@@ -1,0 +1,285 @@
+package com.dailyworks.apnalaundry.ui.screens.earnings
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dailyworks.apnalaundry.core.AppDate
+import com.dailyworks.apnalaundry.core.Money
+import com.dailyworks.apnalaundry.domain.EarningsMath
+import com.dailyworks.apnalaundry.domain.LaundryMath
+import com.dailyworks.apnalaundry.domain.LedgerEntry
+import com.dailyworks.apnalaundry.domain.LedgerKind
+import com.dailyworks.apnalaundry.domain.PayMethod
+import com.dailyworks.apnalaundry.domain.PayTag
+import com.dailyworks.apnalaundry.ui.Selectors
+import com.dailyworks.apnalaundry.ui.ShopViewModel
+import com.dailyworks.apnalaundry.ui.components.AppCard
+import com.dailyworks.apnalaundry.ui.components.BottomNav
+import com.dailyworks.apnalaundry.ui.components.NavTab
+import com.dailyworks.apnalaundry.ui.components.PillChip
+import com.dailyworks.apnalaundry.ui.components.bric
+import com.dailyworks.apnalaundry.ui.components.fig
+import com.dailyworks.apnalaundry.ui.components.rounded
+import com.dailyworks.apnalaundry.ui.components.tap
+import com.dailyworks.apnalaundry.ui.nav.AppNavigator
+import com.dailyworks.apnalaundry.ui.sheets.ActiveSheet
+import com.dailyworks.apnalaundry.ui.sheets.SheetHost
+import com.dailyworks.apnalaundry.ui.theme.Tokens
+import kotlin.math.max
+
+@Composable
+fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
+    val state by shopVm.state.collectAsStateWithLifecycle()
+    val hidden by shopVm.hideAmounts.collectAsStateWithLifecycle()
+    var period by remember { mutableStateOf("today") }
+    var payFilter by remember { mutableStateOf("all") }
+    var active by remember { mutableStateOf<ActiveSheet?>(null) }
+
+    val today = AppDate.TODAY
+    val inRange: (String) -> Boolean = when (period) {
+        "week" -> { iso -> iso in "2026-09-21"..today }
+        "month" -> { iso -> iso in "2026-09-01"..today }
+        else -> { iso -> iso == today }
+    }
+    val e = EarningsMath.compute(state, inRange)
+    fun m(n: Int): String = if (hidden) "₹ ••••" else Money.rupees(n)
+
+    val periodLabel = when (period) {
+        "week" -> "Mon 21 – Fri 25 Sep"
+        "month" -> "1 – 25 Sep"
+        else -> AppDate.plain(today)
+    }
+    val periodTitle = when (period) { "week" -> "This week"; "month" -> "This month"; else -> "Today" }
+
+    val shareText = buildString {
+        append("${state.shop.name} — $periodLabel\n")
+        append("Money received: ₹${Money.grouping(e.received.toLong())}\n")
+        append("  Cash ₹${Money.grouping(e.cash.toLong())} · UPI ₹${Money.grouping(e.upi.toLong())}\n")
+        append("Orders delivered: ${e.ordersDelivered} (work ₹${Money.grouping(e.work.toLong())})\n")
+        append("Baaki added: ₹${Money.grouping(e.baakiAdded.toLong())} · Old baaki collected: ₹${Money.grouping(e.oldIn.toLong())}\n")
+        append("Total baaki in market: ₹${Money.grouping(e.baakiMarket.toLong())}")
+    }
+
+    Column(
+        Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars),
+    ) {
+        // header
+        Row(
+            Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 14.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Earnings", style = bric(22, FontWeight.Bold), modifier = Modifier.weight(1f))
+            IconChip(if (hidden) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility, "Toggle amounts") { shopVm.toggleHideAmounts() }
+            Spacer(Modifier.width(8.dp))
+            IconChip(Icons.Outlined.Share, "Share") { active = ActiveSheet.Share(shareText) }
+        }
+
+        Column(
+            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf("today" to "Today", "week" to "This week", "month" to "This month").forEach { (v, label) ->
+                    PillChip(label, period == v) { period = v; payFilter = "all" }
+                }
+            }
+
+            // Money received
+            AppCard(bg = Tokens.Ink, borderColor = Tokens.Ink) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Money received · $periodTitle", style = fig(13, FontWeight.SemiBold, Tokens.OnDarkMuted))
+                    Text(m(e.received), style = bric(34, FontWeight.Bold, Tokens.OnDark))
+                    Spacer(Modifier.height(6.dp))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        MoneySplit("Cash", m(e.cash), "Should be in your drawer", Modifier.weight(1f))
+                        MoneySplit("UPI", m(e.upi), "In your bank account", Modifier.weight(1f))
+                    }
+                }
+            }
+
+            // How money came in
+            AppCard {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("How the money came in", style = fig(15, FontWeight.Bold))
+                    Spacer(Modifier.height(4.dp))
+                    Line("Work done", m(e.work), null)
+                    Line("Went to khata", m(e.baakiAdded), "−")
+                    Line("Old baaki collected", m(e.oldIn), "+")
+                    Line("Advance taken", m(e.advIn), "+")
+                    Line(if (e.prepaid >= 0) "Paid before delivery" else "Paid on earlier days for these orders", m(e.prepaid), if (e.prepaid >= 0) "+" else "−")
+                    Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Divider).padding(vertical = 6.dp))
+                    Line("Money received", m(e.received), null, bold = true)
+                }
+            }
+
+            // Work done by service
+            if (e.byService.isNotEmpty()) {
+                AppCard {
+                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("Work done by service", style = fig(15, FontWeight.Bold))
+                        val maxAmt = max(1, e.byService.maxOf { it.amount })
+                        e.byService.forEach { s ->
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text(s.label, style = fig(14, FontWeight.SemiBold), modifier = Modifier.weight(1f))
+                                    Text(m(s.amount) + if (!hidden) " · ${s.amount * 100 / max(1, e.work)}%" else "", style = fig(13, FontWeight.SemiBold, Tokens.Muted))
+                                }
+                                Box(Modifier.fillMaxWidth().height(8.dp).rounded(999.dp).background(Tokens.Divider)) {
+                                    Box(
+                                        Modifier
+                                            .fillMaxWidth((s.amount.toFloat() / maxAmt).coerceIn(0.03f, 1f))
+                                            .height(8.dp).rounded(999.dp)
+                                            .background(if (s.isExtra) Tokens.ServiceBarGrey else Tokens.Blue),
+                                    )
+                                }
+                            }
+                        }
+                        if (e.discounts > 0) Text("− ${m(e.discounts)} discounts given", style = fig(13, FontWeight.SemiBold, Tokens.OrangeText))
+                    }
+                }
+            }
+
+            // stats
+            AppCard {
+                Row(Modifier.fillMaxWidth().padding(16.dp)) {
+                    Stat("Orders", e.ordersDelivered.toString(), Modifier.weight(1f))
+                    Stat("Pieces", e.pieces.toString(), Modifier.weight(1f))
+                    Stat("Weight", "${Selectors.trimKg(e.kg)} kg", Modifier.weight(1f))
+                }
+            }
+
+            // baaki in market
+            AppCard(borderColor = Tokens.OrangeBorder, bg = Tokens.OrangeLight) {
+                Row(Modifier.fillMaxWidth().tap { navigator.openCustomers("baaki") }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Baaki in market ${m(e.baakiMarket)}", style = fig(16, FontWeight.Bold, Tokens.OrangeDeep))
+                        Text("${e.baakiCustomers} ${if (e.baakiCustomers == 1) "customer still has to pay" else "customers still have to pay"}", style = fig(13, color = Tokens.OrangeText))
+                    }
+                    Text("›", style = bric(22, FontWeight.Bold, Tokens.OrangeText))
+                }
+            }
+
+            // payments received
+            val pays = state.ledger
+                .filter { it.kind == LedgerKind.GOT && inRange(it.date) }
+                .sortedWith(compareByDescending<LedgerEntry> { it.date }.thenByDescending { it.ts })
+            val shown = pays.filter { payFilter == "all" || it.method.name.equals(payFilter, true) }
+            Text("Payments received", style = fig(15, FontWeight.Bold))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf("all" to "All", "cash" to "Cash", "upi" to "UPI").forEach { (v, label) ->
+                    val count = if (v == "all") pays.size else pays.count { it.method.name.equals(v, true) }
+                    PillChip("$label $count", payFilter == v) { payFilter = v }
+                }
+            }
+            AppCard {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp)) {
+                    if (shown.isEmpty()) {
+                        Text("No payments in this period.", style = fig(14, color = Tokens.Muted), modifier = Modifier.padding(vertical = 16.dp))
+                    }
+                    shown.forEachIndexed { i, entry ->
+                        if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Divider))
+                        PaymentRow(state, entry, hidden) { navigator.openCustomer(entry.custId, "earnings") }
+                    }
+                }
+            }
+        }
+
+        BottomNav(current = NavTab.EARNINGS, onSelect = navigator::selectTab)
+    }
+
+    SheetHost(active, state, shopVm, navigator, onOpen = { active = it }, onDismiss = { active = null })
+}
+
+@Composable
+private fun IconChip(icon: androidx.compose.ui.graphics.vector.ImageVector, cd: String, onClick: () -> Unit) {
+    Box(Modifier.size(44.dp).tap(onClick = onClick), contentAlignment = Alignment.Center) {
+        Icon(icon, cd, tint = Tokens.InkSecondary, modifier = Modifier.size(22.dp))
+    }
+}
+
+@Composable
+private fun MoneySplit(label: String, value: String, note: String, modifier: Modifier) {
+    Column(modifier) {
+        Text(label, style = fig(12, FontWeight.SemiBold, Tokens.OnDarkMuted))
+        Text(value, style = fig(18, FontWeight.Bold, Tokens.OnDark))
+        Text(note, style = fig(11, color = Tokens.OnDarkFaint))
+    }
+}
+
+@Composable
+private fun Line(label: String, value: String, sign: String?, bold: Boolean = false) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text((if (sign != null) "$sign " else "") + label, style = fig(if (bold) 16 else 14, if (bold) FontWeight.Bold else FontWeight.Normal, if (bold) Tokens.Ink else Tokens.InkSecondary))
+        Text(value, style = fig(if (bold) 17 else 14, FontWeight.Bold, if (sign == "−") Tokens.OrangeText else Tokens.Ink))
+    }
+}
+
+@Composable
+private fun Stat(label: String, value: String, modifier: Modifier) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value, style = bric(22, FontWeight.Bold))
+        Text(label, style = fig(12, color = Tokens.Muted))
+    }
+}
+
+@Composable
+private fun PaymentRow(state: com.dailyworks.apnalaundry.domain.LaundryState, e: LedgerEntry, hidden: Boolean, onClick: () -> Unit) {
+    val c = Selectors.customer(state, e.custId)
+    val what = when (e.tag) {
+        PayTag.PRE -> "Paid before delivery · #${e.ref}"
+        PayTag.DELIVER -> {
+            val o = Selectors.order(state, e.ref ?: -1)
+            val khata = if (o != null) LaundryMath.amtOf(o) - o.paid else 0
+            "Order #${e.ref} delivered" + if (khata > 0) " · ${if (hidden) "₹ ••••" else Money.rupees(khata)} to khata" else ""
+        }
+        PayTag.RECEIVE -> when {
+            e.toOld > 0 && e.toAdv > 0 -> "Old baaki + advance"
+            e.toOld > 0 -> "Old baaki"
+            else -> "Advance"
+        }
+        else -> "Payment"
+    }
+    Row(Modifier.fillMaxWidth().tap(onClick = onClick).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(34.dp).rounded(999.dp).background(if (e.method == PayMethod.CASH) Tokens.NeutralFill else Tokens.BlueLight), contentAlignment = Alignment.Center) {
+            Text(if (e.method == PayMethod.CASH) "₹" else "U", style = fig(14, FontWeight.Bold, if (e.method == PayMethod.CASH) Tokens.InkSecondary else Tokens.BlueText))
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(c.name, style = fig(15, FontWeight.Bold), maxLines = 1)
+            Text(what + (if (e.time.isNotBlank()) " · ${e.time}" else ""), style = fig(12, color = Tokens.Muted), maxLines = 1)
+        }
+        Text(if (hidden) "₹ ••••" else Money.rupees(e.amt), style = fig(15, FontWeight.Bold))
+    }
+}
