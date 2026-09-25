@@ -13,3 +13,9 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Local verification screenshots
+/docs/screens/
+
+# Local IDE run state
+/.idea/deploymentTargetSelector.xml
