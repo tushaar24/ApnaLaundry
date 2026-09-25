@@ -1,0 +1,445 @@
+package com.dailyworks.apnalaundry.data
+
+import androidx.room.withTransaction
+import com.dailyworks.apnalaundry.core.AppDate
+import com.dailyworks.apnalaundry.data.local.AppDatabase
+import com.dailyworks.apnalaundry.data.local.CustomerEntity
+import com.dailyworks.apnalaundry.data.local.DayCloseEntity
+import com.dailyworks.apnalaundry.data.local.LedgerEntity
+import com.dailyworks.apnalaundry.data.local.OrderEntity
+import com.dailyworks.apnalaundry.data.local.ServiceEntity
+import com.dailyworks.apnalaundry.data.local.ShopEntity
+import com.dailyworks.apnalaundry.domain.*
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
+
+/** Snapshot of the mutable tables, used to power Undo. */
+data class Snapshot(
+    val orders: List<OrderEntity>,
+    val ledger: List<LedgerEntity>,
+    val customers: List<CustomerEntity>,
+    val services: List<ServiceEntity>,
+    val shop: ShopEntity?,
+)
+
+/** A completed command: user-facing toast text and an optional undo snapshot. */
+data class CmdResult(val toast: String, val undo: Snapshot? = null)
+
+class LaundryRepository(private val db: AppDatabase) {
+    private val shopDao = db.shopDao()
+    private val serviceDao = db.serviceDao()
+    private val customerDao = db.customerDao()
+    private val orderDao = db.orderDao()
+    private val ledgerDao = db.ledgerDao()
+    private val dayCloseDao = db.dayCloseDao()
+
+    @Volatile private var tsCounter = 100_000L
+
+    val state: Flow<LaundryState> = run {
+        val shopDays = combine(shopDao.observe(), dayCloseDao.observe()) { s, d -> s to d }
+        combine(
+            serviceDao.observe(), customerDao.observe(), orderDao.observe(), ledgerDao.observe(), shopDays,
+        ) { services, customers, orders, ledger, sd ->
+            val (shopE, daysE) = sd
+            LaundryState(
+                shop = shopE?.toDomain() ?: Shop(SeedData.shop.name, SeedData.shop.phone, SeedData.shop.closeTime, SeedData.shop.expressPct),
+                services = services.map { it.toDomain() }.sortedBy { it.sortOrder },
+                customers = customers.map { it.toDomain() },
+                orders = orders.map { it.toDomain() },
+                ledger = ledger.map { it.toDomain() },
+                closedDays = daysE.map { it.date }.toSet(),
+            )
+        }
+    }
+
+    val shopFlow: Flow<Shop?> = shopDao.observe().map { it?.toDomain() }
+
+    // ---------------- seeding ----------------
+    suspend fun ensureSeeded() {
+        if (shopDao.get() != null) { refreshTsCounter(); return }
+        db.withTransaction {
+            shopDao.upsert(
+                ShopEntity(1, SeedData.shop.name, SeedData.shop.phone, SeedData.shop.closeTime, SeedData.shop.expressPct, SeedData.NEXT_ORDER, SeedData.NEXT_CUST)
+            )
+            serviceDao.upsertAll(SeedData.services.map { it.toEntity() })
+            customerDao.upsertAll(SeedData.customers.map { it.toEntity() })
+            orderDao.upsertAll(SeedData.orders.map { it.toEntity() })
+            ledgerDao.insertAll(SeedData.ledger.map { it.toEntity() })
+            dayCloseDao.upsertAll(SeedData.closedDays.map { DayCloseEntity(it, 0L, null) })
+        }
+        refreshTsCounter()
+    }
+
+    private suspend fun refreshTsCounter() {
+        val maxTs = ledgerDao.observeOnce().maxOfOrNull { it.ts } ?: 0L
+        tsCounter = maxOf(tsCounter, maxTs + 1)
+    }
+
+    /** Wipe and reseed (Settings → log out / restart). */
+    suspend fun resetToSeed() = db.withTransaction {
+        orderDao.clear(); ledgerDao.clear(); customerDao.clear(); serviceDao.clear(); dayCloseDao.clear()
+        shopDao.upsert(ShopEntity(1, SeedData.shop.name, SeedData.shop.phone, SeedData.shop.closeTime, SeedData.shop.expressPct, SeedData.NEXT_ORDER, SeedData.NEXT_CUST))
+        serviceDao.upsertAll(SeedData.services.map { it.toEntity() })
+        customerDao.upsertAll(SeedData.customers.map { it.toEntity() })
+        orderDao.upsertAll(SeedData.orders.map { it.toEntity() })
+        ledgerDao.insertAll(SeedData.ledger.map { it.toEntity() })
+        dayCloseDao.upsertAll(SeedData.closedDays.map { DayCloseEntity(it, 0L, null) })
+    }
+
+    // ---------------- snapshot / undo ----------------
+    suspend fun snapshot(): Snapshot = Snapshot(
+        orders = orderDao.observeOnce(),
+        ledger = ledgerDao.observeOnce(),
+        customers = customerDao.observeOnce(),
+        services = serviceDao.getAll(),
+        shop = shopDao.get(),
+    )
+
+    suspend fun restore(s: Snapshot) = db.withTransaction {
+        orderDao.clear(); orderDao.upsertAll(s.orders)
+        ledgerDao.clear(); ledgerDao.insertAll(s.ledger)
+        customerDao.clear(); customerDao.upsertAll(s.customers)
+        serviceDao.clear(); serviceDao.upsertAll(s.services)
+        s.shop?.let { shopDao.upsert(it) }
+    }
+
+    // ---------------- helpers ----------------
+    private suspend fun current(): LaundryState {
+        val shopE = shopDao.get()
+        return LaundryState(
+            shop = shopE?.toDomain() ?: Shop("Shine Laundry", "9876543210", "21:00", 50),
+            services = serviceDao.getAll().filter { !it.deleted }.map { it.toDomain() }.sortedBy { it.sortOrder },
+            customers = customerDao.observeOnce().map { it.toDomain() },
+            orders = orderDao.observeOnce().map { it.toDomain() },
+            ledger = ledgerDao.observeOnce().map { it.toDomain() },
+            closedDays = dayCloseDao.observeOnce().map { it.date }.toSet(),
+        )
+    }
+
+    private fun firstName(name: String): String =
+        if (name.startsWith("+")) name else name.substringBefore(" ")
+
+    private fun waReady(nm: String): String =
+        if (AppDate.isLateNight()) "ready message to $nm goes at 9 AM" else "WhatsApp sent to $nm"
+
+    private fun nextTs(): Long = ++tsCounter
+    private fun newLedgerId(): String = "e${nextTs()}"
+
+    private suspend fun mkEntry(
+        cust: String, kind: LedgerKind, amt: Int, method: PayMethod = PayMethod.NONE, tag: PayTag = PayTag.NONE,
+        cover: Int = 0, toOld: Int = 0, toAdv: Int = 0, ref: Int? = null, note: String = "",
+        date: String = AppDate.TODAY, time: String = "Just now",
+    ): LedgerEntry {
+        val ts = nextTs()
+        return LedgerEntry("e$ts", cust, date, time, ts, kind, amt, method, tag, cover, toOld, toAdv, ref, note)
+    }
+
+    private suspend fun money(n: Int) = com.dailyworks.apnalaundry.core.Money.rupees(n)
+
+    // ---------------- order status ----------------
+    suspend fun markPickedUp(orderId: Int): CmdResult {
+        val undo = snapshot()
+        val st = current()
+        val o = st.orders.first { it.id == orderId }
+        val nm = firstName(st.customers.first { it.id == o.custId }.name)
+        orderDao.upsert(o.copy(status = OrderStatus.RECEIVED).toEntity())
+        return CmdResult("Picked up · $nm", undo)
+    }
+
+    suspend fun markReady(orderId: Int): CmdResult {
+        val undo = snapshot()
+        val st = current()
+        val o = st.orders.first { it.id == orderId }
+        val nm = firstName(st.customers.first { it.id == o.custId }.name)
+        orderDao.upsert(o.copy(status = OrderStatus.READY).toEntity())
+        return CmdResult("Marked ready · ${waReady(nm)}", undo)
+    }
+
+    /** Count-clothes sheet: attach lines and advance to [next] (received or ready). */
+    suspend fun saveCount(orderId: Int, next: OrderStatus, lines: List<OrderLine>): CmdResult {
+        val undo = snapshot()
+        val st = current()
+        val o = st.orders.first { it.id == orderId }
+        val nm = firstName(st.customers.first { it.id == o.custId }.name)
+        val total = lines.sumOf { it.amt }
+        val exAmt = if (o.express) LaundryMath.expressAuto(total, st.shop.expressPct) else o.exAmt
+        orderDao.upsert(o.copy(status = next, lines = lines, exAmt = exAmt, billSent = false).toEntity())
+        val head = if (next == OrderStatus.READY) "Marked ready · ${waReady(nm)}" else "Picked up"
+        return CmdResult("$head · bill of ${money(total)} made — send it from the order", undo)
+    }
+
+    suspend fun deliver(orderId: Int, amountReceived: Int, method: PayMethod): CmdResult {
+        val undo = snapshot()
+        val st = current()
+        val o = st.orders.first { it.id == orderId }
+        val total = LaundryMath.amtOf(o)
+        val pre = o.pre
+        val oldBal = LaundryMath.balance(o.custId, st.ledger, st.orders)
+        val alloc = LaundryMath.deliverAllocation(total, pre, oldBal, amountReceived)
+        val entries = mutableListOf<LedgerEntry>()
+        entries += mkEntry(o.custId, LedgerKind.BILL, total, ref = o.id)
+        if (amountReceived > 0) {
+            entries += mkEntry(o.custId, LedgerKind.GOT, amountReceived, method, PayTag.DELIVER,
+                cover = alloc.cover, toOld = alloc.toOld, toAdv = alloc.toAdv, ref = o.id)
+        }
+        db.withTransaction {
+            ledgerDao.insertAll(entries.map { it.toEntity() })
+            orderDao.upsert(o.copy(status = OrderStatus.DELIVERED, doneAt = "Just now", doneDate = AppDate.TODAY, paid = alloc.paidToward).toEntity())
+        }
+        val paidPart = if (amountReceived > 0) " · ${money(amountReceived)} ${if (method == PayMethod.UPI) "UPI" else "cash"}" else ""
+        val balPart = when {
+            alloc.newBalance > 0 -> " · ${money(alloc.newBalance)} baaki"
+            alloc.newBalance < 0 -> " · ${money(alloc.newBalance)} advance"
+            else -> " · all clear"
+        }
+        return CmdResult("Delivered$paidPart$balPart", undo)
+    }
+
+    suspend fun prepay(orderId: Int, method: PayMethod): CmdResult {
+        val undo = snapshot()
+        val st = current()
+        val o = st.orders.first { it.id == orderId }
+        val total = LaundryMath.amtOf(o)
+        db.withTransaction {
+            ledgerDao.insert(mkEntry(o.custId, LedgerKind.GOT, total, method, PayTag.PRE, cover = total, ref = o.id).toEntity())
+            orderDao.upsert(o.copy(pre = total).toEntity())
+        }
+        return CmdResult("Got ${money(total)} ${if (method == PayMethod.UPI) "UPI" else "cash"} · order fully paid", undo)
+    }
+
+    suspend fun cancelOrder(orderId: Int, reason: String): CmdResult {
+        val undo = snapshot()
+        val st = current()
+        val o = st.orders.first { it.id == orderId }
+        val nm = firstName(st.customers.first { it.id == o.custId }.name)
+        orderDao.upsert(o.copy(status = OrderStatus.CANCELLED, cancelReason = reason).toEntity())
+        return CmdResult("Pickup cancelled · $nm", undo)
+    }
+
+    /** kind = "pickup" or "drop". */
+    suspend fun reschedule(orderId: Int, kind: String, dateIso: String, time24: String, notify: Boolean): CmdResult {
+        val undo = snapshot()
+        val st = current()
+        val o = st.orders.first { it.id == orderId }
+        val time12 = AppDate.to12h(time24)
+        val (updated, msg) = if (kind == "pickup") {
+            var u = o.copy(pickupDate = dateIso, pickupTime = time12)
+            if (o.deliveryDate.isNotBlank() && o.ddAuto) {
+                val shift = AppDate.daysBetween(o.pickupDate, dateIso)
+                u = u.copy(deliveryDate = AppDate.add(o.deliveryDate, shift))
+            }
+            u to "Pickup moved to ${AppDate.short(dateIso)}" + if (time12.isNotBlank()) " · $time12" else ""
+        } else {
+            val u = o.copy(deliveryDate = dateIso, deliveryTime = time12, ddAuto = false)
+            val prefix = if (o.deliveryDate.isNotBlank()) "Delivery moved to " else "Delivery date set: "
+            u to prefix + AppDate.short(dateIso) + if (time12.isNotBlank()) " · $time12" else ""
+        }
+        orderDao.upsert(updated.toEntity())
+        return CmdResult(msg + if (notify) " · WhatsApp sent" else "", undo)
+    }
+
+    suspend fun sendBill(orderId: Int): CmdResult {
+        val st = current()
+        val o = st.orders.first { it.id == orderId }
+        val nm = firstName(st.customers.first { it.id == o.custId }.name)
+        orderDao.upsert(o.copy(billSent = true).toEntity())
+        return CmdResult("Opening WhatsApp · bill #$orderId to $nm")
+    }
+
+    // ---------------- khata ----------------
+    suspend fun receivePayment(custId: String, amount: Int, method: PayMethod): CmdResult {
+        val undo = snapshot()
+        val st = current()
+        val oldBal = LaundryMath.balance(custId, st.ledger, st.orders)
+        val (toOld, toAdv) = LaundryMath.receiveAllocation(oldBal, amount)
+        ledgerDao.insert(mkEntry(custId, LedgerKind.GOT, amount, method, PayTag.RECEIVE, toOld = toOld, toAdv = toAdv).toEntity())
+        val after = oldBal - amount
+        val tail = when {
+            after > 0 -> "${money(after)} still baaki"
+            after < 0 -> "${money(after)} advance"
+            else -> "all clear"
+        }
+        return CmdResult("Got ${money(amount)} ${if (method == PayMethod.UPI) "UPI" else "cash"} · $tail", undo)
+    }
+
+    suspend fun addOldBaaki(custId: String, amount: Int): CmdResult {
+        val undo = snapshot()
+        ledgerDao.insert(mkEntry(custId, LedgerKind.OLD, amount).toEntity())
+        return CmdResult("Added ${money(amount)} old baaki", undo)
+    }
+
+    // ---------------- customers ----------------
+    /** Returns the customer id (new or existing on edit). */
+    suspend fun saveCustomer(
+        editId: String?, name: String, phone: String, address: String, oldBaaki: Int, fromList: Boolean,
+    ): Pair<String, CmdResult?> {
+        val undo = snapshot()
+        if (editId != null) {
+            val st = current()
+            val c = st.customers.first { it.id == editId }
+            customerDao.upsert(c.copy(name = name, phone = phone, address = address).toEntity())
+            return editId to null
+        }
+        val shopE = shopDao.get()!!
+        val id = "c${shopE.nextCust}"
+        customerDao.upsert(Customer(id, name, phone, address, 0, "—", 9).toEntity())
+        shopDao.upsert(shopE.copy(nextCust = shopE.nextCust + 1))
+        if (oldBaaki > 0) ledgerDao.insert(mkEntry(id, LedgerKind.OLD, oldBaaki).toEntity())
+        val res = if (fromList)
+            CmdResult("$name added" + if (oldBaaki > 0) " with ${money(oldBaaki)} baaki" else "", undo)
+        else null
+        return id to res
+    }
+
+    // ---------------- rate card ----------------
+    suspend fun upsertService(service: Service) = serviceDao.upsert(service.toEntity())
+
+    suspend fun deleteService(id: String): CmdResult {
+        val undo = snapshot()
+        val services = serviceDao.getAll().filter { !it.deleted }
+        if (services.size <= 1) return CmdResult("Keep at least one service")
+        val sv = services.first { it.id == id }
+        serviceDao.setDeleted(id, true)
+        return CmdResult("${sv.name} deleted · old orders keep it", undo)
+    }
+
+    suspend fun updateShop(name: String, closeTime: String, expressPct: Int) {
+        val e = shopDao.get()!!
+        shopDao.upsert(e.copy(name = name, closeTime = closeTime, expressPct = expressPct))
+    }
+
+    // ---------------- quick order ----------------
+    suspend fun createQuick(
+        existingCustId: String?, typedInput: String, amount: Int, pieces: Int, paidMethod: PayMethod?, day: String,
+    ): Pair<Int, CmdResult> {
+        val undo = snapshot()
+        val shopE = shopDao.get()!!
+        var custId = existingCustId
+        var nextCust = shopE.nextCust
+        if (custId == null) {
+            val digits = typedInput.filter { it.isDigit() }
+            val isPhone = digits.length >= 10 && typedInput.all { it.isDigit() || it == ' ' || it == '+' }
+            custId = "c$nextCust"; nextCust += 1
+            val phone = if (isPhone) digits.takeLast(10) else ""
+            val name = if (isPhone) "+91 " + fmtPhone(phone) else typedInput.split(" ").joinToString(" ") { it.replaceFirstChar { ch -> ch.uppercase() } }
+            customerDao.upsert(Customer(custId, name, phone, "", 0, "Today", 0).toEntity())
+        } else {
+            touchCustomer(custId)
+        }
+        val id = shopE.nextOrder
+        val lines = if (amount > 0) listOf(quickLine(amount, pieces)) else emptyList()
+        var pre = 0
+        val order = Order(
+            id = id, custId = custId, pickup = Route.SHOP, delivery = Route.SHOP, pickupDate = day, pickupTime = "",
+            deliveryDate = "", deliveryTime = "", ddAuto = false, status = OrderStatus.RECEIVED, cancelReason = "",
+            fee = 0, express = false, exAmt = 0, discount = 0, pre = 0, paid = 0, doneAt = "", doneDate = "",
+            createdOn = day, billSent = false, pieces = pieces, lines = lines,
+        )
+        db.withTransaction {
+            if (paidMethod != null && amount > 0) {
+                pre = amount
+                ledgerDao.insert(mkEntry(custId, LedgerKind.GOT, amount, paidMethod, PayTag.PRE, cover = amount, ref = id,
+                    time = if (day == AppDate.TODAY) "Just now" else "Recorded later").toEntity())
+            }
+            orderDao.upsert(order.copy(pre = pre).toEntity())
+            shopDao.upsert(shopE.copy(nextOrder = id + 1, nextCust = nextCust))
+        }
+        val cname = customerDao.observeOnce().first { it.id == custId }.name
+        val toast = "Quick order #$id saved for ${firstName(cname)}" + (if (amount > 0) " · ${money(amount)}" else " · add bill later")
+        return id to CmdResult(toast, undo)
+    }
+
+    // ---------------- new / edit order ----------------
+    data class SaveOrderResult(val orderId: Int, val goToBill: Boolean, val toast: String?, val undo: Snapshot?, val edited: Boolean)
+
+    suspend fun saveOrder(
+        editId: Int?, custId: String, pickup: Route, delivery: Route, pickupDate: String, pickupTime24: String,
+        deliveryDate: String, deliveryTime24: String, ddAuto: Boolean, fee: Int, express: Boolean, exAmt: Int,
+        discount: Int, lines: List<OrderLine>, quickAmount: Int, quickPieces: Int,
+    ): SaveOrderResult {
+        val undo = snapshot()
+        val st = current()
+        val anyHome = pickup == Route.HOME || delivery == Route.HOME
+        val fields = OrderFields(
+            custId, pickup, delivery, pickupDate, AppDate.to12h(pickupTime24), deliveryDate, AppDate.to12h(deliveryTime24),
+            ddAuto, if (anyHome) fee else 0, express, if (express) exAmt else 0, discount, lines,
+        )
+        val nm = firstName(st.customers.first { it.id == custId }.name)
+
+        if (editId != null) {
+            val o = st.orders.first { it.id == editId }
+            // keep lines of deleted services + any quick line
+            val kept = o.lines.filter { !it.isQuick && st.services.none { s -> s.id == it.serviceId } }.toMutableList()
+            if (quickAmount > 0) kept += quickLine(quickAmount, quickPieces)
+            val newLines = kept + lines
+            var updated = o.copy(
+                custId = fields.custId, pickup = fields.pickup, delivery = fields.delivery, pickupDate = fields.pickupDate,
+                pickupTime = fields.pickupTime, deliveryDate = fields.deliveryDate, deliveryTime = fields.deliveryTime,
+                ddAuto = fields.ddAuto, fee = fields.fee, express = fields.express, exAmt = fields.exAmt,
+                discount = fields.discount, lines = newLines,
+            )
+            if (updated.status == OrderStatus.CREATED && newLines.isNotEmpty() && pickup == Route.SHOP) {
+                updated = updated.copy(status = OrderStatus.RECEIVED)
+            }
+            val before = LaundryMath.amtOf(o)
+            val after = LaundryMath.amtOf(updated)
+            val diff = after - before
+            if (diff != 0) updated = updated.copy(billSent = false)
+            db.withTransaction {
+                orderDao.upsert(updated.toEntity())
+                if (o.status == OrderStatus.DELIVERED && diff != 0) {
+                    ledgerDao.insert(mkEntry(o.custId, LedgerKind.ADJ, diff, ref = o.id).toEntity())
+                }
+            }
+            val khataPart = if (o.status == OrderStatus.DELIVERED && diff != 0) " · khata ${if (diff > 0) "+" else "−"}${money(kotlin.math.abs(diff))}" else ""
+            val totalPart = if (diff != 0) " · new total ${money(after)}" else ""
+            return SaveOrderResult(o.id, goToBill = false, toast = "Order #${o.id} updated$totalPart$khataPart", undo = undo, edited = true)
+        }
+
+        // create
+        val shopE = shopDao.get()!!
+        val id = shopE.nextOrder
+        val status = if (pickup == Route.SHOP) OrderStatus.RECEIVED else OrderStatus.CREATED
+        val order = Order(
+            id = id, custId = fields.custId, pickup = fields.pickup, delivery = fields.delivery,
+            pickupDate = fields.pickupDate, pickupTime = fields.pickupTime, deliveryDate = fields.deliveryDate,
+            deliveryTime = fields.deliveryTime, ddAuto = fields.ddAuto, status = status, cancelReason = "",
+            fee = fields.fee, express = fields.express, exAmt = fields.exAmt, discount = fields.discount,
+            pre = 0, paid = 0, doneAt = "", doneDate = "", createdOn = AppDate.TODAY, billSent = false,
+            pieces = 0, lines = fields.lines,
+        )
+        db.withTransaction {
+            orderDao.upsert(order.toEntity())
+            shopDao.upsert(shopE.copy(nextOrder = id + 1))
+            touchCustomer(custId)
+        }
+        return if (fields.lines.isEmpty()) {
+            val toast = if (pickup == Route.HOME)
+                "Pickup scheduled for $nm" + (if (order.pickupTime.isNotBlank()) " · ${order.pickupTime}" else "")
+            else "Order #$id saved for $nm · add clothes when ready"
+            SaveOrderResult(id, goToBill = false, toast = toast, undo = undo, edited = false)
+        } else {
+            SaveOrderResult(id, goToBill = true, toast = null, undo = undo, edited = false)
+        }
+    }
+
+    // ---------------- small helpers ----------------
+    private suspend fun touchCustomer(custId: String) {
+        val c = customerDao.observeOnce().firstOrNull { it.id == custId } ?: return
+        customerDao.upsert(c.copy(lastLabel = "Today", agoRank = 0))
+    }
+
+    private fun quickLine(amount: Int, pieces: Int) = OrderLine(
+        serviceId = "quick", serviceName = "Not itemised", itemName = "Clothes (not itemised)",
+        qty = pieces, price = 0, base = 0, kg = 0.0, amt = amount, isQuick = true,
+    )
+
+    private fun fmtPhone(d: String): String = if (d.length == 10) d.substring(0, 5) + " " + d.substring(5) else d
+
+    data class OrderFields(
+        val custId: String, val pickup: Route, val delivery: Route, val pickupDate: String, val pickupTime: String,
+        val deliveryDate: String, val deliveryTime: String, val ddAuto: Boolean, val fee: Int, val express: Boolean,
+        val exAmt: Int, val discount: Int, val lines: List<OrderLine>,
+    )
+}
