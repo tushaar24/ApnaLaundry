@@ -1,0 +1,130 @@
+package com.dailyworks.apnalaundry.ui.nav
+
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavHostController
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
+import com.dailyworks.apnalaundry.data.Prefs
+import com.dailyworks.apnalaundry.ui.ShopViewModel
+import com.dailyworks.apnalaundry.ui.screens.bill.BillScreen
+import com.dailyworks.apnalaundry.ui.screens.customer.CustomerScreen
+import com.dailyworks.apnalaundry.ui.screens.customers.CustomersScreen
+import com.dailyworks.apnalaundry.ui.screens.earnings.EarningsScreen
+import com.dailyworks.apnalaundry.ui.screens.home.HomeScreen
+import com.dailyworks.apnalaundry.ui.screens.login.LoginScreen
+import com.dailyworks.apnalaundry.ui.screens.neworder.NewOrderScreen
+import com.dailyworks.apnalaundry.ui.screens.order.OrderDetailScreen
+import com.dailyworks.apnalaundry.ui.screens.rates.RatesScreen
+import com.dailyworks.apnalaundry.ui.screens.settings.SettingsScreen
+import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
+
+@Composable
+fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopVm: ShopViewModel) {
+    val prefs: Prefs = koinInject()
+    val scope = rememberCoroutineScope()
+    val loggedIn by prefs.loggedIn.collectAsStateWithLifecycle(initialValue = null)
+    val setupDone by prefs.setupDone.collectAsStateWithLifecycle(initialValue = null)
+
+    val li = loggedIn ?: return
+    val sd = setupDone ?: return
+
+    val start = remember {
+        when {
+            !li -> Routes.LOGIN
+            !sd -> "rates/setup"
+            else -> Routes.HOME
+        }
+    }
+
+    NavHost(navController = navController, startDestination = start) {
+        composable(Routes.LOGIN) {
+            LoginScreen(onLoggedIn = { navigator.toRatesSetup() })
+        }
+
+        composable(
+            Routes.RATES,
+            arguments = listOf(navArgument("from") { type = NavType.StringType; defaultValue = "setup" }),
+        ) { entry ->
+            val from = entry.arguments?.getString("from") ?: "setup"
+            RatesScreen(
+                shopVm = shopVm, from = from,
+                onDone = {
+                    if (from == "setup") {
+                        scope.launch { prefs.setSetupDone(true) }
+                        navigator.toHomeAfterSetup()
+                    } else navigator.back()
+                },
+                onBack = { if (from == "setup") Unit else navigator.back() },
+            )
+        }
+
+        composable(Routes.HOME) { HomeScreen(shopVm, navigator) }
+
+        composable(
+            Routes.CUSTOMERS,
+            arguments = listOf(navArgument("filter") { type = NavType.StringType; defaultValue = "all" }),
+        ) { entry ->
+            CustomersScreen(shopVm, navigator, entry.arguments?.getString("filter") ?: "all")
+        }
+
+        composable(Routes.EARNINGS) { EarningsScreen(shopVm, navigator) }
+
+        composable(Routes.SETTINGS) {
+            SettingsScreen(shopVm, navigator, onLogout = {
+                scope.launch { prefs.logoutAndReset(); shopVm.restart().join() }
+                navigator.nav.navigate(Routes.LOGIN) { popUpTo(0) { inclusive = true } }
+            })
+        }
+
+        composable(
+            Routes.NEW,
+            arguments = listOf(
+                navArgument("edit") { type = NavType.StringType; defaultValue = "-1" },
+                navArgument("cust") { type = NavType.StringType; defaultValue = "" },
+                navArgument("from") { type = NavType.StringType; defaultValue = "home" },
+            ),
+        ) { entry ->
+            val edit = entry.arguments?.getString("edit")?.toIntOrNull()?.takeIf { it > 0 }
+            val cust = entry.arguments?.getString("cust")?.takeIf { it.isNotBlank() }
+            val from = entry.arguments?.getString("from") ?: "home"
+            NewOrderScreen(shopVm, navigator, editId = edit, presetCustId = cust, from = from)
+        }
+
+        composable(
+            Routes.BILL,
+            arguments = listOf(
+                navArgument("orderId") { type = NavType.IntType },
+                navArgument("from") { type = NavType.StringType; defaultValue = "home" },
+            ),
+        ) { entry ->
+            BillScreen(shopVm, navigator, orderId = entry.arguments?.getInt("orderId") ?: 0, from = entry.arguments?.getString("from") ?: "home")
+        }
+
+        composable(
+            Routes.ORDER,
+            arguments = listOf(
+                navArgument("orderId") { type = NavType.IntType },
+                navArgument("from") { type = NavType.StringType; defaultValue = "home" },
+            ),
+        ) { entry ->
+            OrderDetailScreen(shopVm, navigator, orderId = entry.arguments?.getInt("orderId") ?: 0, from = entry.arguments?.getString("from") ?: "home")
+        }
+
+        composable(
+            Routes.CUSTOMER,
+            arguments = listOf(
+                navArgument("custId") { type = NavType.StringType },
+                navArgument("from") { type = NavType.StringType; defaultValue = "customers" },
+            ),
+        ) { entry ->
+            CustomerScreen(shopVm, navigator, custId = entry.arguments?.getString("custId") ?: "", from = entry.arguments?.getString("from") ?: "customers")
+        }
+    }
+}
