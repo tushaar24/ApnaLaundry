@@ -1,34 +1,37 @@
 package com.dailyworks.apnalaundry.ui.theme
 
-import androidx.compose.material3.Typography
-import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
+import com.dailyworks.apnalaundry.R
 
-// Set of Material typography styles to start with
-val Typography = Typography(
-    bodyLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 16.sp,
-        lineHeight = 24.sp,
-        letterSpacing = 0.5.sp
-    )
-    /* Other default text styles to override
-    titleLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 22.sp,
-        lineHeight = 28.sp,
-        letterSpacing = 0.sp
-    ),
-    labelSmall = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
-        fontSize = 11.sp,
-        lineHeight = 16.sp,
-        letterSpacing = 0.5.sp
-    )
-    */
+/**
+ * Bricolage Grotesque (headings, big numbers) + Figtree (everything else).
+ * Both are bundled variable fonts; weights are pulled from the `wght` axis
+ * (applies on API 26+, gracefully falls back to the default instance below).
+ */
+
+private fun figtree(weight: Int) = Font(
+    R.font.figtree,
+    weight = FontWeight(weight),
+    variationSettings = FontVariation.Settings(FontVariation.weight(weight)),
+)
+
+private fun bricolage(weight: Int) = Font(
+    R.font.bricolage_grotesque,
+    weight = FontWeight(weight),
+    variationSettings = FontVariation.Settings(FontVariation.weight(weight)),
+)
+
+val Figtree = FontFamily(
+    figtree(400),
+    figtree(500),
+    figtree(600),
+    figtree(700),
+)
+
+val Bricolage = FontFamily(
+    bricolage(600),
+    bricolage(700),
 )
