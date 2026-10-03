@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import * as AppDate from "@/core/appdate";
 import { rupees } from "@/core/money";
 import { collectedOn } from "@/domain/earningsMath";
@@ -40,22 +40,10 @@ function HomeScreen() {
   const pay = paywallInfo(billing);
   useEffect(() => { void refreshBilling(); }, [refreshBilling]);
 
-  // Trial-upfront variant (or a free-orders user who hit the limit) sees the
-  // paywall automatically right after login — once per session, so they can
-  // close it and browse, with the banner still prompting.
-  const autoShown = useRef(false);
-  useEffect(() => {
-    if (!billing) return;
-    const info = paywallInfo(billing);
-    if (!info.blocked || info.hasActive || autoShown.current) return;
-    if (typeof sessionStorage !== "undefined" && sessionStorage.getItem("al_paywall_seen") === "1") return;
-    autoShown.current = true;
-    try { sessionStorage.setItem("al_paywall_seen", "1"); } catch { /* ignore */ }
-    nav.openPaywall(info.isTrial ? "trial" : "limit");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [billing]);
-
-  // After the free orders run out, taking a new order opens the paywall.
+  // The trial variant is a hard gate handled in BillingGate (the app isn't
+  // reachable without an active subscription), so there's no auto-open here.
+  // The free-orders variant is soft: the banner prompts, and taking a new order
+  // past the limit opens the (cancellable) paywall.
   const startNewOrder = (from: "home" | "empty_home") => {
     if (pay.blocked) nav.openPaywall("limit");
     else nav.openNewOrder({ from });

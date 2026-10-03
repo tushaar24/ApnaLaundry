@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { bootstrap, retryBoot } from "@/data/auth";
 import { useAppStore } from "@/data/store";
+import { paywallInfo, useBillingStore } from "@/data/billingStore";
 import { initAnalytics } from "@/analytics/clevertap";
+import { PaywallScreen } from "@/ui/screens/paywall";
 import { PrimaryButton } from "./basics";
 import { IcLaundry } from "./icons";
 
@@ -72,5 +74,38 @@ export function Gate({ children, zone }: { children: React.ReactNode; zone: "app
   if (authed && !setupDone && zone === "app") return <Splash />;
   if (authed && setupDone && zone !== "app") return <Splash />;
 
+  return <>{children}</>;
+}
+
+/**
+ * Subscription gate inside the authed app. Flow (both platforms): logged in →
+ * check subscription → route; show a loader until the check resolves.
+ *
+ *  - trial_2 variant with no active subscription → a NON-cancellable paywall;
+ *    the app isn't reachable until there's an active subscription.
+ *  - free_<N> variant (or active sub, or billing unconfigured/unreachable) →
+ *    the app renders; the free-orders paywall is soft (banner + new-order block).
+ *
+ * The decision is latched once billing first loads so the success → "Done"
+ * screen isn't skipped the instant the subscription goes active.
+ */
+export function BillingGate({ children }: { children: React.ReactNode }) {
+  const status = useBillingStore((s) => s.status);
+  const loaded = useBillingStore((s) => s.loaded);
+  const refresh = useBillingStore((s) => s.refresh);
+  const [gated, setGated] = useState<boolean | null>(null);
+
+  useEffect(() => { void refresh(); }, [refresh]);
+
+  useEffect(() => {
+    if (!loaded || gated !== null) return;
+    const info = paywallInfo(status);
+    setGated(info.isTrial && info.blocked && !info.hasActive);
+  }, [loaded, status, gated]);
+
+  if (!loaded || gated === null) return <Splash />;
+  if (gated) {
+    return <PaywallScreen reason="trial" hardGate onClose={() => undefined} onDone={() => setGated(false)} />;
+  }
   return <>{children}</>;
 }

@@ -27,11 +27,13 @@ const WAS_ANNUAL = 8999;
 const FEATURES = ["Unlimited orders", "Bills on WhatsApp", "Khata for every customer", "Daily earnings — cash and UPI"];
 
 export function PaywallScreen({
-  reason, onClose, onDone,
+  reason, onClose, onDone, hardGate = false,
 }: {
   reason: "limit" | "trial" | "upsell";
   onClose: () => void;
   onDone: (continuing: boolean) => void;
+  /** Non-cancellable gate (trial variant): no close button, app not reachable. */
+  hardGate?: boolean;
 }) {
   const status = useBillingStore((s) => s.status);
   const refresh = useBillingStore((s) => s.refresh);
@@ -135,10 +137,12 @@ export function PaywallScreen({
         <WaitingView onBack={() => { setStage("plans"); setBusy(false); }} />
       ) : (
         <>
-          <div className="flex items-center justify-between px-5 pt-4">
-            <button type="button" onClick={onClose} aria-label="Close" className="flex size-9 items-center justify-center rounded-full text-[22px] leading-none text-muted hover:bg-neutralfill">
-              ✕
-            </button>
+          <div className="flex items-center justify-between px-5 pt-4" style={{ minHeight: 20 }}>
+            {!hardGate ? (
+              <button type="button" onClick={onClose} aria-label="Close" className="flex size-9 items-center justify-center rounded-full text-[22px] leading-none text-muted hover:bg-neutralfill">
+                ✕
+              </button>
+            ) : null}
           </div>
           <div className="flex-1 overflow-y-auto px-5 pb-4">
             {!info.isTrial ? (
