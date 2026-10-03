@@ -45,8 +45,10 @@ export interface PaywallInfo {
 
 export function paywallInfo(status: BillingStatus | null): PaywallInfo {
   if (!status || !status.configured) {
+    // If the A/B variant can't be determined, default to the trial paywall.
+    const variant = status?.variant || "trial_2";
     return {
-      ready: false, hasActive: false, variant: status?.variant ?? "free_50", isTrial: false,
+      ready: false, hasActive: false, variant, isTrial: variant === "trial_2",
       orderCount: status?.orderCount ?? 0, freeThreshold: status?.freeOrderThreshold ?? 0,
       freeLeft: 0, blocked: false, showBanner: false,
     };
