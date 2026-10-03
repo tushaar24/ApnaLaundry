@@ -1,5 +1,6 @@
 *.iml
 .gradle
+.kotlin
 /local.properties
 /.idea/caches
 /.idea/libraries
@@ -19,3 +20,6 @@ local.properties
 
 # Local IDE run state
 /.idea/deploymentTargetSelector.xml
+
+# Separate backend project (not part of this repo)
+/courses/
