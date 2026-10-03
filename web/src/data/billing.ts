@@ -102,3 +102,35 @@ export function openIntent(intentUrl: string): void {
     window.open(intentUrl, "_blank", "noopener");
   }
 }
+
+export type UpiApp = "gpay" | "phonepe" | "paytm" | "other";
+
+export const UPI_APPS: { key: UpiApp; name: string }[] = [
+  { key: "gpay", name: "Google Pay" },
+  { key: "phonepe", name: "PhonePe" },
+  { key: "paytm", name: "Paytm" },
+  { key: "other", name: "Other UPI app" },
+];
+
+const UPI_PACKAGES: Record<string, string> = {
+  gpay: "com.google.android.apps.nbbc",
+  phonepe: "com.phonepe.app",
+  paytm: "net.one97.paytm",
+};
+
+/**
+ * Open a SPECIFIC UPI app with the mandate intent. On Android we target the
+ * app's package via an `intent://` URL; elsewhere (iOS/"Other") we fall back to
+ * the plain upi:// intent so the OS routes it.
+ */
+export function openUpiApp(intentUrl: string, app: UpiApp): void {
+  if (typeof window === "undefined" || !intentUrl) return;
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  const pkg = UPI_PACKAGES[app];
+  if (app === "other" || !pkg || !isAndroid || !intentUrl.startsWith("upi:")) {
+    openIntent(intentUrl);
+    return;
+  }
+  const rest = intentUrl.replace(/^upi:\/\//i, "");
+  window.location.href = `intent://${rest}#Intent;scheme=upi;package=${pkg};end`;
+}

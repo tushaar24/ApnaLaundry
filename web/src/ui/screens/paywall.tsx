@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import QRCode from "qrcode";
 import * as AppDate from "@/core/appdate";
 import { rupees } from "@/core/money";
-import { cancelSubscription, openIntent, subscribe } from "@/data/billing";
+import { cancelSubscription, openUpiApp, subscribe, UPI_APPS, type UpiApp } from "@/data/billing";
 import { paywallInfo, useBillingStore } from "@/data/billingStore";
 import { Analytics } from "@/analytics/events";
 import { cls, PrimaryButton } from "@/ui/basics";
@@ -42,6 +42,8 @@ export function PaywallScreen({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [qr, setQr] = useState<string | null>(null);
+  const [app, setApp] = useState<UpiApp>("gpay");
+  const [appSheet, setAppSheet] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const annual = status?.plans.annual.amount ?? 499900;
@@ -92,7 +94,7 @@ export function PaywallScreen({
       if (isDesktop) {
         setQr(await QRCode.toDataURL(res.intentUrl, { width: 240, margin: 1 }));
       } else {
-        openIntent(res.intentUrl);
+        openUpiApp(res.intentUrl, app); // opens the chosen UPI app via intent
       }
       setStage("waiting");
       startPolling();
@@ -190,6 +192,18 @@ export function PaywallScreen({
           </div>
 
           <div className="border-t border-divider bg-card px-5 py-4">
+            {/* Pay via <app> — mobile only; desktop pays by QR. */}
+            <button
+              type="button"
+              onClick={() => setAppSheet(true)}
+              className="mb-3 flex w-full items-center justify-between rounded-xl border border-cardborder bg-card px-3.5 py-2.5 lg:hidden"
+            >
+              <span className="text-[13px] font-semibold text-muted">Pay via</span>
+              <span className="flex items-center gap-1.5 text-[15px] font-bold">
+                {UPI_APPS.find((a) => a.key === app)?.name}
+                <span className="text-[12px] text-muted">▾</span>
+              </span>
+            </button>
             <PrimaryButton onClick={pay} disabled={busy}>
               {busy
                 ? "Starting…"
@@ -207,6 +221,15 @@ export function PaywallScreen({
                   : `Renews on ${renewMonthly} · pay by UPI`}
             </p>
           </div>
+
+          {appSheet ? (
+            <AppPicker
+              selected={app}
+              isTrial={info.isTrial}
+              onSelect={(a) => { setApp(a); setAppSheet(false); }}
+              onClose={() => setAppSheet(false)}
+            />
+          ) : null}
         </>
       )}
     </div>
@@ -215,6 +238,50 @@ export function PaywallScreen({
   return (
     <div className="fixed inset-0 z-50 flex items-stretch justify-center lg:items-center lg:bg-[rgba(22,25,33,0.45)] lg:p-4 lg:pl-[240px]">
       {card}
+    </div>
+  );
+}
+
+function AppPicker({
+  selected, isTrial, onSelect, onClose,
+}: {
+  selected: UpiApp;
+  isTrial: boolean;
+  onSelect: (a: UpiApp) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end justify-center lg:items-center lg:pl-[240px]">
+      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-[rgba(22,25,33,0.45)]" />
+      <div className="animate-sheet relative w-full rounded-t-3xl bg-bg p-5 lg:max-w-[420px] lg:rounded-3xl">
+        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-cardborder lg:hidden" />
+        <h3 className="bric text-[20px]">Pay via</h3>
+        <div className="mt-3 flex flex-col">
+          {UPI_APPS.map((a) => (
+            <button
+              key={a.key}
+              type="button"
+              onClick={() => onSelect(a.key)}
+              className="flex items-center justify-between border-b border-divider py-3.5 last:border-0"
+            >
+              <span className="text-[16px] font-semibold">{a.name}</span>
+              <span
+                className={cls(
+                  "flex size-5 items-center justify-center rounded-full border-2",
+                  selected === a.key ? "border-blue" : "border-cardborder",
+                )}
+              >
+                {selected === a.key ? <span className="size-2.5 rounded-full bg-blue" /> : null}
+              </span>
+            </button>
+          ))}
+        </div>
+        <p className="mt-3 text-[12px] text-muted">
+          {isTrial
+            ? "₹2 now · UPI AutoPay for your plan after the trial"
+            : "You'll approve a UPI AutoPay mandate in the app."}
+        </p>
+      </div>
     </div>
   );
 }
