@@ -6,6 +6,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Standalone server for the production Docker image (same as the admin app).
+  output: "standalone",
 };
 
 export default nextConfig;
