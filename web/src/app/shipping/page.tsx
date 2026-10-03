@@ -27,12 +27,9 @@ export default function ShippingPage() {
 
       <H2>3. Service availability</H2>
       <P>
-        If you are unable to access the Service after signing up or paying, please contact us so we can resolve it
+        If you are unable to access the Service after signing up or paying, please reach out so we can resolve it
         promptly.
       </P>
-
-      <H2>4. Contact</H2>
-      <P>For any access or activation issue, email {COMPANY.email} or call {COMPANY.phone}.</P>
     </LegalShell>
   );
 }
