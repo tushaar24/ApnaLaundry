@@ -22,6 +22,10 @@ async function proxy(req: NextRequest, pathParts: string[]): Promise<Response> {
   if (ct) headers["content-type"] = ct;
   const auth = req.headers.get("authorization");
   if (auth) headers["authorization"] = auth;
+  // Razorpay signs webhooks with this header; forward it so
+  // /api/laundry/billing/webhook can verify the HMAC on the backend.
+  const rzpSig = req.headers.get("x-razorpay-signature");
+  if (rzpSig) headers["x-razorpay-signature"] = rzpSig;
 
   let upstream: Response;
   try {
