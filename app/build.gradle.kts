@@ -22,8 +22,13 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Android-emulator loopback to a `npm run dev:backend` on the host.
+            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:5001/api/laundry\"")
+        }
         release {
             isMinifyEnabled = false
+            buildConfigField("String", "API_BASE_URL", "\"https://shwetamakeover.online/api/laundry\"")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -45,12 +50,17 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {
@@ -68,6 +78,7 @@ dependencies {
     implementation(libs.androidx.ui.text.google.fonts)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.work.runtime.ktx)
 
     // Room
     implementation(libs.androidx.room.runtime)
@@ -83,7 +94,6 @@ dependencies {
     implementation(libs.ktor.client.okhttp)
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
-    implementation(libs.ktor.client.mock)
 
     // Coroutines / serialization
     implementation(libs.kotlinx.coroutines.android)
