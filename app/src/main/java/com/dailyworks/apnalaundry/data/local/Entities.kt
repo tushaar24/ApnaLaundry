@@ -19,7 +19,6 @@ data class ShopEntity(
     @PrimaryKey val id: Int = 1,
     val name: String,
     val phone: String,
-    val closeTime: String,
     val expressPct: Int,
     val nextOrder: Int,
     val nextCust: Int,

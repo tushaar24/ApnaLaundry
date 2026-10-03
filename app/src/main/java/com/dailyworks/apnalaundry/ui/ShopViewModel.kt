@@ -30,7 +30,7 @@ class ShopViewModel(
 ) : ViewModel() {
 
     private val empty = LaundryState(
-        Shop("Shine Laundry", "9876543210", "21:00", 50), emptyList(), emptyList(), emptyList(), emptyList(), emptySet(),
+        Shop("Shine Laundry", "9876543210", 50), emptyList(), emptyList(), emptyList(), emptyList(), emptySet(),
     )
 
     val state: StateFlow<LaundryState> =
@@ -81,8 +81,8 @@ class ShopViewModel(
     fun deleteService(id: String) = launchCmd { repo.deleteService(id) }
 
     fun upsertService(service: Service) = viewModelScope.launch { repo.upsertService(service); sync.requestSync() }
-    fun updateShop(name: String, closeTime: String, expressPct: Int) =
-        viewModelScope.launch { repo.updateShop(name, closeTime, expressPct); sync.requestSync() }
+    fun updateShop(name: String, expressPct: Int) =
+        viewModelScope.launch { repo.updateShop(name, expressPct); sync.requestSync() }
 
     // ---- commands whose result the caller needs ----
     fun saveCustomer(
@@ -91,16 +91,6 @@ class ShopViewModel(
     ) = viewModelScope.launch {
         val (id, res) = repo.saveCustomer(editId, name, phone, address, oldBaaki, fromList)
         res?.let { publish(it) }
-        sync.requestSync()
-        onDone(id)
-    }
-
-    fun createQuick(
-        existingCustId: String?, typedInput: String, amount: Int, pieces: Int, paidMethod: PayMethod?, day: String,
-        onDone: (Int) -> Unit = {},
-    ) = viewModelScope.launch {
-        val (id, res) = repo.createQuick(existingCustId, typedInput, amount, pieces, paidMethod, day)
-        publish(res)
         sync.requestSync()
         onDone(id)
     }

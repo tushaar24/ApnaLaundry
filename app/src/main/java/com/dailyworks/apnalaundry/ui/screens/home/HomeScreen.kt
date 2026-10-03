@@ -20,11 +20,13 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.Checkroom
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.Icon
@@ -55,6 +57,7 @@ import com.dailyworks.apnalaundry.ui.components.BottomNav
 import com.dailyworks.apnalaundry.ui.components.FieldBox
 import com.dailyworks.apnalaundry.ui.components.NavTab
 import com.dailyworks.apnalaundry.ui.components.OrderCard
+import com.dailyworks.apnalaundry.ui.components.PrimaryButton
 import com.dailyworks.apnalaundry.ui.components.SectionLabel
 import com.dailyworks.apnalaundry.ui.components.bric
 import com.dailyworks.apnalaundry.ui.components.fig
@@ -102,12 +105,20 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
             }
         }
 
-        if (!searching) {
+        val noOrders = state.orders.isEmpty()
+
+        if (searching) {
+            // handled below
+        } else if (noOrders) {
+            // brand-new shop: the empty state below carries the whole screen
+        } else {
             DashboardStrip(state, selDate, hidden, onEye = shopVm::toggleHideAmounts, onOpen = { navigator.openEarnings() })
             TabRow(state, tabPickup, selDate) { tabPickup = it; filter = "all" }
             DateStrip(state, tabPickup, selDate) { selDate = it }
             FilterTabs(state, tabPickup, selDate, filter) { filter = it }
-        } else {
+        }
+
+        if (searching) {
             val note = if (query.isBlank()) "Type a name, phone number or order number." else run {
                 val n = searchResults(state, query).size
                 "$n result${if (n == 1) "" else "s"} from all dates"
@@ -116,6 +127,10 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
         }
 
         Box(Modifier.weight(1f).fillMaxWidth()) {
+            if (noOrders && !searching) {
+                EmptyHome { navigator.openNewOrder(from = "home") }
+                return@Box
+            }
             LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 170.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (searching) {
                     val results = searchResults(state, query)
@@ -150,16 +165,11 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                 items(list) { o -> OrderCard(state, o, tabPickup, false, { navigator.openOrder(o.id) }, { act(o) }, { active = ActiveSheet.Menu(o.id) }, { dial(context, o, state) }) }
             }
 
-            // FABs — Quick order stacked above New order
+            // New order FAB
             if (!searching) {
-                Column(Modifier.align(Alignment.BottomEnd).padding(16.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Box(Modifier.height(58.dp).rounded(999.dp).background(Tokens.Card).border(1.5.dp, Tokens.Blue, RoundedCornerShape(999.dp)).tap { active = ActiveSheet.Quick(AppDate.TODAY) { } }.padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
-                        Text("Quick order", style = fig(16, FontWeight.Bold, Tokens.Blue))
-                    }
-                    Row(Modifier.height(58.dp).rounded(999.dp).background(Tokens.Blue).tap { navigator.openNewOrder(from = "home") }.padding(start = 18.dp, end = 22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Icon(Icons.Filled.Add, null, tint = Tokens.OnDark, modifier = Modifier.size(22.dp))
-                        Text("New order", style = fig(17, FontWeight.Bold, Tokens.OnDark))
-                    }
+                Row(Modifier.align(Alignment.BottomEnd).padding(16.dp).height(58.dp).rounded(999.dp).background(Tokens.Blue).tap { navigator.openNewOrder(from = "home") }.padding(start = 18.dp, end = 22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Filled.Add, null, tint = Tokens.OnDark, modifier = Modifier.size(22.dp))
+                    Text("New order", style = fig(17, FontWeight.Bold, Tokens.OnDark))
                 }
             }
         }
@@ -168,6 +178,59 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
     }
 
     SheetHost(active, state, shopVm, navigator, onOpen = { active = it }, onDismiss = { active = null })
+}
+
+// ---------- empty state (brand-new shop) ----------
+@Composable
+private fun EmptyHome(onNewOrder: () -> Unit) {
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Column(
+            Modifier.fillMaxWidth().rounded(16.dp).background(Tokens.Card).border(1.dp, Tokens.CardBorder, RoundedCornerShape(16.dp)).padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Box(Modifier.size(84.dp).rounded(999.dp).background(Tokens.BlueLight), contentAlignment = Alignment.Center) {
+                Icon(Icons.Outlined.Checkroom, null, tint = Tokens.Blue, modifier = Modifier.size(40.dp))
+            }
+            Text("Your shop is ready!", style = bric(26, FontWeight.Bold))
+            Text(
+                "No orders yet. Take your first one — it takes less than a minute.",
+                style = fig(15, color = Tokens.Muted), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+            PrimaryButton("+ Take your first order", height = 56.dp, onClick = onNewOrder)
+        }
+
+        Column(
+            Modifier.fillMaxWidth().rounded(16.dp).background(Tokens.Card).border(1.dp, Tokens.CardBorder, RoundedCornerShape(16.dp)).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            SectionLabel("How it works")
+            HowStep(1, "Take the order", "Pick the customer and clothes. The bill is made for you.")
+            HowStep(2, "Mark it ready", "The customer gets a WhatsApp that clothes are ready.")
+            HowStep(3, "Hand over and collect money", "Cash, UPI or khata — it all adds up in Earnings.")
+        }
+
+        Text(
+            "Your prices are already set. Change them anytime from ₹ Rates at the top.",
+            style = fig(13, color = Tokens.Muted), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+        )
+    }
+}
+
+@Composable
+private fun HowStep(n: Int, title: String, desc: String) {
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Box(Modifier.size(28.dp).rounded(999.dp).background(Tokens.Ink), contentAlignment = Alignment.Center) {
+            Text("$n", style = fig(14, FontWeight.Bold, Tokens.OnDark))
+        }
+        Column(Modifier.weight(1f)) {
+            Text(title, style = fig(16, FontWeight.Bold))
+            Text(desc, style = fig(13, color = Tokens.Muted))
+        }
+    }
 }
 
 // ---------- header pieces ----------

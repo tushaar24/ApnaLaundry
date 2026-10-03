@@ -15,7 +15,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class ShopDto(
-    val name: String, val phone: String, val closeTime: String, val expressPct: Int,
+    val name: String, val phone: String, val expressPct: Int,
     val nextOrder: Int, val nextCust: Int, val updatedAt: Long,
 )
 
@@ -81,8 +81,8 @@ data class SyncChanges(
 
 // ---- entity <-> DTO ----
 
-fun ShopEntity.toDto() = ShopDto(name, phone, closeTime, expressPct, nextOrder, nextCust, updatedAt)
-fun ShopDto.toEntity() = ShopEntity(1, name, phone, closeTime, expressPct, nextOrder, nextCust, updatedAt, dirty = false)
+fun ShopEntity.toDto() = ShopDto(name, phone, expressPct, nextOrder, nextCust, updatedAt)
+fun ShopDto.toEntity() = ShopEntity(1, name, phone, expressPct, nextOrder, nextCust, updatedAt, dirty = false)
 
 fun ServiceEntity.toDto() = ServiceDto(id, name, mode, ratePerKg, minKg, readyInDays, lockedToPiece, sortOrder, deleted, itemsJson, updatedAt)
 fun ServiceDto.toEntity() = ServiceEntity(id, name, mode, ratePerKg, minKg, readyInDays, lockedToPiece, sortOrder, deleted, itemsJson, updatedAt, dirty = false)

@@ -50,4 +50,4 @@ fun LedgerEntry.toEntity() = LedgerEntity(
     id, custId, date, time, ts, kind.name, amt, method.name, tag.name, cover, toOld, toAdv, ref, note,
 )
 
-fun ShopEntity.toDomain() = Shop(name, phone, closeTime, expressPct)
+fun ShopEntity.toDomain() = Shop(name, phone, expressPct)

@@ -43,7 +43,7 @@ class LaundryRepository(private val db: AppDatabase) {
         ) { services, customers, orders, ledger, sd ->
             val (shopE, daysE) = sd
             LaundryState(
-                shop = shopE?.toDomain() ?: Shop(SeedData.shop.name, SeedData.shop.phone, SeedData.shop.closeTime, SeedData.shop.expressPct),
+                shop = shopE?.toDomain() ?: Shop(SeedData.shop.name, SeedData.shop.phone, SeedData.shop.expressPct),
                 services = services.map { it.toDomain() }.sortedBy { it.sortOrder },
                 customers = customers.map { it.toDomain() },
                 orders = orders.map { it.toDomain() },
@@ -66,7 +66,7 @@ class LaundryRepository(private val db: AppDatabase) {
         if (shopDao.get() != null) { refreshTsCounter(); return }
         db.withTransaction {
             shopDao.upsert(
-                ShopEntity(1, "Apna Laundry", shopPhone ?: "", SeedData.shop.closeTime, SeedData.shop.expressPct, 1001, 1)
+                ShopEntity(1, "Apna Laundry", shopPhone ?: "", SeedData.shop.expressPct, 1001, 1)
             )
             serviceDao.upsertAll(SeedData.services.map { it.toEntity() })
         }
@@ -129,7 +129,7 @@ class LaundryRepository(private val db: AppDatabase) {
     private suspend fun current(): LaundryState {
         val shopE = shopDao.get()
         return LaundryState(
-            shop = shopE?.toDomain() ?: Shop("Shine Laundry", "9876543210", "21:00", 50),
+            shop = shopE?.toDomain() ?: Shop("Shine Laundry", "9876543210", 50),
             services = serviceDao.getAll().filter { !it.deleted }.map { it.toDomain() }.sortedBy { it.sortOrder },
             customers = customerDao.observeOnce().map { it.toDomain() },
             orders = orderDao.observeOnce().map { it.toDomain() },
@@ -325,50 +325,9 @@ class LaundryRepository(private val db: AppDatabase) {
         return CmdResult("${sv.name} deleted · old orders keep it", undo)
     }
 
-    suspend fun updateShop(name: String, closeTime: String, expressPct: Int) {
+    suspend fun updateShop(name: String, expressPct: Int) {
         val e = shopDao.get()!!
-        shopDao.upsert(e.copy(name = name, closeTime = closeTime, expressPct = expressPct, dirty = true, updatedAt = SyncClock.now()))
-    }
-
-    // ---------------- quick order ----------------
-    suspend fun createQuick(
-        existingCustId: String?, typedInput: String, amount: Int, pieces: Int, paidMethod: PayMethod?, day: String,
-    ): Pair<Int, CmdResult> {
-        val undo = snapshot()
-        val shopE = shopDao.get()!!
-        var custId = existingCustId
-        var nextCust = shopE.nextCust
-        if (custId == null) {
-            val digits = typedInput.filter { it.isDigit() }
-            val isPhone = digits.length >= 10 && typedInput.all { it.isDigit() || it == ' ' || it == '+' }
-            custId = "c$nextCust"; nextCust += 1
-            val phone = if (isPhone) digits.takeLast(10) else ""
-            val name = if (isPhone) "+91 " + fmtPhone(phone) else typedInput.split(" ").joinToString(" ") { it.replaceFirstChar { ch -> ch.uppercase() } }
-            customerDao.upsert(Customer(custId, name, phone, "", 0, "Today", 0).toEntity())
-        } else {
-            touchCustomer(custId)
-        }
-        val id = shopE.nextOrder
-        val lines = if (amount > 0) listOf(quickLine(amount, pieces)) else emptyList()
-        var pre = 0
-        val order = Order(
-            id = id, custId = custId, pickup = Route.SHOP, delivery = Route.SHOP, pickupDate = day, pickupTime = "",
-            deliveryDate = "", deliveryTime = "", ddAuto = false, status = OrderStatus.RECEIVED, cancelReason = "",
-            fee = 0, express = false, exAmt = 0, discount = 0, pre = 0, paid = 0, doneAt = "", doneDate = "",
-            createdOn = day, billSent = false, pieces = pieces, lines = lines,
-        )
-        db.withTransaction {
-            if (paidMethod != null && amount > 0) {
-                pre = amount
-                ledgerDao.insert(mkEntry(custId, LedgerKind.GOT, amount, paidMethod, PayTag.PRE, cover = amount, ref = id,
-                    time = if (day == AppDate.TODAY) "Just now" else "Recorded later").toEntity())
-            }
-            orderDao.upsert(order.copy(pre = pre).toEntity())
-            shopDao.upsert(shopE.copy(nextOrder = id + 1, nextCust = nextCust, dirty = true, updatedAt = SyncClock.now()))
-        }
-        val cname = customerDao.observeOnce().first { it.id == custId }.name
-        val toast = "Quick order #$id saved for ${firstName(cname)}" + (if (amount > 0) " · ${money(amount)}" else " · add bill later")
-        return id to CmdResult(toast, undo)
+        shopDao.upsert(e.copy(name = name, expressPct = expressPct, dirty = true, updatedAt = SyncClock.now()))
     }
 
     // ---------------- new / edit order ----------------
@@ -455,8 +414,6 @@ class LaundryRepository(private val db: AppDatabase) {
         serviceId = "quick", serviceName = "Not itemised", itemName = "Clothes (not itemised)",
         qty = pieces, price = 0, base = 0, kg = 0.0, amt = amount, isQuick = true,
     )
-
-    private fun fmtPhone(d: String): String = if (d.length == 10) d.substring(0, 5) + " " + d.substring(5) else d
 
     data class OrderFields(
         val custId: String, val pickup: Route, val delivery: Route, val pickupDate: String, val pickupTime: String,

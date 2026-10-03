@@ -104,7 +104,6 @@ data class LedgerEntry(
 data class Shop(
     val name: String,
     val phone: String,
-    val closeTime: String,   // "21:00"
     val expressPct: Int,
 )
 

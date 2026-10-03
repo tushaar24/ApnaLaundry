@@ -14,7 +14,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         LedgerEntity::class,
         DayCloseEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -57,6 +57,33 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE day_close ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE day_close ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE day_close ADD COLUMN dirty INTEGER NOT NULL DEFAULT 1")
+            }
+        }
+
+        /**
+         * v2 -> v3: drop the shop.closeTime column (shop closing time removed
+         * from the product). SQLite can't DROP COLUMN on older engines, so the
+         * table is recreated. Rows are re-stamped dirty so the change pushes.
+         */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE shop_new (" +
+                        "id INTEGER NOT NULL PRIMARY KEY, " +
+                        "name TEXT NOT NULL, " +
+                        "phone TEXT NOT NULL, " +
+                        "expressPct INTEGER NOT NULL, " +
+                        "nextOrder INTEGER NOT NULL, " +
+                        "nextCust INTEGER NOT NULL, " +
+                        "updatedAt INTEGER NOT NULL DEFAULT 0, " +
+                        "dirty INTEGER NOT NULL DEFAULT 1)"
+                )
+                db.execSQL(
+                    "INSERT INTO shop_new (id, name, phone, expressPct, nextOrder, nextCust, updatedAt, dirty) " +
+                        "SELECT id, name, phone, expressPct, nextOrder, nextCust, updatedAt, 1 FROM shop"
+                )
+                db.execSQL("DROP TABLE shop")
+                db.execSQL("ALTER TABLE shop_new RENAME TO shop")
             }
         }
     }

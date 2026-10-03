@@ -21,7 +21,6 @@ sealed interface ActiveSheet {
     ) : ActiveSheet
     data class Receive(val custId: String) : ActiveSheet
     data class AddOld(val custId: String) : ActiveSheet
-    data class Quick(val day: String, val onCreated: (Int) -> Unit = {}) : ActiveSheet
     data class BillView(val orderId: Int) : ActiveSheet
     data class Share(val text: String) : ActiveSheet
 }
@@ -46,7 +45,6 @@ fun SheetHost(
         is ActiveSheet.CustomerForm -> CustomerFormSheet(state, active, vm, onDismiss)
         is ActiveSheet.Receive -> ReceivePaymentSheet(state, active.custId, vm, onDismiss)
         is ActiveSheet.AddOld -> AddOldBaakiSheet(state, active.custId, vm, onDismiss)
-        is ActiveSheet.Quick -> QuickOrderSheet(state, active.day, active.onCreated, vm, onDismiss)
         is ActiveSheet.BillView -> BillViewSheet(state, active.orderId, onDismiss)
         is ActiveSheet.Share -> ShareSummarySheet(active.text, vm, onDismiss)
     }

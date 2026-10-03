@@ -15,7 +15,7 @@ object SeedData {
     private fun items(vararg pairs: Pair<String, Int>) =
         pairs.map { ServiceItem(it.first, it.second) }
 
-    val shop = Shop(name = "Shine Laundry", phone = "9876543210", closeTime = "21:00", expressPct = 50)
+    val shop = Shop(name = "Shine Laundry", phone = "9876543210", expressPct = 50)
 
     val services = listOf(
         Service(

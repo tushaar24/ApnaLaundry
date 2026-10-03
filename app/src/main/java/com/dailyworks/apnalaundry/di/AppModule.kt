@@ -20,7 +20,7 @@ import org.koin.dsl.module
 val appModule = module {
     single {
         Room.databaseBuilder(androidContext(), AppDatabase::class.java, AppDatabase.NAME)
-            .addMigrations(AppDatabase.MIGRATION_1_2)
+            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3)
             .build()
     }
     single { Prefs(androidContext()) }
