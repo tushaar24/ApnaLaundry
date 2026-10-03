@@ -1,0 +1,242 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { rupees } from "@/core/money";
+import type { OrderLine, Service } from "@/domain/models";
+import { trimKg } from "@/domain/selectors";
+import { cls, FieldBox, Stepper } from "./basics";
+
+/**
+ * Clothes counting state + editor — port of ui/components/Clothes.kt
+ * (ClothesState + ClothesEditor), shared by New order and Count clothes.
+ */
+
+export interface ClothesState {
+  qty: Record<string, Record<string, number>>; // svcId -> itemName -> qty
+  weight: Record<string, string>; // svcId -> weight text
+  price: Record<string, Record<string, string>>; // svcId -> itemName -> override text
+  selected: string;
+}
+
+export interface ClothesApi {
+  state: ClothesState;
+  qtyOf(svc: string, item: string): number;
+  bump(svc: string, item: string, d: number): void;
+  setWeight(svc: string, v: string): void;
+  priceText(svc: string, item: string): string | undefined;
+  setPrice(svc: string, item: string, v: string): void;
+  priceFor(svc: Service, item: string, base: number): number;
+  select(svcId: string): void;
+  lines(services: Service[]): OrderLine[];
+  total(services: Service[]): number;
+}
+
+export function useClothesState(services: Service[]): ClothesApi {
+  const initialSelected =
+    (services.find((s) => s.mode === "PIECE") ?? services[0])?.id ?? "";
+  const [state, setState] = useState<ClothesState>({
+    qty: {}, weight: {}, price: {}, selected: initialSelected,
+  });
+
+  // Keep selection valid if the service list changes under us.
+  const selected = services.some((s) => s.id === state.selected) ? state.selected : initialSelected;
+
+  return useMemo<ClothesApi>(() => {
+    const api: ClothesApi = {
+      state: { ...state, selected },
+      qtyOf: (svc, item) => state.qty[svc]?.[item] ?? 0,
+      bump: (svc, item, d) =>
+        setState((s) => ({
+          ...s,
+          qty: {
+            ...s.qty,
+            [svc]: { ...(s.qty[svc] ?? {}), [item]: Math.max(0, (s.qty[svc]?.[item] ?? 0) + d) },
+          },
+        })),
+      setWeight: (svc, v) => setState((s) => ({ ...s, weight: { ...s.weight, [svc]: v } })),
+      priceText: (svc, item) => state.price[svc]?.[item],
+      setPrice: (svc, item, v) =>
+        setState((s) => ({
+          ...s,
+          price: { ...s.price, [svc]: { ...(s.price[svc] ?? {}), [item]: v } },
+        })),
+      priceFor: (svc, item, base) => {
+        const ov = state.price[svc.id]?.[item];
+        if (ov != null && ov !== "") {
+          const n = parseInt(ov, 10);
+          return Number.isNaN(n) ? 0 : n;
+        }
+        return base;
+      },
+      select: (svcId) => setState((s) => ({ ...s, selected: svcId })),
+      lines: (svcs) => {
+        const out: OrderLine[] = [];
+        for (const s of svcs) {
+          if (s.mode === "WEIGHT") {
+            const kg = parseFloat(state.weight[s.id] ?? "");
+            if (kg > 0) {
+              const rate = s.ratePerKg ?? 0;
+              const min = s.minKg ?? 0;
+              out.push({
+                serviceId: s.id, serviceName: s.name, itemName: "By weight",
+                qty: 0, price: rate, base: rate, kg, amt: Math.round(Math.max(kg, min) * rate),
+              });
+            }
+          } else {
+            const q = state.qty[s.id] ?? {};
+            for (const it of s.items) {
+              const base = it.price ?? 0;
+              const p = api.priceFor(s, it.name, base);
+              const c = q[it.name] ?? 0;
+              if (c > 0 && p > 0) {
+                out.push({
+                  serviceId: s.id, serviceName: s.name, itemName: it.name,
+                  qty: c, price: p, base, kg: 0, amt: c * p,
+                });
+              }
+            }
+          }
+        }
+        return out;
+      },
+      total: (svcs) => api.lines(svcs).reduce((sum, l) => sum + l.amt, 0),
+    };
+    return api;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, selected]);
+}
+
+function serviceStat(api: ClothesApi, s: Service): { n: number; kg: number; amt: number } {
+  if (s.mode === "WEIGHT") {
+    const kg = parseFloat(api.state.weight[s.id] ?? "") || 0;
+    const amt = kg > 0 ? Math.round(Math.max(kg, s.minKg ?? 0) * (s.ratePerKg ?? 0)) : 0;
+    return { n: 0, kg, amt };
+  }
+  const q = api.state.qty[s.id] ?? {};
+  let n = 0;
+  let a = 0;
+  for (const it of s.items) {
+    const base = it.price ?? 0;
+    const p = api.priceFor(s, it.name, base);
+    const c = q[it.name] ?? 0;
+    if (p > 0) { n += c; a += c * p; }
+  }
+  return { n, kg: 0, amt: a };
+}
+
+export function ClothesEditor({
+  services, api, editablePrice,
+}: { services: Service[]; api: ClothesApi; editablePrice: boolean }) {
+  const cur = services.find((s) => s.id === api.state.selected);
+
+  return (
+    <div className="flex w-full flex-col gap-3">
+      {/* service tiles (2 columns) */}
+      <div className="grid grid-cols-2 gap-2">
+        {services.map((s) => {
+          const { n, kg, amt } = serviceStat(api, s);
+          const has = amt > 0;
+          const sel = api.state.selected === s.id;
+          const sub = has && s.mode === "WEIGHT"
+            ? `${trimKg(kg)} kg · ${rupees(amt)}`
+            : has
+              ? `${n} ${n === 1 ? "item" : "items"} · ${rupees(amt)}`
+              : s.mode === "WEIGHT"
+                ? "By weight"
+                : "Tap to add";
+          return (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => api.select(s.id)}
+              className={cls(
+                "flex h-16 flex-col justify-center rounded-[14px] border-2 px-3.5 text-left",
+                sel ? "border-ink bg-ink" : has ? "border-blue bg-bluelight" : "border-cardborder bg-card",
+              )}
+            >
+              <span className={cls("truncate text-[15px] font-bold", sel ? "text-ondark" : "text-ink")}>{s.name}</span>
+              <span
+                className={cls(
+                  "truncate text-[12px] font-semibold",
+                  sel ? "text-ondarkmuted" : has ? "text-bluetext" : "text-muted",
+                )}
+              >
+                {sub}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {cur ? (
+        cur.mode === "PIECE" ? (
+          <div>
+            {cur.items
+              .filter((it) => (it.price ?? 0) > 0)
+              .map((item) => {
+                const base = item.price ?? 0;
+                const c = api.qtyOf(cur.id, item.name);
+                const priceText = api.priceText(cur.id, item.name) ?? String(base);
+                const changed = editablePrice && priceText !== "" && parseInt(priceText, 10) !== base;
+                return (
+                  <div key={item.name} className="flex h-14 items-center gap-2 py-0.5">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[16px] font-semibold">{item.name}</div>
+                      {changed ? <div className="text-[12px] font-semibold text-orangetext">rate ₹{base}</div> : null}
+                    </div>
+                    {editablePrice ? (
+                      <FieldBox
+                        value={priceText}
+                        onChange={(v) => api.setPrice(cur.id, item.name, v.replace(/\D/g, "").slice(0, 5))}
+                        prefix="₹"
+                        h={42}
+                        className="w-[88px]"
+                        inputMode="numeric"
+                        textClass="text-[16px] font-bold"
+                      />
+                    ) : (
+                      <span className="text-[15px] font-semibold text-muted">₹{base}</span>
+                    )}
+                    <Stepper
+                      qty={c}
+                      onDec={() => api.bump(cur.id, item.name, -1)}
+                      onInc={() => api.bump(cur.id, item.name, 1)}
+                    />
+                  </div>
+                );
+              })}
+          </div>
+        ) : (
+          <WeightEditor cur={cur} api={api} />
+        )
+      ) : null}
+    </div>
+  );
+}
+
+function WeightEditor({ cur, api }: { cur: Service; api: ClothesApi }) {
+  const rate = cur.ratePerKg ?? 0;
+  const min = cur.minKg ?? 0;
+  const w = api.state.weight[cur.id] ?? "";
+  const kg = parseFloat(w) || 0;
+  const amt = kg > 0 ? Math.round(Math.max(kg, min) * rate) : 0;
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex w-full items-center gap-3">
+        <FieldBox
+          value={w}
+          onChange={(v) => api.setWeight(cur.id, v.replace(/[^\d.]/g, ""))}
+          placeholder="0"
+          suffix="kg"
+          h={56}
+          inputMode="decimal"
+          className="flex-1"
+        />
+        <span className="bric text-[22px]">{rupees(amt)}</span>
+      </div>
+      <p className="text-[13px] text-muted">
+        ₹{rate} per kg. Bags under {trimKg(min)} kg are charged for {trimKg(min)} kg.
+      </p>
+    </div>
+  );
+}

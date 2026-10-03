@@ -1,0 +1,118 @@
+/** Pure domain models. Port of domain/Models.kt — same enums and shapes. */
+
+export type PricingMode = "PIECE" | "WEIGHT";
+
+export type OrderStatus = "CREATED" | "RECEIVED" | "READY" | "DELIVERED" | "CANCELLED";
+
+export type Route = "SHOP" | "HOME";
+
+export type LedgerKind = "BILL" | "OLD" | "ADJ" | "GOT";
+
+/** Payment allocation tag on a `GOT` ledger entry. */
+export type PayTag = "PRE" | "DELIVER" | "RECEIVE" | "NONE";
+
+export type PayMethod = "CASH" | "UPI" | "NONE";
+
+export interface ServiceItem {
+  name: string;
+  price: number | null; // null / blank = not offered by this service
+}
+
+export interface Service {
+  id: string;
+  name: string;
+  mode: PricingMode;
+  ratePerKg: number | null; // for WEIGHT
+  minKg: number | null; // for WEIGHT
+  readyInDays: number | null; // null = no ready time
+  lockedToPiece: boolean;
+  items: ServiceItem[];
+  sortOrder: number;
+}
+
+export interface Customer {
+  id: string;
+  name: string;
+  phone: string;
+  address: string;
+  pastOrders: number; // orders from the notebook, before the app
+  lastLabel: string; // "Today", "Yesterday", "23 Sep", "—"
+  agoRank: number; // for sorting recents (0 = most recent)
+}
+
+export interface OrderLine {
+  serviceId: string; // service id, or "quick" for a lump bill
+  serviceName: string; // snapshot so deleting a service never rewrites history
+  itemName: string; // item name, or "By weight" / "Clothes (not itemised)"
+  qty: number;
+  price: number; // per-piece price used on this order
+  base: number; // rate-card price at the time (for the "rate ₹25" note)
+  kg: number; // >0 for weight lines
+  amt: number;
+  isQuick?: boolean;
+}
+
+export interface Order {
+  id: number;
+  custId: string;
+  pickup: Route;
+  delivery: Route;
+  pickupDate: string;
+  pickupTime: string;
+  deliveryDate: string; // "" = no date
+  deliveryTime: string;
+  ddAuto: boolean; // delivery date was auto-filled from ready time
+  status: OrderStatus;
+  cancelReason: string;
+  fee: number; // pickup / delivery charge
+  express: boolean;
+  exAmt: number;
+  discount: number;
+  pre: number; // prepaid before delivery
+  paid: number; // total paid toward this bill
+  doneAt: string; // time string when delivered
+  doneDate: string; // iso date delivered
+  createdOn: string;
+  billSent: boolean;
+  pieces: number; // optional piece count for quick bills
+  lines: OrderLine[];
+}
+
+export interface LedgerEntry {
+  id: string;
+  custId: string;
+  date: string;
+  time: string;
+  ts: number; // stable ordering within a day
+  kind: LedgerKind;
+  amt: number; // adj can be negative
+  method: PayMethod;
+  tag: PayTag;
+  cover: number; // portion that paid this bill
+  toOld: number; // portion that cleared old baaki
+  toAdv: number; // portion kept as advance
+  ref: number | null; // order id
+  note: string;
+}
+
+export interface Shop {
+  name: string;
+  phone: string;
+  expressPct: number;
+}
+
+export interface DayClose {
+  date: string;
+  closedAt: number;
+  cashCounted: number | null;
+}
+
+/** Everything the domain layer needs to compute derived values. */
+export interface LaundryState {
+  shop: Shop;
+  services: Service[];
+  customers: Customer[];
+  orders: Order[];
+  ledger: LedgerEntry[];
+  closedDays: Set<string>;
+}

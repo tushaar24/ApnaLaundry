@@ -1,0 +1,120 @@
+@import "tailwindcss";
+
+/* Design tokens from the app's ui/theme/Color.kt (PRODUCT_SPEC §13). */
+@theme {
+  --color-bg: #f5f3ee;
+  --color-card: #ffffff;
+  --color-cardborder: #e2ded6;
+  --color-divider: #eeebe4;
+  --color-fieldborder: #d5d0c6;
+  --color-dashborder: #b9b3a8;
+  --color-segtrack: #eae6de;
+  --color-neutralfill: #eeebe4;
+
+  --color-ink: #16191d;
+  --color-inksecondary: #3f444a;
+  --color-muted: #5b6168;
+  --color-faint: #8a8f95;
+  --color-muteddot: #6b7178;
+
+  --color-blue: #1d4ed8;
+  --color-bluedisabled: #9aaee6;
+  --color-bluelight: #e6ecfb;
+  --color-bluetext: #1e3a8a;
+  --color-blueborder: #c9d4f4;
+  --color-bluebar: #9db5f5;
+
+  --color-orange: #c2410c;
+  --color-orangetext: #8a3a06;
+  --color-orangedeep: #6b2d05;
+  --color-orangelight: #fbeedc;
+  --color-orangeborder: #e8c9a6;
+  --color-orangebar: #f6b98a;
+  --color-deletered: #9a3412;
+
+  --color-ondark: #ffffff;
+  --color-ondarkmuted: #d9d6cf;
+  --color-ondarkfaint: #c9c5bd;
+  --color-darkchiptrack: #3a3f46;
+
+  --color-servicebargrey: #9a948a;
+  --color-toggleoff: #c9c3b8;
+
+  --font-sans: var(--font-figtree), system-ui, sans-serif;
+  --font-display: var(--font-bricolage), var(--font-figtree), system-ui, sans-serif;
+}
+
+html,
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Headings / big numbers — Bricolage Grotesque with the app's tight tracking. */
+.bric {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+/* Section label — 12sp bold uppercase, +0.04em tracking. */
+.section-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-muted);
+}
+
+input,
+button,
+textarea {
+  font-family: inherit;
+}
+
+input:focus {
+  outline: none;
+}
+
+button {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Dashed border for empty date/time boxes (11/8 dash pattern like the app). */
+.dash-border {
+  border: 1.5px dashed var(--color-dashborder);
+}
+
+/* Bottom-sheet slide-up on mobile. */
+@keyframes sheet-up {
+  from { transform: translateY(32px); opacity: 0.6; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-sheet { animation: sheet-up 0.22s ease-out; }
+.animate-scrim { animation: fade-in 0.18s ease-out; }
+
+/* Toast pop. */
+@keyframes toast-in {
+  from { transform: translateY(12px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.animate-toast { animation: toast-in 0.18s ease-out; }
+
+/* Hide the number input spinners (amount fields). */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Thin scrollbars for the horizontal strips. */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
