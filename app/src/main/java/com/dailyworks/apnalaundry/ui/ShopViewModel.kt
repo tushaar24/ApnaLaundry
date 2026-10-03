@@ -6,6 +6,7 @@ import com.dailyworks.apnalaundry.data.CmdResult
 import com.dailyworks.apnalaundry.data.LaundryRepository
 import com.dailyworks.apnalaundry.data.Prefs
 import com.dailyworks.apnalaundry.data.Snapshot
+import com.dailyworks.apnalaundry.data.sync.SyncScheduler
 import com.dailyworks.apnalaundry.domain.*
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -25,6 +26,7 @@ data class ToastState(val text: String, val hasUndo: Boolean)
 class ShopViewModel(
     private val repo: LaundryRepository,
     private val prefs: Prefs,
+    private val sync: SyncScheduler,
 ) : ViewModel() {
 
     private val empty = LaundryState(
@@ -60,6 +62,7 @@ class ShopViewModel(
             repo.restore(snap)
             undoSnapshot = null
             _toast.value = null
+            sync.requestSync()
         }
     }
 
@@ -77,14 +80,9 @@ class ShopViewModel(
     fun addOldBaaki(custId: String, amount: Int) = launchCmd { repo.addOldBaaki(custId, amount) }
     fun deleteService(id: String) = launchCmd { repo.deleteService(id) }
 
-    fun upsertService(service: Service) = viewModelScope.launch { repo.upsertService(service) }
+    fun upsertService(service: Service) = viewModelScope.launch { repo.upsertService(service); sync.requestSync() }
     fun updateShop(name: String, closeTime: String, expressPct: Int) =
-        viewModelScope.launch { repo.updateShop(name, closeTime, expressPct) }
-
-    fun restart() = viewModelScope.launch {
-        repo.resetToSeed()
-        prefs.logoutAndReset()
-    }
+        viewModelScope.launch { repo.updateShop(name, closeTime, expressPct); sync.requestSync() }
 
     // ---- commands whose result the caller needs ----
     fun saveCustomer(
@@ -93,6 +91,7 @@ class ShopViewModel(
     ) = viewModelScope.launch {
         val (id, res) = repo.saveCustomer(editId, name, phone, address, oldBaaki, fromList)
         res?.let { publish(it) }
+        sync.requestSync()
         onDone(id)
     }
 
@@ -102,6 +101,7 @@ class ShopViewModel(
     ) = viewModelScope.launch {
         val (id, res) = repo.createQuick(existingCustId, typedInput, amount, pieces, paidMethod, day)
         publish(res)
+        sync.requestSync()
         onDone(id)
     }
 
@@ -116,8 +116,10 @@ class ShopViewModel(
             fee, express, exAmt, discount, lines, quickAmount, quickPieces,
         )
         res.toast?.let { publish(CmdResult(it, res.undo)) }
+        sync.requestSync()
         onDone(res)
     }
 
-    private fun launchCmd(block: suspend () -> CmdResult) = viewModelScope.launch { publish(block()) }
+    private fun launchCmd(block: suspend () -> CmdResult) =
+        viewModelScope.launch { publish(block()); sync.requestSync() }
 }

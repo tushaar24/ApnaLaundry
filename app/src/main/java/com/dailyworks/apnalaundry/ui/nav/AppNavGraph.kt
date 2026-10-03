@@ -1,6 +1,7 @@
 package com.dailyworks.apnalaundry.ui.nav
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -10,6 +11,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.dailyworks.apnalaundry.data.AuthRepository
 import com.dailyworks.apnalaundry.data.Prefs
 import com.dailyworks.apnalaundry.ui.ShopViewModel
 import com.dailyworks.apnalaundry.ui.screens.bill.BillScreen
@@ -22,12 +24,14 @@ import com.dailyworks.apnalaundry.ui.screens.neworder.NewOrderScreen
 import com.dailyworks.apnalaundry.ui.screens.order.OrderDetailScreen
 import com.dailyworks.apnalaundry.ui.screens.rates.RatesScreen
 import com.dailyworks.apnalaundry.ui.screens.settings.SettingsScreen
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
 @Composable
 fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopVm: ShopViewModel) {
     val prefs: Prefs = koinInject()
+    val authRepo: AuthRepository = koinInject()
     val scope = rememberCoroutineScope()
     val loggedIn by prefs.loggedIn.collectAsStateWithLifecycle(initialValue = null)
     val setupDone by prefs.setupDone.collectAsStateWithLifecycle(initialValue = null)
@@ -43,9 +47,24 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
         }
     }
 
+    // If the session dies mid-use (refresh token revoked/expired — TokenManager
+    // flips loggedIn off), return to login. Local data is kept; logging back
+    // into the same account merges cleanly.
+    LaunchedEffect(li) {
+        if (!li && navController.currentDestination?.route?.let { it != Routes.LOGIN } == true) {
+            navController.navigate(Routes.LOGIN) { popUpTo(0) { inclusive = true } }
+        }
+    }
+
     NavHost(navController = navController, startDestination = start) {
         composable(Routes.LOGIN) {
-            LoginScreen(onLoggedIn = { navigator.toRatesSetup() })
+            LoginScreen(onLoggedIn = {
+                // An existing account restored from the server skips setup
+                // (AuthRepository set setupDone after the initial pull).
+                scope.launch {
+                    if (prefs.setupDone.first()) navigator.toHomeAfterSetup() else navigator.toRatesSetup()
+                }
+            })
         }
 
         composable(
@@ -78,8 +97,15 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
 
         composable(Routes.SETTINGS) {
             SettingsScreen(shopVm, navigator, onLogout = {
-                scope.launch { prefs.logoutAndReset(); shopVm.restart().join() }
-                navigator.nav.navigate(Routes.LOGIN) { popUpTo(0) { inclusive = true } }
+                scope.launch {
+                    // Pushes unsynced work first; refuses to log out (data
+                    // would be lost) if that fails.
+                    authRepo.logout()
+                        .onSuccess {
+                            navigator.nav.navigate(Routes.LOGIN) { popUpTo(0) { inclusive = true } }
+                        }
+                        .onFailure { shopVm.showInfo(it.message ?: "Couldn't log out — try again") }
+                }
             })
         }
 

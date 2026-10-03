@@ -1,80 +1,120 @@
 package com.dailyworks.apnalaundry.data.remote
 
+import com.dailyworks.apnalaundry.BuildConfig
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
-import io.ktor.client.engine.mock.MockEngine
-import io.ktor.client.engine.mock.respond
+import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.request.bearerAuth
+import io.ktor.client.request.get
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
-import io.ktor.http.HttpHeaders
-import io.ktor.http.HttpStatusCode
-import io.ktor.http.content.TextContent
 import io.ktor.http.contentType
-import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
-import kotlinx.coroutines.delay
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
-@Serializable data class OtpRequest(val phone: String)
-@Serializable data class OtpResponse(val ok: Boolean, val message: String)
-@Serializable data class VerifyRequest(val phone: String, val otp: String)
-@Serializable data class VerifyResponse(val ok: Boolean, val token: String? = null, val message: String)
+// Wire types for /api/laundry/auth/* (success and error responses share the
+// same shape; `code` carries the server's stable error code).
+
+@Serializable data class AuthUserDto(val id: String, val phone: String, val name: String? = null)
+
+@Serializable
+data class OtpChallengeResponse(
+    val success: Boolean,
+    val challengeId: String? = null,
+    val challengeToken: String? = null,
+    val expiresAt: String? = null,
+    val nextSendAt: String? = null,
+    val attemptsRemaining: Int? = null,
+    val code: String? = null,
+    val message: String? = null,
+    val retryAt: String? = null,
+)
+
+@Serializable
+data class CredentialsResponse(
+    val success: Boolean,
+    val user: AuthUserDto? = null,
+    val accessToken: String? = null,
+    val accessExpiresAt: String? = null,
+    val refreshToken: String? = null,
+    val sessionExpiresAt: String? = null,
+    val code: String? = null,
+    val message: String? = null,
+    val attemptsRemaining: Int? = null,
+)
+
+/** Parsed response + HTTP status, so callers can distinguish 401 from offline. */
+data class ApiReply<T>(val status: Int, val body: T?)
+
+/** Server ISO timestamp (Date.toISOString()) -> epoch ms; 0 if unparseable. */
+fun parseIsoMs(iso: String?): Long {
+    if (iso.isNullOrBlank()) return 0L
+    return runCatching {
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
+            .apply { timeZone = TimeZone.getTimeZone("UTC") }
+            .parse(iso)!!.time
+    }.getOrDefault(0L)
+}
 
 /**
- * Demo auth over Ktor. A [MockEngine] plays the role of the backend so the whole
- * flow is real Ktor request/response plumbing while staying fully offline.
- * Fixed demo credentials: phone 9876543210, OTP 123456.
+ * OTP login against the backend (ported from HealthProduct's identity flow):
+ * request-otp -> challenge id + secret challenge token; verify-otp (Bearer
+ * challenge token) -> opaque access/refresh credentials.
  */
 class AuthApi(private val client: HttpClient = defaultClient()) {
 
-    suspend fun requestOtp(phone: String): OtpResponse =
-        client.post("$BASE/auth/request-otp") {
-            contentType(ContentType.Application.Json)
-            setBody(OtpRequest(phone))
-        }.body()
+    private val base = BuildConfig.API_BASE_URL
 
-    suspend fun verifyOtp(phone: String, otp: String): VerifyResponse =
-        client.post("$BASE/auth/verify-otp") {
+    suspend fun requestOtp(phone: String): ApiReply<OtpChallengeResponse> {
+        val res = client.post("$base/auth/request-otp") {
             contentType(ContentType.Application.Json)
-            setBody(VerifyRequest(phone, otp))
-        }.body()
+            setBody(mapOf("phone" to phone))
+        }
+        return ApiReply(res.status.value, runCatching<OtpChallengeResponse> { res.body() }.getOrNull())
+    }
+
+    suspend fun verifyOtp(
+        challengeId: String, challengeToken: String, otp: String, deviceId: String,
+    ): ApiReply<CredentialsResponse> {
+        val res = client.post("$base/auth/verify-otp") {
+            contentType(ContentType.Application.Json)
+            bearerAuth(challengeToken)
+            setBody(mapOf("challengeId" to challengeId, "otp" to otp, "deviceId" to deviceId))
+        }
+        return ApiReply(res.status.value, runCatching<CredentialsResponse> { res.body() }.getOrNull())
+    }
+
+    suspend fun refresh(refreshToken: String): ApiReply<CredentialsResponse> {
+        val res = client.post("$base/auth/refresh") {
+            contentType(ContentType.Application.Json)
+            setBody(mapOf("refreshToken" to refreshToken))
+        }
+        return ApiReply(res.status.value, runCatching<CredentialsResponse> { res.body() }.getOrNull())
+    }
+
+    suspend fun logout(accessToken: String): Int =
+        client.post("$base/auth/logout") { bearerAuth(accessToken) }.status.value
+
+    suspend fun me(accessToken: String): Int =
+        client.get("$base/auth/me") { bearerAuth(accessToken) }.status.value
 
     companion object {
-        const val BASE = "https://demo.apnalaundry.local"
-        const val DEMO_PHONE = "9876543210"
-        const val DEMO_OTP = "123456"
+        val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
-        private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
-
-        fun defaultClient(): HttpClient {
-            val engine = MockEngine { request ->
-                delay(500) // simulate network latency
-                val headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
-                val bodyText = (request.body as? TextContent)?.text.orEmpty()
-                when (request.url.encodedPath) {
-                    "/auth/request-otp" -> {
-                        val phone = runCatching { json.decodeFromString(OtpRequest.serializer(), bodyText).phone }.getOrDefault("")
-                        val res = if (phone == DEMO_PHONE) OtpResponse(true, "OTP sent")
-                        else OtpResponse(false, "This demo only accepts 9876543210")
-                        respond(json.encodeToString(OtpResponse.serializer(), res), HttpStatusCode.OK, headers)
-                    }
-                    "/auth/verify-otp" -> {
-                        val req = runCatching { json.decodeFromString(VerifyRequest.serializer(), bodyText) }
-                            .getOrDefault(VerifyRequest("", ""))
-                        val res = if (req.phone == DEMO_PHONE && req.otp == DEMO_OTP)
-                            VerifyResponse(true, "demo-token-xyz", "Verified")
-                        else VerifyResponse(false, null, "Wrong OTP. Use 123456")
-                        respond(json.encodeToString(VerifyResponse.serializer(), res), HttpStatusCode.OK, headers)
-                    }
-                    else -> respond("Not found", HttpStatusCode.NotFound, headers)
-                }
+        fun defaultClient(): HttpClient = HttpClient(OkHttp) {
+            install(ContentNegotiation) { json(json) }
+            install(HttpTimeout) {
+                requestTimeoutMillis = 30_000
+                connectTimeoutMillis = 10_000
             }
-            return HttpClient(engine) {
-                install(ContentNegotiation) { json(json) }
-            }
+            expectSuccess = false // 4xx bodies are parsed, not thrown
         }
     }
 }

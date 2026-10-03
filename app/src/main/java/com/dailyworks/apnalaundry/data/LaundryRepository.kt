@@ -2,9 +2,9 @@ package com.dailyworks.apnalaundry.data
 
 import androidx.room.withTransaction
 import com.dailyworks.apnalaundry.core.AppDate
+import com.dailyworks.apnalaundry.core.SyncClock
 import com.dailyworks.apnalaundry.data.local.AppDatabase
 import com.dailyworks.apnalaundry.data.local.CustomerEntity
-import com.dailyworks.apnalaundry.data.local.DayCloseEntity
 import com.dailyworks.apnalaundry.data.local.LedgerEntity
 import com.dailyworks.apnalaundry.data.local.OrderEntity
 import com.dailyworks.apnalaundry.data.local.ServiceEntity
@@ -55,53 +55,74 @@ class LaundryRepository(private val db: AppDatabase) {
 
     val shopFlow: Flow<Shop?> = shopDao.observe().map { it?.toDomain() }
 
-    // ---------------- seeding ----------------
-    suspend fun ensureSeeded() {
+    // ---------------- seeding / lifecycle ----------------
+    /**
+     * First-login bootstrap for a NEW account: shop defaults + the default
+     * rate card only — no demo customers/orders. Existing accounts are
+     * restored from the server by the initial sync instead (see
+     * AuthRepository.verifyOtp).
+     */
+    suspend fun ensureSeeded(shopPhone: String? = null) {
         if (shopDao.get() != null) { refreshTsCounter(); return }
         db.withTransaction {
             shopDao.upsert(
-                ShopEntity(1, SeedData.shop.name, SeedData.shop.phone, SeedData.shop.closeTime, SeedData.shop.expressPct, SeedData.NEXT_ORDER, SeedData.NEXT_CUST)
+                ShopEntity(1, "Apna Laundry", shopPhone ?: "", SeedData.shop.closeTime, SeedData.shop.expressPct, 1001, 1)
             )
             serviceDao.upsertAll(SeedData.services.map { it.toEntity() })
-            customerDao.upsertAll(SeedData.customers.map { it.toEntity() })
-            orderDao.upsertAll(SeedData.orders.map { it.toEntity() })
-            ledgerDao.insertAll(SeedData.ledger.map { it.toEntity() })
-            dayCloseDao.upsertAll(SeedData.closedDays.map { DayCloseEntity(it, 0L, null) })
         }
         refreshTsCounter()
     }
 
-    private suspend fun refreshTsCounter() {
-        val maxTs = ledgerDao.observeOnce().maxOfOrNull { it.ts } ?: 0L
-        tsCounter = maxOf(tsCounter, maxTs + 1)
+    suspend fun hasShop(): Boolean = shopDao.get() != null
+
+    /** Wipe everything (logout). The next login pulls or reseeds. */
+    suspend fun clearAll() = db.withTransaction {
+        orderDao.clear(); ledgerDao.clear(); customerDao.clear(); serviceDao.clear(); dayCloseDao.clear(); shopDao.clear()
     }
 
-    /** Wipe and reseed (Settings → log out / restart). */
-    suspend fun resetToSeed() = db.withTransaction {
-        orderDao.clear(); ledgerDao.clear(); customerDao.clear(); serviceDao.clear(); dayCloseDao.clear()
-        shopDao.upsert(ShopEntity(1, SeedData.shop.name, SeedData.shop.phone, SeedData.shop.closeTime, SeedData.shop.expressPct, SeedData.NEXT_ORDER, SeedData.NEXT_CUST))
-        serviceDao.upsertAll(SeedData.services.map { it.toEntity() })
-        customerDao.upsertAll(SeedData.customers.map { it.toEntity() })
-        orderDao.upsertAll(SeedData.orders.map { it.toEntity() })
-        ledgerDao.insertAll(SeedData.ledger.map { it.toEntity() })
-        dayCloseDao.upsertAll(SeedData.closedDays.map { DayCloseEntity(it, 0L, null) })
+    /** Ledger ts values are minted locally; pulled rows may carry higher ones. */
+    suspend fun refreshTsCounter() {
+        val maxTs = ledgerDao.getAll().maxOfOrNull { it.ts } ?: 0L
+        tsCounter = maxOf(tsCounter, maxTs + 1)
     }
 
     // ---------------- snapshot / undo ----------------
     suspend fun snapshot(): Snapshot = Snapshot(
-        orders = orderDao.observeOnce(),
-        ledger = ledgerDao.observeOnce(),
-        customers = customerDao.observeOnce(),
+        orders = orderDao.getAll(),
+        ledger = ledgerDao.getAll(),
+        customers = customerDao.getAll(),
         services = serviceDao.getAll(),
         shop = shopDao.get(),
     )
 
+    /**
+     * Undo. Everything restored is re-stamped dirty so the rollback syncs;
+     * rows created after the snapshot become tombstones (not plain deletes) —
+     * otherwise the server copy would just resurrect them on the next pull.
+     */
     suspend fun restore(s: Snapshot) = db.withTransaction {
-        orderDao.clear(); orderDao.upsertAll(s.orders)
-        ledgerDao.clear(); ledgerDao.insertAll(s.ledger)
-        customerDao.clear(); customerDao.upsertAll(s.customers)
-        serviceDao.clear(); serviceDao.upsertAll(s.services)
-        s.shop?.let { shopDao.upsert(it) }
+        val now = SyncClock.now()
+        fun <T, K> tombstones(current: List<T>, keep: Set<K>, key: (T) -> K, kill: (T) -> T): List<T> =
+            current.filter { key(it) !in keep }.map(kill)
+
+        val orderTombs = tombstones(orderDao.getAll(), s.orders.map { it.id }.toSet(), { it.id }) {
+            it.copy(deleted = true, dirty = true, updatedAt = now)
+        }
+        val ledgerTombs = tombstones(ledgerDao.getAll(), s.ledger.map { it.id }.toSet(), { it.id }) {
+            it.copy(deleted = true, dirty = true, updatedAt = now)
+        }
+        val custTombs = tombstones(customerDao.getAll(), s.customers.map { it.id }.toSet(), { it.id }) {
+            it.copy(deleted = true, dirty = true, updatedAt = now)
+        }
+        val svcTombs = tombstones(serviceDao.getAll(), s.services.map { it.id }.toSet(), { it.id }) {
+            it.copy(deleted = true, dirty = true, updatedAt = now)
+        }
+
+        orderDao.clear(); orderDao.upsertAll(s.orders.map { it.copy(dirty = true, updatedAt = now) } + orderTombs)
+        ledgerDao.clear(); ledgerDao.insertAll(s.ledger.map { it.copy(dirty = true, updatedAt = now) } + ledgerTombs)
+        customerDao.clear(); customerDao.upsertAll(s.customers.map { it.copy(dirty = true, updatedAt = now) } + custTombs)
+        serviceDao.clear(); serviceDao.upsertAll(s.services.map { it.copy(dirty = true, updatedAt = now) } + svcTombs)
+        s.shop?.let { shopDao.upsert(it.copy(dirty = true, updatedAt = now)) }
     }
 
     // ---------------- helpers ----------------
@@ -284,7 +305,7 @@ class LaundryRepository(private val db: AppDatabase) {
         val shopE = shopDao.get()!!
         val id = "c${shopE.nextCust}"
         customerDao.upsert(Customer(id, name, phone, address, 0, "—", 9).toEntity())
-        shopDao.upsert(shopE.copy(nextCust = shopE.nextCust + 1))
+        shopDao.upsert(shopE.copy(nextCust = shopE.nextCust + 1, dirty = true, updatedAt = SyncClock.now()))
         if (oldBaaki > 0) ledgerDao.insert(mkEntry(id, LedgerKind.OLD, oldBaaki).toEntity())
         val res = if (fromList)
             CmdResult("$name added" + if (oldBaaki > 0) " with ${money(oldBaaki)} baaki" else "", undo)
@@ -300,13 +321,13 @@ class LaundryRepository(private val db: AppDatabase) {
         val services = serviceDao.getAll().filter { !it.deleted }
         if (services.size <= 1) return CmdResult("Keep at least one service")
         val sv = services.first { it.id == id }
-        serviceDao.setDeleted(id, true)
+        serviceDao.setDeleted(id, true, SyncClock.now())
         return CmdResult("${sv.name} deleted · old orders keep it", undo)
     }
 
     suspend fun updateShop(name: String, closeTime: String, expressPct: Int) {
         val e = shopDao.get()!!
-        shopDao.upsert(e.copy(name = name, closeTime = closeTime, expressPct = expressPct))
+        shopDao.upsert(e.copy(name = name, closeTime = closeTime, expressPct = expressPct, dirty = true, updatedAt = SyncClock.now()))
     }
 
     // ---------------- quick order ----------------
@@ -343,7 +364,7 @@ class LaundryRepository(private val db: AppDatabase) {
                     time = if (day == AppDate.TODAY) "Just now" else "Recorded later").toEntity())
             }
             orderDao.upsert(order.copy(pre = pre).toEntity())
-            shopDao.upsert(shopE.copy(nextOrder = id + 1, nextCust = nextCust))
+            shopDao.upsert(shopE.copy(nextOrder = id + 1, nextCust = nextCust, dirty = true, updatedAt = SyncClock.now()))
         }
         val cname = customerDao.observeOnce().first { it.id == custId }.name
         val toast = "Quick order #$id saved for ${firstName(cname)}" + (if (amount > 0) " · ${money(amount)}" else " · add bill later")
@@ -411,7 +432,7 @@ class LaundryRepository(private val db: AppDatabase) {
         )
         db.withTransaction {
             orderDao.upsert(order.toEntity())
-            shopDao.upsert(shopE.copy(nextOrder = id + 1))
+            shopDao.upsert(shopE.copy(nextOrder = id + 1, dirty = true, updatedAt = SyncClock.now()))
             touchCustomer(custId)
         }
         return if (fields.lines.isEmpty()) {
@@ -427,7 +448,7 @@ class LaundryRepository(private val db: AppDatabase) {
     // ---------------- small helpers ----------------
     private suspend fun touchCustomer(custId: String) {
         val c = customerDao.observeOnce().firstOrNull { it.id == custId } ?: return
-        customerDao.upsert(c.copy(lastLabel = "Today", agoRank = 0))
+        customerDao.upsert(c.copy(lastLabel = "Today", agoRank = 0, dirty = true, updatedAt = SyncClock.now()))
     }
 
     private fun quickLine(amount: Int, pieces: Int) = OrderLine(

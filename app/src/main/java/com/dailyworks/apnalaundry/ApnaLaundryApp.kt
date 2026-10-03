@@ -1,10 +1,19 @@
 package com.dailyworks.apnalaundry
 
 import android.app.Application
-import com.dailyworks.apnalaundry.data.LaundryRepository
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import com.dailyworks.apnalaundry.data.Prefs
+import com.dailyworks.apnalaundry.data.sync.SyncScheduler
+import com.dailyworks.apnalaundry.data.sync.SyncWorker
 import com.dailyworks.apnalaundry.di.appModule
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.get
 import org.koin.android.ext.koin.androidContext
@@ -17,8 +26,22 @@ class ApnaLaundryApp : Application() {
             androidContext(this@ApnaLaundryApp)
             modules(appModule)
         }
-        // Seed the demo dataset on first launch.
-        val repo: LaundryRepository = get()
-        CoroutineScope(Dispatchers.IO).launch { repo.ensureSeeded() }
+
+        // Hourly background sync (network-gated) so unpushed khata/order data
+        // still reaches the server when the app isn't in the foreground.
+        val periodicSync = PeriodicWorkRequestBuilder<SyncWorker>(1, TimeUnit.HOURS)
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .build()
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "laundry-sync", ExistingPeriodicWorkPolicy.KEEP, periodicSync,
+        )
+
+        // Catch-up sync on every launch. Seeding is no longer done here — a
+        // new account seeds after its first login (AuthRepository.verifyOtp).
+        val prefs: Prefs = get()
+        val scheduler: SyncScheduler = get()
+        CoroutineScope(Dispatchers.IO).launch {
+            if (prefs.loggedIn.first()) scheduler.requestSync()
+        }
     }
 }

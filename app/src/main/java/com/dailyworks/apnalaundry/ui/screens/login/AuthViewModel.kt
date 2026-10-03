@@ -3,21 +3,29 @@ package com.dailyworks.apnalaundry.ui.screens.login
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dailyworks.apnalaundry.data.AuthRepository
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 data class AuthUiState(
-    val phone: String = "9876543210",   // demo number pre-filled
+    val phone: String = "",
     val otp: String = "",
     val step: Step = Step.PHONE,
     val loading: Boolean = false,
     val error: String? = null,
     val done: Boolean = false,
+    val resendInSecs: Int = 0,
+    val attemptsRemaining: Int? = null,
 ) {
     enum class Step { PHONE, OTP }
-    val phoneValid get() = phone.length == 10
+
+    // Real Indian mobiles start 6-9; 10000000xx are the backend's app-review
+    // numbers (deterministic OTP, no SMS).
+    val phoneValid get() = phone.length == 10 &&
+        (phone.first() in '6'..'9' || phone.startsWith("10000000"))
     val otpValid get() = otp.length == 6
 }
 
@@ -25,38 +33,68 @@ class AuthViewModel(private val auth: AuthRepository) : ViewModel() {
     private val _ui = MutableStateFlow(AuthUiState())
     val ui: StateFlow<AuthUiState> = _ui.asStateFlow()
 
+    private var challenge: AuthRepository.Challenge? = null
+    private var countdownJob: Job? = null
+
     fun onPhone(v: String) { _ui.value = _ui.value.copy(phone = v.filter { it.isDigit() }.take(10), error = null) }
     fun onOtp(v: String) { _ui.value = _ui.value.copy(otp = v.filter { it.isDigit() }.take(6), error = null) }
-    fun backToPhone() { _ui.value = _ui.value.copy(step = AuthUiState.Step.PHONE, otp = "", error = null) }
 
+    fun backToPhone() {
+        countdownJob?.cancel()
+        challenge = null
+        _ui.value = _ui.value.copy(step = AuthUiState.Step.PHONE, otp = "", error = null, resendInSecs = 0, attemptsRemaining = null)
+    }
+
+    /** Sends (or resends) the OTP. Resending supersedes the old challenge server-side. */
     fun requestOtp() {
         val s = _ui.value
-        if (!s.phoneValid || s.loading) return
+        if (!s.phoneValid || s.loading || s.resendInSecs > 0) return
         _ui.value = s.copy(loading = true, error = null)
         viewModelScope.launch {
             auth.requestOtp(s.phone)
-                .onSuccess {
-                    // simulate SMS auto-read of the demo OTP after a short beat
-                    _ui.value = _ui.value.copy(loading = false, step = AuthUiState.Step.OTP, otp = "")
+                .onSuccess { ch ->
+                    challenge = ch
+                    _ui.value = _ui.value.copy(
+                        loading = false, step = AuthUiState.Step.OTP, otp = "",
+                        attemptsRemaining = ch.attemptsRemaining,
+                    )
+                    startResendCountdown(ch.nextSendAtMs)
                 }
                 .onFailure { _ui.value = _ui.value.copy(loading = false, error = it.message) }
         }
     }
 
-    fun autoFillDemoOtp() {
-        if (_ui.value.step == AuthUiState.Step.OTP && _ui.value.otp.isEmpty()) {
-            _ui.value = _ui.value.copy(otp = com.dailyworks.apnalaundry.data.remote.AuthApi.DEMO_OTP)
+    fun verify() {
+        val s = _ui.value
+        val ch = challenge
+        if (!s.otpValid || s.loading) return
+        if (ch == null) {
+            _ui.value = s.copy(error = "Request a new OTP first")
+            return
+        }
+        _ui.value = s.copy(loading = true, error = null)
+        viewModelScope.launch {
+            auth.verifyOtp(ch, s.otp)
+                .onSuccess { _ui.value = _ui.value.copy(loading = false, done = true) }
+                .onFailure { e ->
+                    val attempts = (e as? AuthRepository.AuthException)?.attemptsRemaining
+                    _ui.value = _ui.value.copy(
+                        loading = false, error = e.message, otp = "",
+                        attemptsRemaining = attempts ?: _ui.value.attemptsRemaining,
+                    )
+                }
         }
     }
 
-    fun verify() {
-        val s = _ui.value
-        if (!s.otpValid || s.loading) return
-        _ui.value = s.copy(loading = true, error = null)
-        viewModelScope.launch {
-            auth.verifyOtp(s.phone, s.otp)
-                .onSuccess { _ui.value = _ui.value.copy(loading = false, done = true) }
-                .onFailure { _ui.value = _ui.value.copy(loading = false, error = it.message) }
+    private fun startResendCountdown(nextSendAtMs: Long) {
+        countdownJob?.cancel()
+        countdownJob = viewModelScope.launch {
+            while (true) {
+                val left = ((nextSendAtMs - System.currentTimeMillis()) / 1000L).toInt()
+                _ui.value = _ui.value.copy(resendInSecs = maxOf(0, left))
+                if (left <= 0) break
+                delay(1_000)
+            }
         }
     }
 }

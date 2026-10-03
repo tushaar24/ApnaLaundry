@@ -37,7 +37,6 @@ import com.dailyworks.apnalaundry.ui.components.bric
 import com.dailyworks.apnalaundry.ui.components.fig
 import com.dailyworks.apnalaundry.ui.components.tap
 import com.dailyworks.apnalaundry.ui.theme.Tokens
-import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
 
 @Composable
@@ -45,9 +44,6 @@ fun LoginScreen(onLoggedIn: () -> Unit, vm: AuthViewModel = koinViewModel()) {
     val ui by vm.ui.collectAsStateWithLifecycle()
 
     LaunchedEffect(ui.done) { if (ui.done) onLoggedIn() }
-    LaunchedEffect(ui.step) {
-        if (ui.step == AuthUiState.Step.OTP) { delay(900); vm.autoFillDemoOtp() }
-    }
 
     Column(
         Modifier
@@ -86,17 +82,11 @@ private fun ColumnScope.PhoneStep(ui: AuthUiState, vm: AuthViewModel) {
             textStyle = fig(19, FontWeight.SemiBold).copy(letterSpacing = 0.02.em),
             placeholder = "98765 43210",
         )
-        Text("We read the OTP from your SMS automatically — you won't need to type it.", style = fig(14, color = Tokens.Muted))
+        Text("We'll send a one-time password to this number by SMS.", style = fig(14, color = Tokens.Muted))
         if (ui.error != null) Text(ui.error!!, style = fig(14, FontWeight.SemiBold, Tokens.OrangeText))
     }
     Spacer(Modifier.weight(1f))
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        PrimaryButton(if (ui.loading) "Sending…" else "Continue", enabled = ui.phoneValid && !ui.loading, height = 58.dp) { vm.requestOtp() }
-        Text(
-            "Demo: number is pre-filled (9876543210). Tap Continue.",
-            style = fig(13, color = Tokens.Muted), modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center,
-        )
-    }
+    PrimaryButton(if (ui.loading) "Sending…" else "Continue", enabled = ui.phoneValid && !ui.loading, height = 58.dp) { vm.requestOtp() }
 }
 
 @Composable
@@ -121,8 +111,16 @@ private fun ColumnScope.OtpStep(ui: AuthUiState, vm: AuthViewModel) {
             textAlign = TextAlign.Center,
             placeholder = "••••••",
         )
-        Text("Demo OTP is 123456 — it auto-fills in a moment.", style = fig(14, color = Tokens.Muted))
-        if (ui.error != null) Text(ui.error!!, style = fig(14, FontWeight.SemiBold, Tokens.OrangeText))
+        if (ui.error != null) {
+            Text(ui.error!!, style = fig(14, FontWeight.SemiBold, Tokens.OrangeText))
+        } else if (ui.attemptsRemaining != null && ui.attemptsRemaining < 5) {
+            Text("${ui.attemptsRemaining} attempts left", style = fig(14, color = Tokens.Muted))
+        }
+        Text(
+            if (ui.resendInSecs > 0) "Resend code in ${ui.resendInSecs}s" else "Resend code",
+            style = if (ui.resendInSecs > 0) fig(14, color = Tokens.Muted) else fig(14, FontWeight.Bold, Tokens.Blue),
+            modifier = if (ui.resendInSecs > 0) Modifier else Modifier.tap(onClick = vm::requestOtp),
+        )
     }
     Spacer(Modifier.weight(1f))
     PrimaryButton(if (ui.loading) "Verifying…" else "Verify & continue", enabled = ui.otpValid && !ui.loading, height = 58.dp) { vm.verify() }
