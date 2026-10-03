@@ -4,6 +4,15 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Android 11+ package visibility: let the app (and the Razorpay SDK)
+         enumerate installed UPI apps so UPI Intent / AutoPay shows in Checkout. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="upi" />
+        </intent>
+    </queries>
+
     <application
         android:name=".ApnaLaundryApp"
         android:allowBackup="true"
