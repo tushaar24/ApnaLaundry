@@ -158,7 +158,10 @@ export function useNav() {
     openCustomer: (custId: string) => router.push(`/customers/${custId}`),
     openCustomers: (filter = "all") => router.push(filter === "all" ? "/customers" : `/customers?filter=${filter}`),
     openEarnings: () => router.push("/earnings"),
-    openPaywall: (reason: "limit" | "trial" | "upsell" = "upsell") => router.push(`/paywall?reason=${reason}`),
+    // replace: true swaps the current entry (guards that redirect to the
+    // paywall must not leave the blocked page behind — Back would loop).
+    openPaywall: (reason: "limit" | "trial" | "upsell" = "upsell", opts?: { replace?: boolean }) =>
+      (opts?.replace ? router.replace : router.push)(`/paywall?reason=${reason}`),
     pathname,
   };
 }

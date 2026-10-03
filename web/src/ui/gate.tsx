@@ -90,6 +90,7 @@ export function Gate({ children, zone }: { children: React.ReactNode; zone: "app
  * screen isn't skipped the instant the subscription goes active.
  */
 export function BillingGate({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const status = useBillingStore((s) => s.status);
   const loaded = useBillingStore((s) => s.loaded);
   const refresh = useBillingStore((s) => s.refresh);
@@ -105,7 +106,18 @@ export function BillingGate({ children }: { children: React.ReactNode }) {
 
   if (!loaded || gated === null) return <Splash />;
   if (gated) {
-    return <PaywallScreen reason="trial" hardGate onClose={() => undefined} onDone={() => setGated(false)} />;
+    return (
+      <PaywallScreen
+        reason="trial"
+        hardGate
+        onClose={() => undefined}
+        onDone={(continuing) => {
+          setGated(false);
+          // The Done button promised "+ Continue with new order" — honor it.
+          if (continuing) router.push("/orders/new?from=home");
+        }}
+      />
+    );
   }
   return <>{children}</>;
 }

@@ -29,6 +29,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -97,17 +100,23 @@ fun PaywallScreen(
             .background(Tokens.Bg)
             .windowInsetsPadding(WindowInsets.systemBars),
     ) {
-        when (ui.stage) {
-            PaywallStage.DONE -> DoneView(
-                annual = ui.plan == PaywallPlan.ANNUAL,
-                paid = if (ui.plan == PaywallPlan.ANNUAL) annualR else monthlyR,
+        val purchasedAnnual = ui.purchasedPlan == "annual"
+        when {
+            ui.stage == PaywallStage.DONE -> DoneView(
+                annual = purchasedAnnual,
+                paid = if (ui.isTrial) ui.trialAmount / 100 else if (purchasedAnnual) annualR else monthlyR,
+                isTrial = ui.isTrial,
                 blocked = blocked,
                 onDone = onDone,
             )
 
-            PaywallStage.WAITING -> WaitingView()
+            ui.stage == PaywallStage.WAITING -> WaitingView()
 
-            PaywallStage.PLANS -> Column(Modifier.fillMaxSize()) {
+            // Already subscribed (e.g. opened from Settings): show the plan, not
+            // a Pay button — Checkout can't re-authorize an active subscription.
+            ui.hasActive -> ActiveView(ui = ui, onClose = onClose, onCancel = { vm.cancel() })
+
+            else -> Column(Modifier.fillMaxSize()) {
                 // Close — hidden on the trial hard gate (non-cancellable).
                 if (!hardGate) {
                     Box(
@@ -169,35 +178,49 @@ fun PaywallScreen(
                     }
 
                     Spacer(Modifier.height(18.dp))
-                    PlanCard(
-                        selected = ui.plan == PaywallPlan.ANNUAL,
-                        onSelect = { vm.selectPlan(PaywallPlan.ANNUAL) },
-                        name = "Yearly",
-                        note = "Only ${rupees(perMonth * 100)} a month",
-                        price = rupees(annualR * 100),
-                        per = "/year",
-                        was = rupees(WAS_ANNUAL * 100),
-                        badge = "BEST VALUE · SAVE ${rupees(saveVsMonthly * 100)}",
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    PlanCard(
-                        selected = ui.plan == PaywallPlan.MONTHLY,
-                        onSelect = { vm.selectPlan(PaywallPlan.MONTHLY) },
-                        name = "Monthly",
-                        note = "Pay every month",
-                        price = rupees(monthlyR * 100),
-                        per = "/month",
-                        was = rupees(WAS_MONTHLY * 100),
-                        badge = null,
-                    )
+                    if (ui.isTrial) {
+                        // trial_2 has exactly one plan (monthly) — no picker to show.
+                        PlanCard(
+                            selected = true,
+                            onSelect = {},
+                            name = "Monthly plan",
+                            note = "₹2 today · plan starts after the trial",
+                            price = rupees(monthlyR * 100),
+                            per = "/month",
+                            was = rupees(WAS_MONTHLY * 100),
+                            badge = null,
+                        )
+                    } else {
+                        PlanCard(
+                            selected = ui.plan == PaywallPlan.ANNUAL,
+                            onSelect = { vm.selectPlan(PaywallPlan.ANNUAL) },
+                            name = "Yearly",
+                            note = "Only ${rupees(perMonth * 100)} a month",
+                            price = rupees(annualR * 100),
+                            per = "/year",
+                            was = rupees(WAS_ANNUAL * 100),
+                            badge = "BEST VALUE · SAVE ${rupees(saveVsMonthly * 100)}",
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        PlanCard(
+                            selected = ui.plan == PaywallPlan.MONTHLY,
+                            onSelect = { vm.selectPlan(PaywallPlan.MONTHLY) },
+                            name = "Monthly",
+                            note = "Pay every month",
+                            price = rupees(monthlyR * 100),
+                            per = "/month",
+                            was = rupees(WAS_MONTHLY * 100),
+                            badge = null,
+                        )
 
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        if (ui.plan == PaywallPlan.ANNUAL)
-                            "You save ${rupees(saveVsMonthly * 100)} vs paying monthly (${rupees(yearIfMonthly * 100)} a year)"
-                        else "Pick Yearly and save ${rupees(saveVsMonthly * 100)}",
-                        style = fig(13, FontWeight.Bold, if (ui.plan == PaywallPlan.ANNUAL) Tokens.Blue else Tokens.OrangeText),
-                    )
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            if (ui.plan == PaywallPlan.ANNUAL)
+                                "You save ${rupees(saveVsMonthly * 100)} vs paying monthly (${rupees(yearIfMonthly * 100)} a year)"
+                            else "Pick Yearly and save ${rupees(saveVsMonthly * 100)}",
+                            style = fig(13, FontWeight.Bold, if (ui.plan == PaywallPlan.ANNUAL) Tokens.Blue else Tokens.OrangeText),
+                        )
+                    }
                     ui.error?.let {
                         Spacer(Modifier.height(8.dp))
                         Text(it, style = fig(13, FontWeight.SemiBold, Tokens.OrangeText))
@@ -224,7 +247,8 @@ fun PaywallScreen(
                     Spacer(Modifier.height(8.dp))
                     Text(
                         if (ui.isTrial)
-                            "Then ${rupees((if (ui.plan == PaywallPlan.ANNUAL) ui.annualAmount else ui.monthlyAmount))} by UPI AutoPay · cancel anytime"
+                            // trial_2 is always the monthly plan, whatever is tapped.
+                            "Then ${rupees(ui.monthlyAmount)}/month by UPI AutoPay · cancel anytime"
                         else "Pay once by UPI AutoPay · cancel anytime",
                         style = fig(12, FontWeight.Normal, Tokens.Muted),
                         modifier = Modifier.fillMaxWidth(),
@@ -304,7 +328,7 @@ private fun WaitingView() {
 }
 
 @Composable
-private fun DoneView(annual: Boolean, paid: Int, blocked: Boolean, onDone: (Boolean) -> Unit) {
+private fun DoneView(annual: Boolean, paid: Int, isTrial: Boolean, blocked: Boolean, onDone: (Boolean) -> Unit) {
     Column(
         Modifier.fillMaxSize().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -315,13 +339,88 @@ private fun DoneView(annual: Boolean, paid: Int, blocked: Boolean, onDone: (Bool
             contentAlignment = Alignment.Center,
         ) { Icon(Icons.Outlined.Check, null, tint = Tokens.OnDark, modifier = Modifier.size(34.dp)) }
         Spacer(Modifier.height(16.dp))
-        Text(if (annual) "Yearly plan is active" else "Monthly plan is active", style = bric(24, FontWeight.Bold))
+        Text(
+            when {
+                isTrial -> "Your trial has started"
+                annual -> "Yearly plan is active"
+                else -> "Monthly plan is active"
+            },
+            style = bric(24, FontWeight.Bold),
+        )
         Spacer(Modifier.height(8.dp))
         Text("Take as many orders as you want. No more limits.", style = fig(14, FontWeight.Normal, Tokens.Muted))
+        Spacer(Modifier.height(6.dp))
+        Text(
+            if (isTrial) "Paid ${rupees(paid * 100)} (trial) · Monthly plan" else "Paid ${rupees(paid * 100)}",
+            style = fig(14, FontWeight.SemiBold, Tokens.Muted),
+        )
         Spacer(Modifier.weight(1f))
         PrimaryButton(
             text = if (blocked) "+ Continue with new order" else "Go to my orders",
             onClick = { onDone(blocked) },
         )
+    }
+}
+
+@Composable
+private fun ActiveView(ui: PaywallUiState, onClose: () -> Unit, onCancel: () -> Unit) {
+    var confirming by remember { mutableStateOf(false) }
+    val sub = ui.status?.subscription
+    val planName = if (sub?.plan == "annual") "Yearly" else "Monthly"
+    Column(Modifier.fillMaxSize()) {
+        Box(
+            Modifier
+                .size(44.dp)
+                .padding(start = 8.dp, top = 4.dp)
+                .tap(onClick = onClose),
+            contentAlignment = Alignment.Center,
+        ) { Text("✕", style = fig(22, FontWeight.Normal, Tokens.Muted)) }
+        Column(
+            Modifier.weight(1f).padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Box(
+                Modifier.size(64.dp).clip(CircleShape).background(Tokens.Blue),
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Outlined.Check, null, tint = Tokens.OnDark, modifier = Modifier.size(34.dp)) }
+            Spacer(Modifier.height(16.dp))
+            Text("$planName plan is active", style = bric(24, FontWeight.Bold))
+            Spacer(Modifier.height(8.dp))
+            Text("Unlimited orders. Nothing to do here.", style = fig(14, FontWeight.Normal, Tokens.Muted))
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "${rupees(sub?.amount ?: 0)}${if (sub?.plan == "annual") "/year" else "/month"}" +
+                    if (sub?.status == "pending") " · payment retrying" else "",
+                style = fig(14, FontWeight.SemiBold, Tokens.Muted),
+            )
+            ui.error?.let {
+                Spacer(Modifier.height(8.dp))
+                Text(it, style = fig(13, FontWeight.SemiBold, Tokens.OrangeText))
+            }
+            Spacer(Modifier.weight(1f))
+            if (confirming) {
+                Text("Cancel the plan? New orders stop when it ends.", style = fig(14, FontWeight.SemiBold))
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Box(
+                        Modifier.weight(1f).height(52.dp).clip(RoundedCornerShape(14.dp))
+                            .border(1.5.dp, Tokens.Orange, RoundedCornerShape(14.dp))
+                            .tap { if (!ui.busy) onCancel() },
+                        contentAlignment = Alignment.Center,
+                    ) { Text(if (ui.busy) "Cancelling…" else "Yes, cancel", style = fig(15, FontWeight.Bold, Tokens.OrangeText)) }
+                    Box(
+                        Modifier.weight(1f).height(52.dp).clip(RoundedCornerShape(14.dp)).background(Tokens.Blue)
+                            .tap { confirming = false },
+                        contentAlignment = Alignment.Center,
+                    ) { Text("Keep plan", style = fig(15, FontWeight.Bold, Tokens.OnDark)) }
+                }
+            } else {
+                Text(
+                    "Cancel subscription",
+                    style = fig(14, FontWeight.Bold, Tokens.Muted),
+                    modifier = Modifier.tap { confirming = true }.padding(12.dp),
+                )
+            }
+        }
     }
 }

@@ -24,18 +24,20 @@ import org.koin.androidx.compose.koinViewModel
  *  - otherwise (free_<N>, active sub, or billing unreachable) -> the app.
  *
  * [enabled] is false during login/setup, where billing must not be checked.
+ * [onContinueNewOrder] fires when the Done screen's "+ Continue with new order"
+ * is tapped — the host navigates once the gate (and NavHost) are composed.
  */
 @Composable
-fun BillingGate(enabled: Boolean, content: @Composable () -> Unit) {
+fun BillingGate(enabled: Boolean, onContinueNewOrder: () -> Unit = {}, content: @Composable () -> Unit) {
     if (!enabled) {
         content()
         return
     }
-    GatedContent(content)
+    GatedContent(onContinueNewOrder, content)
 }
 
 @Composable
-private fun GatedContent(content: @Composable () -> Unit) {
+private fun GatedContent(onContinueNewOrder: () -> Unit, content: @Composable () -> Unit) {
     val vm: PaywallViewModel = koinViewModel()
     val ui by vm.ui.collectAsStateWithLifecycle()
     // Latch the decision once billing first loads, so the success -> "Done"
@@ -56,7 +58,10 @@ private fun GatedContent(content: @Composable () -> Unit) {
             reason = "trial",
             hardGate = true,
             onClose = {},
-            onDone = { gated = false },
+            onDone = { continuing ->
+                gated = false
+                if (continuing) onContinueNewOrder()
+            },
             vm = vm,
         )
         else -> content()

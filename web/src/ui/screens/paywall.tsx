@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as AppDate from "@/core/appdate";
 import { rupees } from "@/core/money";
-import { cancelSubscription, openSubscriptionCheckout, subscribe } from "@/data/billing";
+import { cancelSubscription, openSubscriptionCheckout, subscribe, type BillingStatus } from "@/data/billing";
 import { paywallInfo, useBillingStore } from "@/data/billingStore";
 import { Analytics } from "@/analytics/events";
 import { cls, PrimaryButton } from "@/ui/basics";
@@ -43,12 +43,21 @@ export function PaywallScreen({
   const [stage, setStage] = useState<Stage>("plans");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The plan the SERVER put on the subscription (trial_2 is always monthly,
+  // whatever was tapped) — Done/analytics must use this, not the local pick.
+  const [purchased, setPurchased] = useState<Plan>("annual");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // trial_2 has exactly one plan (monthly); keep the local state honest.
+  useEffect(() => {
+    if (info.isTrial && plan !== "monthly") setPlan("monthly");
+  }, [info.isTrial, plan]);
 
   const annual = status?.plans.annual.amount ?? 499900;
   const monthly = status?.plans.monthly.amount ?? 49900;
   const annualR = Math.round(annual / 100);
   const monthlyR = Math.round(monthly / 100);
+  const trialR = Math.round((status?.plans.trial.amount ?? 200) / 100);
   const perMonth = Math.round(annual / 12 / 100);
   const saveVsMonthly = Math.round((monthly * 12 - annual) / 100);
   const yearIfMonthly = Math.round((monthly * 12) / 100);
@@ -79,6 +88,7 @@ export function PaywallScreen({
 
   const tillAnnual = useMemo(() => fmtTill(365), []);
   const renewMonthly = useMemo(() => fmtTill(30), []);
+  const trialStart = useMemo(() => fmtTill(7), []); // backend TRIAL_DAYS
 
   async function pay() {
     if (busy) return;
@@ -87,15 +97,18 @@ export function PaywallScreen({
     Analytics.planSelected(info.variant, plan);
     try {
       const res = await subscribe(plan);
-      Analytics.checkoutStarted(info.variant, plan, plan === "annual" ? annual : monthly, res.trialAmount || 0);
+      // The server decides the real plan/amount (never trust the client for money).
+      const serverPlan: Plan = res.plan === "annual" ? "annual" : "monthly";
+      setPurchased(serverPlan);
+      Analytics.checkoutStarted(info.variant, res.plan, res.amount, res.trialAmount || 0);
       // Razorpay Checkout owns the UPI AutoPay approval (its own app picker on
       // mobile, QR on desktop). On success we wait for the webhook to confirm.
       await openSubscriptionCheckout(res, {
-        onSuccess: () => { setStage("waiting"); startPolling(); },
+        onSuccess: () => { setStage("waiting"); startPolling(res.plan); },
         onDismiss: () => { setBusy(false); },
         onError: (msg) => {
           setError(msg);
-          Analytics.checkoutFailed(info.variant, plan, msg);
+          Analytics.checkoutFailed(info.variant, res.plan, msg);
           setBusy(false);
         },
       });
@@ -103,21 +116,35 @@ export function PaywallScreen({
       setError(e instanceof Error ? e.message : "Could not start — try again");
       Analytics.checkoutFailed(info.variant, plan, e instanceof Error ? e.message : "error");
       setBusy(false);
+      // e.g. ALREADY_SUBSCRIBED from another device — refetch so the active
+      // state renders instead of a broken Pay button.
+      void refresh();
     }
   }
 
-  function startPolling() {
+  // Poll for the webhook-confirmed activation — capped at ~90s (matches the
+  // Android app) so a lost webhook shows a retriable message, not an eternal
+  // spinner.
+  const POLL_MS = 3000;
+  const MAX_POLLS = 30;
+  function startPolling(purchasedPlan: string) {
     if (pollRef.current) clearInterval(pollRef.current);
+    let polls = 0;
     pollRef.current = setInterval(async () => {
       await refresh();
       const s = useBillingStore.getState().status;
       if (s?.hasActiveSubscription) {
         if (pollRef.current) clearInterval(pollRef.current);
-        Analytics.checkoutSucceeded(info.variant, plan);
+        Analytics.checkoutSucceeded(info.variant, purchasedPlan);
         setStage("done");
         setBusy(false);
+      } else if (++polls >= MAX_POLLS) {
+        if (pollRef.current) clearInterval(pollRef.current);
+        setStage("plans");
+        setBusy(false);
+        setError("Payment is processing. If you approved it, this will activate in a moment — try refreshing.");
       }
-    }, 3000);
+    }, POLL_MS);
   }
 
   // ---- render ----
@@ -126,15 +153,25 @@ export function PaywallScreen({
     <div className="flex max-h-[92dvh] w-full flex-col overflow-hidden bg-bg lg:max-h-[88dvh] lg:w-[460px] lg:rounded-3xl lg:border lg:border-cardborder lg:shadow-2xl">
       {stage === "done" ? (
         <DoneView
-          plan={plan}
-          paid={plan === "annual" ? annualR : monthlyR}
-          till={plan === "annual" ? tillAnnual : renewMonthly}
-          renewLabel={plan === "annual" ? "Valid till" : "Renews on"}
+          plan={purchased}
+          paid={info.isTrial ? trialR : purchased === "annual" ? annualR : monthlyR}
+          isTrial={info.isTrial}
+          till={info.isTrial ? trialStart : purchased === "annual" ? tillAnnual : renewMonthly}
+          renewLabel={info.isTrial ? "Plan starts" : purchased === "annual" ? "Valid till" : "Renews on"}
           blocked={blocked}
           onDone={onDone}
         />
       ) : stage === "waiting" ? (
         <WaitingView onBack={() => { setStage("plans"); setBusy(false); }} />
+      ) : info.hasActive ? (
+        // Already subscribed (e.g. opened from Settings): show the plan, not a
+        // Pay button — Checkout can't re-authorize an active subscription.
+        <ActiveView
+          sub={status?.subscription ?? null}
+          variant={info.variant}
+          onClose={onClose}
+          onCancelled={() => void refresh()}
+        />
       ) : (
         <>
           <div className="flex items-center justify-between px-5 pt-4" style={{ minHeight: 20 }}>
@@ -164,33 +201,53 @@ export function PaywallScreen({
               ))}
             </ul>
 
-            <div className="mt-5 flex flex-col gap-2.5">
-              <PlanCard
-                selected={plan === "annual"}
-                onSelect={() => setPlan("annual")}
-                name="Yearly"
-                note={`Only ${rupees(perMonth)} a month`}
-                price={rupees(annualR)}
-                per="/year"
-                was={rupees(WAS_ANNUAL)}
-                badge={`BEST VALUE · SAVE ${rupees(saveVsMonthly)}`}
-              />
-              <PlanCard
-                selected={plan === "monthly"}
-                onSelect={() => setPlan("monthly")}
-                name="Monthly"
-                note="Pay every month"
-                price={rupees(monthlyR)}
-                per="/month"
-                was={rupees(WAS_MONTHLY)}
-              />
-            </div>
+            {info.isTrial ? (
+              // trial_2 has exactly one plan (monthly) — no picker to show.
+              <div className="mt-5 rounded-2xl border-2 border-blue bg-card px-4 py-3.5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-[16px] font-bold">Monthly plan</div>
+                    <div className="text-[13px] text-muted">₹2 today · plan starts after the trial</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="bric text-[20px]">{rupees(monthlyR)}</div>
+                    <div className="text-[12px] text-muted">
+                      <span className="line-through">{rupees(WAS_MONTHLY)}</span> /month
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="mt-5 flex flex-col gap-2.5">
+                  <PlanCard
+                    selected={plan === "annual"}
+                    onSelect={() => setPlan("annual")}
+                    name="Yearly"
+                    note={`Only ${rupees(perMonth)} a month`}
+                    price={rupees(annualR)}
+                    per="/year"
+                    was={rupees(WAS_ANNUAL)}
+                    badge={`BEST VALUE · SAVE ${rupees(saveVsMonthly)}`}
+                  />
+                  <PlanCard
+                    selected={plan === "monthly"}
+                    onSelect={() => setPlan("monthly")}
+                    name="Monthly"
+                    note="Pay every month"
+                    price={rupees(monthlyR)}
+                    per="/month"
+                    was={rupees(WAS_MONTHLY)}
+                  />
+                </div>
 
-            <p className={cls("mt-3 text-[13px] font-bold", plan === "annual" ? "text-blue" : "text-orangetext")}>
-              {plan === "annual"
-                ? `You save ${rupees(saveVsMonthly)} vs paying monthly (${rupees(yearIfMonthly)} a year)`
-                : `Pick Yearly and save ${rupees(saveVsMonthly)}`}
-            </p>
+                <p className={cls("mt-3 text-[13px] font-bold", plan === "annual" ? "text-blue" : "text-orangetext")}>
+                  {plan === "annual"
+                    ? `You save ${rupees(saveVsMonthly)} vs paying monthly (${rupees(yearIfMonthly)} a year)`
+                    : `Pick Yearly and save ${rupees(saveVsMonthly)}`}
+                </p>
+              </>
+            )}
             {error ? <p className="mt-2 text-[13px] font-semibold text-orangetext">{error}</p> : null}
           </div>
 
@@ -289,25 +346,29 @@ function WaitingView({ onBack }: { onBack: () => void }) {
 }
 
 function DoneView({
-  plan, paid, till, renewLabel, blocked, onDone,
+  plan, paid, isTrial, till, renewLabel, blocked, onDone,
 }: {
   plan: Plan;
   paid: number;
+  isTrial: boolean;
   till: string;
   renewLabel: string;
   blocked: boolean;
   onDone: (continuing: boolean) => void;
 }) {
+  const title = isTrial
+    ? "Your trial has started"
+    : plan === "annual" ? "Yearly plan is active" : "Monthly plan is active";
   return (
     <div className="flex flex-1 flex-col items-center gap-4 overflow-y-auto p-6 text-center">
       <div className="mt-4 flex size-16 items-center justify-center rounded-full bg-blue text-ondark">
         <IcCheck size={34} />
       </div>
-      <h2 className="bric text-[24px]">{plan === "annual" ? "Yearly plan is active" : "Monthly plan is active"}</h2>
+      <h2 className="bric text-[24px]">{title}</h2>
       <p className="text-[14px] text-muted">Take as many orders as you want. No more limits.</p>
       <div className="w-full rounded-2xl border border-cardborder bg-card">
         <SummaryRow k="Plan" v={plan === "annual" ? "Yearly" : "Monthly"} />
-        <SummaryRow k="Paid" v={rupees(paid)} />
+        <SummaryRow k="Paid" v={isTrial ? `${rupees(paid)} (trial)` : rupees(paid)} />
         <SummaryRow k={renewLabel} v={till} />
         <SummaryRow k="Orders" v="Unlimited" last />
       </div>
@@ -316,6 +377,86 @@ function DoneView({
         <PrimaryButton onClick={() => onDone(blocked)}>
           {blocked ? "+ Continue with new order" : "Go to my orders"}
         </PrimaryButton>
+      </div>
+    </div>
+  );
+}
+
+/** Already-subscribed state: plan summary + cancel (inline confirm). */
+function ActiveView({
+  sub, variant, onClose, onCancelled,
+}: {
+  sub: BillingStatus["subscription"];
+  variant: string;
+  onClose: () => void;
+  onCancelled: () => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const planName = sub?.plan === "annual" ? "Yearly" : "Monthly";
+  const next = sub?.chargeAt ? fmtDate(sub.chargeAt) : null;
+
+  async function cancel() {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      Analytics.subscriptionCancelRequested(sub?.plan ?? "monthly");
+      await cancelSubscription();
+      onCancelled();
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not cancel — try again");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-1 flex-col overflow-y-auto">
+      <div className="flex items-center justify-between px-5 pt-4">
+        <button type="button" onClick={onClose} aria-label="Close" className="flex size-9 items-center justify-center rounded-full text-[22px] leading-none text-muted hover:bg-neutralfill">
+          ✕
+        </button>
+      </div>
+      <div className="flex flex-1 flex-col items-center gap-4 p-6 text-center">
+        <div className="mt-2 flex size-16 items-center justify-center rounded-full bg-blue text-ondark">
+          <IcCheck size={34} />
+        </div>
+        <h2 className="bric text-[24px]">{planName} plan is active</h2>
+        <p className="text-[14px] text-muted">Unlimited orders. Nothing to do here.</p>
+        <div className="w-full rounded-2xl border border-cardborder bg-card">
+          <SummaryRow k="Plan" v={planName} />
+          <SummaryRow k="Amount" v={`${rupees(Math.round((sub?.amount ?? 0) / 100))}${sub?.plan === "annual" ? "/year" : "/month"}`} />
+          {next ? <SummaryRow k="Next charge" v={next} /> : null}
+          <SummaryRow k="Status" v={sub?.status === "pending" ? "Payment retrying" : "Active"} last />
+        </div>
+        {sub?.trialAmount && variant === "trial_2" ? (
+          <p className="text-[12px] text-muted">Started with the ₹2 trial.</p>
+        ) : null}
+        {error ? <p className="text-[13px] font-semibold text-orangetext">{error}</p> : null}
+        <div className="mt-auto w-full">
+          {confirming ? (
+            <div className="flex flex-col gap-2">
+              <p className="text-[14px] font-semibold">Cancel the plan? New orders stop when it ends.</p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={cancel}
+                  disabled={busy}
+                  className="h-[52px] flex-1 rounded-[14px] border-[1.5px] border-orange text-[15px] font-bold text-orangetext"
+                >
+                  {busy ? "Cancelling…" : "Yes, cancel"}
+                </button>
+                <PrimaryButton className="flex-1" onClick={() => setConfirming(false)}>Keep plan</PrimaryButton>
+              </div>
+            </div>
+          ) : (
+            <button type="button" onClick={() => setConfirming(true)} className="w-full py-3 text-[14px] font-bold text-muted">
+              Cancel subscription
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -338,4 +479,9 @@ function fmtTill(offsetDays: number): string {
   return `${parseInt(d, 10)} ${MONTHS[parseInt(m, 10) - 1]} ${y}`;
 }
 
-export { cancelSubscription };
+// "25 Sep 2027" from an ISO timestamp.
+function fmtDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+}

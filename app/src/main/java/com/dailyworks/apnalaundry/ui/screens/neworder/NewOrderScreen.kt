@@ -96,11 +96,15 @@ fun NewOrderScreen(
     val editingOrder = editId?.let { Selectors.order(state, it) }
 
     // Free-orders variant: creating a NEW order past the limit opens the paywall
-    // (the home FAB already blocks; this covers other entry points like a customer).
+    // (the home FAB already blocks; this covers other entry points like a
+    // customer). The paywall REPLACES this screen — pushing would leave it in
+    // the back stack and Back would re-trigger the guard in a loop. Status is
+    // refetched on entry so a session-stale "blocked" can't misfire.
     val billingVm: PaywallViewModel = koinViewModel()
     val billing by billingVm.ui.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { if (editId == null) billingVm.refresh() }
     LaunchedEffect(billing.loaded, billing.blocked) {
-        if (editId == null && billing.loaded && billing.blocked) navigator.openPaywall("limit")
+        if (editId == null && billing.loaded && billing.blocked) navigator.replaceNewOrderWithPaywall("limit")
     }
 
     var custId by remember { mutableStateOf(presetCustId) }

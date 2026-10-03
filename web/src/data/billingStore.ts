@@ -57,7 +57,9 @@ export function paywallInfo(status: BillingStatus | null): PaywallInfo {
   const freeLeft = Math.max(0, status.freeOrderThreshold - status.orderCount);
   const hasActive = status.hasActiveSubscription;
   const blocked = !hasActive && status.paywallDue;
-  const showBanner = !hasActive && (isTrial ? !hasActive : freeLeft <= 10);
+  // Banner is a free_<N>-only nudge (≤10 left / finished). The trial variant
+  // never needs one — it's hard-gated before home is reachable.
+  const showBanner = !hasActive && !isTrial && freeLeft <= 10;
   return {
     ready: true,
     hasActive,
@@ -69,4 +71,10 @@ export function paywallInfo(status: BillingStatus | null): PaywallInfo {
     blocked,
     showBanner,
   };
+}
+
+/** The reason to open the paywall with, from the current paywall state. */
+export function paywallReason(info: PaywallInfo): "limit" | "trial" | "upsell" {
+  if (info.isTrial) return "trial";
+  return info.blocked ? "limit" : "upsell";
 }

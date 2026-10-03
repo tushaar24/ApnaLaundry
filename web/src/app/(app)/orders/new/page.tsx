@@ -54,9 +54,11 @@ function NewOrderScreen() {
 
   // Catch-all paywall guard: creating a new order (not editing) is blocked once
   // the free orders run out, from any entry point. Editing stays allowed.
+  // replace, not push — pushing would leave this page under the paywall and
+  // Back would re-trigger the guard in a loop.
   const billing = useBillingStore((s) => s.status);
   useEffect(() => {
-    if (editId == null && paywallInfo(billing).blocked) nav.openPaywall("limit");
+    if (editId == null && paywallInfo(billing).blocked) nav.openPaywall("limit", { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [billing, editId]);
 

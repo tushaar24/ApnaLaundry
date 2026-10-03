@@ -39,6 +39,14 @@ class AppNavigator(val nav: NavHostController) {
     // reason: "trial" | "limit" | "upsell"
     fun openPaywall(reason: String = "limit") = nav.navigate("paywall?reason=$reason") { launchSingleTop = true }
 
+    // Guard redirects (e.g. new-order when the free orders ran out) must REPLACE
+    // the blocked screen — pushing would leave it underneath and Back would
+    // bounce straight back into the guard.
+    fun replaceNewOrderWithPaywall(reason: String = "limit") = nav.navigate("paywall?reason=$reason") {
+        popUpTo(Routes.NEW) { inclusive = true }
+        launchSingleTop = true
+    }
+
     fun selectTab(tab: NavTab) = when (tab) {
         NavTab.ORDERS -> navigateTab(Routes.HOME)
         NavTab.CUSTOMERS -> navigateTab("customers?filter=all")

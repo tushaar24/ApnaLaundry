@@ -8,7 +8,7 @@ import type { LaundryState, Order, OrderStatus } from "@/domain/models";
 import * as Sel from "@/domain/selectors";
 import * as Repo from "@/data/repository";
 import { useAppStore, useLaundryState } from "@/data/store";
-import { paywallInfo, useBillingStore } from "@/data/billingStore";
+import { paywallInfo, paywallReason, useBillingStore } from "@/data/billingStore";
 import { Analytics } from "@/analytics/events";
 import { useScreenView } from "@/analytics/useScreenView";
 import { cls, FieldBox, PrimaryButton, SectionLabel } from "@/ui/basics";
@@ -138,7 +138,7 @@ function HomeScreen() {
       </div>
 
       {!searching && pay.showBanner ? (
-        <TrialBanner info={pay} onSeePlans={() => nav.openPaywall(pay.blocked ? "limit" : pay.isTrial ? "trial" : "upsell")} />
+        <FreeOrdersBanner info={pay} onSeePlans={() => nav.openPaywall(paywallReason(pay))} />
       ) : null}
 
       {!searching && !noOrders ? (
@@ -260,23 +260,18 @@ function HowStep({ n, title, desc }: { n: number; title: string; desc: string })
   );
 }
 
-// ---------- subscription banner (≤10 free orders left / trial upsell) ----------
+// ---------- free-orders banner (≤10 left / finished; free_<N> variant only —
+// the trial variant is hard-gated before home is reachable) ----------
 
-function TrialBanner({
+function FreeOrdersBanner({
   info, onSeePlans,
 }: { info: ReturnType<typeof paywallInfo>; onSeePlans: () => void }) {
-  const title = info.isTrial
-    ? "Try everything for ₹2"
-    : info.blocked
-      ? "Your free orders are finished"
-      : info.freeLeft === 1
-        ? "Only 1 free order left"
-        : `Only ${info.freeLeft} free orders left`;
-  const sub = info.isTrial
-    ? "Start your trial — unlimited orders"
-    : info.blocked
-      ? "Choose a plan to take new orders"
-      : "Get unlimited orders from ₹417 a month";
+  const title = info.blocked
+    ? "Your free orders are finished"
+    : info.freeLeft === 1
+      ? "Only 1 free order left"
+      : `Only ${info.freeLeft} free orders left`;
+  const sub = info.blocked ? "Choose a plan to take new orders" : "Get unlimited orders from ₹417 a month";
   return (
     <div className="mx-4 mb-2.5 flex items-center gap-3 rounded-[14px] border border-orangeborder bg-orangelight p-3">
       <div className="min-w-0 flex-1">
@@ -288,7 +283,7 @@ function TrialBanner({
         onClick={onSeePlans}
         className="shrink-0 rounded-full bg-orange px-4 py-2 text-[14px] font-bold text-ondark"
       >
-        {info.isTrial ? "Start" : "See plans"}
+        See plans
       </button>
     </div>
   );

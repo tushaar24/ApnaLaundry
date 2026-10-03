@@ -23,6 +23,9 @@ data class PaywallUiState(
     val loaded: Boolean = false, // true once the first /status call resolves (ok or failed)
     val stage: PaywallStage = PaywallStage.PLANS,
     val plan: PaywallPlan = PaywallPlan.ANNUAL,
+    // The plan the SERVER put on the subscription (trial_2 is always monthly,
+    // whatever was tapped) — Done/analytics use this, never the local pick.
+    val purchasedPlan: String? = null,
     val busy: Boolean = false,
     val error: String? = null,
 ) {
@@ -60,10 +63,17 @@ class PaywallViewModel(
 
     private var shownTracked = false
 
+    // Several screens hold a PaywallViewModel (gate, home, new-order, paywall)
+    // and all collect the shared CheckoutBridge — only the instance that
+    // actually launched Checkout may react to a result.
+    private var awaitingCheckout = false
+
     init {
         refresh()
         viewModelScope.launch {
             bridge.results.collect { result ->
+                if (!awaitingCheckout) return@collect
+                awaitingCheckout = false
                 when (result) {
                     is CheckoutResult.Success -> onCheckoutApproved()
                     is CheckoutResult.Failure -> onCheckoutFailed(result.code, result.description)
@@ -102,21 +112,47 @@ class PaywallViewModel(
                 if (!res.success || res.subscriptionId == null || res.keyId == null) {
                     throw IllegalStateException(res.message ?: "Could not start subscription")
                 }
+                // The server decides the real plan (never trust the client for money).
+                _ui.value = _ui.value.copy(purchasedPlan = res.plan)
                 Analytics.checkoutStarted(s.variant, res.plan, res.amount, res.trialAmount)
                 val contact = runCatching { prefs.userPhone.first() }.getOrNull()
+                awaitingCheckout = true
                 RazorpayCheckout.launch(activity, res, contact = contact, email = null)
             } catch (e: Exception) {
                 onCheckoutFailed(0, e.message)
+                // e.g. ALREADY_SUBSCRIBED from another device — refetch so the
+                // active state renders instead of a broken Pay button.
+                refresh()
             }
         }
     }
+
+    /** Cancel the active subscription, then refetch status. */
+    fun cancel() {
+        if (_ui.value.busy) return
+        _ui.value = _ui.value.copy(busy = true, error = null)
+        viewModelScope.launch {
+            try {
+                Analytics.subscriptionCancelRequested(_ui.value.status?.subscription?.plan ?: "monthly")
+                val res = repo.cancel()
+                if (!res.success) throw IllegalStateException(res.message ?: "Could not cancel")
+                val status = runCatching { repo.status() }.getOrNull()
+                _ui.value = _ui.value.copy(status = status ?: _ui.value.status, busy = false)
+            } catch (e: Exception) {
+                _ui.value = _ui.value.copy(busy = false, error = e.message ?: "Could not cancel — try again")
+            }
+        }
+    }
+
+    private fun purchasedOrSelected(): String =
+        _ui.value.purchasedPlan ?: _ui.value.plan.name.lowercase()
 
     private fun onCheckoutApproved() {
         _ui.value = _ui.value.copy(stage = PaywallStage.WAITING)
         viewModelScope.launch {
             val status = repo.pollUntilActive()
             if (status?.hasActiveSubscription == true) {
-                Analytics.checkoutSucceeded(_ui.value.variant, _ui.value.plan.name.lowercase())
+                Analytics.checkoutSucceeded(_ui.value.variant, purchasedOrSelected())
                 _ui.value = _ui.value.copy(status = status, stage = PaywallStage.DONE, busy = false)
             } else {
                 // Approved on-device but not yet confirmed — let the user re-check.
@@ -130,7 +166,7 @@ class PaywallViewModel(
 
     private fun onCheckoutFailed(code: Int, description: String?) {
         val msg = description?.takeIf { it.isNotBlank() } ?: "Payment was not completed"
-        Analytics.checkoutFailed(_ui.value.variant, _ui.value.plan.name.lowercase(), msg)
+        Analytics.checkoutFailed(_ui.value.variant, purchasedOrSelected(), msg)
         _ui.value = _ui.value.copy(stage = PaywallStage.PLANS, busy = false, error = msg)
     }
 }

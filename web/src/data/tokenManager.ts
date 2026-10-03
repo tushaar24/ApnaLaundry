@@ -20,26 +20,47 @@ export function setSessionDeadListener(fn: SessionDeadListener) {
   onSessionDead = fn;
 }
 
-async function refreshLocked(): Promise<string | null> {
-  const refresh = prefs.refreshToken;
-  if (!refresh) return null;
+type RefreshAttempt =
+  | { kind: "ok"; token: string }
+  | { kind: "transient" } // offline / malformed — retry later
+  | { kind: "rejected"; used: string }; // server said 401 for this token
+
+async function attemptRefresh(refresh: string): Promise<RefreshAttempt> {
   let reply;
   try {
     reply = await authApi.refresh(refresh);
   } catch {
-    return null; // offline — try again on the next sync
+    return { kind: "transient" }; // offline — try again on the next sync
   }
-  if (reply.status === 401) {
-    // Session revoked/expired on the server: this login is dead.
-    prefs.clearCredentials();
-    prefs.setLoggedIn(false);
-    onSessionDead?.();
-    return null;
-  }
+  if (reply.status === 401) return { kind: "rejected", used: refresh };
   const body = reply.body;
-  if (!body?.success || !body.accessToken || !body.refreshToken) return null;
+  if (!body?.success || !body.accessToken || !body.refreshToken) return { kind: "transient" };
   prefs.setAccessPair(body.accessToken, parseIsoMs(body.accessExpiresAt), body.refreshToken);
-  return body.accessToken;
+  return { kind: "ok", token: body.accessToken };
+}
+
+async function refreshLocked(): Promise<string | null> {
+  const refresh = prefs.refreshToken;
+  if (!refresh) return null;
+  const first = await attemptRefresh(refresh);
+  if (first.kind === "ok") return first.token;
+  if (first.kind === "transient") return null;
+
+  // Refresh tokens are single-use and rotate: a 401 can mean another tab won
+  // the race and already stored fresh credentials in localStorage. Re-read
+  // before declaring the session dead — wiping here would log BOTH tabs out.
+  const current = prefs.refreshToken;
+  if (current && current !== first.used) {
+    const second = await attemptRefresh(current);
+    if (second.kind === "ok") return second.token;
+    if (second.kind === "transient") return null;
+  }
+
+  // Genuinely revoked/expired on the server: this login is dead.
+  prefs.clearCredentials();
+  prefs.setLoggedIn(false);
+  onSessionDead?.();
+  return null;
 }
 
 function singleFlight(fn: () => Promise<string | null>): Promise<string | null> {

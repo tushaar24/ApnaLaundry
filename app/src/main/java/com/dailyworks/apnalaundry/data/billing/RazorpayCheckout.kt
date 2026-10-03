@@ -50,11 +50,13 @@ sealed interface CheckoutResult {
 
 /**
  * Bridges Checkout results from the Activity (which must implement Razorpay's
- * PaymentResultWithDataListener) to the ViewModel. A hot [SharedFlow] with a
- * small buffer so a result emitted while the collector re-subscribes isn't lost.
+ * PaymentResultWithDataListener) to the ViewModel. replay = 1 so a result
+ * posted during an Activity/collector gap (e.g. while switching back from the
+ * UPI app) is not lost; collectors must gate on "did I start a checkout" so a
+ * replayed result never triggers a ViewModel that wasn't paying.
  */
 class CheckoutBridge {
-    private val _results = MutableSharedFlow<CheckoutResult>(extraBufferCapacity = 8)
+    private val _results = MutableSharedFlow<CheckoutResult>(replay = 1, extraBufferCapacity = 8)
     val results: SharedFlow<CheckoutResult> = _results
     fun post(result: CheckoutResult) { _results.tryEmit(result) }
 }

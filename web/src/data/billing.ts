@@ -65,6 +65,7 @@ async function authedFetch(path: string, init?: RequestInit): Promise<Response> 
 
 export async function getBillingStatus(): Promise<BillingStatus> {
   const res = await authedFetch("/api/laundry/billing/status");
+  if (!res.ok) throw new Error(`Billing status failed (${res.status})`);
   return (await res.json()) as BillingStatus;
 }
 

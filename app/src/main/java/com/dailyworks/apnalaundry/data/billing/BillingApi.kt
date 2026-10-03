@@ -16,8 +16,9 @@ import io.ktor.http.contentType
 
 /**
  * Authenticated calls to /api/laundry/billing. Same Bearer + one-401-refresh
- * pattern as SyncApi. No Razorpay SDK — subscribe() returns an `intentUrl` the
- * UI opens (UPI app) or renders as a QR code.
+ * pattern as SyncApi. subscribe() returns the Razorpay subscription id + public
+ * key; the UI hands both to Razorpay Standard Checkout for the UPI AutoPay
+ * mandate approval.
  */
 class BillingApi(private val client: HttpClient, private val tokens: TokenManager) {
 

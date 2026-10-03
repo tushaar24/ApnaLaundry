@@ -3,8 +3,10 @@ package com.dailyworks.apnalaundry.ui.nav
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -59,7 +61,16 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
     }
 
     // Trial variant is a hard gate inside the authed app; login/setup aren't gated.
-    BillingGate(enabled = li && sd) {
+    // "+ Continue with new order" on the gate's Done screen navigates once the
+    // NavHost below has composed (never during the gate itself).
+    var pendingNewOrder by remember { mutableStateOf(false) }
+    BillingGate(enabled = li && sd, onContinueNewOrder = { pendingNewOrder = true }) {
+    LaunchedEffect(pendingNewOrder) {
+        if (pendingNewOrder) {
+            pendingNewOrder = false
+            navigator.openNewOrder(from = "paywall")
+        }
+    }
     NavHost(navController = navController, startDestination = start) {
         composable(Routes.LOGIN) {
             LoginScreen(onLoggedIn = {

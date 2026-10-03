@@ -86,7 +86,8 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
     var active by remember { mutableStateOf<ActiveSheet?>(null) }
 
     // Free-orders variant: banner + new-order block (the trial variant never
-    // reaches home — it's hard-gated in BillingGate).
+    // reaches home — it's hard-gated in BillingGate). Refetched on every entry
+    // so the banner's order count doesn't go stale in the retained ViewModel.
     val billingVm: PaywallViewModel = koinViewModel()
     val billing by billingVm.ui.collectAsStateWithLifecycle()
     val showBillingBanner = billing.status?.configured == true && !billing.isTrial &&
@@ -95,7 +96,10 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
         if (billing.blocked) navigator.openPaywall("limit") else navigator.openNewOrder(from = "home")
     }
 
-    LaunchedEffect(Unit) { Analytics.screen("home") }
+    LaunchedEffect(Unit) {
+        Analytics.screen("home")
+        billingVm.refresh()
+    }
 
     fun act(o: Order) {
         when (o.status) {
@@ -125,6 +129,7 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
             FreeOrdersBanner(
                 blocked = billing.blocked,
                 freeLeft = billing.freeLeft,
+                perMonthR = billing.annualAmount / 12 / 100,
                 onSeePlans = { navigator.openPaywall(if (billing.blocked) "limit" else "upsell") },
             )
         }
@@ -206,13 +211,14 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
 
 // ---------- free-orders banner (≤10 left / limit reached) ----------
 @Composable
-private fun FreeOrdersBanner(blocked: Boolean, freeLeft: Int, onSeePlans: () -> Unit) {
+private fun FreeOrdersBanner(blocked: Boolean, freeLeft: Int, perMonthR: Int, onSeePlans: () -> Unit) {
     val title = when {
         blocked -> "Your free orders are finished"
         freeLeft == 1 -> "Only 1 free order left"
         else -> "Only $freeLeft free orders left"
     }
-    val sub = if (blocked) "Choose a plan to take new orders" else "Get unlimited orders from ₹417 a month"
+    // Per-month price derives from the server's annual amount — never hardcoded.
+    val sub = if (blocked) "Choose a plan to take new orders" else "Get unlimited orders from ₹$perMonthR a month"
     Row(
         Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp).fillMaxWidth()
             .rounded(14.dp).background(Tokens.OrangeLight)

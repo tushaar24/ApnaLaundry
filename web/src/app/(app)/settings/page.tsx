@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import * as Repo from "@/data/repository";
 import { logout } from "@/data/auth";
 import { useLaundryState } from "@/data/store";
-import { paywallInfo, useBillingStore } from "@/data/billingStore";
+import { paywallInfo, paywallReason, useBillingStore } from "@/data/billingStore";
 import { useScreenView } from "@/analytics/useScreenView";
 import { AppCard, FieldBox, SectionLabel } from "@/ui/basics";
 import { IcChevronRight } from "@/ui/icons";
@@ -76,7 +76,7 @@ function SettingsScreen() {
 
       {/* Subscription / free-trial row */}
       {pay.ready ? (
-        <AppCard onClick={() => nav.openPaywall(pay.hasActive ? "upsell" : pay.blocked ? "limit" : pay.isTrial ? "trial" : "upsell")}>
+        <AppCard onClick={() => nav.openPaywall(pay.hasActive ? "upsell" : paywallReason(pay))}>
           <div className="flex w-full items-center justify-between p-4">
             <span className="flex min-w-0 flex-col">
               <span className="text-[16px] font-bold">
