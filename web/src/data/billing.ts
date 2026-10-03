@@ -38,12 +38,12 @@ export interface BillingStatus {
 }
 
 export interface SubscribeResult {
+  /** Razorpay subscription id (sub_…) — passed to Razorpay Checkout. */
   subscriptionId: string;
-  /**
-   * UPI AutoPay authorization link from the backend. Open it on the device to
-   * pick a UPI app, or render it as a QR code to scan.
-   */
-  intentUrl: string;
+  /** Public Razorpay key id for Checkout. */
+  keyId: string;
+  /** Hosted authorization link (fallback; Checkout is the primary path). */
+  shortUrl?: string | null;
   plan: string;
   variant: PaywallVariant;
   amount: number;
@@ -85,52 +85,63 @@ export async function cancelSubscription(): Promise<void> {
   if (!res.ok || !body.success) throw new Error(body.message || "Could not cancel");
 }
 
-/**
- * Open the backend-provided UPI AutoPay intent to approve the mandate — no
- * Razorpay SDK. On desktop, render `intentUrl` as a QR code instead (scan with
- * a phone's UPI app). The authoritative confirmation comes from the server
- * webhook, so after the user returns, poll getBillingStatus() for
- * `hasActiveSubscription`.
- */
-export function openIntent(intentUrl: string): void {
-  if (typeof window === "undefined" || !intentUrl) return;
-  // upi:// intents must navigate the current tab (a UPI app handles them);
-  // https authorization pages open in a new tab.
-  if (intentUrl.startsWith("upi:")) {
-    window.location.href = intentUrl;
-  } else {
-    window.open(intentUrl, "_blank", "noopener");
-  }
+// ─────────────────────── Razorpay Standard Checkout ───────────────────────
+// Razorpay owns the UPI AutoPay approval UI (its own app picker on mobile, QR on
+// desktop). We create the subscription server-side, then open Checkout with the
+// subscription id. The authoritative confirmation is the server webhook, so on
+// success we poll getBillingStatus() for `hasActiveSubscription`.
+
+const CHECKOUT_SRC = "https://checkout.razorpay.com/v1/checkout.js";
+let checkoutLoading: Promise<void> | null = null;
+
+function loadCheckout(): Promise<void> {
+  if (typeof window === "undefined") return Promise.reject(new Error("No window"));
+  if ((window as unknown as { Razorpay?: unknown }).Razorpay) return Promise.resolve();
+  if (checkoutLoading) return checkoutLoading;
+  checkoutLoading = new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = CHECKOUT_SRC;
+    s.async = true;
+    s.onload = () => resolve();
+    s.onerror = () => { checkoutLoading = null; reject(new Error("Could not load Razorpay")); };
+    document.head.appendChild(s);
+  });
+  return checkoutLoading;
 }
 
-export type UpiApp = "gpay" | "phonepe" | "paytm" | "other";
-
-export const UPI_APPS: { key: UpiApp; name: string }[] = [
-  { key: "gpay", name: "Google Pay" },
-  { key: "phonepe", name: "PhonePe" },
-  { key: "paytm", name: "Paytm" },
-  { key: "other", name: "Other UPI app" },
-];
-
-const UPI_PACKAGES: Record<string, string> = {
-  gpay: "com.google.android.apps.nbbc",
-  phonepe: "com.phonepe.app",
-  paytm: "net.one97.paytm",
-};
+export interface CheckoutCallbacks {
+  name?: string;
+  email?: string;
+  contact?: string;
+  onSuccess: () => void;
+  onDismiss: () => void;
+  onError?: (message: string) => void;
+}
 
 /**
- * Open a SPECIFIC UPI app with the mandate intent. On Android we target the
- * app's package via an `intent://` URL; elsewhere (iOS/"Other") we fall back to
- * the plain upi:// intent so the OS routes it.
+ * Open Razorpay Checkout to authorize the subscription's UPI AutoPay mandate.
+ * `onSuccess` fires when Razorpay confirms the authorization (then poll status);
+ * `onDismiss` when the user closes without paying.
  */
-export function openUpiApp(intentUrl: string, app: UpiApp): void {
-  if (typeof window === "undefined" || !intentUrl) return;
-  const isAndroid = /Android/i.test(navigator.userAgent);
-  const pkg = UPI_PACKAGES[app];
-  if (app === "other" || !pkg || !isAndroid || !intentUrl.startsWith("upi:")) {
-    openIntent(intentUrl);
-    return;
-  }
-  const rest = intentUrl.replace(/^upi:\/\//i, "");
-  window.location.href = `intent://${rest}#Intent;scheme=upi;package=${pkg};end`;
+export async function openSubscriptionCheckout(result: SubscribeResult, cb: CheckoutCallbacks): Promise<void> {
+  await loadCheckout();
+  const RazorpayCtor = (window as unknown as { Razorpay: new (opts: Record<string, unknown>) => { open: () => void; on: (e: string, h: (r: unknown) => void) => void } }).Razorpay;
+  const description = result.trialAmount > 0
+    ? "Start ₹2 trial · UPI AutoPay"
+    : result.plan === "annual" ? "Yearly plan · UPI AutoPay" : "Monthly plan · UPI AutoPay";
+  const rzp = new RazorpayCtor({
+    key: result.keyId,
+    subscription_id: result.subscriptionId,
+    name: "ApnaLaundry",
+    description,
+    prefill: { name: cb.name, email: cb.email, contact: cb.contact },
+    theme: { color: "#1d4ed8" },
+    handler: () => cb.onSuccess(),
+    modal: { ondismiss: () => cb.onDismiss() },
+  });
+  rzp.on("payment.failed", (resp: unknown) => {
+    const err = (resp as { error?: { description?: string } })?.error;
+    if (cb.onError) cb.onError(err?.description || "Payment failed — please try again");
+  });
+  rzp.open();
 }

@@ -1,20 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import QRCode from "qrcode";
 import * as AppDate from "@/core/appdate";
 import { rupees } from "@/core/money";
-import { cancelSubscription, openUpiApp, subscribe, UPI_APPS, type UpiApp } from "@/data/billing";
+import { cancelSubscription, openSubscriptionCheckout, subscribe } from "@/data/billing";
 import { paywallInfo, useBillingStore } from "@/data/billingStore";
 import { Analytics } from "@/analytics/events";
 import { cls, PrimaryButton } from "@/ui/basics";
 import { IcCheck } from "@/ui/icons";
 
 /**
- * Paywall / plans screen for the A/B free-orders flow (option A), built from
- * the handoff (docs 08-subscription). Mobile is the full-screen layout from
- * the design; desktop is a centred modal card. Desktops have no UPI app, so
- * after "Pay" we show a QR to scan with a phone (plus open-in-browser).
+ * Paywall / plans screen for the A/B paywall flow, built from the handoff
+ * (docs 08-subscription). Mobile is the full-screen layout from the design;
+ * desktop is a centred modal card. "Pay" creates the Razorpay subscription and
+ * opens Razorpay Checkout for the UPI AutoPay approval (Razorpay owns that step:
+ * its own UPI app picker on mobile, QR on desktop); on success we poll status.
  */
 
 type Plan = "annual" | "monthly";
@@ -41,9 +41,6 @@ export function PaywallScreen({
   const [stage, setStage] = useState<Stage>("plans");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [qr, setQr] = useState<string | null>(null);
-  const [app, setApp] = useState<UpiApp>("gpay");
-  const [appSheet, setAppSheet] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const annual = status?.plans.annual.amount ?? 499900;
@@ -89,15 +86,17 @@ export function PaywallScreen({
     try {
       const res = await subscribe(plan);
       Analytics.checkoutStarted(info.variant, plan, plan === "annual" ? annual : monthly, res.trialAmount || 0);
-      // Desktop → show QR to scan; otherwise open the UPI intent / auth link.
-      const isDesktop = typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches;
-      if (isDesktop) {
-        setQr(await QRCode.toDataURL(res.intentUrl, { width: 240, margin: 1 }));
-      } else {
-        openUpiApp(res.intentUrl, app); // opens the chosen UPI app via intent
-      }
-      setStage("waiting");
-      startPolling();
+      // Razorpay Checkout owns the UPI AutoPay approval (its own app picker on
+      // mobile, QR on desktop). On success we wait for the webhook to confirm.
+      await openSubscriptionCheckout(res, {
+        onSuccess: () => { setStage("waiting"); startPolling(); },
+        onDismiss: () => { setBusy(false); },
+        onError: (msg) => {
+          setError(msg);
+          Analytics.checkoutFailed(info.variant, plan, msg);
+          setBusy(false);
+        },
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not start — try again");
       Analytics.checkoutFailed(info.variant, plan, e instanceof Error ? e.message : "error");
@@ -133,7 +132,7 @@ export function PaywallScreen({
           onDone={onDone}
         />
       ) : stage === "waiting" ? (
-        <WaitingView qr={qr} onBack={() => { setStage("plans"); setBusy(false); }} />
+        <WaitingView onBack={() => { setStage("plans"); setBusy(false); }} />
       ) : (
         <>
           <div className="flex items-center justify-between px-5 pt-4">
@@ -192,18 +191,6 @@ export function PaywallScreen({
           </div>
 
           <div className="border-t border-divider bg-card px-5 py-4">
-            {/* Pay via <app> — mobile only; desktop pays by QR. */}
-            <button
-              type="button"
-              onClick={() => setAppSheet(true)}
-              className="mb-3 flex w-full items-center justify-between rounded-xl border border-cardborder bg-card px-3.5 py-2.5 lg:hidden"
-            >
-              <span className="text-[13px] font-semibold text-muted">Pay via</span>
-              <span className="flex items-center gap-1.5 text-[15px] font-bold">
-                {UPI_APPS.find((a) => a.key === app)?.name}
-                <span className="text-[12px] text-muted">▾</span>
-              </span>
-            </button>
             <PrimaryButton onClick={pay} disabled={busy}>
               {busy
                 ? "Starting…"
@@ -221,15 +208,6 @@ export function PaywallScreen({
                   : `Renews on ${renewMonthly} · pay by UPI`}
             </p>
           </div>
-
-          {appSheet ? (
-            <AppPicker
-              selected={app}
-              isTrial={info.isTrial}
-              onSelect={(a) => { setApp(a); setAppSheet(false); }}
-              onClose={() => setAppSheet(false)}
-            />
-          ) : null}
         </>
       )}
     </div>
@@ -238,50 +216,6 @@ export function PaywallScreen({
   return (
     <div className="fixed inset-0 z-50 flex items-stretch justify-center lg:items-center lg:bg-[rgba(22,25,33,0.45)] lg:p-4 lg:pl-[240px]">
       {card}
-    </div>
-  );
-}
-
-function AppPicker({
-  selected, isTrial, onSelect, onClose,
-}: {
-  selected: UpiApp;
-  isTrial: boolean;
-  onSelect: (a: UpiApp) => void;
-  onClose: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center lg:items-center lg:pl-[240px]">
-      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-[rgba(22,25,33,0.45)]" />
-      <div className="animate-sheet relative w-full rounded-t-3xl bg-bg p-5 lg:max-w-[420px] lg:rounded-3xl">
-        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-cardborder lg:hidden" />
-        <h3 className="bric text-[20px]">Pay via</h3>
-        <div className="mt-3 flex flex-col">
-          {UPI_APPS.map((a) => (
-            <button
-              key={a.key}
-              type="button"
-              onClick={() => onSelect(a.key)}
-              className="flex items-center justify-between border-b border-divider py-3.5 last:border-0"
-            >
-              <span className="text-[16px] font-semibold">{a.name}</span>
-              <span
-                className={cls(
-                  "flex size-5 items-center justify-center rounded-full border-2",
-                  selected === a.key ? "border-blue" : "border-cardborder",
-                )}
-              >
-                {selected === a.key ? <span className="size-2.5 rounded-full bg-blue" /> : null}
-              </span>
-            </button>
-          ))}
-        </div>
-        <p className="mt-3 text-[12px] text-muted">
-          {isTrial
-            ? "₹2 now · UPI AutoPay for your plan after the trial"
-            : "You'll approve a UPI AutoPay mandate in the app."}
-        </p>
-      </div>
     </div>
   );
 }
@@ -336,23 +270,12 @@ function PlanCard({
   );
 }
 
-function WaitingView({ qr, onBack }: { qr: string | null; onBack: () => void }) {
+function WaitingView({ onBack }: { onBack: () => void }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
-      {qr ? (
-        <>
-          <h2 className="bric text-[22px]">Scan to pay with any UPI app</h2>
-          <p className="text-[14px] text-muted">Open PhonePe / GPay / Paytm on your phone and scan this QR to approve the UPI AutoPay.</p>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={qr} alt="UPI QR code" width={240} height={240} className="rounded-2xl border border-cardborder p-2" />
-        </>
-      ) : (
-        <>
-          <div className="size-10 animate-spin rounded-full border-4 border-cardborder border-t-blue" />
-          <h2 className="bric text-[22px]">Approve in your UPI app</h2>
-          <p className="text-[14px] text-muted">Complete the UPI AutoPay approval, then come back — this will update automatically.</p>
-        </>
-      )}
+      <div className="size-10 animate-spin rounded-full border-4 border-cardborder border-t-blue" />
+      <h2 className="bric text-[22px]">Confirming your subscription…</h2>
+      <p className="text-[14px] text-muted">We&apos;re confirming the UPI AutoPay approval. This updates automatically — it only takes a moment.</p>
       <p className="text-[13px] text-faint">Waiting for confirmation…</p>
       <button type="button" onClick={onBack} className="text-[14px] font-bold text-blue">
         Back to plans

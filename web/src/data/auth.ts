@@ -85,10 +85,12 @@ export async function verifyOtp(challenge: Challenge, otp: string): Promise<void
 
   prefs.setCredentials(body.accessToken, parseIsoMs(body.accessExpiresAt), body.refreshToken, user.id, user.phone);
   const store = useAppStore.getState();
-  store.setAuthed(true);
   resetCheckpoint();
 
-  // Initial sync: pull this account's data if it exists.
+  // Initial sync: pull this account's data if it exists. We resolve setup
+  // status BEFORE flipping `authed`, so the Gate routes exactly once — flipping
+  // authed first would let it transiently route to /setup (a rate-screen flash)
+  // during the pull, before setupDone is known.
   await syncNow();
   const existingAccount = hasShop();
   if (existingAccount) {
@@ -99,6 +101,8 @@ export async function verifyOtp(challenge: Challenge, otp: string): Promise<void
     await ensureSeeded(user.phone);
     await syncNow();
   }
+  // Setup status is now known — reveal the authed app in a single transition.
+  store.setAuthed(true);
 
   // Identify the owner so every event attributes to this shop, then the
   // funnel event. is_new_user / needs_setup = this account had no shop yet.
