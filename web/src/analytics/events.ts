@@ -143,4 +143,31 @@ export const Analytics = {
   orderSearchOpened() {
     rawTrack("Order Search Opened");
   },
+
+  // ---- billing / paywall funnel (A/B: trial_2 | free_50) ----
+  // The client fires the UI funnel below; the backend fires the money-confirmed
+  // events (Subscription Activated / Charged / Payment Failed / Halted /
+  // Cancelled) from the Razorpay webhook. `paywall_variant` is set as a profile
+  // property so funnels can be split by variant.
+  paywallVariant(variant: string) {
+    updateProfile({ paywall_variant: variant });
+  },
+  paywallShown(variant: string, orderCount: number) {
+    rawTrack("Paywall Shown", { variant, order_count: orderCount });
+  },
+  planSelected(variant: string, plan: string) {
+    rawTrack("Plan Selected", { variant, plan });
+  },
+  checkoutStarted(variant: string, plan: string, amount: number, trialAmount: number) {
+    rawTrack("Checkout Started", { variant, plan, amount, trial_amount: trialAmount });
+  },
+  checkoutSucceeded(variant: string, plan: string) {
+    rawTrack("Checkout Succeeded", { variant, plan });
+  },
+  checkoutFailed(variant: string, plan: string, reason: string) {
+    rawTrack("Checkout Failed", { variant, plan, reason });
+  },
+  subscriptionCancelRequested(plan: string) {
+    rawTrack("Subscription Cancel Requested", { plan });
+  },
 };

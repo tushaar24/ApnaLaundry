@@ -1,10 +1,10 @@
 <resources>
     <string name="app_name">MyLaundry</string>
 
-    <!-- CleverTap credentials. Leave the account id / token BLANK to keep
-         analytics disabled (every event no-ops). Fill them in when the
-         CleverTap account arrives; region matches the courses org (eu1). -->
-    <string name="clevertap_account_id"></string>
-    <string name="clevertap_token"></string>
-    <string name="clevertap_region">eu1</string>
+    <!-- CleverTap credentials (LIVE-Daily Apps). Region is "global" → the
+         CLEVERTAP_REGION meta-data is left empty so the SDK uses the default
+         data centre. Leave account id / token blank to disable analytics. -->
+    <string name="clevertap_account_id">RZ7-7RW-Z97Z</string>
+    <string name="clevertap_token">02a-a12</string>
+    <string name="clevertap_region"></string>
 </resources>

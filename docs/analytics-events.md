@@ -89,6 +89,31 @@ Custom property keys are `snake_case`. `Charged` uses CleverTap's reserved
 | `Earnings Period Changed` | `period` (`today`\|`week`\|`month`) | period toggle on Earnings |
 | `Order Search Opened` | — | search opened on Home |
 
+### Billing / paywall (A/B: `trial_2` \| `free_50`)
+
+The variant is assigned by the backend (Firebase-weighted, stable per user) and
+returned by `GET /billing/status`. The **client** fires the UI funnel below and
+sets the `paywall_variant` profile property. The **backend** fires the
+money-confirmed events from the Razorpay webhook (server-side CleverTap), so
+revenue events can't be spoofed or lost if the app closes.
+
+| Event | Source | Properties | Fired when |
+| ----- | ------ | ---------- | ---------- |
+| `Paywall Shown` | client | `variant`, `order_count` | paywall/trial screen shown |
+| `Plan Selected` | client | `variant`, `plan` | user taps a plan |
+| `Checkout Started` | client | `variant`, `plan`, `amount`, `trial_amount` | UPI intent opened |
+| `Checkout Succeeded` | client | `variant`, `plan` | returned from UPI app as success (optimistic) |
+| `Checkout Failed` | client | `variant`, `plan`, `reason` | cancelled / failed |
+| `Subscription Cancel Requested` | client | `plan` | user taps cancel |
+| `Subscription Activated` | server | `plan`, `variant` | `subscription.authenticated`/`activated` webhook |
+| `Subscription Charged` | server | `plan`, `amount`, `variant` | `subscription.charged` webhook (recurring success) |
+| `Subscription Payment Failed` | server | `plan`, `variant` | `subscription.pending` (will retry) |
+| `Subscription Halted` | server | `plan`, `variant` | `subscription.halted` (retries exhausted) |
+| `Subscription Cancelled` | server | `plan`, `variant` | `subscription.cancelled` |
+
+Profile property `subscription_status` (+ `plan`, `paywall_variant`) is kept
+current from the webhook, for retention/win-back journeys.
+
 ## Where it lives
 
 - **Web**: `web/src/analytics/` — `clevertap.ts` (SDK loader, no-op until

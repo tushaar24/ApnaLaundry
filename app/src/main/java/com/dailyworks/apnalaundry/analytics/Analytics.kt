@@ -201,4 +201,28 @@ object Analytics {
         track("Earnings Period Changed", mapOf("period" to period))
 
     fun orderSearchOpened() = track("Order Search Opened")
+
+    // ---- billing / paywall funnel (A/B: trial_2 | free_50) ----
+    // The client fires the UI funnel; the backend fires the money-confirmed
+    // events (Subscription Activated / Charged / Payment Failed / Halted /
+    // Cancelled) from the Razorpay webhook.
+    fun paywallVariant(variant: String) = updateProfile(mapOf("paywall_variant" to variant))
+
+    fun paywallShown(variant: String, orderCount: Int) =
+        track("Paywall Shown", mapOf("variant" to variant, "order_count" to orderCount))
+
+    fun planSelected(variant: String, plan: String) =
+        track("Plan Selected", mapOf("variant" to variant, "plan" to plan))
+
+    fun checkoutStarted(variant: String, plan: String, amount: Int, trialAmount: Int) =
+        track("Checkout Started", mapOf("variant" to variant, "plan" to plan, "amount" to amount, "trial_amount" to trialAmount))
+
+    fun checkoutSucceeded(variant: String, plan: String) =
+        track("Checkout Succeeded", mapOf("variant" to variant, "plan" to plan))
+
+    fun checkoutFailed(variant: String, plan: String, reason: String) =
+        track("Checkout Failed", mapOf("variant" to variant, "plan" to plan, "reason" to reason))
+
+    fun subscriptionCancelRequested(plan: String) =
+        track("Subscription Cancel Requested", mapOf("plan" to plan))
 }

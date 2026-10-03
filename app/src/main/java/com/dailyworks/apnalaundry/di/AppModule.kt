@@ -6,6 +6,7 @@ import com.dailyworks.apnalaundry.data.LaundryRepository
 import com.dailyworks.apnalaundry.data.Prefs
 import com.dailyworks.apnalaundry.data.local.AppDatabase
 import com.dailyworks.apnalaundry.data.remote.AuthApi
+import com.dailyworks.apnalaundry.data.billing.BillingApi
 import com.dailyworks.apnalaundry.data.remote.TokenManager
 import com.dailyworks.apnalaundry.data.sync.SyncApi
 import com.dailyworks.apnalaundry.data.sync.SyncManager
@@ -30,6 +31,7 @@ val appModule = module {
     single { AuthApi(get()) }
     single { TokenManager(get(), get()) }
     single { SyncApi(get(), get()) }
+    single { BillingApi(get(), get()) }
 
     single { LaundryRepository(get()) }
     single { SyncManager(get(), get(), get(), get()) }

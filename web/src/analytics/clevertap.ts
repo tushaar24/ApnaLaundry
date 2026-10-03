@@ -11,7 +11,9 @@
  */
 
 const ACCOUNT_ID = process.env.NEXT_PUBLIC_CLEVERTAP_ACCOUNT_ID ?? "";
-const REGION = process.env.NEXT_PUBLIC_CLEVERTAP_REGION ?? "eu1";
+const REGION = (process.env.NEXT_PUBLIC_CLEVERTAP_REGION ?? "").trim().toLowerCase();
+// "global" (or unset) → no region prefix, default data centre.
+const IS_GLOBAL = REGION === "" || REGION === "global";
 
 interface CleverTapQueue {
   event: unknown[];
@@ -46,7 +48,7 @@ export function initAnalytics(): void {
     event: [], profile: [], account: [], onUserLogin: [], notifications: [], privacy: [],
   };
   q.account.push({ id: ACCOUNT_ID });
-  q.region = REGION;
+  if (!IS_GLOBAL) q.region = REGION;
   q.privacy.push({ optOut: false });
   q.privacy.push({ useIP: false });
   window.clevertap = q;
@@ -54,7 +56,7 @@ export function initAnalytics(): void {
   const script = document.createElement("script");
   script.type = "text/javascript";
   script.async = true;
-  // Region-specific CDN (eu1 → …bby2u). Matches the courses frontend.
+  // Region-specific CDN (eu1 → …bby2u); global/other → the default CDN.
   const host = REGION.startsWith("eu")
     ? "https://d2r1yp2w7bby2u.cloudfront.net"
     : "https://d2r1yp2w7bby2p.cloudfront.net";

@@ -86,6 +86,9 @@ dependencies {
     // CleverTap (events / funnel analytics)
     implementation(libs.clevertap.android.sdk)
 
+    // Google Play Billing (required for Play Store acceptance of a paid app).
+    implementation(libs.play.billing)
+
     // Room
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)

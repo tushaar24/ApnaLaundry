@@ -16,10 +16,11 @@
         android:theme="@style/Theme.ApnaLaundry"
         tools:targetApi="31">
 
-        <!-- CleverTap credentials (values from strings.xml; blank = disabled). -->
+        <!-- CleverTap credentials (values from strings.xml; blank = disabled).
+             Region is "global" → no CLEVERTAP_REGION meta-data (default data
+             centre). Add it back only for a regional account (e.g. eu1/in1). -->
         <meta-data android:name="CLEVERTAP_ACCOUNT_ID" android:value="@string/clevertap_account_id" />
         <meta-data android:name="CLEVERTAP_TOKEN" android:value="@string/clevertap_token" />
-        <meta-data android:name="CLEVERTAP_REGION" android:value="@string/clevertap_region" />
 
         <activity
             android:name=".MainActivity"
