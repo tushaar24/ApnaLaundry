@@ -89,6 +89,9 @@ dependencies {
     // Google Play Billing (required for Play Store acceptance of a paid app).
     implementation(libs.play.billing)
 
+    // Razorpay Standard Checkout — UPI AutoPay subscription authorization.
+    implementation(libs.razorpay.checkout)
+
     // Room
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)

@@ -1,0 +1,327 @@
+package com.dailyworks.apnalaundry.ui.screens.paywall
+
+import android.app.Activity
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dailyworks.apnalaundry.ui.components.PrimaryButton
+import com.dailyworks.apnalaundry.ui.components.bric
+import com.dailyworks.apnalaundry.ui.components.fig
+import com.dailyworks.apnalaundry.ui.components.tap
+import com.dailyworks.apnalaundry.ui.theme.Tokens
+import org.koin.androidx.compose.koinViewModel
+
+private val FEATURES = listOf(
+    "Unlimited orders",
+    "Bills on WhatsApp",
+    "Khata for every customer",
+    "Daily earnings — cash and UPI",
+)
+
+private const val WAS_MONTHLY = 799
+private const val WAS_ANNUAL = 8999
+
+/** "₹4,999" from paise. */
+private fun rupees(paise: Int): String {
+    val whole = paise / 100
+    val s = whole.toString()
+    val sb = StringBuilder()
+    val n = s.length
+    for (i in 0 until n) {
+        if (i != 0) {
+            val fromRight = n - i
+            if (fromRight % 2 == 1 && fromRight != 1 && fromRight < n) sb.append(',')
+        }
+        sb.append(s[i])
+    }
+    return "₹$sb"
+}
+
+@Composable
+fun PaywallScreen(
+    reason: String,
+    onClose: () -> Unit,
+    onDone: (continuing: Boolean) -> Unit,
+    hardGate: Boolean = false,
+    vm: PaywallViewModel = koinViewModel(),
+) {
+    val ui by vm.ui.collectAsStateWithLifecycle()
+    val activity = LocalContext.current as Activity
+
+    // Trial hard gate: the back button cannot dismiss the paywall.
+    BackHandler(enabled = hardGate) { /* consume — no escape until subscribed */ }
+
+    val blocked = reason == "limit" || ui.freeLeft <= 0
+    val annualR = ui.annualAmount / 100
+    val monthlyR = ui.monthlyAmount / 100
+    val perMonth = ui.annualAmount / 12 / 100
+    val saveVsMonthly = (ui.monthlyAmount * 12 - ui.annualAmount) / 100
+    val yearIfMonthly = ui.monthlyAmount * 12 / 100
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Tokens.Bg)
+            .windowInsetsPadding(WindowInsets.systemBars),
+    ) {
+        when (ui.stage) {
+            PaywallStage.DONE -> DoneView(
+                annual = ui.plan == PaywallPlan.ANNUAL,
+                paid = if (ui.plan == PaywallPlan.ANNUAL) annualR else monthlyR,
+                blocked = blocked,
+                onDone = onDone,
+            )
+
+            PaywallStage.WAITING -> WaitingView()
+
+            PaywallStage.PLANS -> Column(Modifier.fillMaxSize()) {
+                // Close — hidden on the trial hard gate (non-cancellable).
+                if (!hardGate) {
+                    Box(
+                        Modifier
+                            .size(44.dp)
+                            .padding(start = 8.dp, top = 4.dp)
+                            .tap(onClick = onClose),
+                        contentAlignment = Alignment.Center,
+                    ) { Text("✕", style = fig(22, FontWeight.Normal, Tokens.Muted)) }
+                } else {
+                    Spacer(Modifier.height(12.dp))
+                }
+
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 20.dp),
+                ) {
+                    if (!ui.isTrial) {
+                        Text(
+                            "${ui.orderCount} of ${ui.freeThreshold} free orders used",
+                            style = fig(13, FontWeight.Bold, Tokens.OrangeText),
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        when {
+                            ui.isTrial -> "Start taking orders"
+                            blocked -> "Your free orders are finished"
+                            ui.freeLeft == 1 -> "Only 1 free order left"
+                            else -> "Only ${ui.freeLeft} free orders left"
+                        },
+                        style = bric(26, FontWeight.Bold),
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        when {
+                            ui.isTrial -> "Try everything for ₹2. Your plan starts after the trial — cancel anytime."
+                            blocked -> "Pick a plan to take new orders. Your old orders and khata are safe."
+                            else -> "Pick a plan and keep taking orders without a break."
+                        },
+                        style = fig(15, FontWeight.Normal, Tokens.Muted),
+                    )
+
+                    Spacer(Modifier.height(16.dp))
+                    FEATURES.forEach { f ->
+                        Row(
+                            Modifier.padding(vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Box(
+                                Modifier.size(20.dp).clip(CircleShape).background(Tokens.BlueLight),
+                                contentAlignment = Alignment.Center,
+                            ) { Icon(Icons.Outlined.Check, null, tint = Tokens.Blue, modifier = Modifier.size(14.dp)) }
+                            Text(f, style = fig(15, FontWeight.SemiBold))
+                        }
+                    }
+
+                    Spacer(Modifier.height(18.dp))
+                    PlanCard(
+                        selected = ui.plan == PaywallPlan.ANNUAL,
+                        onSelect = { vm.selectPlan(PaywallPlan.ANNUAL) },
+                        name = "Yearly",
+                        note = "Only ${rupees(perMonth * 100)} a month",
+                        price = rupees(annualR * 100),
+                        per = "/year",
+                        was = rupees(WAS_ANNUAL * 100),
+                        badge = "BEST VALUE · SAVE ${rupees(saveVsMonthly * 100)}",
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    PlanCard(
+                        selected = ui.plan == PaywallPlan.MONTHLY,
+                        onSelect = { vm.selectPlan(PaywallPlan.MONTHLY) },
+                        name = "Monthly",
+                        note = "Pay every month",
+                        price = rupees(monthlyR * 100),
+                        per = "/month",
+                        was = rupees(WAS_MONTHLY * 100),
+                        badge = null,
+                    )
+
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        if (ui.plan == PaywallPlan.ANNUAL)
+                            "You save ${rupees(saveVsMonthly * 100)} vs paying monthly (${rupees(yearIfMonthly * 100)} a year)"
+                        else "Pick Yearly and save ${rupees(saveVsMonthly * 100)}",
+                        style = fig(13, FontWeight.Bold, if (ui.plan == PaywallPlan.ANNUAL) Tokens.Blue else Tokens.OrangeText),
+                    )
+                    ui.error?.let {
+                        Spacer(Modifier.height(8.dp))
+                        Text(it, style = fig(13, FontWeight.SemiBold, Tokens.OrangeText))
+                    }
+                    Spacer(Modifier.height(16.dp))
+                }
+
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(Tokens.Card)
+                        .padding(20.dp),
+                ) {
+                    PrimaryButton(
+                        text = when {
+                            ui.busy -> "Starting…"
+                            ui.isTrial -> "Start trial for ₹2"
+                            ui.plan == PaywallPlan.ANNUAL -> "Pay ${rupees(annualR * 100)} for 1 year"
+                            else -> "Pay ${rupees(monthlyR * 100)} for 1 month"
+                        },
+                        enabled = !ui.busy,
+                        onClick = { vm.pay(activity) },
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        if (ui.isTrial)
+                            "Then ${rupees((if (ui.plan == PaywallPlan.ANNUAL) ui.annualAmount else ui.monthlyAmount))} by UPI AutoPay · cancel anytime"
+                        else "Pay once by UPI AutoPay · cancel anytime",
+                        style = fig(12, FontWeight.Normal, Tokens.Muted),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlanCard(
+    selected: Boolean,
+    onSelect: () -> Unit,
+    name: String,
+    note: String,
+    price: String,
+    per: String,
+    was: String,
+    badge: String?,
+) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(Tokens.Card)
+            .border(2.dp, if (selected) Tokens.Blue else Tokens.CardBorder, RoundedCornerShape(16.dp))
+            .tap(onClick = onSelect)
+            .padding(16.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(
+                Modifier.size(20.dp).clip(CircleShape)
+                    .border(2.dp, if (selected) Tokens.Blue else Tokens.CardBorder, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) { if (selected) Box(Modifier.size(10.dp).clip(CircleShape).background(Tokens.Blue)) }
+            Column(Modifier.weight(1f)) {
+                Text(name, style = fig(16, FontWeight.Bold))
+                Text(note, style = fig(13, FontWeight.Normal, Tokens.Muted))
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text(price, style = bric(20, FontWeight.Bold))
+                Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(was, style = fig(12, FontWeight.Normal, Tokens.Muted).copy(textDecoration = TextDecoration.LineThrough))
+                    Text(per, style = fig(12, FontWeight.Normal, Tokens.Muted))
+                }
+            }
+        }
+        if (badge != null) {
+            Box(
+                Modifier
+                    .padding(start = 4.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(Tokens.Orange)
+                    .padding(horizontal = 8.dp, vertical = 2.dp),
+            ) { Text(badge, style = fig(10, FontWeight.Bold, Tokens.OnDark)) }
+        }
+    }
+}
+
+@Composable
+private fun WaitingView() {
+    Column(
+        Modifier.fillMaxSize().padding(32.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        CircularProgressIndicator(color = Tokens.Blue)
+        Spacer(Modifier.height(16.dp))
+        Text("Confirming your subscription…", style = bric(22, FontWeight.Bold))
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "We're confirming the UPI AutoPay approval. This updates automatically — it only takes a moment.",
+            style = fig(14, FontWeight.Normal, Tokens.Muted),
+        )
+    }
+}
+
+@Composable
+private fun DoneView(annual: Boolean, paid: Int, blocked: Boolean, onDone: (Boolean) -> Unit) {
+    Column(
+        Modifier.fillMaxSize().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Spacer(Modifier.height(24.dp))
+        Box(
+            Modifier.size(64.dp).clip(CircleShape).background(Tokens.Blue),
+            contentAlignment = Alignment.Center,
+        ) { Icon(Icons.Outlined.Check, null, tint = Tokens.OnDark, modifier = Modifier.size(34.dp)) }
+        Spacer(Modifier.height(16.dp))
+        Text(if (annual) "Yearly plan is active" else "Monthly plan is active", style = bric(24, FontWeight.Bold))
+        Spacer(Modifier.height(8.dp))
+        Text("Take as many orders as you want. No more limits.", style = fig(14, FontWeight.Normal, Tokens.Muted))
+        Spacer(Modifier.weight(1f))
+        PrimaryButton(
+            text = if (blocked) "+ Continue with new order" else "Go to my orders",
+            onClick = { onDone(blocked) },
+        )
+    }
+}

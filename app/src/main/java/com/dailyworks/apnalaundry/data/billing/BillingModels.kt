@@ -32,9 +32,9 @@ data class BillingSubscriptionDto(
 data class BillingStatus(
     val success: Boolean = false,
     val configured: Boolean = false,
-    val variant: String = "free_50", // trial_2 | free_50
+    val variant: String = "trial_2", // trial_2 | free_<N>
     val orderCount: Int = 0,
-    val freeOrderThreshold: Int = 50,
+    val freeOrderThreshold: Int = 0,
     val paywallDue: Boolean = false,
     val hasActiveSubscription: Boolean = false,
     val plans: BillingPlans = BillingPlans(),
@@ -47,9 +47,12 @@ data class SubscribeRequest(val plan: String)
 @Serializable
 data class SubscribeResponse(
     val success: Boolean = false,
+    // Razorpay subscription id (sub_…) — passed to Razorpay Checkout.
     val subscriptionId: String? = null,
-    // UPI AutoPay intent: open it to pick a UPI app, or render it as a QR code.
-    val intentUrl: String? = null,
+    // Public Razorpay key id for Checkout.
+    val keyId: String? = null,
+    // Hosted authorization link (fallback; Checkout is the primary path).
+    val shortUrl: String? = null,
     val plan: String = "",
     val variant: String = "",
     val amount: Int = 0,

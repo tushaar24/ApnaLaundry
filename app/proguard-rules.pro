@@ -19,3 +19,14 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# ---- Razorpay Standard Checkout (UPI AutoPay) ----
+-keep class com.razorpay.** { *; }
+-dontwarn com.razorpay.**
+-keepattributes JavascriptInterface
+-keepattributes *Annotation*
+-optimizations !method/inlining/*
+# Keep the Activity's payment result callbacks (invoked reflectively by the SDK).
+-keepclasseswithmembers class * {
+    public void onPayment*(...);
+}

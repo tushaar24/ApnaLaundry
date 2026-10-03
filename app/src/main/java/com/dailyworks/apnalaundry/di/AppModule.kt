@@ -7,12 +7,15 @@ import com.dailyworks.apnalaundry.data.Prefs
 import com.dailyworks.apnalaundry.data.local.AppDatabase
 import com.dailyworks.apnalaundry.data.remote.AuthApi
 import com.dailyworks.apnalaundry.data.billing.BillingApi
+import com.dailyworks.apnalaundry.data.billing.BillingRepository
+import com.dailyworks.apnalaundry.data.billing.CheckoutBridge
 import com.dailyworks.apnalaundry.data.remote.TokenManager
 import com.dailyworks.apnalaundry.data.sync.SyncApi
 import com.dailyworks.apnalaundry.data.sync.SyncManager
 import com.dailyworks.apnalaundry.data.sync.SyncScheduler
 import com.dailyworks.apnalaundry.ui.ShopViewModel
 import com.dailyworks.apnalaundry.ui.screens.login.AuthViewModel
+import com.dailyworks.apnalaundry.ui.screens.paywall.PaywallViewModel
 import io.ktor.client.HttpClient
 import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.viewmodel.dsl.viewModel
@@ -32,6 +35,8 @@ val appModule = module {
     single { TokenManager(get(), get()) }
     single { SyncApi(get(), get()) }
     single { BillingApi(get(), get()) }
+    single { BillingRepository(get()) }
+    single { CheckoutBridge() }
 
     single { LaundryRepository(get()) }
     single { SyncManager(get(), get(), get(), get()) }
@@ -40,4 +45,5 @@ val appModule = module {
 
     viewModel { ShopViewModel(get(), get(), get()) }
     viewModel { AuthViewModel(get()) }
+    viewModel { PaywallViewModel(get(), get(), get()) }
 }

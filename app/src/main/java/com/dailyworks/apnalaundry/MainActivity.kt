@@ -18,23 +18,42 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.rememberNavController
+import com.dailyworks.apnalaundry.data.billing.CheckoutBridge
+import com.dailyworks.apnalaundry.data.billing.CheckoutResult
 import com.dailyworks.apnalaundry.ui.ShopViewModel
 import com.dailyworks.apnalaundry.ui.components.ToastBar
 import com.dailyworks.apnalaundry.ui.nav.AppNavGraph
 import com.dailyworks.apnalaundry.ui.nav.AppNavigator
 import com.dailyworks.apnalaundry.ui.theme.ApnaLaundryTheme
 import com.dailyworks.apnalaundry.ui.theme.Tokens
+import com.razorpay.Checkout
+import com.razorpay.PaymentData
+import com.razorpay.PaymentResultWithDataListener
+import org.koin.android.ext.android.inject
 import org.koin.androidx.compose.koinViewModel
 
-class MainActivity : ComponentActivity() {
+// Implements Razorpay's result listener: Standard Checkout delivers the UPI
+// AutoPay outcome here, which we forward to the paywall via CheckoutBridge.
+class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
+    private val checkoutBridge: CheckoutBridge by inject()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Checkout.preload(applicationContext)
         enableEdgeToEdge()
         setContent {
             ApnaLaundryTheme {
                 AppRoot()
             }
         }
+    }
+
+    override fun onPaymentSuccess(razorpayPaymentId: String?, paymentData: PaymentData?) {
+        checkoutBridge.post(CheckoutResult.Success(razorpayPaymentId))
+    }
+
+    override fun onPaymentError(code: Int, response: String?, paymentData: PaymentData?) {
+        checkoutBridge.post(CheckoutResult.Failure(code, response))
     }
 }
 

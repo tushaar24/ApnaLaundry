@@ -22,6 +22,8 @@ import com.dailyworks.apnalaundry.ui.screens.home.HomeScreen
 import com.dailyworks.apnalaundry.ui.screens.login.LoginScreen
 import com.dailyworks.apnalaundry.ui.screens.neworder.NewOrderScreen
 import com.dailyworks.apnalaundry.ui.screens.order.OrderDetailScreen
+import com.dailyworks.apnalaundry.ui.screens.paywall.BillingGate
+import com.dailyworks.apnalaundry.ui.screens.paywall.PaywallScreen
 import com.dailyworks.apnalaundry.ui.screens.rates.RatesScreen
 import com.dailyworks.apnalaundry.ui.screens.settings.SettingsScreen
 import kotlinx.coroutines.flow.first
@@ -56,6 +58,8 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
         }
     }
 
+    // Trial variant is a hard gate inside the authed app; login/setup aren't gated.
+    BillingGate(enabled = li && sd) {
     NavHost(navController = navController, startDestination = start) {
         composable(Routes.LOGIN) {
             LoginScreen(onLoggedIn = {
@@ -152,5 +156,18 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
         ) { entry ->
             CustomerScreen(shopVm, navigator, custId = entry.arguments?.getString("custId") ?: "", from = entry.arguments?.getString("from") ?: "customers")
         }
+
+        // Soft paywall route (free-orders variant: new-order block / banner / settings).
+        composable(
+            Routes.PAYWALL,
+            arguments = listOf(navArgument("reason") { type = NavType.StringType; defaultValue = "limit" }),
+        ) { entry ->
+            PaywallScreen(
+                reason = entry.arguments?.getString("reason") ?: "limit",
+                onClose = { navigator.back() },
+                onDone = { continuing -> if (continuing) navigator.openNewOrder(from = "paywall") else navigator.openHome() },
+            )
+        }
+    }
     }
 }

@@ -82,6 +82,21 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: () 
                 }
             }
 
+            // Subscription / plan
+            AppCard {
+                Row(
+                    Modifier.fillMaxWidth().tap { navigator.openPaywall("upsell") }.padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column {
+                        Text("Subscription", style = fig(16, FontWeight.Bold))
+                        Text("Your plan and billing", style = fig(13, color = Tokens.Muted))
+                    }
+                    Text("View", style = fig(15, FontWeight.Bold, Tokens.Blue))
+                }
+            }
+
             // Phone
             AppCard {
                 Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {

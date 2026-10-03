@@ -53,6 +53,8 @@ import java.time.ZoneId
 import java.util.Locale
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dailyworks.apnalaundry.analytics.Analytics
+import com.dailyworks.apnalaundry.ui.screens.paywall.PaywallViewModel
+import org.koin.androidx.compose.koinViewModel
 import com.dailyworks.apnalaundry.core.AppDate
 import com.dailyworks.apnalaundry.core.Money
 import com.dailyworks.apnalaundry.domain.LaundryMath
@@ -92,6 +94,14 @@ fun NewOrderScreen(
     val services = state.services
     val clothes = rememberClothesState(services)
     val editingOrder = editId?.let { Selectors.order(state, it) }
+
+    // Free-orders variant: creating a NEW order past the limit opens the paywall
+    // (the home FAB already blocks; this covers other entry points like a customer).
+    val billingVm: PaywallViewModel = koinViewModel()
+    val billing by billingVm.ui.collectAsStateWithLifecycle()
+    LaunchedEffect(billing.loaded, billing.blocked) {
+        if (editId == null && billing.loaded && billing.blocked) navigator.openPaywall("limit")
+    }
 
     var custId by remember { mutableStateOf(presetCustId) }
     var query by remember { mutableStateOf("") }
