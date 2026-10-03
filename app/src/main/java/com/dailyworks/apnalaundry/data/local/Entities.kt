@@ -1,7 +1,18 @@
 package com.dailyworks.apnalaundry.data.local
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import com.dailyworks.apnalaundry.core.SyncClock
+
+// Every table carries sync metadata (see data/sync/SyncManager):
+//   updatedAt — client logical clock (epoch ms); the server resolves conflicts
+//               last-write-wins on this value
+//   dirty     — true when the row has local changes not yet pushed
+//   deleted   — tombstone: hidden from the UI but kept (and pushed) so other
+//               devices learn about the deletion
+// Constructor defaults stamp rows as fresh local writes; rows applied from a
+// server pull are built with explicit values (dirty = false, server updatedAt).
 
 @Entity(tableName = "shop")
 data class ShopEntity(
@@ -12,6 +23,8 @@ data class ShopEntity(
     val expressPct: Int,
     val nextOrder: Int,
     val nextCust: Int,
+    @ColumnInfo(defaultValue = "0") val updatedAt: Long = SyncClock.now(),
+    @ColumnInfo(defaultValue = "1") val dirty: Boolean = true,
 )
 
 @Entity(tableName = "services")
@@ -26,6 +39,8 @@ data class ServiceEntity(
     val sortOrder: Int,
     val deleted: Boolean,
     val itemsJson: String,
+    @ColumnInfo(defaultValue = "0") val updatedAt: Long = SyncClock.now(),
+    @ColumnInfo(defaultValue = "1") val dirty: Boolean = true,
 )
 
 @Entity(tableName = "customers")
@@ -37,6 +52,9 @@ data class CustomerEntity(
     val pastOrders: Int,
     val lastLabel: String,
     val agoRank: Int,
+    @ColumnInfo(defaultValue = "0") val deleted: Boolean = false,
+    @ColumnInfo(defaultValue = "0") val updatedAt: Long = SyncClock.now(),
+    @ColumnInfo(defaultValue = "1") val dirty: Boolean = true,
 )
 
 @Entity(tableName = "orders")
@@ -64,6 +82,9 @@ data class OrderEntity(
     val billSent: Boolean,
     val pieces: Int,
     val linesJson: String,
+    @ColumnInfo(defaultValue = "0") val deleted: Boolean = false,
+    @ColumnInfo(defaultValue = "0") val updatedAt: Long = SyncClock.now(),
+    @ColumnInfo(defaultValue = "1") val dirty: Boolean = true,
 )
 
 @Entity(tableName = "ledger")
@@ -82,6 +103,9 @@ data class LedgerEntity(
     val toAdv: Int,
     val ref: Int?,
     val note: String,
+    @ColumnInfo(defaultValue = "0") val deleted: Boolean = false,
+    @ColumnInfo(defaultValue = "0") val updatedAt: Long = SyncClock.now(),
+    @ColumnInfo(defaultValue = "1") val dirty: Boolean = true,
 )
 
 @Entity(tableName = "day_close")
@@ -89,4 +113,7 @@ data class DayCloseEntity(
     @PrimaryKey val date: String,
     val closedAt: Long,
     val cashCounted: Int?,
+    @ColumnInfo(defaultValue = "0") val deleted: Boolean = false,
+    @ColumnInfo(defaultValue = "0") val updatedAt: Long = SyncClock.now(),
+    @ColumnInfo(defaultValue = "1") val dirty: Boolean = true,
 )
