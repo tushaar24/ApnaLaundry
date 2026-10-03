@@ -9,7 +9,8 @@ import { tokenManager } from "./tokenManager";
  * + openSubscriptionCheckout() to take the UPI AutoPay mandate.
  */
 
-export type PaywallVariant = "trial_2" | "free_50";
+// "trial_2" or "free_<N>" (N = free orders allowed, an A/B lever).
+export type PaywallVariant = string;
 
 export interface BillingStatus {
   configured: boolean;
