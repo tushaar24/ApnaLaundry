@@ -83,8 +83,8 @@ identity `received = work − baakiAdded + oldIn + advIn + prepaid = cash + upi`
 
 ## Out of scope
 
-Multi-module split, multi-device sync, a real backend, and a real system clock — all deliberately
-deferred to keep the demo offline and coherent.
+Multi-module split and a real system clock remain deferred. A real backend and
+offline-first sync have since been built — see [sync-and-auth.md](sync-and-auth.md).
 
 ## Further notes
 

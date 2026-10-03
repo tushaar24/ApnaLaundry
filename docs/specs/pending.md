@@ -39,7 +39,8 @@ Only the pure domain layer is tested today (`AcceptanceTest`, 9 scenarios). Add:
   the Undo `snapshot`/`restore` round-trip.
 - **Customer-khata running-balance test** — seed a ledger, assert the per-row "balance after" sequence
   (including the pre-payment-excluded-until-delivered rule).
-- **Auth test** — `AuthRepository` over the Ktor `MockEngine` (accept demo creds, reject others).
+- **Auth test** — the demo `MockEngine` flow is gone (see sync-and-auth.md); test `AuthRepository`
+  against the real request/verify contract instead (fake `AuthApi`).
 - **Compose UI tests** — at least Home (tabs/filters), New order (save → bill), Collect payment.
 - **Earnings** week/month reconciliation once historical seed data is richer.
 
@@ -47,8 +48,8 @@ Only the pure domain layer is tested today (`AcceptanceTest`, 9 scenarios). Add:
 
 - **Real system clock** — replace the pinned `AppDate.TODAY` / `NOW_MINUTES` with the device clock
   for a production build (they exist to keep the demo data coherent).
-- **Room migrations** — schema is version 1 with destructive fallback; add real migrations before
-  shipping to real users.
+- ~~**Room migrations**~~ — done: schema is version 2 with a real `MIGRATION_1_2` (sync columns),
+  destructive fallback removed, `exportSchema` on (`app/schemas/`).
 - **Release build** — currently debug-signed only. Add a signing config + `isMinifyEnabled`/ProGuard
   and produce a signed release APK/AAB for distribution.
 - **App icon & splash** — still the default launcher icon; add a branded icon + splash.

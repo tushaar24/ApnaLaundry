@@ -24,7 +24,8 @@ Implementation / Testing Decisions → Out of Scope → Further Notes).
 | Doc | Area | Status |
 |---|---|---|
 | [architecture.md](architecture.md) | Stack, layers, test seams | ✅ Built |
-| [onboarding-auth.md](onboarding-auth.md) | Demo login + OTP, rate-card setup | ✅ Built |
+| [onboarding-auth.md](onboarding-auth.md) | Demo login + OTP, rate-card setup | ✅ Built (auth since replaced — see below) |
+| [sync-and-auth.md](sync-and-auth.md) | Offline-first sync + real OTP auth against the shared backend | ✅ Built |
 | [orders.md](orders.md) | Home, order lifecycle, new/edit, count, quick order | ✅ Built |
 | [billing-payments-khata.md](billing-payments-khata.md) | Bill, payments, khata ledger, customers | ✅ Built |
 | [earnings.md](earnings.md) | Earnings reconciliation | ✅ Built (chart pending) |

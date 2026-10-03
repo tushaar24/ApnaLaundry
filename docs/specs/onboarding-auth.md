@@ -58,7 +58,11 @@ rate-card setup screen. On later launches the owner lands straight on Home.
 
 ## Out of scope
 
-Real SMS/OTP delivery, real phone-number validation, multiple users/roles, and password reset.
+> **Superseded:** the demo flow described here was replaced by real OTP auth
+> against the shared backend — see [sync-and-auth.md](sync-and-auth.md). The
+> MockEngine, pre-filled number, and auto-filled OTP are gone.
+
+Multiple users/roles and password reset remain out of scope.
 
 ## Further notes
 
