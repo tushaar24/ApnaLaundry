@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import * as AppDate from "@/core/appdate";
 import { rupees } from "@/core/money";
 import { collectedOn } from "@/domain/earningsMath";
@@ -8,6 +8,7 @@ import type { LaundryState, Order, OrderStatus } from "@/domain/models";
 import * as Sel from "@/domain/selectors";
 import * as Repo from "@/data/repository";
 import { useAppStore, useLaundryState } from "@/data/store";
+import { paywallInfo, useBillingStore } from "@/data/billingStore";
 import { Analytics } from "@/analytics/events";
 import { useScreenView } from "@/analytics/useScreenView";
 import { cls, FieldBox, PrimaryButton, SectionLabel } from "@/ui/basics";
@@ -33,6 +34,17 @@ function HomeScreen() {
   const toggleHide = useAppStore((s) => s.toggleHideAmounts);
   const nav = useNav();
   useScreenView("home");
+
+  const billing = useBillingStore((s) => s.status);
+  const refreshBilling = useBillingStore((s) => s.refresh);
+  const pay = paywallInfo(billing);
+  useEffect(() => { void refreshBilling(); }, [refreshBilling]);
+
+  // After the free orders run out, taking a new order opens the paywall.
+  const startNewOrder = (from: "home" | "empty_home") => {
+    if (pay.blocked) nav.openPaywall("limit");
+    else nav.openNewOrder({ from });
+  };
 
   const [tabPickup, setTabPickup] = useState(true);
   const [selDate, setSelDate] = useState(AppDate.today());
@@ -122,6 +134,10 @@ function HomeScreen() {
         )}
       </div>
 
+      {!searching && pay.showBanner ? (
+        <TrialBanner info={pay} onSeePlans={() => nav.openPaywall(pay.blocked ? "limit" : pay.isTrial ? "trial" : "upsell")} />
+      ) : null}
+
       {!searching && !noOrders ? (
         <>
           <DashboardStrip
@@ -147,7 +163,7 @@ function HomeScreen() {
 
       <div className="relative flex-1">
         {noOrders && !searching ? (
-          <EmptyHome onNewOrder={() => nav.openNewOrder({ from: "home" })} />
+          <EmptyHome onNewOrder={() => startNewOrder("empty_home")} />
         ) : (
           <div className="flex flex-col gap-2.5 px-4 pb-[170px] pt-0.5">
             {searching ? (
@@ -185,7 +201,7 @@ function HomeScreen() {
         {!searching && !noOrders ? (
           <button
             type="button"
-            onClick={() => nav.openNewOrder({ from: "home" })}
+            onClick={() => startNewOrder("home")}
             className="fixed bottom-[88px] right-4 z-30 flex h-[58px] items-center gap-2 rounded-full bg-blue pl-[18px] pr-[22px] text-ondark shadow-lg shadow-blue/25 lg:bottom-8 lg:right-8"
           >
             <IcAdd size={22} />
@@ -237,6 +253,40 @@ function HowStep({ n, title, desc }: { n: number; title: string; desc: string })
         <span className="text-[16px] font-bold">{title}</span>
         <span className="text-[13px] text-muted">{desc}</span>
       </span>
+    </div>
+  );
+}
+
+// ---------- subscription banner (≤10 free orders left / trial upsell) ----------
+
+function TrialBanner({
+  info, onSeePlans,
+}: { info: ReturnType<typeof paywallInfo>; onSeePlans: () => void }) {
+  const title = info.isTrial
+    ? "Try everything for ₹2"
+    : info.blocked
+      ? "Your free orders are finished"
+      : info.freeLeft === 1
+        ? "Only 1 free order left"
+        : `Only ${info.freeLeft} free orders left`;
+  const sub = info.isTrial
+    ? "Start your trial — unlimited orders"
+    : info.blocked
+      ? "Choose a plan to take new orders"
+      : "Get unlimited orders from ₹417 a month";
+  return (
+    <div className="mx-4 mb-2.5 flex items-center gap-3 rounded-[14px] border border-orangeborder bg-orangelight p-3">
+      <div className="min-w-0 flex-1">
+        <div className="text-[14px] font-bold text-orangedeep">{title}</div>
+        <div className="text-[13px] text-orangetext">{sub}</div>
+      </div>
+      <button
+        type="button"
+        onClick={onSeePlans}
+        className="shrink-0 rounded-full bg-orange px-4 py-2 text-[14px] font-bold text-ondark"
+      >
+        {info.isTrial ? "Start" : "See plans"}
+      </button>
     </div>
   );
 }

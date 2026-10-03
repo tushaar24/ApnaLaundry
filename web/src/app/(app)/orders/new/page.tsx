@@ -9,6 +9,7 @@ import type { Route } from "@/domain/models";
 import * as Sel from "@/domain/selectors";
 import * as Repo from "@/data/repository";
 import { useLaundryState } from "@/data/store";
+import { paywallInfo, useBillingStore } from "@/data/billingStore";
 import { Analytics } from "@/analytics/events";
 import {
   AppCard, Avatar, cls, DateTimeBox, Divider, FieldBox, PrimaryButton, SectionLabel, Toggle, TopBar,
@@ -50,6 +51,14 @@ function NewOrderScreen() {
   const services = state.services;
   const clothes = useClothesState(services);
   const editingOrder = editId != null ? Sel.order(state, editId) : undefined;
+
+  // Catch-all paywall guard: creating a new order (not editing) is blocked once
+  // the free orders run out, from any entry point. Editing stays allowed.
+  const billing = useBillingStore((s) => s.status);
+  useEffect(() => {
+    if (editId == null && paywallInfo(billing).blocked) nav.openPaywall("limit");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [billing, editId]);
 
   const [custId, setCustId] = useState<string | null>(presetCustId);
   const [query, setQuery] = useState("");

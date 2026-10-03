@@ -158,6 +158,7 @@ export function useNav() {
     openCustomer: (custId: string) => router.push(`/customers/${custId}`),
     openCustomers: (filter = "all") => router.push(filter === "all" ? "/customers" : `/customers?filter=${filter}`),
     openEarnings: () => router.push("/earnings"),
+    openPaywall: (reason: "limit" | "trial" | "upsell" = "upsell") => router.push(`/paywall?reason=${reason}`),
     pathname,
   };
 }

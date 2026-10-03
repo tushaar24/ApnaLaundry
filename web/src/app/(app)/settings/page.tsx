@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import * as Repo from "@/data/repository";
 import { logout } from "@/data/auth";
 import { useLaundryState } from "@/data/store";
+import { paywallInfo, useBillingStore } from "@/data/billingStore";
 import { useScreenView } from "@/analytics/useScreenView";
 import { AppCard, FieldBox, SectionLabel } from "@/ui/basics";
+import { IcChevronRight } from "@/ui/icons";
 import { Shell, useNav } from "@/ui/shell";
 
 /** Settings — port of ui/screens/settings/SettingsScreen.kt. */
@@ -27,6 +29,11 @@ function SettingsScreen() {
   const [name, setName] = useState(shop.name);
   const [loggingOut, setLoggingOut] = useState(false);
   useScreenView("settings");
+
+  const billing = useBillingStore((s) => s.status);
+  const refreshBilling = useBillingStore((s) => s.refresh);
+  const pay = paywallInfo(billing);
+  useEffect(() => { void refreshBilling(); }, [refreshBilling]);
 
   async function doLogout() {
     if (loggingOut) return;
@@ -66,6 +73,33 @@ function SettingsScreen() {
           <span className="text-[15px] font-bold text-blue">Edit</span>
         </div>
       </AppCard>
+
+      {/* Subscription / free-trial row */}
+      {pay.ready ? (
+        <AppCard onClick={() => nav.openPaywall(pay.hasActive ? "upsell" : pay.blocked ? "limit" : pay.isTrial ? "trial" : "upsell")}>
+          <div className="flex w-full items-center justify-between p-4">
+            <span className="flex min-w-0 flex-col">
+              <span className="text-[16px] font-bold">
+                {pay.hasActive ? `${billing?.subscription?.plan === "annual" ? "Yearly" : "Monthly"} plan` : "Free trial"}
+              </span>
+              <span className="text-[13px] text-muted">
+                {pay.hasActive
+                  ? "Unlimited orders"
+                  : pay.isTrial
+                    ? "Start your ₹2 trial"
+                    : `${pay.orderCount} of ${pay.freeThreshold} free orders used`}
+              </span>
+            </span>
+            {pay.hasActive ? (
+              <span className="text-muted"><IcChevronRight size={20} /></span>
+            ) : (
+              <span className="shrink-0 rounded-full bg-orange px-3.5 py-1.5 text-[13px] font-bold text-ondark">
+                {pay.isTrial ? "Start" : "Upgrade"}
+              </span>
+            )}
+          </div>
+        </AppCard>
+      ) : null}
 
       {/* Phone */}
       <AppCard>
