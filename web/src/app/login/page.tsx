@@ -6,6 +6,7 @@ import { Analytics } from "@/analytics/events";
 import { useScreenView } from "@/analytics/useScreenView";
 import { cls, FieldBox, PrimaryButton } from "@/ui/basics";
 import { Gate } from "@/ui/gate";
+import { LegalFooter } from "@/ui/legal";
 import { IcLaundry } from "@/ui/icons";
 
 /**
@@ -197,6 +198,7 @@ function LoginScreen() {
           </PrimaryButton>
         </>
       )}
+      <LegalFooter />
     </div>
   );
 }
