@@ -32,7 +32,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.core.Money
 import com.dailyworks.apnalaundry.domain.Customer
 import com.dailyworks.apnalaundry.ui.Selectors
@@ -56,6 +58,8 @@ fun CustomersScreen(shopVm: ShopViewModel, navigator: AppNavigator, initialFilte
     var filter by remember { mutableStateOf(initialFilter.ifBlank { "all" }) }
     var query by remember { mutableStateOf("") }
     var active by remember { mutableStateOf<ActiveSheet?>(null) }
+
+    LaunchedEffect(Unit) { Analytics.screen("customers") }
 
     val withBal = state.customers.map { it to Selectors.balance(state, it.id) }
     val owe = withBal.filter { it.second > 0 }

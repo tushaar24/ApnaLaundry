@@ -1,5 +1,6 @@
 package com.dailyworks.apnalaundry.data
 
+import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.data.remote.AuthApi
 import com.dailyworks.apnalaundry.data.remote.parseIsoMs
 import com.dailyworks.apnalaundry.data.sync.SyncManager
@@ -82,13 +83,19 @@ class AuthRepository(
         // Initial sync: pull this account's data if it exists. Failures are
         // non-fatal — the app works offline and syncs later.
         syncManager.syncNow()
-        if (repo.hasShop()) {
+        val existingAccount = repo.hasShop()
+        if (existingAccount) {
             // Existing account restored from the server — skip the setup flow.
             prefs.setSetupDone(true)
         } else {
             repo.ensureSeeded(shopPhone = user.phone)
             syncManager.syncNow()
         }
+
+        // Identify the owner so every event attributes to this shop, then the
+        // funnel event. is_new_user / needs_setup = this account had no shop yet.
+        Analytics.identify(user.id, user.phone, repo.currentShopName())
+        Analytics.loggedIn(isNewUser = !existingAccount, needsSetup = !existingAccount)
     }
 
     /**
@@ -107,6 +114,7 @@ class AuthRepository(
         prefs.accessToken.first()?.let { token ->
             runCatching { api.logout(token) } // best-effort server-side revoke
         }
+        Analytics.loggedOut()
         prefs.logoutAndReset()
         repo.clearAll()
     }

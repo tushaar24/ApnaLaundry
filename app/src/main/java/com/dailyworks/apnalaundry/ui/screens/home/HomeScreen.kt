@@ -43,7 +43,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
+import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.core.AppDate
 import com.dailyworks.apnalaundry.core.Money
 import com.dailyworks.apnalaundry.domain.EarningsMath
@@ -81,6 +83,8 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
     var query by remember { mutableStateOf("") }
     var active by remember { mutableStateOf<ActiveSheet?>(null) }
 
+    LaunchedEffect(Unit) { Analytics.screen("home") }
+
     fun act(o: Order) {
         when (o.status) {
             OrderStatus.CREATED -> if (o.lines.isEmpty()) active = ActiveSheet.Count(o.id, OrderStatus.RECEIVED) else shopVm.markPickedUp(o.id)
@@ -98,7 +102,7 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                 Box(Modifier.height(44.dp).rounded(999.dp).background(Tokens.Card).border(1.dp, Tokens.CardBorder, RoundedCornerShape(999.dp)).tap { navigator.openRates("home") }.padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
                     Text("₹ Rates", style = fig(14, FontWeight.Bold))
                 }
-                RoundIcon(Icons.Filled.Search, "Search") { searching = true; query = "" }
+                RoundIcon(Icons.Filled.Search, "Search") { searching = true; query = ""; Analytics.orderSearchOpened() }
             } else {
                 FieldBox(query, { query = it }, placeholder = "Name, phone or order no.", modifier = Modifier.weight(1f), height = 50.dp, borderColor = Tokens.Blue, borderWidth = 2.dp, leading = { Icon(Icons.Filled.Search, null, tint = Tokens.Muted, modifier = Modifier.size(20.dp)) })
                 Text("Close", style = fig(15, FontWeight.Bold, Tokens.Blue), modifier = Modifier.tap { searching = false; query = "" })

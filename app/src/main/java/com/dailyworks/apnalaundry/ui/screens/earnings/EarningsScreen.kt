@@ -36,7 +36,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.core.AppDate
 import com.dailyworks.apnalaundry.core.Money
 import com.dailyworks.apnalaundry.domain.EarningsMath
@@ -68,6 +70,8 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
     var period by remember { mutableStateOf("today") }
     var payFilter by remember { mutableStateOf("all") }
     var active by remember { mutableStateOf<ActiveSheet?>(null) }
+
+    LaunchedEffect(Unit) { Analytics.screen("earnings") }
 
     val today = AppDate.TODAY
     val inRange: (String) -> Boolean = when (period) {
@@ -105,7 +109,7 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
             Text("Earnings", style = bric(22, FontWeight.Bold), modifier = Modifier.weight(1f))
             IconChip(if (hidden) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility, "Toggle amounts") { shopVm.toggleHideAmounts() }
             Spacer(Modifier.width(8.dp))
-            IconChip(Icons.Outlined.Share, "Share") { active = ActiveSheet.Share(shareText) }
+            IconChip(Icons.Outlined.Share, "Share") { Analytics.summaryShared(period); active = ActiveSheet.Share(shareText) }
         }
 
         Column(
@@ -131,7 +135,7 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
 
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf("today" to "Today", "week" to "This week", "month" to "This month").forEach { (v, label) ->
-                    PillChip(label, period == v) { period = v; payFilter = "all" }
+                    PillChip(label, period == v) { period = v; payFilter = "all"; Analytics.earningsPeriodChanged(v) }
                 }
             }
 

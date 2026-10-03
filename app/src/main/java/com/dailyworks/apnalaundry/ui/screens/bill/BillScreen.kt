@@ -26,7 +26,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.core.AppDate
 import com.dailyworks.apnalaundry.core.Money
 import com.dailyworks.apnalaundry.domain.LaundryMath
@@ -55,6 +57,8 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
     val amt = LaundryMath.amtOf(o)
     val fullyPaid = o.pre >= amt && amt > 0
     var active by remember { mutableStateOf<ActiveSheet?>(null) }
+
+    LaunchedEffect(Unit) { Analytics.screen("bill") }
 
     Box(Modifier.fillMaxSize().background(Tokens.Bg)) {
         Column(

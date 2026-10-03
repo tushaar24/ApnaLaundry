@@ -40,7 +40,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.domain.PricingMode
 import com.dailyworks.apnalaundry.domain.Service
 import com.dailyworks.apnalaundry.domain.ServiceItem
@@ -82,6 +84,11 @@ fun RatesScreen(shopVm: ShopViewModel, from: String, onDone: () -> Unit, onBack:
     val setup = from == "setup"
     var page by remember { mutableStateOf<RatePage>(RatePage.List) }
 
+    LaunchedEffect(Unit) {
+        Analytics.screen("rates")
+        if (!setup) Analytics.ratesOpened(from)
+    }
+
     when (val p = page) {
         is RatePage.List -> RateListPage(
             shopVm = shopVm, setup = setup,
@@ -94,7 +101,7 @@ fun RatesScreen(shopVm: ShopViewModel, from: String, onDone: () -> Unit, onBack:
             if (svc == null) { page = RatePage.List } else {
                 EditServicePage(
                     original = svc, canDelete = state.services.size > 1,
-                    onSave = { shopVm.upsertService(it); page = RatePage.List },
+                    onSave = { shopVm.upsertService(it); Analytics.serviceEdited(it.id); page = RatePage.List },
                     onDelete = { shopVm.deleteService(svc.id); page = RatePage.List },
                     onBack = { page = RatePage.List },
                 )
@@ -102,7 +109,7 @@ fun RatesScreen(shopVm: ShopViewModel, from: String, onDone: () -> Unit, onBack:
         }
         is RatePage.Add -> AddServicePage(
             existing = state.services,
-            onAdd = { shopVm.upsertService(it); page = RatePage.List },
+            onAdd = { shopVm.upsertService(it); Analytics.serviceAdded(it.mode.name); page = RatePage.List },
             onBack = { page = RatePage.List },
         )
     }
@@ -122,7 +129,9 @@ private fun RateListPage(
     var expressPct by remember { mutableStateOf(state.shop.expressPct.toString()) }
 
     fun commitAndDone() {
-        shopVm.updateShop(if (setup) shopName.trim().ifBlank { "My Shop" } else state.shop.name, expressPct.toIntOrNull() ?: 50)
+        val pct = expressPct.toIntOrNull() ?: 50
+        shopVm.updateShop(if (setup) shopName.trim().ifBlank { "My Shop" } else state.shop.name, pct)
+        if (setup) Analytics.setupCompleted(services.size, pct)
         onDone()
     }
 

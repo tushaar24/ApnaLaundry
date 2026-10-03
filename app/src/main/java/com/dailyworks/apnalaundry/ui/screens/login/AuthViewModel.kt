@@ -2,6 +2,7 @@ package com.dailyworks.apnalaundry.ui.screens.login
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.data.AuthRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -50,6 +51,10 @@ class AuthViewModel(private val auth: AuthRepository) : ViewModel() {
         val s = _ui.value
         if (!s.phoneValid || s.loading || s.resendInSecs > 0) return
         _ui.value = s.copy(loading = true, error = null)
+        Analytics.otpRequested(
+            phoneType = if (s.phone.startsWith("10000000")) "review" else "real",
+            isResend = s.step == AuthUiState.Step.OTP,
+        )
         viewModelScope.launch {
             auth.requestOtp(s.phone)
                 .onSuccess { ch ->
@@ -60,7 +65,10 @@ class AuthViewModel(private val auth: AuthRepository) : ViewModel() {
                     )
                     startResendCountdown(ch.nextSendAtMs)
                 }
-                .onFailure { _ui.value = _ui.value.copy(loading = false, error = it.message) }
+                .onFailure {
+                    Analytics.otpRequestFailed(it.message ?: "Couldn't send OTP")
+                    _ui.value = _ui.value.copy(loading = false, error = it.message)
+                }
         }
     }
 
@@ -73,11 +81,13 @@ class AuthViewModel(private val auth: AuthRepository) : ViewModel() {
             return
         }
         _ui.value = s.copy(loading = true, error = null)
+        Analytics.otpSubmitted()
         viewModelScope.launch {
             auth.verifyOtp(ch, s.otp)
                 .onSuccess { _ui.value = _ui.value.copy(loading = false, done = true) }
                 .onFailure { e ->
                     val attempts = (e as? AuthRepository.AuthException)?.attemptsRemaining
+                    Analytics.otpVerificationFailed(e.message ?: "Verification failed", attempts)
                     _ui.value = _ui.value.copy(
                         loading = false, error = e.message, otp = "",
                         attemptsRemaining = attempts ?: _ui.value.attemptsRemaining,

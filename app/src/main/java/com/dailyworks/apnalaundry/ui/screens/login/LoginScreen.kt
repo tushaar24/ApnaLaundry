@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.ui.components.FieldBox
 import com.dailyworks.apnalaundry.ui.components.PrimaryButton
 import com.dailyworks.apnalaundry.ui.components.bric
@@ -43,6 +44,7 @@ import org.koin.androidx.compose.koinViewModel
 fun LoginScreen(onLoggedIn: () -> Unit, vm: AuthViewModel = koinViewModel()) {
     val ui by vm.ui.collectAsStateWithLifecycle()
 
+    LaunchedEffect(Unit) { Analytics.screen("login") }
     LaunchedEffect(ui.done) { if (ui.done) onLoggedIn() }
 
     Column(

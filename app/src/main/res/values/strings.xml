@@ -1,3 +1,10 @@
 <resources>
     <string name="app_name">MyLaundry</string>
+
+    <!-- CleverTap credentials. Leave the account id / token BLANK to keep
+         analytics disabled (every event no-ops). Fill them in when the
+         CleverTap account arrives; region matches the courses org (eu1). -->
+    <string name="clevertap_account_id"></string>
+    <string name="clevertap_token"></string>
+    <string name="clevertap_region">eu1</string>
 </resources>

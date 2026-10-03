@@ -1,6 +1,7 @@
 package com.dailyworks.apnalaundry
 
 import android.app.Application
+import com.dailyworks.apnalaundry.analytics.Analytics
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
@@ -21,7 +22,12 @@ import org.koin.core.context.startKoin
 
 class ApnaLaundryApp : Application() {
     override fun onCreate() {
+        // CleverTap activity-lifecycle hooks must register before super.onCreate()
+        // (no-ops until the manifest account id/token are set).
+        Analytics.registerLifecycle(this)
         super.onCreate()
+        Analytics.init(this)
+
         startKoin {
             androidContext(this@ApnaLaundryApp)
             modules(appModule)

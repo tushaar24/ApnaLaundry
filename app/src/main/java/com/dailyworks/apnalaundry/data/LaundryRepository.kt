@@ -1,6 +1,7 @@
 package com.dailyworks.apnalaundry.data
 
 import androidx.room.withTransaction
+import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.core.AppDate
 import com.dailyworks.apnalaundry.core.SyncClock
 import com.dailyworks.apnalaundry.data.local.AppDatabase
@@ -74,6 +75,8 @@ class LaundryRepository(private val db: AppDatabase) {
     }
 
     suspend fun hasShop(): Boolean = shopDao.get() != null
+
+    suspend fun currentShopName(): String? = shopDao.get()?.name
 
     /** Wipe everything (logout). The next login pulls or reseeds. */
     suspend fun clearAll() = db.withTransaction {
@@ -165,6 +168,7 @@ class LaundryRepository(private val db: AppDatabase) {
         val o = st.orders.first { it.id == orderId }
         val nm = firstName(st.customers.first { it.id == o.custId }.name)
         orderDao.upsert(o.copy(status = OrderStatus.RECEIVED).toEntity())
+        Analytics.orderPickedUp(orderId)
         return CmdResult("Picked up · $nm", undo)
     }
 
@@ -174,6 +178,7 @@ class LaundryRepository(private val db: AppDatabase) {
         val o = st.orders.first { it.id == orderId }
         val nm = firstName(st.customers.first { it.id == o.custId }.name)
         orderDao.upsert(o.copy(status = OrderStatus.READY).toEntity())
+        Analytics.orderMarkedReady(orderId)
         return CmdResult("Marked ready · ${waReady(nm)}", undo)
     }
 
@@ -186,6 +191,7 @@ class LaundryRepository(private val db: AppDatabase) {
         val total = lines.sumOf { it.amt }
         val exAmt = if (o.express) LaundryMath.expressAuto(total, st.shop.expressPct) else o.exAmt
         orderDao.upsert(o.copy(status = next, lines = lines, exAmt = exAmt, billSent = false).toEntity())
+        Analytics.clothesCounted(orderId, next.name, total)
         val head = if (next == OrderStatus.READY) "Marked ready · ${waReady(nm)}" else "Picked up"
         return CmdResult("$head · bill of ${money(total)} made — send it from the order", undo)
     }
@@ -208,6 +214,13 @@ class LaundryRepository(private val db: AppDatabase) {
             ledgerDao.insertAll(entries.map { it.toEntity() })
             orderDao.upsert(o.copy(status = OrderStatus.DELIVERED, doneAt = "Just now", doneDate = AppDate.TODAY, paid = alloc.paidToward).toEntity())
         }
+        Analytics.orderDelivered(
+            orderId = o.id, total = total, amountReceived = amountReceived, method = method,
+            toKhata = maxOf(0, total - alloc.paidToward), fromAdvance = pre, lines = o.lines,
+        )
+        if (amountReceived > 0) {
+            Analytics.paymentReceived(amountReceived, method, "delivery", o.custId, o.id)
+        }
         val paidPart = if (amountReceived > 0) " · ${money(amountReceived)} ${if (method == PayMethod.UPI) "UPI" else "cash"}" else ""
         val balPart = when {
             alloc.newBalance > 0 -> " · ${money(alloc.newBalance)} baaki"
@@ -226,6 +239,7 @@ class LaundryRepository(private val db: AppDatabase) {
             ledgerDao.insert(mkEntry(o.custId, LedgerKind.GOT, total, method, PayTag.PRE, cover = total, ref = o.id).toEntity())
             orderDao.upsert(o.copy(pre = total).toEntity())
         }
+        Analytics.paymentReceived(total, method, "prepay", o.custId, o.id)
         return CmdResult("Got ${money(total)} ${if (method == PayMethod.UPI) "UPI" else "cash"} · order fully paid", undo)
     }
 
@@ -235,6 +249,7 @@ class LaundryRepository(private val db: AppDatabase) {
         val o = st.orders.first { it.id == orderId }
         val nm = firstName(st.customers.first { it.id == o.custId }.name)
         orderDao.upsert(o.copy(status = OrderStatus.CANCELLED, cancelReason = reason).toEntity())
+        Analytics.orderCancelled(orderId, reason)
         return CmdResult("Pickup cancelled · $nm", undo)
     }
 
@@ -257,6 +272,7 @@ class LaundryRepository(private val db: AppDatabase) {
             u to prefix + AppDate.short(dateIso) + if (time12.isNotBlank()) " · $time12" else ""
         }
         orderDao.upsert(updated.toEntity())
+        Analytics.orderRescheduled(orderId, if (kind == "pickup") "pickup" else "delivery", notify)
         return CmdResult(msg + if (notify) " · WhatsApp sent" else "", undo)
     }
 
@@ -265,6 +281,7 @@ class LaundryRepository(private val db: AppDatabase) {
         val o = st.orders.first { it.id == orderId }
         val nm = firstName(st.customers.first { it.id == o.custId }.name)
         orderDao.upsert(o.copy(billSent = true).toEntity())
+        Analytics.billSent(orderId)
         return CmdResult("Opening WhatsApp · bill #$orderId to $nm")
     }
 
@@ -275,6 +292,7 @@ class LaundryRepository(private val db: AppDatabase) {
         val oldBal = LaundryMath.balance(custId, st.ledger, st.orders)
         val (toOld, toAdv) = LaundryMath.receiveAllocation(oldBal, amount)
         ledgerDao.insert(mkEntry(custId, LedgerKind.GOT, amount, method, PayTag.RECEIVE, toOld = toOld, toAdv = toAdv).toEntity())
+        Analytics.paymentReceived(amount, method, "khata", custId, null)
         val after = oldBal - amount
         val tail = when {
             after > 0 -> "${money(after)} still baaki"
@@ -287,6 +305,7 @@ class LaundryRepository(private val db: AppDatabase) {
     suspend fun addOldBaaki(custId: String, amount: Int): CmdResult {
         val undo = snapshot()
         ledgerDao.insert(mkEntry(custId, LedgerKind.OLD, amount).toEntity())
+        Analytics.oldBaakiAdded(amount, custId)
         return CmdResult("Added ${money(amount)} old baaki", undo)
     }
 
@@ -307,6 +326,7 @@ class LaundryRepository(private val db: AppDatabase) {
         customerDao.upsert(Customer(id, name, phone, address, 0, "—", 9).toEntity())
         shopDao.upsert(shopE.copy(nextCust = shopE.nextCust + 1, dirty = true, updatedAt = SyncClock.now()))
         if (oldBaaki > 0) ledgerDao.insert(mkEntry(id, LedgerKind.OLD, oldBaaki).toEntity())
+        Analytics.customerAdded(if (fromList) "list" else "order", oldBaaki > 0)
         val res = if (fromList)
             CmdResult("$name added" + if (oldBaaki > 0) " with ${money(oldBaaki)} baaki" else "", undo)
         else null
@@ -322,12 +342,14 @@ class LaundryRepository(private val db: AppDatabase) {
         if (services.size <= 1) return CmdResult("Keep at least one service")
         val sv = services.first { it.id == id }
         serviceDao.setDeleted(id, true, SyncClock.now())
+        Analytics.serviceDeleted(id)
         return CmdResult("${sv.name} deleted · old orders keep it", undo)
     }
 
     suspend fun updateShop(name: String, expressPct: Int) {
         val e = shopDao.get()!!
         shopDao.upsert(e.copy(name = name, expressPct = expressPct, dirty = true, updatedAt = SyncClock.now()))
+        if (name.isNotBlank()) Analytics.updateProfile(mapOf("Name" to name))
     }
 
     // ---------------- new / edit order ----------------
@@ -374,6 +396,7 @@ class LaundryRepository(private val db: AppDatabase) {
             }
             val khataPart = if (o.status == OrderStatus.DELIVERED && diff != 0) " · khata ${if (diff > 0) "+" else "−"}${money(kotlin.math.abs(diff))}" else ""
             val totalPart = if (diff != 0) " · new total ${money(after)}" else ""
+            trackOrderSaved(updated, isEdit = true)
             return SaveOrderResult(o.id, goToBill = false, toast = "Order #${o.id} updated$totalPart$khataPart", undo = undo, edited = true)
         }
 
@@ -394,6 +417,7 @@ class LaundryRepository(private val db: AppDatabase) {
             shopDao.upsert(shopE.copy(nextOrder = id + 1, dirty = true, updatedAt = SyncClock.now()))
             touchCustomer(custId)
         }
+        trackOrderSaved(order, isEdit = false)
         return if (fields.lines.isEmpty()) {
             val toast = if (pickup == Route.HOME)
                 "Pickup scheduled for $nm" + (if (order.pickupTime.isNotBlank()) " · ${order.pickupTime}" else "")
@@ -408,6 +432,17 @@ class LaundryRepository(private val db: AppDatabase) {
     private suspend fun touchCustomer(custId: String) {
         val c = customerDao.observeOnce().firstOrNull { it.id == custId } ?: return
         customerDao.upsert(c.copy(lastLabel = "Today", agoRank = 0, dirty = true, updatedAt = SyncClock.now()))
+    }
+
+    private fun trackOrderSaved(o: Order, isEdit: Boolean) {
+        var pieces = 0; var kg = 0.0
+        o.lines.forEach { if (it.kg > 0) kg += it.kg else pieces += it.qty }
+        Analytics.orderSaved(
+            orderId = o.id, isEdit = isEdit, hasBill = o.lines.isNotEmpty(), pickup = o.pickup.name,
+            delivery = o.delivery.name, express = o.express, discount = o.discount, fee = o.fee,
+            pieces = pieces, kg = kg, servicesCount = o.lines.map { it.serviceId }.distinct().size,
+            total = LaundryMath.amtOf(o), quickBill = o.lines.any { it.isQuick },
+        )
     }
 
     private fun quickLine(amount: Int, pieces: Int) = OrderLine(

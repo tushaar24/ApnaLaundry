@@ -33,7 +33,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.core.AppDate
 import com.dailyworks.apnalaundry.core.Money
 import com.dailyworks.apnalaundry.domain.LaundryMath
@@ -61,6 +63,8 @@ fun OrderDetailScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: I
     val c = Selectors.customer(state, o.custId)
     val amt = LaundryMath.amtOf(o)
     var active by remember { mutableStateOf<ActiveSheet?>(null) }
+
+    LaunchedEffect(Unit) { Analytics.screen("order_detail") }
 
     val cancelled = o.status == OrderStatus.CANCELLED
     val labels = if (o.pickup == Route.HOME) listOf("To pick up", "Received", "Ready", "Delivered") else listOf("Received", "Ready", "Delivered")

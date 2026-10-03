@@ -23,8 +23,11 @@ android {
 
     buildTypes {
         debug {
-            // Android-emulator loopback to a `npm run dev:backend` on the host.
-            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:5001/api/laundry\"")
+            // Points at the production backend (same as release). For a local
+            // `npm run dev:backend` on the host, use the emulator loopback
+            // instead: "http://10.0.2.2:5001/api/laundry" (needs the debug-only
+            // cleartext manifest).
+            buildConfigField("String", "API_BASE_URL", "\"https://shwetamakeover.online/api/laundry\"")
         }
         release {
             isMinifyEnabled = false
@@ -79,6 +82,9 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.work.runtime.ktx)
+
+    // CleverTap (events / funnel analytics)
+    implementation(libs.clevertap.android.sdk)
 
     // Room
     implementation(libs.androidx.room.runtime)

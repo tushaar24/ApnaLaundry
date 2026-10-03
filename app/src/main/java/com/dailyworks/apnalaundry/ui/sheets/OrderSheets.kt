@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -26,6 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.core.AppDate
 import com.dailyworks.apnalaundry.core.Money
 import com.dailyworks.apnalaundry.domain.LaundryMath
@@ -194,6 +196,7 @@ fun BillViewSheet(state: LaundryState, orderId: Int, onDismiss: () -> Unit) {
     val o = Selectors.order(state, orderId) ?: return onDismiss()
     val c = Selectors.customer(state, o.custId)
     val total = LaundryMath.amtOf(o)
+    LaunchedEffect(orderId) { Analytics.billViewed(orderId) }
     AppBottomSheet(title = "Bill #${o.id}", subtitle = "${c.name} · this is what the customer sees", onDismiss = onDismiss) {
         Column(Modifier.fillMaxWidth().rounded(16.dp).background(Tokens.Card).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(state.shop.name, style = bric(22, FontWeight.Bold))

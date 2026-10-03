@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.ui.ShopViewModel
 import com.dailyworks.apnalaundry.ui.components.AppCard
 import com.dailyworks.apnalaundry.ui.components.BottomNav
@@ -47,6 +48,7 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: () 
 
     var name by remember(shop.name) { mutableStateOf(shop.name) }
     LaunchedEffect(shop.name) { if (name.isBlank()) name = shop.name }
+    LaunchedEffect(Unit) { Analytics.screen("settings") }
 
     Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars)) {
         Column(

@@ -52,6 +52,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.util.Locale
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.core.AppDate
 import com.dailyworks.apnalaundry.core.Money
 import com.dailyworks.apnalaundry.domain.LaundryMath
@@ -109,6 +110,11 @@ fun NewOrderScreen(
     var showQuickBox by remember { mutableStateOf(false) }
     var active by remember { mutableStateOf<ActiveSheet?>(null) }
     var loaded by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        Analytics.screen("new_order")
+        Analytics.newOrderStarted(if (presetCustId != null) "customer" else "home", editId != null)
+    }
 
     // Prefill for edit mode.
     LaunchedEffect(editingOrder?.id, services.size) {

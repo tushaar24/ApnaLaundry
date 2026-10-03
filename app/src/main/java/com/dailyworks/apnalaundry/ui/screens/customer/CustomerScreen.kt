@@ -28,7 +28,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.core.AppDate
 import com.dailyworks.apnalaundry.core.Money
 import com.dailyworks.apnalaundry.domain.LaundryMath
@@ -65,6 +67,8 @@ fun CustomerScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: Strin
     val state by shopVm.state.collectAsStateWithLifecycle()
     var tab by remember { mutableStateOf("khata") }
     var active by remember { mutableStateOf<ActiveSheet?>(null) }
+
+    LaunchedEffect(Unit) { Analytics.screen("customer_khata") }
 
     val c = Selectors.customer(state, custId)
     val nm = Selectors.firstName(c.name)
@@ -113,6 +117,7 @@ fun CustomerScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: Strin
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         PrimaryButton("Receive payment", Modifier.weight(1f), height = 46.dp) { active = ActiveSheet.Receive(custId) }
                         OutlineButton("Remind", Modifier.weight(1f), height = 46.dp, border = Tokens.OrangeBorder, fg = Tokens.OrangeText) {
+                            Analytics.reminderSent(custId, bal)
                             shopVm.showInfo("WhatsApp reminder sent to $nm for ${Money.rupees(bal)}")
                         }
                     }

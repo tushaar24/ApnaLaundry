@@ -15,6 +15,12 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.ApnaLaundry"
         tools:targetApi="31">
+
+        <!-- CleverTap credentials (values from strings.xml; blank = disabled). -->
+        <meta-data android:name="CLEVERTAP_ACCOUNT_ID" android:value="@string/clevertap_account_id" />
+        <meta-data android:name="CLEVERTAP_TOKEN" android:value="@string/clevertap_token" />
+        <meta-data android:name="CLEVERTAP_REGION" android:value="@string/clevertap_region" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
