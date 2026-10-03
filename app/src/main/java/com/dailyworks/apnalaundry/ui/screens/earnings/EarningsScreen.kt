@@ -19,6 +19,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
@@ -33,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dailyworks.apnalaundry.core.AppDate
@@ -110,6 +112,23 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            if (state.orders.isEmpty() && state.ledger.isEmpty()) {
+                Column(
+                    Modifier.fillMaxWidth().padding(top = 56.dp), horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Box(Modifier.size(84.dp).rounded(999.dp).background(Tokens.NeutralFill), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Outlined.BarChart, null, tint = Tokens.InkSecondary, modifier = Modifier.size(40.dp))
+                    }
+                    Text("No earnings yet", style = bric(22, FontWeight.Bold))
+                    Text(
+                        "Take and deliver your first order — the money you receive shows up here.",
+                        style = fig(14, color = Tokens.Muted), textAlign = TextAlign.Center,
+                    )
+                }
+                return@Column
+            }
+
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf("today" to "Today", "week" to "This week", "month" to "This month").forEach { (v, label) ->
                     PillChip(label, period == v) { period = v; payFilter = "all" }
