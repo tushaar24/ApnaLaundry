@@ -7,6 +7,7 @@ import { clearAll, ensureSeeded, hasShop } from "./repository";
 import { hasPendingChanges, pushNow, resetCheckpoint, startAutoSync, syncNow } from "./sync";
 import { setSessionDeadListener } from "./tokenManager";
 import { Analytics } from "@/analytics/events";
+import { MetaPixel } from "@/analytics/metaPixel";
 import { deriveState } from "./store";
 
 /**
@@ -122,6 +123,7 @@ export async function verifyOtp(challenge: Challenge, otp: string): Promise<void
   const shopName = deriveState(useAppStore.getState().rows).shop.name;
   Analytics.identify({ identity: user.id, phone: user.phone, name: shopName });
   Analytics.loggedIn(!existingAccount, !existingAccount);
+  MetaPixel.loginSuccess(!existingAccount);
 }
 
 /**

@@ -6,6 +6,7 @@ import { rupees } from "@/core/money";
 import { cancelSubscription, openSubscriptionCheckout, preloadCheckout, subscribe, type BillingStatus } from "@/data/billing";
 import { paywallInfo, useBillingStore } from "@/data/billingStore";
 import { Analytics } from "@/analytics/events";
+import { MetaPixel } from "@/analytics/metaPixel";
 import { cls, PrimaryButton, SectionLabel } from "@/ui/basics";
 import { IcBook, IcChart, IcChat, IcCheck, IcReceipt } from "@/ui/icons";
 
@@ -115,10 +116,17 @@ export function PaywallScreen({
       const serverPlan: Plan = res.plan === "annual" ? "annual" : "monthly";
       setPurchased(serverPlan);
       Analytics.checkoutStarted(info.variant, res.plan, res.amount, res.trialAmount || 0);
+      // Value in rupees: what this approval charges now (the ₹2 trial, or the plan).
+      const chargeRupees = (res.trialAmount || res.amount) / 100;
+      MetaPixel.subscriptionInitiated(res.subscriptionId, res.plan, info.variant, chargeRupees);
       // Razorpay Checkout owns the UPI AutoPay approval (its own app picker on
       // mobile, QR on desktop). On success we wait for the webhook to confirm.
       await openSubscriptionCheckout(res, {
-        onSuccess: () => { setStage("waiting"); startPolling(res.plan); },
+        onSuccess: () => {
+          MetaPixel.subscriptionActivated(res.subscriptionId, res.plan, info.variant, chargeRupees);
+          setStage("waiting");
+          startPolling(res.plan);
+        },
         onDismiss: () => { setBusy(false); },
         onError: (msg) => {
           setError(msg);

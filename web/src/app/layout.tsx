@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, Figtree } from "next/font/google";
 import "./globals.css";
+import { MetaPixelScript } from "@/analytics/metaPixel";
 
 const figtree = Figtree({
   subsets: ["latin"],
@@ -29,7 +30,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${figtree.variable} ${bricolage.variable}`}>
-      <body>{children}</body>
+      <body>
+        {children}
+        <MetaPixelScript />
+      </body>
     </html>
   );
 }

@@ -26,6 +26,19 @@ async function proxy(req: NextRequest, pathParts: string[]): Promise<Response> {
   // /api/laundry/billing/webhook can verify the HMAC on the backend.
   const rzpSig = req.headers.get("x-razorpay-signature");
   if (rzpSig) headers["x-razorpay-signature"] = rzpSig;
+  // Meta Conversions API match signals: the visitor's IP (nginx's
+  // X-Forwarded-For, so the backend's req.ip is the real client), browser UA,
+  // and the pixel's first-party cookies (this site's cookies never reach the
+  // backend otherwise). x-laundry-client marks the request as from the website.
+  const xff = req.headers.get("x-forwarded-for");
+  if (xff) headers["x-forwarded-for"] = xff;
+  const ua = req.headers.get("user-agent");
+  if (ua) headers["user-agent"] = ua;
+  const fbp = req.cookies.get("_fbp")?.value;
+  if (fbp) headers["x-meta-fbp"] = fbp;
+  const fbc = req.cookies.get("_fbc")?.value;
+  if (fbc) headers["x-meta-fbc"] = fbc;
+  headers["x-laundry-client"] = "web";
 
   let upstream: Response;
   try {
