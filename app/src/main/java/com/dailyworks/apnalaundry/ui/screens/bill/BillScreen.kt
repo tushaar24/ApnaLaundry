@@ -24,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.LaunchedEffect
@@ -52,6 +53,7 @@ import com.dailyworks.apnalaundry.ui.theme.Tokens
 @Composable
 fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, from: String) {
     val state by shopVm.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     val o = Selectors.order(state, orderId) ?: return
     val c = Selectors.customer(state, o.custId)
     val amt = LaundryMath.amtOf(o)
@@ -111,9 +113,9 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
                     Text("Bill", style = fig(13, FontWeight.Bold, Tokens.Muted))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlineButton("View bill", Modifier.weight(1f), height = 50.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { active = ActiveSheet.BillView(o.id) }
-                        OutlineButton("Download", Modifier.weight(1f), height = 50.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { shopVm.showInfo("Bill-${o.id}.pdf saved in Downloads") }
+                        OutlineButton("Download", Modifier.weight(1f), height = 50.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { shareBillImage(context, state, o) }
                     }
-                    PrimaryButton(if (o.billSent) "Send again" else "Send on WhatsApp", height = 54.dp) { shopVm.sendBill(o.id) }
+                    PrimaryButton(if (o.billSent) "Send again" else "Send on WhatsApp", height = 54.dp) { sendBillOnWhatsApp(context, state, o); shopVm.sendBill(o.id) }
                     Text(
                         if (o.billSent) "Sent to ${Selectors.firstName(c.name)} ✓" else "Not sent yet",
                         style = fig(13, FontWeight.Bold, if (o.billSent) Tokens.BlueText else Tokens.OrangeText),
