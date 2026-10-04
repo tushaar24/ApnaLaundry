@@ -6,8 +6,8 @@ import { rupees } from "@/core/money";
 import { cancelSubscription, openSubscriptionCheckout, subscribe, type BillingStatus } from "@/data/billing";
 import { paywallInfo, useBillingStore } from "@/data/billingStore";
 import { Analytics } from "@/analytics/events";
-import { cls, PrimaryButton } from "@/ui/basics";
-import { IcCheck } from "@/ui/icons";
+import { cls, PrimaryButton, SectionLabel } from "@/ui/basics";
+import { IcBook, IcChart, IcChat, IcCheck, IcReceipt } from "@/ui/icons";
 
 /**
  * Paywall / plans screen for the A/B paywall flow, built from the handoff
@@ -25,6 +25,18 @@ const WAS_MONTHLY = 799;
 const WAS_ANNUAL = 8999;
 
 const FEATURES = ["Unlimited orders", "Bills on WhatsApp", "Khata for every customer", "Daily earnings — cash and UPI"];
+
+// backend TRIAL_DAYS (laundry-razorpay.js)
+const TRIAL_DAYS = 7;
+
+// The trial paywall lists features with a subtitle each (design 08b).
+const TRIAL_FEATURES: { Icon: typeof IcReceipt; title: string; sub: string }[] = [
+  { Icon: IcReceipt, title: "Unlimited orders", sub: "Walk-in, home pickup and delivery" },
+  { Icon: IcChat, title: "Bills on WhatsApp", sub: "Make and send a bill in one tap" },
+  { Icon: IcBook, title: "Khata for every customer", sub: "Always know who owes you money" },
+  { Icon: IcCheck, title: "“Clothes ready” message", sub: "Customers get a WhatsApp automatically" },
+  { Icon: IcChart, title: "Daily earnings", sub: "Cash and UPI added up for you" },
+];
 
 export function PaywallScreen({
   reason, onClose, onDone, hardGate = false, setupPending = false,
@@ -49,11 +61,6 @@ export function PaywallScreen({
   // whatever was tapped) — Done/analytics must use this, not the local pick.
   const [purchased, setPurchased] = useState<Plan>("annual");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // trial_2 has exactly one plan (monthly); keep the local state honest.
-  useEffect(() => {
-    if (info.isTrial && plan !== "monthly") setPlan("monthly");
-  }, [info.isTrial, plan]);
 
   const annual = status?.plans.annual.amount ?? 499900;
   const monthly = status?.plans.monthly.amount ?? 49900;
@@ -90,7 +97,7 @@ export function PaywallScreen({
 
   const tillAnnual = useMemo(() => fmtTill(365), []);
   const renewMonthly = useMemo(() => fmtTill(30), []);
-  const trialStart = useMemo(() => fmtTill(7), []); // backend TRIAL_DAYS
+  const trialStart = useMemo(() => fmtTill(TRIAL_DAYS), []);
 
   async function pay() {
     if (busy) return;
@@ -185,43 +192,79 @@ export function PaywallScreen({
             ) : null}
           </div>
           <div className="flex-1 overflow-y-auto px-5 pb-4">
-            {!info.isTrial ? (
-              <div className="text-[13px] font-bold text-orangetext">
-                {info.orderCount} of {info.freeThreshold} free orders used
-              </div>
-            ) : null}
-            <h1 className="bric mt-1 text-[26px] leading-tight">{headline}</h1>
-            <p className="mt-1.5 text-[15px] text-muted">{subline}</p>
-
-            <ul className="mt-4 flex flex-col gap-2.5">
-              {FEATURES.map((f) => (
-                <li key={f} className="flex items-center gap-2.5">
-                  <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-bluelight text-blue">
-                    <IcCheck size={14} />
-                  </span>
-                  <span className="text-[15px] font-semibold">{f}</span>
-                </li>
-              ))}
-            </ul>
-
             {info.isTrial ? (
-              // trial_2 has exactly one plan (monthly) — no picker to show.
-              <div className="mt-5 rounded-2xl border-2 border-blue bg-card px-4 py-3.5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-[16px] font-bold">Monthly plan</div>
-                    <div className="text-[13px] text-muted">₹2 today · plan starts after the trial</div>
+              <>
+                {/* ₹2 trial hero */}
+                <div className="mt-1 rounded-2xl bg-blue px-5 py-5 text-ondark">
+                  <div className="text-[12px] font-bold tracking-[0.08em] text-bluebar">
+                    {TRIAL_DAYS}-DAY FULL TRIAL
                   </div>
-                  <div className="text-right">
-                    <div className="bric text-[20px]">{rupees(monthlyR)}</div>
-                    <div className="text-[12px] text-muted">
-                      <span className="line-through">{rupees(WAS_MONTHLY)}</span> /month
+                  <div className="mt-1.5 flex items-center gap-4">
+                    <span className="bric text-[52px] leading-none">{rupees(trialR)}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[18px] font-bold leading-snug">That&apos;s all you pay today</div>
+                      <div className="text-[14px] text-bluebar">Every feature unlocked for {TRIAL_DAYS} days</div>
                     </div>
                   </div>
                 </div>
-              </div>
+
+                <SectionLabel text="Everything in the app" className="mt-5" />
+                <div className="mt-3 flex flex-col gap-3.5">
+                  {TRIAL_FEATURES.map((f) => (
+                    <div key={f.title} className="flex items-center gap-3">
+                      <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-bluelight text-blue">
+                        <f.Icon size={22} />
+                      </span>
+                      <div className="min-w-0">
+                        <div className="text-[16px] font-bold">{f.title}</div>
+                        <div className="text-[13px] text-muted">{f.sub}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <SectionLabel text={`Your plan after ${TRIAL_DAYS} days`} className="mt-5" />
+                <div className="mt-3 flex flex-col gap-2.5">
+                  <PlanCard
+                    selected={plan === "annual"}
+                    onSelect={() => setPlan("annual")}
+                    name="Yearly"
+                    note={`Only ${rupees(perMonth)} a month`}
+                    price={rupees(annualR)}
+                    per="/year"
+                    was={rupees(WAS_ANNUAL)}
+                    badge={`BEST VALUE · SAVE ${rupees(saveVsMonthly)}`}
+                  />
+                  <PlanCard
+                    selected={plan === "monthly"}
+                    onSelect={() => setPlan("monthly")}
+                    name="Monthly"
+                    note="Pay every month"
+                    price={rupees(monthlyR)}
+                    per="/month"
+                    was={rupees(WAS_MONTHLY)}
+                  />
+                </div>
+              </>
             ) : (
               <>
+                <div className="text-[13px] font-bold text-orangetext">
+                  {info.orderCount} of {info.freeThreshold} free orders used
+                </div>
+                <h1 className="bric mt-1 text-[26px] leading-tight">{headline}</h1>
+                <p className="mt-1.5 text-[15px] text-muted">{subline}</p>
+
+                <ul className="mt-4 flex flex-col gap-2.5">
+                  {FEATURES.map((f) => (
+                    <li key={f} className="flex items-center gap-2.5">
+                      <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-bluelight text-blue">
+                        <IcCheck size={14} />
+                      </span>
+                      <span className="text-[15px] font-semibold">{f}</span>
+                    </li>
+                  ))}
+                </ul>
+
                 <div className="mt-5 flex flex-col gap-2.5">
                   <PlanCard
                     selected={plan === "annual"}
@@ -259,14 +302,14 @@ export function PaywallScreen({
               {busy
                 ? "Starting…"
                 : info.isTrial
-                  ? "Start trial for ₹2"
+                  ? `Start trial for ${rupees(trialR)}`
                   : plan === "annual"
                     ? `Pay ${rupees(annualR)} for 1 year`
                     : `Pay ${rupees(monthlyR)} for 1 month`}
             </PrimaryButton>
             <p className="mt-2 text-center text-[12px] text-muted">
               {info.isTrial
-                ? `Then ${rupees(plan === "annual" ? annualR : monthlyR)} by UPI AutoPay · cancel anytime`
+                ? `Then ${rupees(plan === "annual" ? annualR : monthlyR)}/${plan === "annual" ? "year" : "month"} from ${trialStart} by UPI AutoPay. Cancel anytime before.`
                 : plan === "annual"
                   ? `Valid till ${tillAnnual} · pay by UPI`
                   : `Renews on ${renewMonthly} · pay by UPI`}

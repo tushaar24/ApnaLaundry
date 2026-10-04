@@ -118,3 +118,9 @@ export const IcShirt = (p: P) => (
 export const IcChevronRight = (p: P) => (
   <Base {...p}><path d="m9 6 6 6-6 6" /></Base>
 );
+export const IcChat = (p: P) => (
+  <Base {...p}><path d="M4 4h16v12H8l-4 4V4Z" /></Base>
+);
+export const IcBook = (p: P) => (
+  <Base {...p}><path d="M6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5V4.5A1.5 1.5 0 0 1 6.5 3Z" /><path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19M9 8h6" /></Base>
+);

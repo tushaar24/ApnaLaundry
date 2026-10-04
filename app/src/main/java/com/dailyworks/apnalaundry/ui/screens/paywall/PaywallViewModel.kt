@@ -103,8 +103,9 @@ class PaywallViewModel(
         val s = _ui.value
         if (s.busy) return
         _ui.value = s.copy(busy = true, error = null)
-        // Variant decides the plan server-side; trial_2 is always monthly.
-        val planArg = if (s.isTrial) "monthly" else if (s.plan == PaywallPlan.ANNUAL) "annual" else "monthly"
+        // The user's chosen plan; trial_2 layers the ₹2 trial on top of it. The
+        // server prices it from its own table (never trusts the client for money).
+        val planArg = if (s.plan == PaywallPlan.ANNUAL) "annual" else "monthly"
         Analytics.planSelected(s.variant, planArg)
         viewModelScope.launch {
             try {
