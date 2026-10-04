@@ -32,6 +32,8 @@ export interface CredentialsResponse {
   accessExpiresAt?: string;
   refreshToken?: string;
   sessionExpiresAt?: string;
+  /** verify-otp only: account created just now, so the server holds no data for it yet. */
+  isNewUser?: boolean;
   code?: string;
   message?: string;
   attemptsRemaining?: number;

@@ -38,11 +38,21 @@ class SyncManager(
 
     private val mutex = Mutex()
 
-    suspend fun syncNow(): Result = mutex.withLock {
+    suspend fun syncNow(): Result = runLocked {
+        pullOnce()
+        pushOnce()
+    }
+
+    /**
+     * Push only — for a brand-new account right after seeding, where a pull
+     * can't return anything and would only add a round trip.
+     */
+    suspend fun pushNow(): Result = runLocked { pushOnce() }
+
+    private suspend fun runLocked(work: suspend () -> Unit): Result = mutex.withLock {
         if (!prefs.loggedIn.first()) return Result.Skipped
         try {
-            pullOnce()
-            pushOnce()
+            work()
             Result.Success
         } catch (e: NotLoggedInException) {
             Result.Error("Not logged in", authDead = true)

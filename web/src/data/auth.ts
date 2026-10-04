@@ -4,7 +4,7 @@ import { authApi, parseIsoMs } from "./authApi";
 import { prefs } from "./prefs";
 import { useAppStore } from "./store";
 import { clearAll, ensureSeeded, hasShop } from "./repository";
-import { hasPendingChanges, resetCheckpoint, startAutoSync, syncNow } from "./sync";
+import { hasPendingChanges, pushNow, resetCheckpoint, startAutoSync, syncNow } from "./sync";
 import { setSessionDeadListener } from "./tokenManager";
 import { Analytics } from "@/analytics/events";
 import { deriveState } from "./store";
@@ -101,8 +101,9 @@ export async function verifyOtp(challenge: Challenge, otp: string): Promise<void
   // Initial sync: pull this account's data if it exists. We resolve setup
   // status BEFORE flipping `authed`, so the Gate routes exactly once — flipping
   // authed first would let it transiently route to /setup (a rate-screen flash)
-  // during the pull, before setupDone is known.
-  await syncNow();
+  // during the pull, before setupDone is known. A just-created account has
+  // nothing to pull, so it skips straight to seeding (saves a round trip).
+  if (!body.isNewUser) await syncNow();
   const existingAccount = hasShop();
   if (existingAccount) {
     // Existing account restored from the server — skip the setup flow.
@@ -110,7 +111,8 @@ export async function verifyOtp(challenge: Challenge, otp: string): Promise<void
   } else {
     store.setSetupDone(false);
     await ensureSeeded(user.phone);
-    await syncNow();
+    // Just pulled (or nothing to pull) — only the seed needs to go up.
+    await pushNow();
   }
   // Setup status is now known — reveal the authed app in a single transition.
   store.setAuthed(true);

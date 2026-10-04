@@ -81,15 +81,17 @@ class AuthRepository(
         prefs.setLoggedIn(true)
 
         // Initial sync: pull this account's data if it exists. Failures are
-        // non-fatal — the app works offline and syncs later.
-        syncManager.syncNow()
+        // non-fatal — the app works offline and syncs later. A just-created
+        // account has nothing to pull, so it skips straight to seeding.
+        if (!body.isNewUser) syncManager.syncNow()
         val existingAccount = repo.hasShop()
         if (existingAccount) {
             // Existing account restored from the server — skip the setup flow.
             prefs.setSetupDone(true)
         } else {
             repo.ensureSeeded(shopPhone = user.phone)
-            syncManager.syncNow()
+            // Just pulled (or nothing to pull) — only the seed needs to go up.
+            syncManager.pushNow()
         }
 
         // Identify the owner so every event attributes to this shop, then the

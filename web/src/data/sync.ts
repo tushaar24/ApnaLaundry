@@ -135,13 +135,27 @@ export function hasPendingChanges(): boolean {
 
 /** One sync = pull then push, mutex-guarded. */
 export function syncNow(): Promise<SyncResult> {
+  return runLocked(async () => {
+    await pullOnce();
+    await pushOnce();
+  });
+}
+
+/**
+ * Push only, mutex-guarded — for a brand-new account right after seeding,
+ * where a pull can't return anything and would only add a round trip.
+ */
+export function pushNow(): Promise<SyncResult> {
+  return runLocked(pushOnce);
+}
+
+function runLocked(work: () => Promise<void>): Promise<SyncResult> {
   const run = chain.then(async (): Promise<SyncResult> => {
     if (!prefs.loggedIn) return { kind: "skipped" };
     const store = useAppStore.getState();
     store.setSyncing(true);
     try {
-      await pullOnce();
-      await pushOnce();
+      await work();
       return { kind: "success" };
     } catch (e) {
       if (e instanceof NotLoggedInError) {

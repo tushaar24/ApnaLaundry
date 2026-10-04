@@ -45,6 +45,8 @@ data class CredentialsResponse(
     val accessExpiresAt: String? = null,
     val refreshToken: String? = null,
     val sessionExpiresAt: String? = null,
+    /** verify-otp only: account created just now, so the server holds no data for it yet. */
+    val isNewUser: Boolean = false,
     val code: String? = null,
     val message: String? = null,
     val attemptsRemaining: Int? = null,
