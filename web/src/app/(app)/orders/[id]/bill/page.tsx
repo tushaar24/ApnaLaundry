@@ -11,6 +11,7 @@ import * as Repo from "@/data/repository";
 import { useLaundryState } from "@/data/store";
 import { useScreenView } from "@/analytics/useScreenView";
 import { AppCard, cls, Divider, OutlineButton, PrimaryButton, TopBar } from "@/ui/basics";
+import { downloadBill, sendBillOnWhatsApp } from "@/ui/billActions";
 import { SheetHost } from "@/ui/sheets/host";
 import type { ActiveSheet } from "@/ui/sheets/types";
 import { Shell, useNav } from "@/ui/shell";
@@ -115,12 +116,12 @@ function BillScreen({ orderId }: { orderId: number }) {
               className="flex-1"
               border="var(--color-cardborder)"
               fg="var(--color-ink)"
-              onClick={() => Repo.showInfo(`Bill-${o.id}.pdf saved in Downloads`)}
+              onClick={() => void downloadBill(state, o)}
             >
               Download
             </OutlineButton>
           </div>
-          <PrimaryButton h={54} onClick={() => Repo.sendBill(o.id)}>
+          <PrimaryButton h={54} onClick={() => sendBillOnWhatsApp(state, o)}>
             {o.billSent ? "Send again" : "Send on WhatsApp"}
           </PrimaryButton>
           <span className={cls("text-[13px] font-bold", o.billSent ? "text-bluetext" : "text-orangetext")}>

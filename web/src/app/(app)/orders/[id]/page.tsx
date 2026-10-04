@@ -10,6 +10,7 @@ import * as Repo from "@/data/repository";
 import { useLaundryState } from "@/data/store";
 import { useScreenView } from "@/analytics/useScreenView";
 import { AppCard, Avatar, cls, Divider, OutlineButton, PrimaryButton, TopBar } from "@/ui/basics";
+import { downloadBill, sendBillOnWhatsApp } from "@/ui/billActions";
 import { IcMore } from "@/ui/icons";
 import { SheetHost } from "@/ui/sheets/host";
 import type { ActiveSheet } from "@/ui/sheets/types";
@@ -195,7 +196,7 @@ function OrderDetailScreen({ orderId }: { orderId: number }) {
                 className="flex-1"
                 border="var(--color-cardborder)"
                 fg="var(--color-ink)"
-                onClick={() => Repo.showInfo(`Bill-${o.id}.pdf saved in Downloads`)}
+                onClick={() => void downloadBill(state, o)}
               >
                 Download
               </OutlineButton>
@@ -205,12 +206,12 @@ function OrderDetailScreen({ orderId }: { orderId: number }) {
                   className="flex-1"
                   border="var(--color-blueborder)"
                   fg="var(--color-bluetext)"
-                  onClick={() => Repo.sendBill(o.id)}
+                  onClick={() => sendBillOnWhatsApp(state, o)}
                 >
                   Sent ✓
                 </OutlineButton>
               ) : (
-                <PrimaryButton h={48} className="flex-1" onClick={() => Repo.sendBill(o.id)}>
+                <PrimaryButton h={48} className="flex-1" onClick={() => sendBillOnWhatsApp(state, o)}>
                   WhatsApp
                 </PrimaryButton>
               )}
