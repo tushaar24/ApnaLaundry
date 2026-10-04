@@ -26,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.LaunchedEffect
@@ -52,6 +53,7 @@ import com.dailyworks.apnalaundry.ui.components.fig
 import com.dailyworks.apnalaundry.ui.components.rounded
 import com.dailyworks.apnalaundry.ui.components.tap
 import com.dailyworks.apnalaundry.ui.nav.AppNavigator
+import com.dailyworks.apnalaundry.ui.screens.bill.sendReminderOnWhatsApp
 import com.dailyworks.apnalaundry.ui.sheets.ActiveSheet
 import com.dailyworks.apnalaundry.ui.sheets.SheetHost
 import com.dailyworks.apnalaundry.ui.theme.Tokens
@@ -65,6 +67,7 @@ private data class KhataRow(
 @Composable
 fun CustomerScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: String, from: String) {
     val state by shopVm.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     var tab by remember { mutableStateOf("khata") }
     var active by remember { mutableStateOf<ActiveSheet?>(null) }
 
@@ -118,7 +121,8 @@ fun CustomerScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: Strin
                         PrimaryButton("Receive payment", Modifier.weight(1f), height = 46.dp) { active = ActiveSheet.Receive(custId) }
                         OutlineButton("Remind", Modifier.weight(1f), height = 46.dp, border = Tokens.OrangeBorder, fg = Tokens.OrangeText) {
                             Analytics.reminderSent(custId, bal)
-                            shopVm.showInfo("WhatsApp reminder sent to $nm for ${Money.rupees(bal)}")
+                            sendReminderOnWhatsApp(context, state, custId, bal)
+                            shopVm.showInfo("Opening WhatsApp · reminder to $nm for ${Money.rupees(bal)}")
                         }
                     }
                 }

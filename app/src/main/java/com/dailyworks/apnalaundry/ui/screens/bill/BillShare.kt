@@ -71,6 +71,30 @@ fun sendBillOnWhatsApp(context: Context, state: LaundryState, o: Order) {
     val digits = c.phone.filter { it.isDigit() }.takeLast(10)
     val text = Uri.encode(billText(state, o))
     val url = if (digits.length == 10) "https://wa.me/91$digits?text=$text" else "https://wa.me/?text=$text"
+    openWhatsApp(context, url)
+}
+
+private fun reminderText(state: LaundryState, custId: String, bal: Int): String {
+    val c = Selectors.customer(state, custId)
+    return buildString {
+        appendLine("*${state.shop.name}*")
+        appendLine("+91 ${Selectors.fmtPhone(state.shop.phone)}")
+        appendLine()
+        appendLine("${c.name}, a gentle reminder — your laundry balance is *${Money.rupees(bal)}*.")
+        append("Please clear it on your next visit. Thank you!")
+    }
+}
+
+/** Opens WhatsApp to the customer with a khata balance reminder. */
+fun sendReminderOnWhatsApp(context: Context, state: LaundryState, custId: String, bal: Int) {
+    val c = Selectors.customer(state, custId)
+    val digits = c.phone.filter { it.isDigit() }.takeLast(10)
+    val text = Uri.encode(reminderText(state, custId, bal))
+    val url = if (digits.length == 10) "https://wa.me/91$digits?text=$text" else "https://wa.me/?text=$text"
+    openWhatsApp(context, url)
+}
+
+private fun openWhatsApp(context: Context, url: String) {
     try {
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     } catch (e: ActivityNotFoundException) {
