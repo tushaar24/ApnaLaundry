@@ -324,8 +324,12 @@ export function DateTimeBox({
         aria-label={text}
         onClick={() => {
           const el = ref.current;
-          if (el && "showPicker" in el) {
-            try { el.showPicker(); } catch { /* native tap still opens it */ }
+          if (!el) return;
+          // Focus first: macOS Safari needs a focused input to open (and can
+          // otherwise close it immediately), iOS needs focus to open it at all.
+          try { el.focus({ preventScroll: true }); } catch { el.focus(); }
+          if ("showPicker" in el) {
+            try { el.showPicker(); } catch { /* focus alone opens it on iOS */ }
           }
         }}
         onChange={(e) => {
@@ -336,7 +340,10 @@ export function DateTimeBox({
             onPick(v);
           }
         }}
-        className="absolute inset-0 size-full cursor-pointer opacity-0"
+        // translateZ(0) keeps an empty date input tappable on iPad Safari (a
+        // known bug); text-[16px] stops iOS from zooming the page on focus.
+        className="absolute inset-0 size-full cursor-pointer text-[16px] opacity-0"
+        style={{ transform: "translateZ(0)" }}
       />
     </div>
   );
