@@ -84,12 +84,18 @@ export function Gate({ children, zone }: { children: React.ReactNode; zone: "app
   useEffect(() => {
     if (!hydrated) return;
     if (!authed) {
-      if (zone !== "login") router.replace("/login");
+      // Carry the deep link along so login can land back on it.
+      if (zone !== "login") {
+        const here = window.location.pathname + window.location.search;
+        router.replace(here !== "/" ? `/login?returnTo=${encodeURIComponent(here)}` : "/login");
+      }
       return;
     }
-    // Authed on the login page → leave for the app; billing/setup resolve there.
+    // Authed on the login page → back to the deep link that brought us here
+    // (internal paths only — no "//host"), or the app; billing/setup resolve there.
     if (zone === "login") {
-      router.replace("/");
+      const raw = new URLSearchParams(window.location.search).get("returnTo") ?? "";
+      router.replace(raw.startsWith("/") && !raw.startsWith("//") ? raw : "/");
       return;
     }
     // Subscription before setup: wait for the billing decision, and while the

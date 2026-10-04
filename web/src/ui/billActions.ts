@@ -65,6 +65,23 @@ export function sendBillOnWhatsApp(state: LaundryState, o: Order): void {
   Repo.sendBill(o.id); // marks billSent + analytics + toast
 }
 
+/** Opens WhatsApp to the customer with a khata balance reminder. */
+export function sendReminderOnWhatsApp(state: LaundryState, custId: string, bal: number): void {
+  const c = Sel.customer(state, custId);
+  const digits = (c.phone || "").replace(/\D/g, "").slice(-10);
+  const text = encodeURIComponent([
+    `*${state.shop.name}*`,
+    `+91 ${Sel.fmtPhone(state.shop.phone)}`,
+    "",
+    `${c.name}, a gentle reminder — your laundry balance is *${rupees(bal)}*.`,
+    "Please clear it on your next visit. Thank you!",
+  ].join("\n"));
+  const url = digits.length === 10 ? `https://wa.me/91${digits}?text=${text}` : `https://wa.me/?text=${text}`;
+  // Must open synchronously in the click handler so it isn't popup-blocked.
+  window.open(url, "_blank", "noopener,noreferrer");
+  Repo.showInfo(`Opening WhatsApp · reminder to ${Sel.firstName(c.name)} for ${rupees(bal)}`);
+}
+
 // ---------------- PNG rendering + download/share ----------------
 
 async function renderBillPng(state: LaundryState, o: Order): Promise<Blob> {
@@ -156,6 +173,15 @@ async function renderBillPng(state: LaundryState, o: Order): Promise<Blob> {
   });
 }
 
+/** True on phones/tablets, where the native share sheet is the better "save". */
+function isMobileDevice(): boolean {
+  // iPadOS 13+ reports itself as "Macintosh" — the touch check catches it.
+  return (
+    /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+    (/Mac/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)
+  );
+}
+
 /** Share the bill image via the native sheet (mobile) or download it (desktop). */
 export async function downloadBill(state: LaundryState, o: Order): Promise<void> {
   let blob: Blob;
@@ -168,14 +194,18 @@ export async function downloadBill(state: LaundryState, o: Order): Promise<void>
   const file = new File([blob], `Bill-${o.id}.png`, { type: "image/png" });
 
   // Mobile (iOS Safari 15+/Android Chrome): native share sheet → save or send.
+  // Desktop Chrome also exposes navigator.share (macOS/Windows), but there
+  // "Download" must stay a real download — so the share path is mobile-only,
+  // and a failed share (not a user dismissal) falls through to the download.
   const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
-  if (typeof nav.share === "function" && nav.canShare?.({ files: [file] })) {
+  if (isMobileDevice() && typeof nav.share === "function" && nav.canShare?.({ files: [file] })) {
     try {
       await nav.share({ files: [file], title: `Bill #${o.id}` });
-    } catch {
-      /* user dismissed the share sheet — nothing to do */
+      return;
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return; // user dismissed
+      /* share unavailable after all — fall through to the download */
     }
-    return;
   }
 
   // Desktop: download the file.

@@ -26,7 +26,9 @@ export function ToastBar() {
   const toast = useAppStore((s) => s.toast);
   if (!toast) return null;
   return (
-    <div className="animate-toast pointer-events-none fixed inset-x-0 bottom-[84px] z-50 flex justify-center px-4 lg:bottom-6 lg:pl-[240px]">
+    // bottom-[156px] clears the New-order FAB (bottom 88px + 58px tall) — a
+    // toast sitting on the FAB turns a late "Undo" tap into a new order.
+    <div className="animate-toast pointer-events-none fixed inset-x-0 bottom-[156px] z-50 flex justify-center px-4 lg:bottom-6 lg:pl-[240px]">
       <div className="pointer-events-auto flex w-full max-w-[560px] items-center gap-3 rounded-[14px] bg-ink px-4 py-3.5">
         <span className="flex-1 text-[14px] font-semibold text-ondark">{toast.text}</span>
         {toast.hasUndo ? (
@@ -144,7 +146,10 @@ export function useNav() {
       if (window.history.length > 1) router.back();
       else router.push("/");
     },
-    openHome: () => router.push("/"),
+    // replace: true swaps the current entry — used when leaving a completed
+    // form (new order → bill/home), so Back doesn't resurrect the stale form.
+    openHome: (opts?: { replace?: boolean }) =>
+      (opts?.replace ? router.replace : router.push)("/"),
     openRates: (from: string) => router.push(`/rates?from=${from}`),
     openNewOrder: (opts?: { editId?: number; custId?: string; from?: string }) => {
       const p = new URLSearchParams();
@@ -153,7 +158,8 @@ export function useNav() {
       if (opts?.from) p.set("from", opts.from);
       router.push(`/orders/new${p.size ? `?${p}` : ""}`);
     },
-    openBill: (orderId: number, from = "home") => router.push(`/orders/${orderId}/bill?from=${from}`),
+    openBill: (orderId: number, from = "home", opts?: { replace?: boolean }) =>
+      (opts?.replace ? router.replace : router.push)(`/orders/${orderId}/bill?from=${from}`),
     openOrder: (orderId: number) => router.push(`/orders/${orderId}`),
     openCustomer: (custId: string) => router.push(`/customers/${custId}`),
     openCustomers: (filter = "all") => router.push(filter === "all" ? "/customers" : `/customers?filter=${filter}`),

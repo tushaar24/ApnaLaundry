@@ -60,7 +60,7 @@ function CustomersScreen() {
       <div className="flex flex-col gap-2.5 px-4 pt-3">
         <div className="flex items-end gap-2">
           <h1 className="bric text-[24px]">Customers</h1>
-          <span className="pb-[3px] text-[13px] text-muted">{state.customers.length} customers</span>
+          <span className="pb-[3px] text-[13px] text-muted">{Sel.countNoun(state.customers.length, "customer")}</span>
         </div>
         <FieldBox
           value={query}

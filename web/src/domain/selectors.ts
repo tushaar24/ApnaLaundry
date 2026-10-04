@@ -64,3 +64,8 @@ export function trimKg(kg: number): string {
 export function orderCount(state: LaundryState, c: Customer): number {
   return c.pastOrders + state.orders.filter((o) => o.custId === c.id && o.status !== "CANCELLED").length;
 }
+
+/** "1 order" / "3 orders" — counted label with the right plural. */
+export function countNoun(n: number, noun: string): string {
+  return `${n} ${noun}${n === 1 ? "" : "s"}`;
+}

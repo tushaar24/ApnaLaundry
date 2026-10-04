@@ -40,7 +40,12 @@ function PaywallRoute() {
     <div className="min-h-dvh bg-bg">
       <PaywallScreen
         reason={reason}
-        onClose={() => router.push("/")}
+        // Close returns to wherever the paywall was opened from (settings,
+        // home banner…); guards that enter via replace leave no loop behind.
+        onClose={() => {
+          if (window.history.length > 1) router.back();
+          else router.push("/");
+        }}
         onDone={(continuing) => router.push(continuing ? "/orders/new?from=home" : "/")}
       />
     </div>

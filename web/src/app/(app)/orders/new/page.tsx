@@ -196,9 +196,11 @@ function NewOrderScreen() {
       quickAmount: showQuickBox ? parseInt(quickAmt, 10) || 0 : 0,
       quickPieces: showQuickBox ? parseInt(quickPcs, 10) || 0 : 0,
     });
+    // The saved form must not stay in history (the app's nav graph pops it) —
+    // otherwise browser Back lands on a blank "New order" after saving.
     if (editId != null) nav.back();
-    else if (result.goToBill) nav.openBill(result.orderId, "new");
-    else nav.openHome();
+    else if (result.goToBill) nav.openBill(result.orderId, "new", { replace: true });
+    else nav.openHome({ replace: true });
   }
 
   // ---- live bill card (shared mobile/desktop) ----
@@ -239,7 +241,7 @@ function NewOrderScreen() {
                   <div className="text-[13px] text-inksecondary">
                     {Sel.fmtPhone(cust.phone)}
                     {" · "}
-                    {Sel.orderCount(state, cust) > 0 ? `${Sel.orderCount(state, cust)} orders` : "New customer"}
+                    {Sel.orderCount(state, cust) > 0 ? Sel.countNoun(Sel.orderCount(state, cust), "order") : "New customer"}
                     {Sel.balance(state, cust.id) > 0 ? ` · ${rupees(Sel.balance(state, cust.id))} baaki` : ""}
                   </div>
                 </div>
@@ -506,7 +508,7 @@ function CustomerPicker({
             <span className="text-[13px] text-muted">{Sel.fmtPhone(r.phone)}</span>
           </span>
           <span className="text-[12px] text-muted">
-            {Sel.orderCount(state, r) > 0 ? `${Sel.orderCount(state, r)} orders` : "New"}
+            {Sel.orderCount(state, r) > 0 ? Sel.countNoun(Sel.orderCount(state, r), "order") : "New"}
           </span>
         </button>
       ))}

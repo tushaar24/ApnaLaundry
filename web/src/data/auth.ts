@@ -47,7 +47,11 @@ export async function requestOtp(phone: string): Promise<Challenge> {
   }
   const body = reply.body;
   if (!body?.success || !body.challengeId || !body.challengeToken) {
-    throw new AuthError(body?.message ?? "Couldn't send OTP — try again");
+    let msg = body?.message ?? "Couldn't send OTP — try again";
+    // Short cooldowns come with retryAt — show the wait so it's actionable.
+    const retrySecs = Math.ceil((parseIsoMs(body?.retryAt) - Date.now()) / 1000);
+    if (retrySecs > 0 && retrySecs <= 120) msg = `${msg} (${retrySecs}s)`;
+    throw new AuthError(msg);
   }
   return {
     id: body.challengeId,

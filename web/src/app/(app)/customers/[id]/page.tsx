@@ -6,8 +6,8 @@ import { rupees } from "@/core/money";
 import { amtOf } from "@/domain/laundryMath";
 import type { LaundryState, Order, PayMethod } from "@/domain/models";
 import * as Sel from "@/domain/selectors";
-import * as Repo from "@/data/repository";
 import { useLaundryState } from "@/data/store";
+import { sendReminderOnWhatsApp } from "@/ui/billActions";
 import { Analytics } from "@/analytics/events";
 import { useScreenView } from "@/analytics/useScreenView";
 import {
@@ -122,6 +122,10 @@ function CustomerScreen({ custId }: { custId: string }) {
   const [active, setActive] = useState<ActiveSheet | null>(null);
   useScreenView("customer_khata");
 
+  const exists = state.customers.some((cu) => cu.id === custId);
+  if (!exists) {
+    return <div className="p-8 text-center text-[14px] text-muted">Customer not found.</div>;
+  }
   const c = Sel.customer(state, custId);
   const nm = Sel.firstName(c.name);
   const bal = Sel.balance(state, custId);
@@ -142,7 +146,7 @@ function CustomerScreen({ custId }: { custId: string }) {
           <div className="min-w-0 flex-1">
             <h1 className="bric text-[24px]">{c.name}</h1>
             <div className="text-[13px] text-muted">
-              +91 {Sel.fmtPhone(c.phone)} · {Sel.orderCount(state, c)} orders
+              +91 {Sel.fmtPhone(c.phone)} · {Sel.countNoun(Sel.orderCount(state, c), "order")}
             </div>
             {c.address !== "" ? <div className="text-[13px] text-muted">{c.address}</div> : null}
           </div>
@@ -190,7 +194,7 @@ function CustomerScreen({ custId }: { custId: string }) {
                 fg="var(--color-orangetext)"
                 onClick={() => {
                   Analytics.reminderSent(custId, bal);
-                  Repo.showInfo(`WhatsApp reminder sent to ${nm} for ${rupees(bal)}`);
+                  sendReminderOnWhatsApp(state, custId, bal);
                 }}
               >
                 Remind
