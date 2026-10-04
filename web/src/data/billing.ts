@@ -93,7 +93,29 @@ export async function cancelSubscription(): Promise<void> {
 // success we poll getBillingStatus() for `hasActiveSubscription`.
 
 const CHECKOUT_SRC = "https://checkout.razorpay.com/v1/checkout.js";
+// Origins the Checkout modal talks to once open — preconnected ahead of time
+// so its iframe boot skips the DNS + TLS handshakes.
+const CHECKOUT_ORIGINS = ["https://checkout.razorpay.com", "https://api.razorpay.com"];
 let checkoutLoading: Promise<void> | null = null;
+
+/**
+ * Warm up Razorpay Checkout before the user taps Pay: preconnect to Razorpay
+ * and load checkout.js (which pre-renders its hidden iframe), so the tap only
+ * has to wait for our subscribe API, not the script download + modal boot.
+ * Fire-and-forget: failures are swallowed — openSubscriptionCheckout() retries
+ * the load for real and surfaces the error there.
+ */
+export function preloadCheckout(): void {
+  if (typeof window === "undefined") return;
+  for (const origin of CHECKOUT_ORIGINS) {
+    if (document.head.querySelector(`link[rel="preconnect"][href="${origin}"]`)) continue;
+    const link = document.createElement("link");
+    link.rel = "preconnect";
+    link.href = origin;
+    document.head.appendChild(link);
+  }
+  loadCheckout().catch(() => {});
+}
 
 function loadCheckout(): Promise<void> {
   if (typeof window === "undefined") return Promise.reject(new Error("No window"));

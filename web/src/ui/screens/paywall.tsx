@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as AppDate from "@/core/appdate";
 import { rupees } from "@/core/money";
-import { cancelSubscription, openSubscriptionCheckout, subscribe, type BillingStatus } from "@/data/billing";
+import { cancelSubscription, openSubscriptionCheckout, preloadCheckout, subscribe, type BillingStatus } from "@/data/billing";
 import { paywallInfo, useBillingStore } from "@/data/billingStore";
 import { Analytics } from "@/analytics/events";
 import { cls, PrimaryButton, SectionLabel } from "@/ui/basics";
@@ -86,9 +86,11 @@ export function PaywallScreen({
       ? "Pick a plan to take new orders. Your old orders and khata are safe."
       : "Pick a plan and keep taking orders without a break.";
 
-  // Fire Paywall Shown once.
+  // Fire Paywall Shown once, and warm up Razorpay Checkout (script +
+  // connections) while the user reads the plans — so Pay opens it instantly.
   useEffect(() => {
     Analytics.paywallShown(info.variant, info.orderCount);
+    if (!info.hasActive) preloadCheckout();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -104,6 +106,9 @@ export function PaywallScreen({
     setBusy(true);
     setError(null);
     Analytics.planSelected(info.variant, plan);
+    // If the mount-time warm-up failed or hasn't finished, this restarts the
+    // checkout.js load in parallel with the subscribe call instead of after it.
+    preloadCheckout();
     try {
       const res = await subscribe(plan);
       // The server decides the real plan/amount (never trust the client for money).
