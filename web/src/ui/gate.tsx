@@ -11,9 +11,15 @@ import { PrimaryButton } from "./basics";
 import { IcLaundry } from "./icons";
 
 /**
- * Client-side auth/setup gate (the web port of AppNavGraph's start-
- * destination logic): !loggedIn → /login, loggedIn && !setupDone → /setup,
- * else the app. Also bootstraps the online store (initial pull) on load.
+ * Client-side auth/billing/setup gate (the web port of AppNavGraph's start-
+ * destination logic). Resolves, in order:
+ *   1. login        — !authed → /login
+ *   2. subscription — an authed trial user without an active subscription hits
+ *      a hard paywall BEFORE setup (both the setup and app zones pass through
+ *      here); the free-orders variant is soft and never gates here.
+ *   3. setup        — authed && !setupDone → /setup
+ *   4. app          — otherwise
+ * Also bootstraps the online store (initial pull) on load.
  */
 
 function Splash() {
@@ -50,10 +56,30 @@ export function Gate({ children, zone }: { children: React.ReactNode; zone: "app
   const setupDone = useAppStore((s) => s.setupDone);
   const bootError = useAppStore((s) => s.bootError);
 
+  // Subscription state. For authed users (the setup and app zones) the
+  // subscription is resolved before setup, so the trial hard gate sits between
+  // login and setup. The login zone never checks billing.
+  const billingLoaded = useBillingStore((s) => s.loaded);
+  const billingStatus = useBillingStore((s) => s.status);
+  const refreshBilling = useBillingStore((s) => s.refresh);
+  const [gated, setGated] = useState<boolean | null>(null);
+
   useEffect(() => {
     initAnalytics();
     void bootstrap();
   }, []);
+
+  useEffect(() => {
+    if (authed && zone !== "login") void refreshBilling();
+  }, [authed, zone, refreshBilling]);
+
+  // Latch the gating decision once billing first loads, so the success → "Done"
+  // screen isn't skipped the instant the subscription goes active.
+  useEffect(() => {
+    if (zone === "login" || !authed || !billingLoaded || gated !== null) return;
+    const info = paywallInfo(billingStatus);
+    setGated(info.isTrial && info.blocked && !info.hasActive);
+  }, [zone, authed, billingLoaded, billingStatus, gated]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -61,63 +87,47 @@ export function Gate({ children, zone }: { children: React.ReactNode; zone: "app
       if (zone !== "login") router.replace("/login");
       return;
     }
+    // Authed on the login page → leave for the app; billing/setup resolve there.
+    if (zone === "login") {
+      router.replace("/");
+      return;
+    }
+    // Subscription before setup: wait for the billing decision, and while the
+    // hard gate is up don't route anywhere (the paywall is shown below).
+    if (gated === null || gated) return;
     if (!setupDone) {
       if (zone !== "setup") router.replace("/setup");
       return;
     }
     if (zone !== "app") router.replace("/");
-  }, [hydrated, authed, setupDone, zone, router, pathname]);
+  }, [hydrated, authed, setupDone, zone, gated, router, pathname]);
 
   if (!hydrated) return <Splash />;
-  if (bootError && zone === "app") return <BootErrorScreen message={bootError} />;
-  if (!authed && zone !== "login") return <Splash />;
-  if (authed && !setupDone && zone === "app") return <Splash />;
-  if (authed && setupDone && zone !== "app") return <Splash />;
+  if (!authed) return zone === "login" ? <>{children}</> : <Splash />;
+  // Authed on the login page: redirecting to the app.
+  if (zone === "login") return <Splash />;
 
-  return <>{children}</>;
-}
-
-/**
- * Subscription gate inside the authed app. Flow (both platforms): logged in →
- * check subscription → route; show a loader until the check resolves.
- *
- *  - trial_2 variant with no active subscription → a NON-cancellable paywall;
- *    the app isn't reachable until there's an active subscription.
- *  - free_<N> variant (or active sub, or billing unconfigured/unreachable) →
- *    the app renders; the free-orders paywall is soft (banner + new-order block).
- *
- * The decision is latched once billing first loads so the success → "Done"
- * screen isn't skipped the instant the subscription goes active.
- */
-export function BillingGate({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
-  const status = useBillingStore((s) => s.status);
-  const loaded = useBillingStore((s) => s.loaded);
-  const refresh = useBillingStore((s) => s.refresh);
-  const [gated, setGated] = useState<boolean | null>(null);
-
-  useEffect(() => { void refresh(); }, [refresh]);
-
-  useEffect(() => {
-    if (!loaded || gated !== null) return;
-    const info = paywallInfo(status);
-    setGated(info.isTrial && info.blocked && !info.hasActive);
-  }, [loaded, status, gated]);
-
-  if (!loaded || gated === null) return <Splash />;
+  // Authed in the setup/app zones: a boot/sync failure, then the subscription
+  // gate, then setup/app.
+  if (bootError) return <BootErrorScreen message={bootError} />;
+  if (!billingLoaded || gated === null) return <Splash />;
   if (gated) {
     return (
       <PaywallScreen
         reason="trial"
         hardGate
+        setupPending={!setupDone}
         onClose={() => undefined}
         onDone={(continuing) => {
           setGated(false);
-          // The Done button promised "+ Continue with new order" — honor it.
-          if (continuing) router.push("/orders/new?from=home");
+          // The Done button promised "+ Continue with new order" — honor it,
+          // but only once the shop is set up. A brand-new shop falls through to
+          // the setup redirect (the routing effect above sends it to /setup).
+          if (continuing && setupDone) router.push("/orders/new?from=home");
         }}
       />
     );
   }
-  return <>{children}</>;
+  if (!setupDone) return zone === "setup" ? <>{children}</> : <Splash />;
+  return zone === "app" ? <>{children}</> : <Splash />;
 }

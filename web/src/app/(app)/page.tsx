@@ -40,7 +40,7 @@ function HomeScreen() {
   const pay = paywallInfo(billing);
   useEffect(() => { void refreshBilling(); }, [refreshBilling]);
 
-  // The trial variant is a hard gate handled in BillingGate (the app isn't
+  // The trial variant is a hard gate handled in the Gate (the app isn't
   // reachable without an active subscription), so there's no auto-open here.
   // The free-orders variant is soft: the banner prompts, and taking a new order
   // past the limit opens the (cancellable) paywall.

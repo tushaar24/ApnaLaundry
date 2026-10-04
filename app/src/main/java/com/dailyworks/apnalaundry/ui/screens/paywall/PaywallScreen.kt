@@ -79,6 +79,8 @@ fun PaywallScreen(
     onClose: () -> Unit,
     onDone: (continuing: Boolean) -> Unit,
     hardGate: Boolean = false,
+    // Brand-new shop hitting the gate before setup — the Done CTA leads to setup.
+    setupPending: Boolean = false,
     vm: PaywallViewModel = koinViewModel(),
 ) {
     val ui by vm.ui.collectAsStateWithLifecycle()
@@ -107,6 +109,7 @@ fun PaywallScreen(
                 paid = if (ui.isTrial) ui.trialAmount / 100 else if (purchasedAnnual) annualR else monthlyR,
                 isTrial = ui.isTrial,
                 blocked = blocked,
+                setupPending = setupPending,
                 onDone = onDone,
             )
 
@@ -328,7 +331,7 @@ private fun WaitingView() {
 }
 
 @Composable
-private fun DoneView(annual: Boolean, paid: Int, isTrial: Boolean, blocked: Boolean, onDone: (Boolean) -> Unit) {
+private fun DoneView(annual: Boolean, paid: Int, isTrial: Boolean, blocked: Boolean, setupPending: Boolean, onDone: (Boolean) -> Unit) {
     Column(
         Modifier.fillMaxSize().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -356,8 +359,12 @@ private fun DoneView(annual: Boolean, paid: Int, isTrial: Boolean, blocked: Bool
         )
         Spacer(Modifier.weight(1f))
         PrimaryButton(
-            text = if (blocked) "+ Continue with new order" else "Go to my orders",
-            onClick = { onDone(blocked) },
+            text = when {
+                setupPending -> "Set up your shop"
+                blocked -> "+ Continue with new order"
+                else -> "Go to my orders"
+            },
+            onClick = { onDone(blocked && !setupPending) },
         )
     }
 }

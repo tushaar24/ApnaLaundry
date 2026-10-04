@@ -60,11 +60,14 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
         }
     }
 
-    // Trial variant is a hard gate inside the authed app; login/setup aren't gated.
-    // "+ Continue with new order" on the gate's Done screen navigates once the
-    // NavHost below has composed (never during the gate itself).
+    // Subscription is resolved right after login and BEFORE setup
+    // (login -> subscription -> setup -> app): the trial variant hard-gates any
+    // logged-in user, so a brand-new shop subscribes first, then sets up. Only
+    // the login screen is ungated. "+ Continue with new order" on the gate's
+    // Done screen navigates once the NavHost below has composed — but a shop
+    // that isn't set up yet (setupPending) lands on setup instead.
     var pendingNewOrder by remember { mutableStateOf(false) }
-    BillingGate(enabled = li && sd, onContinueNewOrder = { pendingNewOrder = true }) {
+    BillingGate(enabled = li, setupPending = !sd, onContinueNewOrder = { pendingNewOrder = true }) {
     LaunchedEffect(pendingNewOrder) {
         if (pendingNewOrder) {
             pendingNewOrder = false

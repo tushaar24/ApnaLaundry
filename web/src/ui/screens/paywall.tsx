@@ -27,13 +27,15 @@ const WAS_ANNUAL = 8999;
 const FEATURES = ["Unlimited orders", "Bills on WhatsApp", "Khata for every customer", "Daily earnings — cash and UPI"];
 
 export function PaywallScreen({
-  reason, onClose, onDone, hardGate = false,
+  reason, onClose, onDone, hardGate = false, setupPending = false,
 }: {
   reason: "limit" | "trial" | "upsell";
   onClose: () => void;
   onDone: (continuing: boolean) => void;
   /** Non-cancellable gate (trial variant): no close button, app not reachable. */
   hardGate?: boolean;
+  /** Brand-new shop hitting the gate before setup — the Done CTA leads to setup, not a new order. */
+  setupPending?: boolean;
 }) {
   const status = useBillingStore((s) => s.status);
   const refresh = useBillingStore((s) => s.refresh);
@@ -159,6 +161,7 @@ export function PaywallScreen({
           till={info.isTrial ? trialStart : purchased === "annual" ? tillAnnual : renewMonthly}
           renewLabel={info.isTrial ? "Plan starts" : purchased === "annual" ? "Valid till" : "Renews on"}
           blocked={blocked}
+          setupPending={setupPending}
           onDone={onDone}
         />
       ) : stage === "waiting" ? (
@@ -346,7 +349,7 @@ function WaitingView({ onBack }: { onBack: () => void }) {
 }
 
 function DoneView({
-  plan, paid, isTrial, till, renewLabel, blocked, onDone,
+  plan, paid, isTrial, till, renewLabel, blocked, setupPending, onDone,
 }: {
   plan: Plan;
   paid: number;
@@ -354,6 +357,7 @@ function DoneView({
   till: string;
   renewLabel: string;
   blocked: boolean;
+  setupPending: boolean;
   onDone: (continuing: boolean) => void;
 }) {
   const title = isTrial
@@ -374,8 +378,8 @@ function DoneView({
       </div>
       <p className="text-[12px] text-muted">The receipt is also sent to you on WhatsApp.</p>
       <div className="mt-2 w-full">
-        <PrimaryButton onClick={() => onDone(blocked)}>
-          {blocked ? "+ Continue with new order" : "Go to my orders"}
+        <PrimaryButton onClick={() => onDone(blocked && !setupPending)}>
+          {setupPending ? "Set up your shop" : blocked ? "+ Continue with new order" : "Go to my orders"}
         </PrimaryButton>
       </div>
     </div>
