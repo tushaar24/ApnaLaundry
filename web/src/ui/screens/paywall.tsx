@@ -159,7 +159,7 @@ export function PaywallScreen({
   // ---- render ----
 
   const card = (
-    <div className="flex max-h-[92dvh] w-full flex-col overflow-hidden bg-bg lg:max-h-[88dvh] lg:w-[460px] lg:rounded-3xl lg:border lg:border-cardborder lg:shadow-2xl">
+    <div className="flex w-full max-w-[480px] flex-col">
       {stage === "done" ? (
         <DoneView
           plan={purchased}
@@ -183,152 +183,148 @@ export function PaywallScreen({
           onCancelled={() => void refresh()}
         />
       ) : (
-        <>
-          <div className="flex items-center justify-between px-5 pt-4" style={{ minHeight: 20 }}>
-            {!hardGate ? (
-              <button type="button" onClick={onClose} aria-label="Close" className="flex size-9 items-center justify-center rounded-full text-[22px] leading-none text-muted hover:bg-neutralfill">
-                ✕
-              </button>
-            ) : null}
-          </div>
-          <div className="flex-1 overflow-y-auto px-5 pb-4">
-            {info.isTrial ? (
-              <>
-                {/* ₹2 trial hero */}
-                <div className="mt-1 rounded-2xl bg-blue px-5 py-5 text-ondark">
-                  <div className="text-[12px] font-bold tracking-[0.08em] text-bluebar">
-                    {TRIAL_DAYS}-DAY FULL TRIAL
-                  </div>
-                  <div className="mt-1.5 flex items-center gap-4">
-                    <span className="bric text-[52px] leading-none">{rupees(trialR)}</span>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[18px] font-bold leading-snug">That&apos;s all you pay today</div>
-                      <div className="text-[14px] text-bluebar">Every feature unlocked for {TRIAL_DAYS} days</div>
-                    </div>
+        <div className="relative flex flex-1 flex-col justify-center px-5 py-6">
+          {!hardGate ? (
+            <button type="button" onClick={onClose} aria-label="Close" className="absolute left-3 top-3 flex size-9 items-center justify-center rounded-full text-[22px] leading-none text-muted hover:bg-neutralfill">
+              ✕
+            </button>
+          ) : null}
+
+          {info.isTrial ? (
+            <>
+              {/* ₹2 trial hero */}
+              <div className="rounded-2xl bg-blue px-4 py-3.5 text-ondark">
+                <div className="text-[11px] font-bold tracking-[0.08em] text-bluebar">{TRIAL_DAYS}-DAY FULL TRIAL</div>
+                <div className="mt-1 flex items-center gap-4">
+                  <span className="bric text-[40px] leading-none">{rupees(trialR)}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[16px] font-bold leading-snug">That&apos;s all you pay today</div>
+                    <div className="text-[13px] text-bluebar">Every feature unlocked for {TRIAL_DAYS} days</div>
                   </div>
                 </div>
+              </div>
 
-                <SectionLabel text="Everything in the app" className="mt-5" />
-                <div className="mt-3 flex flex-col gap-3.5">
-                  {TRIAL_FEATURES.map((f) => (
-                    <div key={f.title} className="flex items-center gap-3">
-                      <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-bluelight text-blue">
-                        <f.Icon size={22} />
-                      </span>
-                      <div className="min-w-0">
-                        <div className="text-[16px] font-bold">{f.title}</div>
-                        <div className="text-[13px] text-muted">{f.sub}</div>
-                      </div>
+              <SectionLabel text="Everything in the app" className="mt-4" />
+              <div className="mt-2 flex flex-col gap-1.5">
+                {TRIAL_FEATURES.map((f) => (
+                  <div key={f.title} className="flex items-center gap-2.5">
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-bluelight text-blue">
+                      <f.Icon size={18} />
+                    </span>
+                    <div className="min-w-0">
+                      <div className="text-[15px] font-bold leading-tight">{f.title}</div>
+                      <div className="text-[12px] text-muted leading-tight">{f.sub}</div>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))}
+              </div>
 
-                <SectionLabel text={`Your plan after ${TRIAL_DAYS} days`} className="mt-5" />
-                <div className="mt-3 flex flex-col gap-2.5">
-                  <PlanCard
-                    selected={plan === "annual"}
-                    onSelect={() => setPlan("annual")}
-                    name="Yearly"
-                    note={`Only ${rupees(perMonth)} a month`}
-                    price={rupees(annualR)}
-                    per="/year"
-                    was={rupees(WAS_ANNUAL)}
-                    badge={`BEST VALUE · SAVE ${rupees(saveVsMonthly)}`}
-                  />
-                  <PlanCard
-                    selected={plan === "monthly"}
-                    onSelect={() => setPlan("monthly")}
-                    name="Monthly"
-                    note="Pay every month"
-                    price={rupees(monthlyR)}
-                    per="/month"
-                    was={rupees(WAS_MONTHLY)}
-                  />
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="text-[13px] font-bold text-orangetext">
-                  {info.orderCount} of {info.freeThreshold} free orders used
-                </div>
-                <h1 className="bric mt-1 text-[26px] leading-tight">{headline}</h1>
-                <p className="mt-1.5 text-[15px] text-muted">{subline}</p>
+              <SectionLabel text={`Your plan after ${TRIAL_DAYS} days`} className="mt-4" />
+              <div className="mt-2 flex flex-col gap-2">
+                <PlanCard
+                  dense
+                  selected={plan === "annual"}
+                  onSelect={() => setPlan("annual")}
+                  name="Yearly"
+                  note={`Only ${rupees(perMonth)} a month`}
+                  price={rupees(annualR)}
+                  per="/year"
+                  was={rupees(WAS_ANNUAL)}
+                  badge={`BEST VALUE · SAVE ${rupees(saveVsMonthly)}`}
+                />
+                <PlanCard
+                  dense
+                  selected={plan === "monthly"}
+                  onSelect={() => setPlan("monthly")}
+                  name="Monthly"
+                  note="Pay every month"
+                  price={rupees(monthlyR)}
+                  per="/month"
+                  was={rupees(WAS_MONTHLY)}
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="text-[13px] font-bold text-orangetext">
+                {info.orderCount} of {info.freeThreshold} free orders used
+              </div>
+              <h1 className="bric mt-1 text-[26px] leading-tight">{headline}</h1>
+              <p className="mt-1.5 text-[15px] text-muted">{subline}</p>
 
-                <ul className="mt-4 flex flex-col gap-2.5">
-                  {FEATURES.map((f) => (
-                    <li key={f} className="flex items-center gap-2.5">
-                      <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-bluelight text-blue">
-                        <IcCheck size={14} />
-                      </span>
-                      <span className="text-[15px] font-semibold">{f}</span>
-                    </li>
-                  ))}
-                </ul>
+              <ul className="mt-4 flex flex-col gap-2.5">
+                {FEATURES.map((f) => (
+                  <li key={f} className="flex items-center gap-2.5">
+                    <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-bluelight text-blue">
+                      <IcCheck size={14} />
+                    </span>
+                    <span className="text-[15px] font-semibold">{f}</span>
+                  </li>
+                ))}
+              </ul>
 
-                <div className="mt-5 flex flex-col gap-2.5">
-                  <PlanCard
-                    selected={plan === "annual"}
-                    onSelect={() => setPlan("annual")}
-                    name="Yearly"
-                    note={`Only ${rupees(perMonth)} a month`}
-                    price={rupees(annualR)}
-                    per="/year"
-                    was={rupees(WAS_ANNUAL)}
-                    badge={`BEST VALUE · SAVE ${rupees(saveVsMonthly)}`}
-                  />
-                  <PlanCard
-                    selected={plan === "monthly"}
-                    onSelect={() => setPlan("monthly")}
-                    name="Monthly"
-                    note="Pay every month"
-                    price={rupees(monthlyR)}
-                    per="/month"
-                    was={rupees(WAS_MONTHLY)}
-                  />
-                </div>
+              <div className="mt-5 flex flex-col gap-2.5">
+                <PlanCard
+                  selected={plan === "annual"}
+                  onSelect={() => setPlan("annual")}
+                  name="Yearly"
+                  note={`Only ${rupees(perMonth)} a month`}
+                  price={rupees(annualR)}
+                  per="/year"
+                  was={rupees(WAS_ANNUAL)}
+                  badge={`BEST VALUE · SAVE ${rupees(saveVsMonthly)}`}
+                />
+                <PlanCard
+                  selected={plan === "monthly"}
+                  onSelect={() => setPlan("monthly")}
+                  name="Monthly"
+                  note="Pay every month"
+                  price={rupees(monthlyR)}
+                  per="/month"
+                  was={rupees(WAS_MONTHLY)}
+                />
+              </div>
 
-                <p className={cls("mt-3 text-[13px] font-bold", plan === "annual" ? "text-blue" : "text-orangetext")}>
-                  {plan === "annual"
-                    ? `You save ${rupees(saveVsMonthly)} vs paying monthly (${rupees(yearIfMonthly)} a year)`
-                    : `Pick Yearly and save ${rupees(saveVsMonthly)}`}
-                </p>
-              </>
-            )}
-            {error ? <p className="mt-2 text-[13px] font-semibold text-orangetext">{error}</p> : null}
-          </div>
+              <p className={cls("mt-3 text-[13px] font-bold", plan === "annual" ? "text-blue" : "text-orangetext")}>
+                {plan === "annual"
+                  ? `You save ${rupees(saveVsMonthly)} vs paying monthly (${rupees(yearIfMonthly)} a year)`
+                  : `Pick Yearly and save ${rupees(saveVsMonthly)}`}
+              </p>
+            </>
+          )}
 
-          <div className="border-t border-divider bg-card px-5 py-4">
-            <PrimaryButton onClick={pay} disabled={busy}>
-              {busy
-                ? "Starting…"
-                : info.isTrial
-                  ? `Start trial for ${rupees(trialR)}`
-                  : plan === "annual"
-                    ? `Pay ${rupees(annualR)} for 1 year`
-                    : `Pay ${rupees(monthlyR)} for 1 month`}
-            </PrimaryButton>
-            <p className="mt-2 text-center text-[12px] text-muted">
-              {info.isTrial
-                ? `Then ${rupees(plan === "annual" ? annualR : monthlyR)}/${plan === "annual" ? "year" : "month"} from ${trialStart} by UPI AutoPay. Cancel anytime before.`
+          {error ? <p className="mt-2 text-[13px] font-semibold text-orangetext">{error}</p> : null}
+
+          <PrimaryButton className="mt-5" onClick={pay} disabled={busy}>
+            {busy
+              ? "Starting…"
+              : info.isTrial
+                ? `Start trial for ${rupees(trialR)}`
                 : plan === "annual"
-                  ? `Valid till ${tillAnnual} · pay by UPI`
-                  : `Renews on ${renewMonthly} · pay by UPI`}
-            </p>
-          </div>
-        </>
+                  ? `Pay ${rupees(annualR)} for 1 year`
+                  : `Pay ${rupees(monthlyR)} for 1 month`}
+          </PrimaryButton>
+          <p className="mt-2 text-center text-[12px] text-muted">
+            {info.isTrial
+              ? `Then ${rupees(plan === "annual" ? annualR : monthlyR)}/${plan === "annual" ? "year" : "month"} from ${trialStart} by UPI AutoPay. Cancel anytime before.`
+              : plan === "annual"
+                ? `Valid till ${tillAnnual} · pay by UPI`
+                : `Renews on ${renewMonthly} · pay by UPI`}
+          </p>
+        </div>
       )}
     </div>
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-stretch justify-center lg:items-center lg:bg-[rgba(22,25,33,0.45)] lg:p-4 lg:pl-[240px]">
+    <div className="flex min-h-dvh justify-center bg-bg">
       {card}
     </div>
   );
 }
 
 function PlanCard({
-  selected, onSelect, name, note, price, per, was, badge,
+  selected, onSelect, name, note, price, per, was, badge, dense,
 }: {
   selected: boolean;
   onSelect: () => void;
@@ -338,13 +334,15 @@ function PlanCard({
   per: string;
   was: string;
   badge?: string;
+  dense?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onSelect}
       className={cls(
-        "relative w-full rounded-2xl border-2 bg-card px-4 py-3.5 text-left",
+        "relative w-full rounded-2xl border-2 bg-card px-4 text-left",
+        dense ? "py-2.5" : "py-3.5",
         selected ? "border-blue" : "border-cardborder",
       )}
     >
