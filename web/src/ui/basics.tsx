@@ -301,17 +301,7 @@ export function DateTimeBox({
 }) {
   const ref = useRef<HTMLInputElement>(null);
   return (
-    <button
-      type="button"
-      onClick={() => {
-        const el = ref.current;
-        if (!el) return;
-        if ("showPicker" in el) {
-          try { el.showPicker(); return; } catch { /* fall through */ }
-        }
-        el.focus();
-        el.click();
-      }}
+    <div
       className={cls(
         "relative flex h-[52px] items-center gap-2 rounded-xl bg-card px-3",
         isSet ? "border-[1.5px] border-fieldborder" : "dash-border",
@@ -320,12 +310,24 @@ export function DateTimeBox({
     >
       <span style={{ color: iconTint }} className="shrink-0">{icon}</span>
       <span className={cls("truncate text-[14px] font-bold", isSet ? "text-ink" : "text-muted")}>{text}</span>
+      {/* The native input overlays the whole box — transparent but tappable — so
+          a tap anywhere opens the browser's own date/time picker. This works on
+          every browser (iOS/desktop Safari, Chrome, Firefox); the old approach
+          hid the input (pointer-events:none) and called showPicker() from the
+          wrapper, which Safari ignored, so nothing opened. showPicker() on click
+          opens it on desktop, where tapping the field alone doesn't. */}
       <input
         ref={ref}
         type={type}
-        tabIndex={-1}
         value={value}
         min={min}
+        aria-label={text}
+        onClick={() => {
+          const el = ref.current;
+          if (el && "showPicker" in el) {
+            try { el.showPicker(); } catch { /* native tap still opens it */ }
+          }
+        }}
         onChange={(e) => {
           const v = e.target.value;
           if (type === "date") {
@@ -334,9 +336,8 @@ export function DateTimeBox({
             onPick(v);
           }
         }}
-        className="absolute inset-0 size-full opacity-0"
-        style={{ pointerEvents: "none" }}
+        className="absolute inset-0 size-full cursor-pointer opacity-0"
       />
-    </button>
+    </div>
   );
 }

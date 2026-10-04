@@ -87,6 +87,13 @@ export async function verifyOtp(challenge: Challenge, otp: string): Promise<void
   const store = useAppStore.getState();
   resetCheckpoint();
 
+  // Mark the session logged in BEFORE syncing: syncNow() no-ops while
+  // !prefs.loggedIn, so without this the initial pull and the seed-push below
+  // are both skipped and a brand-new shop's seeded rate card is never persisted
+  // (lost if the user leaves before a later sync). This sets prefs.loggedIn
+  // only — `authed` (which drives Gate routing) still flips once, at the end.
+  prefs.setLoggedIn(true);
+
   // Initial sync: pull this account's data if it exists. We resolve setup
   // status BEFORE flipping `authed`, so the Gate routes exactly once — flipping
   // authed first would let it transiently route to /setup (a rate-screen flash)
