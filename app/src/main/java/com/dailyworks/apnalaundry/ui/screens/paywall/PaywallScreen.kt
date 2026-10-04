@@ -33,6 +33,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -124,10 +125,14 @@ fun PaywallScreen(
     ) {
         val purchasedAnnual = ui.purchasedPlan == "annual"
         when {
-            ui.stage == PaywallStage.DONE -> DoneView(
+            ui.stage == PaywallStage.DONE -> if (ui.isTrial) {
+                // Trial has no success screen (handoff 08b) — the ₹2 only starts
+                // the trial, so proceed straight through instead of a summary.
+                LaunchedEffect(Unit) { onDone(false) }
+            } else DoneView(
                 annual = purchasedAnnual,
-                paid = if (ui.isTrial) ui.trialAmount / 100 else if (purchasedAnnual) annualR else monthlyR,
-                isTrial = ui.isTrial,
+                paid = if (purchasedAnnual) annualR else monthlyR,
+                isTrial = false,
                 blocked = blocked,
                 setupPending = setupPending,
                 onDone = onDone,

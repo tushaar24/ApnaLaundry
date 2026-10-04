@@ -145,8 +145,15 @@ export function PaywallScreen({
       if (s?.hasActiveSubscription) {
         if (pollRef.current) clearInterval(pollRef.current);
         Analytics.checkoutSucceeded(info.variant, purchasedPlan);
-        setStage("done");
-        setBusy(false);
+        // The trial has no success screen (handoff 08b) — the ₹2 only starts the
+        // trial, the plan charges later, so proceed straight through. The
+        // free-orders purchase keeps its "plan is active" summary (handoff 05).
+        if (info.isTrial) {
+          onDone(false);
+        } else {
+          setStage("done");
+          setBusy(false);
+        }
       } else if (++polls >= MAX_POLLS) {
         if (pollRef.current) clearInterval(pollRef.current);
         setStage("plans");
