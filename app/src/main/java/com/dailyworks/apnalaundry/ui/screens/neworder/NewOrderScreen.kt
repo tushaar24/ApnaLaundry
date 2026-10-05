@@ -117,7 +117,9 @@ fun NewOrderScreen(
     var deliveryTime by remember { mutableStateOf("") }
     var feeText by remember { mutableStateOf("") }
     var express by remember { mutableStateOf(false) }
-    var exOverride by remember { mutableStateOf("") }
+    // null = follow the automatic amount (pct of clothes); a string = the owner
+    // typed their own, which may be "" mid-edit (must NOT snap back to auto).
+    var exOverride by remember { mutableStateOf<String?>(null) }
     var discountText by remember { mutableStateOf("") }
     var quickAmt by remember { mutableStateOf("") }
     var quickPcs by remember { mutableStateOf("") }
@@ -146,8 +148,9 @@ fun NewOrderScreen(
         feeText = if (o.fee > 0) o.fee.toString() else ""
         express = o.express
         discountText = if (o.discount > 0) o.discount.toString() else ""
-        val clothesTotalForEx = o.lines.filter { !it.isQuick }.sumOf { it.amt }
-        exOverride = if (o.express && o.exAmt != LaundryMath.expressAuto(clothesTotalForEx, state.shop.expressPct)) o.exAmt.toString() else ""
+        // Same base as the live auto amount below: every line, quick amount included.
+        val clothesTotalForEx = o.lines.sumOf { it.amt }
+        exOverride = if (o.express && o.exAmt != LaundryMath.expressAuto(clothesTotalForEx, state.shop.expressPct)) o.exAmt.toString() else null
         o.lines.forEach { l ->
             when {
                 l.isQuick -> { quickAmt = l.amt.toString(); quickPcs = if (l.qty > 0) l.qty.toString() else ""; showQuickBox = true }
@@ -170,7 +173,7 @@ fun NewOrderScreen(
     val quickAmount = if (showQuickBox) quickAmt.toIntOrNull() ?: 0 else 0
     val clothesTotal = clothes.total(services) + quickAmount
     val exAuto = LaundryMath.expressAuto(clothesTotal, pct)
-    val exAmt = if (express) (exOverride.toIntOrNull() ?: exAuto) else 0
+    val exAmt = if (express) exOverride.let { if (it == null) exAuto else it.toIntOrNull() ?: 0 } else 0
     val fee = if (anyHome) feeText.toIntOrNull() ?: 0 else 0
     val discount = discountText.toIntOrNull() ?: 0
     val grand = max(0, clothesTotal + exAmt + fee - discount)
@@ -359,11 +362,11 @@ fun NewOrderScreen(
                             Text("Express order", style = fig(15, FontWeight.Bold, Tokens.OrangeText))
                             Text("+$pct% on clothes" + (if (express && clothesTotal > 0) " = ${Money.rupees(exAuto)}" else "") + " · washed first", style = fig(13, color = Tokens.Muted))
                         }
-                        Toggle(express, onColor = Tokens.Orange) { express = !express; exOverride = "" }
+                        Toggle(express, onColor = Tokens.Orange) { express = !express; exOverride = null }
                     }
                 }
                 if (express) {
-                    FieldBox(if (exOverride.isNotBlank()) exOverride else exAuto.toString(), { exOverride = it.filter { c -> c.isDigit() }.take(5) }, prefix = "₹", suffix = "express", height = 48.dp, keyboardType = KeyboardType.Number)
+                    FieldBox(exOverride ?: exAuto.toString(), { exOverride = it.filter { c -> c.isDigit() }.take(5) }, prefix = "₹", suffix = "express", height = 48.dp, keyboardType = KeyboardType.Number)
                 }
                 FieldBox(discountText, { discountText = it.filter { c -> c.isDigit() }.take(5) }, prefix = "₹", suffix = "discount (optional)", height = 48.dp, keyboardType = KeyboardType.Number)
             }

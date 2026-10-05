@@ -72,7 +72,9 @@ function NewOrderScreen() {
   const [deliveryTime, setDeliveryTime] = useState("");
   const [feeText, setFeeText] = useState("");
   const [express, setExpress] = useState(false);
-  const [exOverride, setExOverride] = useState("");
+  // null = follow the automatic amount (pct of clothes); a string = the owner
+  // typed their own, which may be "" mid-edit (must NOT snap back to auto).
+  const [exOverride, setExOverride] = useState<string | null>(null);
   const [discountText, setDiscountText] = useState("");
   const [quickAmt, setQuickAmt] = useState("");
   const [quickPcs, setQuickPcs] = useState("");
@@ -101,9 +103,10 @@ function NewOrderScreen() {
     setFeeText(o.fee > 0 ? String(o.fee) : "");
     setExpress(o.express);
     setDiscountText(o.discount > 0 ? String(o.discount) : "");
-    const clothesTotalForEx = o.lines.filter((l) => !l.isQuick).reduce((s, l) => s + l.amt, 0);
+    // Same base as the live auto amount below: every line, quick amount included.
+    const clothesTotalForEx = o.lines.reduce((s, l) => s + l.amt, 0);
     setExOverride(
-      o.express && o.exAmt !== expressAuto(clothesTotalForEx, state.shop.expressPct) ? String(o.exAmt) : "",
+      o.express && o.exAmt !== expressAuto(clothesTotalForEx, state.shop.expressPct) ? String(o.exAmt) : null,
     );
     for (const l of o.lines) {
       if (l.isQuick) {
@@ -132,7 +135,7 @@ function NewOrderScreen() {
   const quickAmount = showQuickBox ? parseInt(quickAmt, 10) || 0 : 0;
   const clothesTotal = clothes.total(services) + quickAmount;
   const exAuto = expressAuto(clothesTotal, pct);
-  const exAmt = express ? (parseInt(exOverride, 10) || exAuto) : 0;
+  const exAmt = express ? (exOverride === null ? exAuto : parseInt(exOverride, 10) || 0) : 0;
   const fee = anyHome ? parseInt(feeText, 10) || 0 : 0;
   const discount = parseInt(discountText, 10) || 0;
   const grand = Math.max(0, clothesTotal + exAmt + fee - discount);
@@ -411,12 +414,12 @@ function NewOrderScreen() {
                     +{pct}% on clothes{express && clothesTotal > 0 ? ` = ${rupees(exAuto)}` : ""} · washed first
                   </div>
                 </div>
-                <Toggle on={express} onColor="var(--color-orange)" onToggle={() => { setExpress((v) => !v); setExOverride(""); }} />
+                <Toggle on={express} onColor="var(--color-orange)" onToggle={() => { setExpress((v) => !v); setExOverride(null); }} />
               </div>
             </AppCard>
             {express ? (
               <FieldBox
-                value={exOverride !== "" ? exOverride : String(exAuto)}
+                value={exOverride ?? String(exAuto)}
                 onChange={(v) => setExOverride(v.replace(/\D/g, "").slice(0, 5))}
                 prefix="₹"
                 suffix="express"
