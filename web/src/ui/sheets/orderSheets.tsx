@@ -4,11 +4,13 @@ import { useEffect, useState } from "react";
 import * as AppDate from "@/core/appdate";
 import { rupees } from "@/core/money";
 import { amtOf } from "@/domain/laundryMath";
-import type { LaundryState, OrderStatus, PayMethod } from "@/domain/models";
+import { billReceipt } from "@/domain/billReceipt";
+import type { LaundryState, Order, OrderStatus, PayMethod } from "@/domain/models";
 import * as Sel from "@/domain/selectors";
 import * as Repo from "@/data/repository";
 import { Analytics } from "@/analytics/events";
 import { cls, Divider, FieldBox, PillChip, PrimaryButton, Toggle } from "../basics";
+import { billPreviewUrl } from "../billPdf";
 import { AppSheet } from "../sheet";
 import { ClothesEditor, useClothesState } from "../clothes";
 
@@ -255,33 +257,27 @@ export function BillViewSheet({
     Analytics.billViewed(orderId);
   }, [orderId]);
   if (!o) { onDismiss(); return null; }
-  const total = amtOf(o);
 
   return (
     <AppSheet title={`Bill #${o.id}`} subtitle={`${c.name} · this is what the customer sees`} onDismiss={onDismiss}>
-      <div className="flex flex-col gap-2 rounded-2xl bg-card p-4">
-        <span className="bric text-[22px]">{state.shop.name}</span>
-        <span className="text-[13px] text-muted">+91 {Sel.fmtPhone(state.shop.phone)}</span>
-        <Divider className="my-1" />
-        <span className="text-[13px] font-semibold text-muted">
-          Bill #{o.id} · {AppDate.plain(o.createdOn)}
-        </span>
-        <span className="text-[15px] font-semibold">To: {c.name}</span>
-        {o.lines.map((l, i) => (
-          <div key={i} className="flex w-full justify-between">
-            <span className="text-[15px]">
-              {l.kg > 0 ? `${l.serviceName} · ${Sel.trimKg(l.kg)} kg` : `${l.itemName} × ${l.qty}`}
-            </span>
-            <span className="text-[15px] font-semibold">{rupees(l.amt)}</span>
-          </div>
-        ))}
-        {o.express && o.exAmt > 0 ? <MoneyRow label="Express" value={`+ ${rupees(o.exAmt)}`} /> : null}
-        {o.fee > 0 ? <MoneyRow label="Pickup / delivery" value={`+ ${rupees(o.fee)}`} /> : null}
-        {o.discount > 0 ? <MoneyRow label="Discount" value={`− ${rupees(o.discount)}`} valueColor="var(--color-orangetext)" /> : null}
-        <Divider className="my-1" />
-        <MoneyRow label="Total" value={rupees(total)} bold />
-        <span className="mt-1 text-[15px] font-bold text-blue">Thank you!</span>
-      </div>
+      <ReceiptPreview state={state} order={o} />
     </AppSheet>
+  );
+}
+
+/** The exact receipt image that goes into the PDF. */
+function ReceiptPreview({ state, order }: { state: LaundryState; order: Order }) {
+  const [src, setSrc] = useState("");
+  useEffect(() => {
+    try {
+      setSrc(billPreviewUrl(billReceipt(state, order)));
+    } catch {
+      setSrc("");
+    }
+  }, [state, order]);
+  if (!src) return <div className="h-[420px] w-full rounded-2xl bg-white" />;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- a data: URL, nothing to optimise
+    <img src={src} alt={`Bill #${order.id}`} className="w-full rounded-2xl border border-cardborder bg-white" />
   );
 }

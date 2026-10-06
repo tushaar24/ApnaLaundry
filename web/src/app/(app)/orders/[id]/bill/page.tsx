@@ -116,7 +116,7 @@ function BillScreen({ orderId }: { orderId: number }) {
               className="flex-1"
               border="var(--color-cardborder)"
               fg="var(--color-ink)"
-              onClick={() => void downloadBill(state, o)}
+              onClick={() => downloadBill(state, o)}
             >
               Download
             </OutlineButton>
