@@ -10,7 +10,7 @@ import * as Repo from "@/data/repository";
 import { useLaundryState } from "@/data/store";
 import { useScreenView } from "@/analytics/useScreenView";
 import { AppCard, Avatar, cls, Divider, OutlineButton, PrimaryButton, TopBar } from "@/ui/basics";
-import { downloadBill, sendBillOnWhatsApp } from "@/ui/billActions";
+import { downloadBill, sendBillOnWhatsApp, usePrepareBillSend } from "@/ui/billActions";
 import { IcMore } from "@/ui/icons";
 import { SheetHost } from "@/ui/sheets/host";
 import type { ActiveSheet } from "@/ui/sheets/types";
@@ -44,6 +44,7 @@ function OrderDetailScreen({ orderId }: { orderId: number }) {
   const nav = useNav();
   const [active, setActive] = useState<ActiveSheet | null>(null);
   useScreenView("order_detail");
+  usePrepareBillSend(orderId);
 
   const o = Sel.order(state, orderId);
   if (!o) {

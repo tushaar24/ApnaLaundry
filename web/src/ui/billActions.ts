@@ -1,22 +1,25 @@
 "use client";
 
+import { useEffect } from "react";
+
 import { rupees } from "@/core/money";
 import { amtOf } from "@/domain/laundryMath";
 import { billReceipt } from "@/domain/billReceipt";
 import type { LaundryState, Order } from "@/domain/models";
 import * as Sel from "@/domain/selectors";
 import * as Repo from "@/data/repository";
-import { billPdfFile } from "@/ui/billPdf";
+import { billPdfFile, shareOrSaveFile } from "@/ui/billPdf";
+import { cachedBillLink, prefetchBillLink } from "@/ui/billLinks";
 
 /**
- * "Download" and "Send on WhatsApp" for a bill — both hand over the bill as a
- * PDF receipt (ui/billPdf.ts). A wa.me link can only carry text, so:
- *  - Phones (iOS Safari / Android Chrome): the native share sheet with the PDF
- *    attached → the owner taps WhatsApp and picks the customer.
- *  - Desktop: the PDF downloads and WhatsApp opens on the customer's chat with
- *    a short note, ready for the owner to attach the file.
- * The PDF is built synchronously so the share stays inside the tap's user
- * gesture (iOS Safari refuses a share after an await).
+ * "Send on WhatsApp" and "Download" for a bill.
+ *  - WhatsApp: a browser can't hand a file to a specific WhatsApp chat (wa.me
+ *    carries text only; the share sheet can't preselect a contact). So the tap
+ *    opens the customer's chat with the message + a link to their bill page
+ *    (/b/<token>, PDF download there), and the owner just hits send.
+ *  - Download: the PDF receipt (ui/billPdf.ts) via the native share sheet on
+ *    phones, a file download on desktop. Built synchronously so the share
+ *    stays inside the tap's user gesture (iOS Safari refuses one after await).
  */
 
 function customerDigits(state: LaundryState, custId: string): string {
@@ -30,19 +33,14 @@ function waUrl(digits: string, text: string): string {
   return digits.length === 10 ? `https://wa.me/91${digits}?text=${t}` : `https://wa.me/?text=${t}`;
 }
 
-/** Short message that travels with the PDF. */
-function billCaption(state: LaundryState, o: Order): string {
+/** The WhatsApp message (asterisks render bold). Without a link it still carries the total. */
+function billMessage(state: LaundryState, o: Order, link: string | null): string {
   const c = Sel.customer(state, o.custId);
-  return `Hi ${Sel.firstName(c.name)}, here is your bill for order #${o.id} from ${state.shop.name} — Total ${rupees(amtOf(o))}. Thank you!`;
-}
-
-/** True on phones/tablets, where the native share sheet is the better "save". */
-function isMobileDevice(): boolean {
-  // iPadOS 13+ reports itself as "Macintosh" — the touch check catches it.
-  return (
-    /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
-    (/Mac/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)
-  );
+  return [
+    `Hi ${Sel.firstName(c.name)}, here is your bill for order #${o.id} from *${state.shop.name}* — Total *${rupees(amtOf(o))}*.`,
+    link ? `View / download your bill:\n${link}` : "",
+    "Thank you!",
+  ].filter(Boolean).join("\n\n");
 }
 
 function makePdf(state: LaundryState, o: Order): File | null {
@@ -54,54 +52,42 @@ function makePdf(state: LaundryState, o: Order): File | null {
   }
 }
 
+
+/** Screens with a send button call this so the tap opens WhatsApp instantly. */
+export function usePrepareBillSend(orderId: number): void {
+  useEffect(() => {
+    if (orderId > 0) void prefetchBillLink(orderId);
+  }, [orderId]);
+}
+
 /**
- * Mobile only: desktop Chrome also exposes navigator.share (macOS/Windows),
- * but there "Download" must stay a real download.
+ * Opens the customer's WhatsApp chat with the bill message + link, ready for
+ * the owner to hit send, and marks the bill sent.
  */
-function canShareFile(file: File): boolean {
-  const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
-  return isMobileDevice() && typeof nav.share === "function" && !!nav.canShare?.({ files: [file] });
-}
-
-function saveFile(file: File): void {
-  const url = URL.createObjectURL(file);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = file.name;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
-}
-
-function isDismissal(e: unknown): boolean {
-  return e instanceof DOMException && e.name === "AbortError";
-}
-
-/** Sends the bill PDF to the customer on WhatsApp, and marks the bill sent. */
 export function sendBillOnWhatsApp(state: LaundryState, o: Order): void {
-  const file = makePdf(state, o);
-  if (!file) return;
-  const caption = billCaption(state, o);
-
-  if (canShareFile(file)) {
-    navigator.share({ files: [file], text: caption, title: `Bill #${o.id}` }).then(
-      () => Repo.sendBill(o.id), // marks billSent + analytics + toast
-      (e) => {
-        if (isDismissal(e)) return;
-        saveFile(file);
-        Repo.showInfo(`${file.name} saved — attach it in WhatsApp`);
-      },
-    );
+  const digits = customerDigits(state, o.custId);
+  const link = cachedBillLink(o.id);
+  if (link) {
+    // Must open synchronously in the click handler so it isn't popup-blocked.
+    window.open(waUrl(digits, billMessage(state, o, link)), "_blank", "noopener,noreferrer");
+    Repo.sendBill(o.id); // marks billSent + analytics + toast
     return;
   }
 
-  // Desktop: open the customer's chat (synchronously, so it isn't
-  // popup-blocked) and download the PDF to attach there.
-  window.open(waUrl(customerDigits(state, o.custId), caption), "_blank", "noopener,noreferrer");
-  saveFile(file);
-  Repo.sendBill(o.id);
-  Repo.showInfo(`${file.name} downloaded — attach it in the WhatsApp chat`);
+  // Link not fetched yet (slow network): open the tab now, inside the tap, and
+  // point it at WhatsApp once the link arrives — without it if that fails.
+  const tab = window.open("about:blank", "_blank");
+  void prefetchBillLink(o.id).then((l) => {
+    const url = waUrl(digits, billMessage(state, o, l));
+    if (tab) {
+      tab.opener = null;
+      tab.location.href = url;
+    } else {
+      window.location.href = url;
+    }
+    Repo.sendBill(o.id);
+    if (!l) Repo.showInfo("Couldn't create the bill link — sent the total only");
+  });
 }
 
 /** Opens WhatsApp to the customer with a khata balance reminder. */
@@ -123,14 +109,7 @@ export function sendReminderOnWhatsApp(state: LaundryState, custId: string, bal:
 export function downloadBill(state: LaundryState, o: Order): void {
   const file = makePdf(state, o);
   if (!file) return;
-  if (canShareFile(file)) {
-    navigator.share({ files: [file], title: `Bill #${o.id}` }).catch((e) => {
-      if (isDismissal(e)) return;
-      saveFile(file); // share unavailable after all — fall back to the download
-      Repo.showInfo(`${file.name} downloaded`);
-    });
-    return;
-  }
-  saveFile(file);
-  Repo.showInfo(`${file.name} downloaded`);
+  void shareOrSaveFile(file, `Bill #${o.id}`).then((r) => {
+    if (r === "saved") Repo.showInfo(`${file.name} downloaded`);
+  });
 }

@@ -5,12 +5,12 @@ import type { LedgerEntry, Order, Service } from "./models";
  * No storage or UI dependencies.
  */
 
-export function clothesOf(o: Order): number {
+export function clothesOf(o: Pick<Order, "lines">): number {
   return o.lines.reduce((s, l) => s + l.amt, 0);
 }
 
 /** Order total = clothes + express + fee − discount. Never stored separately. */
-export function amtOf(o: Order): number {
+export function amtOf(o: Pick<Order, "lines" | "express" | "exAmt" | "fee" | "discount">): number {
   return clothesOf(o) + (o.express ? o.exAmt : 0) + o.fee - o.discount;
 }
 

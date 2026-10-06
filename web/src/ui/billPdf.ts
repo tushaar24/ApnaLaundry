@@ -213,6 +213,46 @@ function jpegPdf(jpeg: Uint8Array, wPx: number, hPx: number, wPt: number, hPt: n
   return new Blob(parts as BlobPart[], { type: "application/pdf" });
 }
 
+/** True on phones/tablets, where the native share sheet is the better "save". */
+function isMobileDevice(): boolean {
+  // iPadOS 13+ reports itself as "Macintosh" — the touch check catches it.
+  return (
+    /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+    (/Mac/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)
+  );
+}
+
+function saveFile(file: File): void {
+  const url = URL.createObjectURL(file);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = file.name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+/**
+ * Phones: the native share sheet (save to Files / send). Desktop: a real
+ * download — desktop Chrome also has navigator.share, but "Download" must
+ * stay a download there. A failed share (not a dismissal) falls back to the
+ * download. Call it synchronously inside the tap (iOS Safari requirement).
+ */
+export async function shareOrSaveFile(file: File, title: string): Promise<"shared" | "saved" | "dismissed"> {
+  const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
+  if (isMobileDevice() && typeof nav.share === "function" && nav.canShare?.({ files: [file] })) {
+    try {
+      await nav.share({ files: [file], title });
+      return "shared";
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return "dismissed";
+    }
+  }
+  saveFile(file);
+  return "saved";
+}
+
 /** The receipt as a PNG data URL, for the in-app "View bill" preview. */
 export function billPreviewUrl(r: BillReceipt): string {
   return renderCanvas(r).toDataURL("image/png");

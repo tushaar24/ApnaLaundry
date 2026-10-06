@@ -27,7 +27,7 @@ export interface PullResponse {
   message?: string;
 }
 
-async function authedFetch(path: string, init?: RequestInit): Promise<Response> {
+export async function authedFetch(path: string, init?: RequestInit): Promise<Response> {
   let token = await tokenManager.validAccessToken();
   if (!token) throw new NotLoggedInError();
   let res = await fetch(path, {

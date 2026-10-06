@@ -59,8 +59,25 @@ function line(l: OrderLine): ReceiptLine {
   return { item: l.itemName, sub: l.serviceName, qty: String(l.qty), rate: receiptMoney(l.price), total: receiptMoney(l.amt) };
 }
 
+/** The order fields a bill shows — also what the public bill endpoint returns. */
+export type BillOrder = Pick<
+  Order,
+  "id" | "status" | "createdOn" | "deliveryDate" | "doneDate" | "express" | "exAmt" | "fee" | "discount" | "lines"
+>;
+
+/** Everything needed to print one bill (the public /b/<token> page's payload). */
+export interface BillData {
+  shop: { name: string; phone: string };
+  customer: { name: string; phone: string };
+  order: BillOrder;
+}
+
 export function billReceipt(state: LaundryState, o: Order): BillReceipt {
   const c = Sel.customer(state, o.custId);
+  return receiptFrom({ shop: state.shop, customer: c, order: o });
+}
+
+export function receiptFrom({ shop, customer: c, order: o }: BillData): BillReceipt {
   const phone = (c.phone || "").replace(/\D/g, "").slice(-10);
 
   const info: ReceiptRow[] = [
@@ -78,8 +95,8 @@ export function billReceipt(state: LaundryState, o: Order): BillReceipt {
   if (o.discount > 0) extras.push({ label: "Discount", value: `− ${receiptMoney(o.discount)}` });
 
   return {
-    shopName: state.shop.name,
-    shopPhone: state.shop.phone ? `+91 ${Sel.fmtPhone(state.shop.phone)}` : "",
+    shopName: shop.name,
+    shopPhone: shop.phone ? `+91 ${Sel.fmtPhone(shop.phone)}` : "",
     info,
     lines: o.lines.map(line),
     subtotal: receiptMoney(clothesOf(o)),
