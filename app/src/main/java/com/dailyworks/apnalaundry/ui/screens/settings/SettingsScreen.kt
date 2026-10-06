@@ -85,7 +85,7 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: () 
             // Subscription / plan
             AppCard {
                 Row(
-                    Modifier.fillMaxWidth().tap { navigator.openPaywall("upsell") }.padding(16.dp),
+                    Modifier.fillMaxWidth().tap { navigator.openSubscription() }.padding(16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {

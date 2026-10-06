@@ -14,9 +14,10 @@ import { IcLaundry } from "./icons";
  * Client-side auth/billing/setup gate (the web port of AppNavGraph's start-
  * destination logic). Resolves, in order:
  *   1. login        — !authed → /login
- *   2. subscription — an authed trial user without an active subscription hits
- *      a hard paywall BEFORE setup (both the setup and app zones pass through
- *      here); the free-orders variant is soft and never gates here.
+ *   2. subscription — an authed user without an active subscription (and not
+ *      in grace) hits the non-cancellable ₹2-trial paywall BEFORE setup (both
+ *      the setup and app zones pass through here). Billing unreachable or
+ *      unconfigured fails open.
  *   3. setup        — authed && !setupDone → /setup
  *   4. app          — otherwise
  * Also bootstraps the online store (initial pull) on load.
@@ -57,7 +58,7 @@ export function Gate({ children, zone }: { children: React.ReactNode; zone: "app
   const bootError = useAppStore((s) => s.bootError);
 
   // Subscription state. For authed users (the setup and app zones) the
-  // subscription is resolved before setup, so the trial hard gate sits between
+  // subscription is resolved before setup, so the hard gate sits between
   // login and setup. The login zone never checks billing.
   const billingLoaded = useBillingStore((s) => s.loaded);
   const billingStatus = useBillingStore((s) => s.status);
@@ -77,8 +78,7 @@ export function Gate({ children, zone }: { children: React.ReactNode; zone: "app
   // screen isn't skipped the instant the subscription goes active.
   useEffect(() => {
     if (zone === "login" || !authed || !billingLoaded || gated !== null) return;
-    const info = paywallInfo(billingStatus);
-    setGated(info.isTrial && info.blocked && !info.hasActive);
+    setGated(paywallInfo(billingStatus).blocked);
   }, [zone, authed, billingLoaded, billingStatus, gated]);
 
   useEffect(() => {
@@ -119,19 +119,8 @@ export function Gate({ children, zone }: { children: React.ReactNode; zone: "app
   if (!billingLoaded || gated === null) return <Splash />;
   if (gated) {
     return (
-      <PaywallScreen
-        reason="trial"
-        hardGate
-        setupPending={!setupDone}
-        onClose={() => undefined}
-        onDone={(continuing) => {
-          setGated(false);
-          // The Done button promised "+ Continue with new order" — honor it,
-          // but only once the shop is set up. A brand-new shop falls through to
-          // the setup redirect (the routing effect above sends it to /setup).
-          if (continuing && setupDone) router.push("/orders/new?from=home");
-        }}
-      />
+      // Once active, the routing effect above sends a brand-new shop to /setup.
+      <PaywallScreen onDone={() => setGated(false)} />
     );
   }
   if (!setupDone) return zone === "setup" ? <>{children}</> : <Splash />;

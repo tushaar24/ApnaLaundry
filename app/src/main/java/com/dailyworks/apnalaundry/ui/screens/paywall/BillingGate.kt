@@ -22,31 +22,25 @@ import org.koin.androidx.compose.koinViewModel
  * login -> subscription -> setup -> app.
  * Flow: logged in -> check subscription -> route; a loader shows until the
  * check resolves.
- *  - trial_2 + no active subscription -> non-cancellable paywall (app unreachable).
- *  - otherwise (free_<N>, active sub, or billing unreachable) -> the content.
+ *  - no active subscription -> non-cancellable ₹2-trial paywall (app unreachable).
+ *  - otherwise (active sub, or billing unconfigured/unreachable) -> the content.
  *
  * [enabled] is false only on the login screen, where billing must not be checked.
- * [setupPending] is true when the shop hasn't been set up yet — the Done screen
- * then leads to setup instead of a new order.
- * [onContinueNewOrder] fires when the Done screen's "+ Continue with new order"
- * is tapped — the host navigates once the gate (and NavHost) are composed.
  */
 @Composable
 fun BillingGate(
     enabled: Boolean,
-    setupPending: Boolean = false,
-    onContinueNewOrder: () -> Unit = {},
     content: @Composable () -> Unit,
 ) {
     if (!enabled) {
         content()
         return
     }
-    GatedContent(setupPending, onContinueNewOrder, content)
+    GatedContent(content)
 }
 
 @Composable
-private fun GatedContent(setupPending: Boolean, onContinueNewOrder: () -> Unit, content: @Composable () -> Unit) {
+private fun GatedContent(content: @Composable () -> Unit) {
     val vm: PaywallViewModel = koinViewModel()
     val ui by vm.ui.collectAsStateWithLifecycle()
     // Latch the decision once billing first loads, so the success -> "Done"
@@ -64,14 +58,9 @@ private fun GatedContent(setupPending: Boolean, onContinueNewOrder: () -> Unit, 
     when {
         !ui.loaded || !decided -> Loader()
         gated -> PaywallScreen(
-            reason = "trial",
             hardGate = true,
-            setupPending = setupPending,
             onClose = {},
-            onDone = { continuing ->
-                gated = false
-                if (continuing) onContinueNewOrder()
-            },
+            onDone = { gated = false },
             vm = vm,
         )
         else -> content()

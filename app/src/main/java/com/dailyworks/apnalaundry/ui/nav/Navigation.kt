@@ -15,7 +15,7 @@ object Routes {
     const val BILL = "bill/{orderId}?from={from}"
     const val ORDER = "order/{orderId}?from={from}"
     const val CUSTOMER = "customer/{custId}?from={from}"
-    const val PAYWALL = "paywall?reason={reason}"
+    const val SUBSCRIPTION = "subscription"
 }
 
 /** Thin typed wrapper over the NavController used by every screen. */
@@ -36,16 +36,7 @@ class AppNavigator(val nav: NavHostController) {
     fun openCustomers(filter: String = "all") = navigateTab("customers?filter=$filter")
     fun openEarnings() = navigateTab(Routes.EARNINGS)
     fun openSettings() = navigateTab(Routes.SETTINGS)
-    // reason: "trial" | "limit" | "upsell"
-    fun openPaywall(reason: String = "limit") = nav.navigate("paywall?reason=$reason") { launchSingleTop = true }
-
-    // Guard redirects (e.g. new-order when the free orders ran out) must REPLACE
-    // the blocked screen — pushing would leave it underneath and Back would
-    // bounce straight back into the guard.
-    fun replaceNewOrderWithPaywall(reason: String = "limit") = nav.navigate("paywall?reason=$reason") {
-        popUpTo(Routes.NEW) { inclusive = true }
-        launchSingleTop = true
-    }
+    fun openSubscription() = nav.navigate(Routes.SUBSCRIPTION) { launchSingleTop = true }
 
     fun selectTab(tab: NavTab) = when (tab) {
         NavTab.ORDERS -> navigateTab(Routes.HOME)

@@ -29,14 +29,14 @@ export const MetaPixel = {
     fbq("trackCustom", "login_success", { is_new_user: isNewUser });
   },
   /** Checkout opened for a subscription (value = what approval charges now, in ₹). */
-  subscriptionInitiated(subscriptionId: string, plan: string, variant: string, valueRupees: number) {
+  subscriptionInitiated(subscriptionId: string, plan: string, valueRupees: number) {
     fbq("trackCustom", "subscription_initiated",
-      { plan, variant, subscription_id: subscriptionId, value: valueRupees, currency: "INR" });
+      { plan, subscription_id: subscriptionId, value: valueRupees, currency: "INR" });
   },
   /** Mandate approved in Razorpay Checkout. */
-  subscriptionActivated(subscriptionId: string, plan: string, variant: string, valueRupees: number) {
+  subscriptionActivated(subscriptionId: string, plan: string, valueRupees: number) {
     fbq("trackCustom", "subscription_activated",
-      { plan, variant, value: valueRupees, currency: "INR" },
+      { plan, value: valueRupees, currency: "INR" },
       { eventID: `subact_${subscriptionId}` });
   },
 };

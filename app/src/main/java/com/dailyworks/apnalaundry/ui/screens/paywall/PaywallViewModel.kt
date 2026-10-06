@@ -23,31 +23,25 @@ data class PaywallUiState(
     val loaded: Boolean = false, // true once the first /status call resolves (ok or failed)
     val stage: PaywallStage = PaywallStage.PLANS,
     val plan: PaywallPlan = PaywallPlan.ANNUAL,
-    // The plan the SERVER put on the subscription (trial_2 is always monthly,
-    // whatever was tapped) — Done/analytics use this, never the local pick.
+    // The plan the SERVER put on the subscription — analytics use this, never
+    // the local pick.
     val purchasedPlan: String? = null,
     val busy: Boolean = false,
     val error: String? = null,
 ) {
-    val variant: String get() = status?.variant ?: "trial_2"
-    val isTrial: Boolean get() = variant == "trial_2"
     val hasActive: Boolean get() = status?.hasActiveSubscription == true
-    val orderCount: Int get() = status?.orderCount ?: 0
-    val freeThreshold: Int get() = status?.freeOrderThreshold ?: 0
-    val freeLeft: Int get() = (freeThreshold - orderCount).coerceAtLeast(0)
     val annualAmount: Int get() = status?.plans?.annual?.amount ?: 499900
     val monthlyAmount: Int get() = status?.plans?.monthly?.amount ?: 49900
     val trialAmount: Int get() = status?.plans?.trial?.amount ?: 200
 
-    // Paywall "due" per the backend (false if billing is unconfigured/unreachable
-    // so an outage never locks the owner out of their shop).
-    val blocked: Boolean get() = status?.configured == true && !hasActive && status?.paywallDue == true
-    // trial_2 + no active subscription → the non-cancellable hard gate.
-    val shouldHardGate: Boolean get() = blocked && isTrial
+    // No active subscription and the backend says the paywall is due → the
+    // non-cancellable hard gate. False if billing is unconfigured/unreachable so
+    // an outage never locks the owner out of their shop.
+    val shouldHardGate: Boolean get() = status?.configured == true && !hasActive && status?.paywallDue == true
 }
 
 /**
- * Drives the paywall: loads A/B status, creates the subscription, hands it to
+ * Drives the paywall: loads billing status, creates the subscription, hands it to
  * Razorpay Standard Checkout (which owns the UPI AutoPay approval UI), then
  * waits for the server webhook to confirm activation. Failure states surface as
  * [PaywallUiState.error] back on the plans screen.
@@ -63,7 +57,7 @@ class PaywallViewModel(
 
     private var shownTracked = false
 
-    // Several screens hold a PaywallViewModel (gate, home, new-order, paywall)
+    // More than one PaywallViewModel can exist (gate, Settings → Subscription)
     // and all collect the shared CheckoutBridge — only the instance that
     // actually launched Checkout may react to a result.
     private var awaitingCheckout = false
@@ -86,12 +80,11 @@ class PaywallViewModel(
         viewModelScope.launch {
             val status = runCatching { repo.status() }.getOrNull()
             _ui.value = _ui.value.copy(status = status ?: _ui.value.status, loaded = true)
-            if (status != null) {
-                Analytics.paywallVariant(status.variant)
-                if (!shownTracked) {
-                    shownTracked = true
-                    Analytics.paywallShown(status.variant, status.orderCount)
-                }
+            // Only count it when the plans are actually on screen (not for a
+            // subscribed user passing through the gate).
+            if (status != null && status.configured && !status.hasActiveSubscription && !shownTracked) {
+                shownTracked = true
+                Analytics.paywallShown()
             }
         }
     }
@@ -103,10 +96,10 @@ class PaywallViewModel(
         val s = _ui.value
         if (s.busy) return
         _ui.value = s.copy(busy = true, error = null)
-        // The user's chosen plan; trial_2 layers the ₹2 trial on top of it. The
+        // The user's chosen plan; the ₹2 trial is layered on top of it. The
         // server prices it from its own table (never trusts the client for money).
         val planArg = if (s.plan == PaywallPlan.ANNUAL) "annual" else "monthly"
-        Analytics.planSelected(s.variant, planArg)
+        Analytics.planSelected(planArg)
         viewModelScope.launch {
             try {
                 val res = repo.subscribe(planArg)
@@ -115,7 +108,7 @@ class PaywallViewModel(
                 }
                 // The server decides the real plan (never trust the client for money).
                 _ui.value = _ui.value.copy(purchasedPlan = res.plan)
-                Analytics.checkoutStarted(s.variant, res.plan, res.amount, res.trialAmount)
+                Analytics.checkoutStarted(res.plan, res.amount, res.trialAmount)
                 val contact = runCatching { prefs.userPhone.first() }.getOrNull()
                 awaitingCheckout = true
                 RazorpayCheckout.launch(activity, res, contact = contact, email = null)
@@ -153,7 +146,7 @@ class PaywallViewModel(
         viewModelScope.launch {
             val status = repo.pollUntilActive()
             if (status?.hasActiveSubscription == true) {
-                Analytics.checkoutSucceeded(_ui.value.variant, purchasedOrSelected())
+                Analytics.checkoutSucceeded(purchasedOrSelected())
                 _ui.value = _ui.value.copy(status = status, stage = PaywallStage.DONE, busy = false)
             } else {
                 // Approved on-device but not yet confirmed — let the user re-check.
@@ -167,7 +160,7 @@ class PaywallViewModel(
 
     private fun onCheckoutFailed(code: Int, description: String?) {
         val msg = description?.takeIf { it.isNotBlank() } ?: "Payment was not completed"
-        Analytics.checkoutFailed(_ui.value.variant, purchasedOrSelected(), msg)
+        Analytics.checkoutFailed(purchasedOrSelected(), msg)
         _ui.value = _ui.value.copy(stage = PaywallStage.PLANS, busy = false, error = msg)
     }
 }

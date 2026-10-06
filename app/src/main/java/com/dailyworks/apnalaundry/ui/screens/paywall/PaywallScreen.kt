@@ -54,13 +54,6 @@ import com.dailyworks.apnalaundry.ui.components.tap
 import com.dailyworks.apnalaundry.ui.theme.Tokens
 import org.koin.androidx.compose.koinViewModel
 
-private val FEATURES = listOf(
-    "Unlimited orders",
-    "Bills on WhatsApp",
-    "Khata for every customer",
-    "Daily earnings — cash and UPI",
-)
-
 private const val WAS_MONTHLY = 799
 private const val WAS_ANNUAL = 8999
 
@@ -69,7 +62,7 @@ private const val TRIAL_DAYS = 7
 
 private data class TrialFeature(val icon: ImageVector, val title: String, val sub: String)
 
-// The trial paywall lists features with a subtitle each (design 08b).
+// The paywall lists features with a subtitle each (design 08b).
 private val TRIAL_FEATURES = listOf(
     TrialFeature(Icons.AutoMirrored.Outlined.ReceiptLong, "Unlimited orders", "Walk-in, home pickup and delivery"),
     TrialFeature(Icons.AutoMirrored.Outlined.Chat, "Bills on WhatsApp", "Make and send a bill in one tap"),
@@ -94,28 +87,29 @@ private fun rupees(paise: Int): String {
     return "₹$sb"
 }
 
+/**
+ * The ₹2-trial paywall. [hardGate] is the post-login BillingGate (no close, Back
+ * consumed); otherwise it's Settings → Subscription, which shows the active plan
+ * (with cancel) or, if there's none, the same trial offer with a close button.
+ * [onDone] fires once the subscription is confirmed active.
+ */
 @Composable
 fun PaywallScreen(
-    reason: String,
     onClose: () -> Unit,
-    onDone: (continuing: Boolean) -> Unit,
+    onDone: () -> Unit,
     hardGate: Boolean = false,
-    // Brand-new shop hitting the gate before setup — the Done CTA leads to setup.
-    setupPending: Boolean = false,
     vm: PaywallViewModel = koinViewModel(),
 ) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     val activity = LocalContext.current as Activity
 
-    // Trial hard gate: the back button cannot dismiss the paywall.
+    // Hard gate: the back button cannot dismiss the paywall.
     BackHandler(enabled = hardGate) { /* consume — no escape until subscribed */ }
 
-    val blocked = reason == "limit" || ui.freeLeft <= 0
     val annualR = ui.annualAmount / 100
     val monthlyR = ui.monthlyAmount / 100
     val perMonth = ui.annualAmount / 12 / 100
     val saveVsMonthly = (ui.monthlyAmount * 12 - ui.annualAmount) / 100
-    val yearIfMonthly = ui.monthlyAmount * 12 / 100
 
     Box(
         Modifier
@@ -123,20 +117,10 @@ fun PaywallScreen(
             .background(Tokens.Bg)
             .windowInsetsPadding(WindowInsets.systemBars),
     ) {
-        val purchasedAnnual = ui.purchasedPlan == "annual"
         when {
-            ui.stage == PaywallStage.DONE -> if (ui.isTrial) {
-                // Trial has no success screen (handoff 08b) — the ₹2 only starts
-                // the trial, so proceed straight through instead of a summary.
-                LaunchedEffect(Unit) { onDone(false) }
-            } else DoneView(
-                annual = purchasedAnnual,
-                paid = if (purchasedAnnual) annualR else monthlyR,
-                isTrial = false,
-                blocked = blocked,
-                setupPending = setupPending,
-                onDone = onDone,
-            )
+            // No success screen (handoff 08b) — the ₹2 only starts the trial, so
+            // proceed straight through instead of a summary.
+            ui.stage == PaywallStage.DONE -> LaunchedEffect(Unit) { onDone() }
 
             ui.stage == PaywallStage.WAITING -> WaitingView()
 
@@ -145,7 +129,7 @@ fun PaywallScreen(
             ui.hasActive -> ActiveView(ui = ui, onClose = onClose, onCancel = { vm.cancel() })
 
             else -> Column(Modifier.fillMaxSize()) {
-                // Close — hidden on the trial hard gate (non-cancellable).
+                // Close — hidden on the hard gate (non-cancellable).
                 if (!hardGate) {
                     Box(
                         Modifier
@@ -164,135 +148,67 @@ fun PaywallScreen(
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = 20.dp),
                 ) {
-                    if (ui.isTrial) {
-                        // ₹2 trial hero
-                        Spacer(Modifier.height(4.dp))
-                        Column(
-                            Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Tokens.Blue).padding(20.dp),
-                        ) {
-                            Text("$TRIAL_DAYS-DAY FULL TRIAL", style = fig(12, FontWeight.Bold, Tokens.BlueBar))
-                            Spacer(Modifier.height(6.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(rupees(ui.trialAmount), style = bric(52, FontWeight.Bold, Tokens.OnDark))
-                                Spacer(Modifier.width(16.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Text("That's all you pay today", style = fig(18, FontWeight.Bold, Tokens.OnDark))
-                                    Text("Every feature unlocked for $TRIAL_DAYS days", style = fig(14, FontWeight.Normal, Tokens.BlueBar))
-                                }
-                            }
-                        }
-
-                        Spacer(Modifier.height(20.dp))
-                        Text("EVERYTHING IN THE APP", style = fig(12, FontWeight.Bold, Tokens.Muted))
-                        Spacer(Modifier.height(12.dp))
-                        TRIAL_FEATURES.forEach { f ->
-                            Row(
-                                Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                Box(
-                                    Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(Tokens.BlueLight),
-                                    contentAlignment = Alignment.Center,
-                                ) { Icon(f.icon, null, tint = Tokens.Blue, modifier = Modifier.size(22.dp)) }
-                                Column(Modifier.weight(1f)) {
-                                    Text(f.title, style = fig(16, FontWeight.Bold))
-                                    Text(f.sub, style = fig(13, FontWeight.Normal, Tokens.Muted))
-                                }
-                            }
-                        }
-
-                        Spacer(Modifier.height(20.dp))
-                        Text("YOUR PLAN AFTER $TRIAL_DAYS DAYS", style = fig(12, FontWeight.Bold, Tokens.Muted))
-                        Spacer(Modifier.height(12.dp))
-                        PlanCard(
-                            selected = ui.plan == PaywallPlan.ANNUAL,
-                            onSelect = { vm.selectPlan(PaywallPlan.ANNUAL) },
-                            name = "Yearly",
-                            note = "Only ${rupees(perMonth * 100)} a month",
-                            price = rupees(annualR * 100),
-                            per = "/year",
-                            was = rupees(WAS_ANNUAL * 100),
-                            badge = "BEST VALUE · SAVE ${rupees(saveVsMonthly * 100)}",
-                        )
-                        Spacer(Modifier.height(10.dp))
-                        PlanCard(
-                            selected = ui.plan == PaywallPlan.MONTHLY,
-                            onSelect = { vm.selectPlan(PaywallPlan.MONTHLY) },
-                            name = "Monthly",
-                            note = "Pay every month",
-                            price = rupees(monthlyR * 100),
-                            per = "/month",
-                            was = rupees(WAS_MONTHLY * 100),
-                            badge = null,
-                        )
-                    } else {
-                        Text(
-                            "${ui.orderCount} of ${ui.freeThreshold} free orders used",
-                            style = fig(13, FontWeight.Bold, Tokens.OrangeText),
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            when {
-                                blocked -> "Your free orders are finished"
-                                ui.freeLeft == 1 -> "Only 1 free order left"
-                                else -> "Only ${ui.freeLeft} free orders left"
-                            },
-                            style = bric(26, FontWeight.Bold),
-                        )
+                    // ₹2 trial hero
+                    Spacer(Modifier.height(4.dp))
+                    Column(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Tokens.Blue).padding(20.dp),
+                    ) {
+                        Text("$TRIAL_DAYS-DAY FULL TRIAL", style = fig(12, FontWeight.Bold, Tokens.BlueBar))
                         Spacer(Modifier.height(6.dp))
-                        Text(
-                            if (blocked) "Pick a plan to take new orders. Your old orders and khata are safe."
-                            else "Pick a plan and keep taking orders without a break.",
-                            style = fig(15, FontWeight.Normal, Tokens.Muted),
-                        )
-
-                        Spacer(Modifier.height(16.dp))
-                        FEATURES.forEach { f ->
-                            Row(
-                                Modifier.padding(vertical = 5.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            ) {
-                                Box(
-                                    Modifier.size(20.dp).clip(CircleShape).background(Tokens.BlueLight),
-                                    contentAlignment = Alignment.Center,
-                                ) { Icon(Icons.Outlined.Check, null, tint = Tokens.Blue, modifier = Modifier.size(14.dp)) }
-                                Text(f, style = fig(15, FontWeight.SemiBold))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(rupees(ui.trialAmount), style = bric(52, FontWeight.Bold, Tokens.OnDark))
+                            Spacer(Modifier.width(16.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text("That's all you pay today", style = fig(18, FontWeight.Bold, Tokens.OnDark))
+                                Text("Every feature unlocked for $TRIAL_DAYS days", style = fig(14, FontWeight.Normal, Tokens.BlueBar))
                             }
                         }
-
-                        Spacer(Modifier.height(18.dp))
-                        PlanCard(
-                            selected = ui.plan == PaywallPlan.ANNUAL,
-                            onSelect = { vm.selectPlan(PaywallPlan.ANNUAL) },
-                            name = "Yearly",
-                            note = "Only ${rupees(perMonth * 100)} a month",
-                            price = rupees(annualR * 100),
-                            per = "/year",
-                            was = rupees(WAS_ANNUAL * 100),
-                            badge = "BEST VALUE · SAVE ${rupees(saveVsMonthly * 100)}",
-                        )
-                        Spacer(Modifier.height(10.dp))
-                        PlanCard(
-                            selected = ui.plan == PaywallPlan.MONTHLY,
-                            onSelect = { vm.selectPlan(PaywallPlan.MONTHLY) },
-                            name = "Monthly",
-                            note = "Pay every month",
-                            price = rupees(monthlyR * 100),
-                            per = "/month",
-                            was = rupees(WAS_MONTHLY * 100),
-                            badge = null,
-                        )
-
-                        Spacer(Modifier.height(12.dp))
-                        Text(
-                            if (ui.plan == PaywallPlan.ANNUAL)
-                                "You save ${rupees(saveVsMonthly * 100)} vs paying monthly (${rupees(yearIfMonthly * 100)} a year)"
-                            else "Pick Yearly and save ${rupees(saveVsMonthly * 100)}",
-                            style = fig(13, FontWeight.Bold, if (ui.plan == PaywallPlan.ANNUAL) Tokens.Blue else Tokens.OrangeText),
-                        )
                     }
+
+                    Spacer(Modifier.height(20.dp))
+                    Text("EVERYTHING IN THE APP", style = fig(12, FontWeight.Bold, Tokens.Muted))
+                    Spacer(Modifier.height(12.dp))
+                    TRIAL_FEATURES.forEach { f ->
+                        Row(
+                            Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Box(
+                                Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(Tokens.BlueLight),
+                                contentAlignment = Alignment.Center,
+                            ) { Icon(f.icon, null, tint = Tokens.Blue, modifier = Modifier.size(22.dp)) }
+                            Column(Modifier.weight(1f)) {
+                                Text(f.title, style = fig(16, FontWeight.Bold))
+                                Text(f.sub, style = fig(13, FontWeight.Normal, Tokens.Muted))
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(20.dp))
+                    Text("YOUR PLAN AFTER $TRIAL_DAYS DAYS", style = fig(12, FontWeight.Bold, Tokens.Muted))
+                    Spacer(Modifier.height(12.dp))
+                    PlanCard(
+                        selected = ui.plan == PaywallPlan.ANNUAL,
+                        onSelect = { vm.selectPlan(PaywallPlan.ANNUAL) },
+                        name = "Yearly",
+                        note = "Only ${rupees(perMonth * 100)} a month",
+                        price = rupees(annualR * 100),
+                        per = "/year",
+                        was = rupees(WAS_ANNUAL * 100),
+                        badge = "BEST VALUE · SAVE ${rupees(saveVsMonthly * 100)}",
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    PlanCard(
+                        selected = ui.plan == PaywallPlan.MONTHLY,
+                        onSelect = { vm.selectPlan(PaywallPlan.MONTHLY) },
+                        name = "Monthly",
+                        note = "Pay every month",
+                        price = rupees(monthlyR * 100),
+                        per = "/month",
+                        was = rupees(WAS_MONTHLY * 100),
+                        badge = null,
+                    )
                     ui.error?.let {
                         Spacer(Modifier.height(8.dp))
                         Text(it, style = fig(13, FontWeight.SemiBold, Tokens.OrangeText))
@@ -307,23 +223,16 @@ fun PaywallScreen(
                         .padding(20.dp),
                 ) {
                     PrimaryButton(
-                        text = when {
-                            ui.busy -> "Starting…"
-                            ui.isTrial -> "Start trial for ${rupees(ui.trialAmount)}"
-                            ui.plan == PaywallPlan.ANNUAL -> "Pay ${rupees(annualR * 100)} for 1 year"
-                            else -> "Pay ${rupees(monthlyR * 100)} for 1 month"
-                        },
+                        text = if (ui.busy) "Starting…" else "Start trial for ${rupees(ui.trialAmount)}",
                         enabled = !ui.busy,
                         onClick = { vm.pay(activity) },
                     )
                     Spacer(Modifier.height(8.dp))
+                    // The chosen plan kicks in after the trial.
+                    val amt = if (ui.plan == PaywallPlan.ANNUAL) ui.annualAmount else ui.monthlyAmount
+                    val per = if (ui.plan == PaywallPlan.ANNUAL) "year" else "month"
                     Text(
-                        if (ui.isTrial) {
-                            // The chosen plan kicks in after the trial.
-                            val amt = if (ui.plan == PaywallPlan.ANNUAL) ui.annualAmount else ui.monthlyAmount
-                            val per = if (ui.plan == PaywallPlan.ANNUAL) "year" else "month"
-                            "Then ${rupees(amt)}/$per after the $TRIAL_DAYS-day trial · cancel anytime"
-                        } else "Pay once by UPI AutoPay · cancel anytime",
+                        "Then ${rupees(amt)}/$per after the $TRIAL_DAYS-day trial · cancel anytime",
                         style = fig(12, FontWeight.Normal, Tokens.Muted),
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -397,46 +306,6 @@ private fun WaitingView() {
         Text(
             "We're confirming the UPI AutoPay approval. This updates automatically — it only takes a moment.",
             style = fig(14, FontWeight.Normal, Tokens.Muted),
-        )
-    }
-}
-
-@Composable
-private fun DoneView(annual: Boolean, paid: Int, isTrial: Boolean, blocked: Boolean, setupPending: Boolean, onDone: (Boolean) -> Unit) {
-    Column(
-        Modifier.fillMaxSize().padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Spacer(Modifier.height(24.dp))
-        Box(
-            Modifier.size(64.dp).clip(CircleShape).background(Tokens.Blue),
-            contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Outlined.Check, null, tint = Tokens.OnDark, modifier = Modifier.size(34.dp)) }
-        Spacer(Modifier.height(16.dp))
-        Text(
-            when {
-                isTrial -> "Your trial has started"
-                annual -> "Yearly plan is active"
-                else -> "Monthly plan is active"
-            },
-            style = bric(24, FontWeight.Bold),
-        )
-        Spacer(Modifier.height(8.dp))
-        Text("Take as many orders as you want. No more limits.", style = fig(14, FontWeight.Normal, Tokens.Muted))
-        Spacer(Modifier.height(6.dp))
-        Text(
-            if (isTrial) "Paid ${rupees(paid * 100)} (trial) · ${if (annual) "Yearly" else "Monthly"} plan"
-            else "Paid ${rupees(paid * 100)}",
-            style = fig(14, FontWeight.SemiBold, Tokens.Muted),
-        )
-        Spacer(Modifier.weight(1f))
-        PrimaryButton(
-            text = when {
-                setupPending -> "Set up your shop"
-                blocked -> "+ Continue with new order"
-                else -> "Go to my orders"
-            },
-            onClick = { onDone(blocked && !setupPending) },
         )
     }
 }

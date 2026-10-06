@@ -46,7 +46,6 @@ import androidx.compose.ui.unit.em
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dailyworks.apnalaundry.analytics.Analytics
-import org.koin.androidx.compose.koinViewModel
 import com.dailyworks.apnalaundry.core.AppDate
 import com.dailyworks.apnalaundry.core.Money
 import com.dailyworks.apnalaundry.domain.EarningsMath
@@ -56,7 +55,6 @@ import com.dailyworks.apnalaundry.domain.OrderStatus
 import com.dailyworks.apnalaundry.domain.Route
 import com.dailyworks.apnalaundry.ui.Selectors
 import com.dailyworks.apnalaundry.ui.ShopViewModel
-import com.dailyworks.apnalaundry.ui.screens.paywall.PaywallViewModel
 import com.dailyworks.apnalaundry.ui.components.BottomNav
 import com.dailyworks.apnalaundry.ui.components.FieldBox
 import com.dailyworks.apnalaundry.ui.components.NavTab
@@ -85,21 +83,9 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
     var query by remember { mutableStateOf("") }
     var active by remember { mutableStateOf<ActiveSheet?>(null) }
 
-    // Free-orders variant: banner + new-order block (the trial variant never
-    // reaches home — it's hard-gated in BillingGate). Refetched on every entry
-    // so the banner's order count doesn't go stale in the retained ViewModel.
-    val billingVm: PaywallViewModel = koinViewModel()
-    val billing by billingVm.ui.collectAsStateWithLifecycle()
-    val showBillingBanner = billing.status?.configured == true && !billing.isTrial &&
-        !billing.hasActive && (billing.blocked || billing.freeLeft <= 10)
-    val startNewOrder: () -> Unit = {
-        if (billing.blocked) navigator.openPaywall("limit") else navigator.openNewOrder(from = "home")
-    }
+    val startNewOrder: () -> Unit = { navigator.openNewOrder(from = "home") }
 
-    LaunchedEffect(Unit) {
-        Analytics.screen("home")
-        billingVm.refresh()
-    }
+    LaunchedEffect(Unit) { Analytics.screen("home") }
 
     fun act(o: Order) {
         when (o.status) {
@@ -123,15 +109,6 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                 FieldBox(query, { query = it }, placeholder = "Name, phone or order no.", modifier = Modifier.weight(1f), height = 50.dp, borderColor = Tokens.Blue, borderWidth = 2.dp, leading = { Icon(Icons.Filled.Search, null, tint = Tokens.Muted, modifier = Modifier.size(20.dp)) })
                 Text("Close", style = fig(15, FontWeight.Bold, Tokens.Blue), modifier = Modifier.tap { searching = false; query = "" })
             }
-        }
-
-        if (!searching && showBillingBanner) {
-            FreeOrdersBanner(
-                blocked = billing.blocked,
-                freeLeft = billing.freeLeft,
-                perMonthR = billing.annualAmount / 12 / 100,
-                onSeePlans = { navigator.openPaywall(if (billing.blocked) "limit" else "upsell") },
-            )
         }
 
         val noOrders = state.orders.isEmpty()
@@ -207,35 +184,6 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
     }
 
     SheetHost(active, state, shopVm, navigator, onOpen = { active = it }, onDismiss = { active = null })
-}
-
-// ---------- free-orders banner (≤10 left / limit reached) ----------
-@Composable
-private fun FreeOrdersBanner(blocked: Boolean, freeLeft: Int, perMonthR: Int, onSeePlans: () -> Unit) {
-    val title = when {
-        blocked -> "Your free orders are finished"
-        freeLeft == 1 -> "Only 1 free order left"
-        else -> "Only $freeLeft free orders left"
-    }
-    // Per-month price derives from the server's annual amount — never hardcoded.
-    val sub = if (blocked) "Choose a plan to take new orders" else "Get unlimited orders from ₹$perMonthR a month"
-    Row(
-        Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp).fillMaxWidth()
-            .rounded(14.dp).background(Tokens.OrangeLight)
-            .border(1.dp, Tokens.OrangeBorder, RoundedCornerShape(14.dp)).padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(title, style = fig(14, FontWeight.Bold, Tokens.OrangeDeep))
-            Text(sub, style = fig(13, color = Tokens.OrangeText))
-        }
-        Box(
-            Modifier.rounded(999.dp).background(Tokens.Orange).tap(onClick = onSeePlans)
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            contentAlignment = Alignment.Center,
-        ) { Text("See plans", style = fig(14, FontWeight.Bold, Tokens.OnDark)) }
-    }
 }
 
 // ---------- empty state (brand-new shop) ----------

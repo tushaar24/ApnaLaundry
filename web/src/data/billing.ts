@@ -3,20 +3,16 @@
 import { tokenManager } from "./tokenManager";
 
 /**
- * Billing API client (web) for the A/B paywall + Razorpay UPI AutoPay
+ * Billing API client (web) for the ₹2-trial paywall + Razorpay UPI AutoPay
  * subscription flow. Talks to /api/laundry/billing/* (proxied to the backend).
- * The paywall UI calls getStatus() to decide what to show, then subscribe()
- * + openSubscriptionCheckout() to take the UPI AutoPay mandate.
+ * The Gate calls getBillingStatus() to decide whether to hard-gate, then the
+ * paywall's subscribe() + openSubscriptionCheckout() take the UPI AutoPay
+ * mandate (the ₹2 trial always applies to a new subscription).
  */
-
-// "trial_2" or "free_<N>" (N = free orders allowed, an A/B lever).
-export type PaywallVariant = string;
 
 export interface BillingStatus {
   configured: boolean;
-  variant: PaywallVariant;
-  orderCount: number;
-  freeOrderThreshold: number;
+  /** No active subscription and past any grace period → hard paywall. */
   paywallDue: boolean;
   hasActiveSubscription: boolean;
   plans: {
@@ -27,7 +23,6 @@ export interface BillingStatus {
   subscription: {
     id: string;
     plan: string;
-    variant: string | null;
     status: string;
     amount: number;
     trialAmount: number;
@@ -45,7 +40,6 @@ export interface SubscribeResult {
   /** Hosted authorization link (fallback; Checkout is the primary path). */
   shortUrl?: string | null;
   plan: string;
-  variant: PaywallVariant;
   amount: number;
   trialAmount: number;
   reused?: boolean;

@@ -3,10 +3,8 @@ package com.dailyworks.apnalaundry.ui.nav
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -61,19 +59,10 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
     }
 
     // Subscription is resolved right after login and BEFORE setup
-    // (login -> subscription -> setup -> app): the trial variant hard-gates any
-    // logged-in user, so a brand-new shop subscribes first, then sets up. Only
-    // the login screen is ungated. "+ Continue with new order" on the gate's
-    // Done screen navigates once the NavHost below has composed — but a shop
-    // that isn't set up yet (setupPending) lands on setup instead.
-    var pendingNewOrder by remember { mutableStateOf(false) }
-    BillingGate(enabled = li, setupPending = !sd, onContinueNewOrder = { pendingNewOrder = true }) {
-    LaunchedEffect(pendingNewOrder) {
-        if (pendingNewOrder) {
-            pendingNewOrder = false
-            navigator.openNewOrder(from = "paywall")
-        }
-    }
+    // (login -> subscription -> setup -> app): any logged-in user without an
+    // active subscription is hard-gated on the ₹2 trial, so a brand-new shop
+    // subscribes first, then sets up. Only the login screen is ungated.
+    BillingGate(enabled = li) {
     NavHost(navController = navController, startDestination = start) {
         composable(Routes.LOGIN) {
             LoginScreen(onLoggedIn = {
@@ -171,15 +160,11 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
             CustomerScreen(shopVm, navigator, custId = entry.arguments?.getString("custId") ?: "", from = entry.arguments?.getString("from") ?: "customers")
         }
 
-        // Soft paywall route (free-orders variant: new-order block / banner / settings).
-        composable(
-            Routes.PAYWALL,
-            arguments = listOf(navArgument("reason") { type = NavType.StringType; defaultValue = "limit" }),
-        ) { entry ->
+        // Settings → Subscription: manage/cancel the active plan.
+        composable(Routes.SUBSCRIPTION) {
             PaywallScreen(
-                reason = entry.arguments?.getString("reason") ?: "limit",
                 onClose = { navigator.back() },
-                onDone = { continuing -> if (continuing) navigator.openNewOrder(from = "paywall") else navigator.openHome() },
+                onDone = { navigator.openHome() },
             )
         }
     }

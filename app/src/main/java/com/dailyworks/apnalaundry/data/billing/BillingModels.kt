@@ -3,7 +3,8 @@ package com.dailyworks.apnalaundry.data.billing
 import kotlinx.serialization.Serializable
 
 // Wire types for /api/laundry/billing/*. Mirrors the website's billing client
-// so both platforms drive the same A/B paywall + UPI AutoPay flow.
+// so both platforms drive the same ₹2-trial paywall + UPI AutoPay flow.
+// Unknown keys are ignored (AuthApi.json), so extra server fields are harmless.
 
 @Serializable
 data class PlanAmount(val amount: Int = 0)
@@ -19,7 +20,6 @@ data class BillingPlans(
 data class BillingSubscriptionDto(
     val id: String = "",
     val plan: String = "",
-    val variant: String? = null,
     val status: String = "",
     val amount: Int = 0,
     val trialAmount: Int = 0,
@@ -32,9 +32,6 @@ data class BillingSubscriptionDto(
 data class BillingStatus(
     val success: Boolean = false,
     val configured: Boolean = false,
-    val variant: String = "trial_2", // trial_2 | free_<N>
-    val orderCount: Int = 0,
-    val freeOrderThreshold: Int = 0,
     val paywallDue: Boolean = false,
     val hasActiveSubscription: Boolean = false,
     val plans: BillingPlans = BillingPlans(),
@@ -54,7 +51,6 @@ data class SubscribeResponse(
     // Hosted authorization link (fallback; Checkout is the primary path).
     val shortUrl: String? = null,
     val plan: String = "",
-    val variant: String = "",
     val amount: Int = 0,
     val trialAmount: Int = 0,
     val reused: Boolean = false,
