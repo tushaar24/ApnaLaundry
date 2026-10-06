@@ -58,7 +58,8 @@ private const val WAS_MONTHLY = 799
 private const val WAS_ANNUAL = 8999
 
 // backend TRIAL_DAYS (laundry-razorpay.js)
-private const val TRIAL_DAYS = 7
+private const val TRIAL_DAYS = 1
+private val TRIAL_PERIOD = if (TRIAL_DAYS == 1) "1 day" else "$TRIAL_DAYS days"
 
 private data class TrialFeature(val icon: ImageVector, val title: String, val sub: String)
 
@@ -160,7 +161,7 @@ fun PaywallScreen(
                             Spacer(Modifier.width(16.dp))
                             Column(Modifier.weight(1f)) {
                                 Text("That's all you pay today", style = fig(18, FontWeight.Bold, Tokens.OnDark))
-                                Text("Every feature unlocked for $TRIAL_DAYS days", style = fig(14, FontWeight.Normal, Tokens.BlueBar))
+                                Text("Every feature unlocked for $TRIAL_PERIOD", style = fig(14, FontWeight.Normal, Tokens.BlueBar))
                             }
                         }
                     }
@@ -186,7 +187,7 @@ fun PaywallScreen(
                     }
 
                     Spacer(Modifier.height(20.dp))
-                    Text("YOUR PLAN AFTER $TRIAL_DAYS DAYS", style = fig(12, FontWeight.Bold, Tokens.Muted))
+                    Text("YOUR PLAN AFTER ${TRIAL_PERIOD.uppercase()}", style = fig(12, FontWeight.Bold, Tokens.Muted))
                     Spacer(Modifier.height(12.dp))
                     PlanCard(
                         selected = ui.plan == PaywallPlan.ANNUAL,
