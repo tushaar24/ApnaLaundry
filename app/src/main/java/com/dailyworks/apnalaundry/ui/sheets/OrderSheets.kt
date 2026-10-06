@@ -64,7 +64,7 @@ fun CollectPaymentSheet(state: LaundryState, orderId: Int, vm: ShopViewModel, on
     val c = Selectors.customer(state, o.custId)
     val total = LaundryMath.amtOf(o)
     val pre = o.pre
-    val oldBal = Selectors.balance(state, o.custId)
+    val oldBal = Selectors.balance(state, o.custId, o.id)
     val billDue = total - pre
     val due = billDue + oldBal
     var payAmt by remember { mutableStateOf(max(0, due).toString()) }

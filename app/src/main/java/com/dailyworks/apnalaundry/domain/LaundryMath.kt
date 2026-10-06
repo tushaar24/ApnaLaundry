@@ -30,25 +30,30 @@ object LaundryMath {
         }
     }
 
+    /** Not yet delivered or cancelled — its total is in the baaki but has no `BILL` entry yet. */
+    fun isOpen(o: Order): Boolean = o.status != OrderStatus.DELIVERED && o.status != OrderStatus.CANCELLED
+
     /**
      * Khata balance for a customer.
-     * balance = Σ bills + Σ old baaki + Σ bill changes − Σ payments.
-     * A `pre` payment counts only once its order is delivered.
+     * balance = Σ bills + Σ old baaki + Σ bill changes + Σ open orders − Σ payments.
+     * An open order counts at its current total from the moment it is created; on
+     * delivery it is replaced by its `BILL` entry. `exceptOrder` leaves one open
+     * order and its prepayments out (the "old" side of a delivery).
      */
-    fun balance(custId: String, ledger: List<LedgerEntry>, orders: List<Order>): Int {
+    fun balance(custId: String, ledger: List<LedgerEntry>, orders: List<Order>, exceptOrder: Int? = null): Int {
         var b = 0
         for (e in ledger) {
             if (e.custId != custId) continue
             when (e.kind) {
                 LedgerKind.BILL, LedgerKind.OLD, LedgerKind.ADJ -> b += e.amt
                 LedgerKind.GOT -> {
-                    if (e.tag == PayTag.PRE) {
-                        val o = orders.firstOrNull { it.id == e.ref }
-                        if (o == null || o.status != OrderStatus.DELIVERED) continue
-                    }
+                    if (e.tag == PayTag.PRE && exceptOrder != null && e.ref == exceptOrder) continue
                     b -= e.amt
                 }
             }
+        }
+        for (o in orders) {
+            if (o.custId == custId && o.id != exceptOrder && isOpen(o)) b += amtOf(o)
         }
         return b
     }

@@ -64,14 +64,25 @@ class AcceptanceTest {
         assertEquals(270, LaundryMath.balance("cx", ledger, emptyList()))
     }
 
-    // 6. Prepaid order: khata unaffected until delivery.
-    @Test fun prepaidOrderKhataUnaffectedUntilDelivery() {
-        val inProgress = order(id = 42, status = OrderStatus.RECEIVED, lines = listOf(line("io", "Shirt", 6, 10)))
-        val ledger = listOf(got("cy", 60, PayTag.PRE, cover = 60, ref = 42))
-        assertEquals(0, LaundryMath.balance("cy", ledger, listOf(inProgress)))
-        val delivered = inProgress.copy(status = OrderStatus.DELIVERED)
-        // once delivered, the ₹60 pre payment counts (nothing else in ledger) → −60 advance
-        assertEquals(-60, LaundryMath.balance("cy", ledger, listOf(delivered)))
+    // 6. A new order adds its total to the baaki at once; delivery swaps it for the bill entry.
+    @Test fun openOrderCountsInBaaki() {
+        val open = order(id = 42, status = OrderStatus.CREATED, fee = 30)
+        assertEquals(30, LaundryMath.balance("c", emptyList(), listOf(open)))
+        val counted = open.copy(status = OrderStatus.RECEIVED, lines = listOf(line("io", "Shirt", 6, 10)))
+        assertEquals(90, LaundryMath.balance("c", emptyList(), listOf(counted)))
+        assertEquals(0, LaundryMath.balance("c", emptyList(), listOf(counted.copy(status = OrderStatus.CANCELLED))))
+        val delivered = counted.copy(status = OrderStatus.DELIVERED)
+        assertEquals(90, LaundryMath.balance("c", listOf(bill("c", 90, ref = 42)), listOf(delivered)))
+    }
+
+    // 6b. Prepaid order: the prepayment clears its baaki at once; delivery leaves the old side alone.
+    @Test fun prepaidOpenOrder() {
+        val open = order(id = 42, status = OrderStatus.RECEIVED, lines = listOf(line("io", "Shirt", 6, 10)))
+        val ledger = listOf(got("c", 60, PayTag.PRE, cover = 60, ref = 42), got("c", 20, PayTag.RECEIVE, toAdv = 20))
+        assertEquals(-20, LaundryMath.balance("c", ledger, listOf(open)))
+        assertEquals(-20, LaundryMath.balance("c", ledger, listOf(open), exceptOrder = 42))
+        val delivered = open.copy(status = OrderStatus.DELIVERED)
+        assertEquals(-20, LaundryMath.balance("c", ledger + bill("c", 60, ref = 42), listOf(delivered)))
     }
 
     // 7. Edit after delivery: ₹240 → ₹300 adds a +₹60 adjustment.

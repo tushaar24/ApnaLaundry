@@ -202,7 +202,7 @@ class LaundryRepository(private val db: AppDatabase) {
         val o = st.orders.first { it.id == orderId }
         val total = LaundryMath.amtOf(o)
         val pre = o.pre
-        val oldBal = LaundryMath.balance(o.custId, st.ledger, st.orders)
+        val oldBal = LaundryMath.balance(o.custId, st.ledger, st.orders, o.id)
         val alloc = LaundryMath.deliverAllocation(total, pre, oldBal, amountReceived)
         val entries = mutableListOf<LedgerEntry>()
         entries += mkEntry(o.custId, LedgerKind.BILL, total, ref = o.id)
