@@ -93,11 +93,16 @@ function RateListPage({
   const [shopName, setShopName] = useState(state.shop.name);
   const [expressPct, setExpressPct] = useState(String(state.shop.expressPct));
 
+  /** Onboarding only: keep the prefilled rate list and shop as-is. */
+  function skip() {
+    Analytics.setupSkipped(services.length);
+    onDone();
+  }
+
   function commitAndDone() {
-    Repo.updateShop(
-      setup ? (shopName.trim() || "My Shop") : state.shop.name,
-      parseInt(expressPct, 10) || 50,
-    );
+    const pct = parseInt(expressPct, 10) || 50;
+    Repo.updateShop(setup ? (shopName.trim() || "My Shop") : state.shop.name, pct);
+    if (setup) Analytics.setupCompleted(services.length, pct);
     onDone();
   }
 
@@ -109,7 +114,14 @@ function RateListPage({
           <>
             <div className="flex items-center gap-2">
               <span className="text-blue"><IcCheck size={18} /></span>
-              <span className="text-[13px] font-semibold text-muted">Number verified · Last step</span>
+              <span className="flex-1 text-[13px] font-semibold text-muted">Number verified · Last step</span>
+              <button
+                type="button"
+                onClick={skip}
+                className="rounded-[10px] px-3 py-2 text-[15px] font-bold text-blue"
+              >
+                Skip
+              </button>
             </div>
             <div className="flex flex-col gap-2">
               <span className="text-[13px] font-bold text-inksecondary">SHOP NAME</span>

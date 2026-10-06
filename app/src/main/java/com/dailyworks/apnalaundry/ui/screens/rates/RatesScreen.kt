@@ -128,6 +128,12 @@ private fun RateListPage(
     var shopName by remember { mutableStateOf(state.shop.name) }
     var expressPct by remember { mutableStateOf(state.shop.expressPct.toString()) }
 
+    /** Onboarding only: keep the prefilled rate list and shop as-is. */
+    fun skip() {
+        Analytics.setupSkipped(services.size)
+        onDone()
+    }
+
     fun commitAndDone() {
         val pct = expressPct.toIntOrNull() ?: 50
         shopVm.updateShop(if (setup) shopName.trim().ifBlank { "My Shop" } else state.shop.name, pct)
@@ -145,7 +151,12 @@ private fun RateListPage(
             if (setup) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(Icons.Outlined.Check, null, tint = Tokens.Blue, modifier = Modifier.size(18.dp))
-                    Text("Number verified · Last step", style = fig(13, FontWeight.SemiBold, Tokens.Muted))
+                    Text("Number verified · Last step", style = fig(13, FontWeight.SemiBold, Tokens.Muted), modifier = Modifier.weight(1f))
+                    Text(
+                        "Skip",
+                        style = fig(15, FontWeight.Bold, Tokens.Blue),
+                        modifier = Modifier.rounded(10.dp).tap(onClick = { skip() }).padding(horizontal = 12.dp, vertical = 8.dp),
+                    )
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("SHOP NAME", style = fig(13, FontWeight.Bold, Tokens.InkSecondary))
