@@ -126,10 +126,9 @@ private fun RateListPage(
     val services = state.services
 
     var shopName by remember { mutableStateOf(state.shop.name) }
-    var expressPct by remember { mutableStateOf(state.shop.expressPct.toString()) }
 
     fun commitAndDone() {
-        val pct = expressPct.toIntOrNull() ?: 50
+        val pct = state.shop.expressPct
         shopVm.updateShop(if (setup) shopName.trim().ifBlank { "My Shop" } else state.shop.name, pct)
         if (setup) Analytics.setupCompleted(services.size, pct)
         onDone()
@@ -170,22 +169,6 @@ private fun RateListPage(
             }
 
             AddServiceCard(onAdd)
-
-            Text("OTHER SETTINGS · OPTIONAL", style = fig(13, FontWeight.Bold, Tokens.InkSecondary))
-            Row(
-                Modifier.fillMaxWidth().rounded(16.dp).background(Tokens.Card).border(1.dp, Tokens.CardBorder, RoundedCornerShape(16.dp)).padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text("Express charge", style = fig(16, FontWeight.Bold))
-                    Text("Extra you take for urgent orders", style = fig(13, color = Tokens.Muted))
-                }
-                FieldBox(
-                    expressPct, { expressPct = it.filter { c -> c.isDigit() }.take(3) },
-                    prefix = "+", suffix = "%", modifier = Modifier.width(104.dp), height = 48.dp,
-                    keyboardType = KeyboardType.Number, textStyle = fig(18, FontWeight.Bold),
-                )
-            }
         }
 
         Column(Modifier.fillMaxWidth().background(Tokens.Card)) {

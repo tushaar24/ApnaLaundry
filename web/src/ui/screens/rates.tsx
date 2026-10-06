@@ -91,12 +91,11 @@ function RateListPage({
   const state = useLaundryState();
   const services = state.services;
   const [shopName, setShopName] = useState(state.shop.name);
-  const [expressPct, setExpressPct] = useState(String(state.shop.expressPct));
 
   function commitAndDone() {
     Repo.updateShop(
       setup ? (shopName.trim() || "My Shop") : state.shop.name,
-      parseInt(expressPct, 10) || 50,
+      state.shop.expressPct,
     );
     onDone();
   }
@@ -144,24 +143,6 @@ function RateListPage({
             <span className="text-[13px] text-muted">Only if you do something extra, like Steam Press</span>
           </span>
         </button>
-
-        <span className="text-[13px] font-bold text-inksecondary">OTHER SETTINGS · OPTIONAL</span>
-        <div className="flex w-full items-center rounded-2xl border border-cardborder bg-card p-4">
-          <div className="min-w-0 flex-1">
-            <div className="text-[16px] font-bold">Express charge</div>
-            <div className="text-[13px] text-muted">Extra you take for urgent orders</div>
-          </div>
-          <FieldBox
-            value={expressPct}
-            onChange={(v) => setExpressPct(v.replace(/\D/g, "").slice(0, 3))}
-            prefix="+"
-            suffix="%"
-            h={48}
-            className="w-[104px]"
-            inputMode="numeric"
-            textClass="text-[18px] font-bold"
-          />
-        </div>
       </div>
 
       <div className="sticky bottom-0 w-full border-t border-divider bg-card">
