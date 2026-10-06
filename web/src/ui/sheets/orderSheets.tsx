@@ -36,7 +36,7 @@ export function CollectPaymentSheet({
   const c = Sel.customer(state, o?.custId ?? "");
   const total = o ? amtOf(o) : 0;
   const pre = o?.pre ?? 0;
-  const oldBal = o ? Sel.balance(state, o.custId) : 0;
+  const oldBal = o ? Sel.balance(state, o.custId, o.id) : 0;
   const billDue = total - pre;
   const due = billDue + oldBal;
   const [payAmt, setPayAmt] = useState(String(Math.max(0, due)));

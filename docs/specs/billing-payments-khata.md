@@ -38,11 +38,11 @@ a clear allocation rule, and a per-customer khata ledger that always reconciles.
 16. As an owner, I want each row to show initials, name, last order, order count, phone and balance, so that I recognise them.
 17. As an owner, I want a customer khata page with a running balance after every entry, so that I can explain any number.
 18. As an owner, I want the khata to list bills, payments, old baaki and bill-changes newest-first, so that the story reads top-down.
-19. As an owner, I want a prepayment to count only once its order is delivered, so that in-progress orders don't distort the balance.
+19. As an owner, I want a new order's total added to the customer's baaki as soon as the order is created (and a prepayment to clear it at once), so that the baaki always shows everything the customer owes.
 20. As an owner, I want "advance used" noted when a new bill eats into advance, so that the customer sees where it went.
 21. As an owner, I want Receive payment (prefilled to full baaki, chips, preview, cash/UPI), so that collecting old baaki is quick.
 22. As an owner, I want to add old baaki from my notebook, so that pre-app debts are captured.
-23. As an owner, I want "Orders in progress · not in khata yet" listed separately, so that I don't double-count.
+23. As an owner, I want orders in progress shown in the khata at their current total (and listed under "Orders in progress"), so that I can explain the baaki.
 24. As an owner, I want a manual "Send reminder on WhatsApp", so that nudging is my choice, not automatic.
 
 ## Implementation decisions
@@ -55,8 +55,10 @@ a clear allocation rule, and a per-customer khata ledger that always reconciles.
 - **Delivery allocation** (`deliverAllocation`): `billDue = max(0, total − prepaid)`;
   `cover = min(received, billDue)`; `toOld = min(rest, max(0, oldBaaki))`; `toAdv = rest − toOld`;
   `newBalance = oldBaaki + total − prepaid − received`. Writes a `bill` and (if paid) a `got` ledger entry.
-- **Khata balance** (`balance`): `Σ bill + Σ old + Σ adj − Σ payments`, but a `pre`-tagged payment
-  is excluded until its order is `delivered`.
+- **Khata balance** (`balance`): `Σ bill + Σ old + Σ adj + Σ open orders − Σ payments`. An open
+  order (not delivered/cancelled) counts at its live `amtOf`, so counting clothes, editing or
+  cancelling before delivery moves the baaki with no ledger entry; at delivery the `bill` entry takes
+  over. Prepayments count immediately. Delivery's "old baaki" is `balance(…, exceptOrder = this order)`.
 - **Payment label:** paid ≥ total → Paid; paid > 0 → Part paid; else In khata.
 - **Edit after delivery:** the total difference is written as an `adj` ledger entry (can be negative)
   and the bill is marked not-sent.

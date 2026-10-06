@@ -111,9 +111,9 @@ fun CustomerScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: Strin
                 Text(if (bal > 0) "$nm has to pay you" else if (bal < 0) "$nm has paid extra (advance)" else "All clear", style = fig(14, FontWeight.SemiBold, balFg))
                 Text(Money.rupees(bal), style = bric(30, FontWeight.Bold, balFg))
                 Text(
-                    if (bal > 0) "Baaki from delivered orders. Orders in progress are not counted yet."
+                    if (bal > 0) "Includes orders in progress at their current total."
                     else if (bal < 0) "Used automatically on the next bill."
-                    else "Nothing to collect from delivered orders.",
+                    else "Nothing to collect.",
                     style = fig(12, color = balFg),
                 )
                 if (bal > 0) {
@@ -130,7 +130,7 @@ fun CustomerScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: Strin
             Text("+ Add old baaki from notebook", style = fig(14, FontWeight.Bold, Tokens.Blue), modifier = Modifier.tap { active = ActiveSheet.AddOld(custId) })
 
             if (inProgress.isNotEmpty()) {
-                Text("ORDERS IN PROGRESS · NOT IN KHATA YET", style = fig(12, FontWeight.Bold, Tokens.Muted))
+                Text("ORDERS IN PROGRESS", style = fig(12, FontWeight.Bold, Tokens.Muted))
                 inProgress.forEach { o -> OrderMiniRow(state, o) { navigator.openOrder(o.id, "customer") } }
             }
 
@@ -160,7 +160,7 @@ private fun khataRows(state: com.dailyworks.apnalaundry.domain.LaundryState, cus
     val out = led.map { e ->
         val before = run
         val whenStr = AppDate.plain(e.date).substringAfter(", ") + (if (e.time.isNotBlank()) " · ${e.time}" else "")
-        var isAdd = false; var counts = true
+        var isAdd = false
         val title: String; val sub: String
         when (e.kind) {
             LedgerKind.BILL -> {
@@ -173,21 +173,31 @@ private fun khataRows(state: com.dailyworks.apnalaundry.domain.LaundryState, cus
             LedgerKind.OLD -> { isAdd = true; run += e.amt; title = "Old baaki"; sub = "$whenStr · from notebook" }
             LedgerKind.ADJ -> { isAdd = e.amt > 0; run += e.amt; title = "Bill changed · Order #${e.ref}"; sub = "$whenStr · order edited after delivery" }
             LedgerKind.GOT -> {
-                val o = if (e.tag == PayTag.PRE) Selectors.order(state, e.ref ?: -1) else null
-                counts = !(e.tag == PayTag.PRE && (o == null || o.status != OrderStatus.DELIVERED))
-                if (counts) run -= e.amt
+                run -= e.amt
                 title = if (e.tag == PayTag.PRE) "Paid for order #${e.ref} · ${methodName(e.method)}" else "Got ${Money.rupees(e.amt)} · ${methodName(e.method)}"
-                sub = whenStr + (if (!counts) " · counts when order is delivered" else if (e.toAdv > 0) " · ${Money.rupees(e.toAdv)} kept as advance" else "")
+                sub = whenStr + (if (e.toAdv > 0) " · ${Money.rupees(e.toAdv)} kept as advance" else "")
             }
         }
-        val fg = if (!counts) Tokens.MutedDot else if (isAdd) Tokens.OrangeText else Tokens.BlueText
+        val fg = if (isAdd) Tokens.OrangeText else Tokens.BlueText
         KhataRow(
             title = title, sub = sub, amount = (if (isAdd) "+ " else "− ") + Money.rupees(e.amt), amtColor = fg,
             after = balWord(run), isAdd = isAdd,
             icBg = if (isAdd) Tokens.OrangeLight else Tokens.BlueLight, icFg = if (isAdd) Tokens.OrangeText else Tokens.BlueText,
         )
-    }.reversed()
-    return out
+    }.toMutableList()
+    // Open orders are already in the baaki at their current total (newest last).
+    state.orders.filter { it.custId == custId && LaundryMath.isOpen(it) }.sortedBy { it.id }.forEach { o ->
+        val amt = LaundryMath.amtOf(o)
+        run += amt
+        val desc = if (o.lines.isNotEmpty()) "${Selectors.itemsLabel(o)} · ${Selectors.svcLabel(o)}" else "clothes not counted yet"
+        out += KhataRow(
+            title = "Order #${o.id} · in progress",
+            sub = AppDate.plain(o.createdOn.ifBlank { o.pickupDate }).substringAfter(", ") + " · $desc",
+            amount = "+ " + Money.rupees(amt), amtColor = Tokens.OrangeText,
+            after = balWord(run), isAdd = true, icBg = Tokens.OrangeLight, icFg = Tokens.OrangeText,
+        )
+    }
+    return out.reversed()
 }
 
 @Composable

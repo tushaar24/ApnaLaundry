@@ -33,12 +33,19 @@ export function serviceName(id: string, services: Service[], snapshot?: string |
   }
 }
 
+/** Not yet delivered or cancelled — its total is in the baaki but has no `BILL` entry yet. */
+export function isOpen(o: Order): boolean {
+  return o.status !== "DELIVERED" && o.status !== "CANCELLED";
+}
+
 /**
  * Khata balance for a customer.
- * balance = Σ bills + Σ old baaki + Σ bill changes − Σ payments.
- * A `pre` payment counts only once its order is delivered.
+ * balance = Σ bills + Σ old baaki + Σ bill changes + Σ open orders − Σ payments.
+ * An open order counts at its current total from the moment it is created; on
+ * delivery it is replaced by its `BILL` entry. `exceptOrder` leaves one open
+ * order and its prepayments out (the "old" side of a delivery).
  */
-export function balance(custId: string, ledger: LedgerEntry[], orders: Order[]): number {
+export function balance(custId: string, ledger: LedgerEntry[], orders: Order[], exceptOrder?: number): number {
   let b = 0;
   for (const e of ledger) {
     if (e.custId !== custId) continue;
@@ -46,12 +53,12 @@ export function balance(custId: string, ledger: LedgerEntry[], orders: Order[]):
       b += e.amt;
     } else {
       // GOT
-      if (e.tag === "PRE") {
-        const o = orders.find((or) => or.id === e.ref);
-        if (!o || o.status !== "DELIVERED") continue;
-      }
+      if (e.tag === "PRE" && e.ref === exceptOrder) continue;
       b -= e.amt;
     }
+  }
+  for (const o of orders) {
+    if (o.custId === custId && o.id !== exceptOrder && isOpen(o)) b += amtOf(o);
   }
   return b;
 }

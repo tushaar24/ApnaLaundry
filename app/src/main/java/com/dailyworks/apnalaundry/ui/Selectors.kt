@@ -14,8 +14,8 @@ object Selectors {
 
     fun order(state: LaundryState, id: Int): Order? = state.orders.firstOrNull { it.id == id }
 
-    fun balance(state: LaundryState, custId: String): Int =
-        LaundryMath.balance(custId, state.ledger, state.orders)
+    fun balance(state: LaundryState, custId: String, exceptOrder: Int? = null): Int =
+        LaundryMath.balance(custId, state.ledger, state.orders, exceptOrder)
 
     fun firstName(name: String): String =
         if (name.startsWith("+")) name else name.substringBefore(" ")
