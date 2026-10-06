@@ -247,6 +247,17 @@ function ChargeByCard({ draft, onChange }: { draft: Service; onChange: (s: Servi
 function PerPieceCard({
   draft, emptyHint, onChange,
 }: { draft: Service; emptyHint?: boolean; onChange: (s: Service) => void }) {
+  const [newName, setNewName] = useState("");
+  const name = newName.trim();
+  const exists = draft.items.some((it) => it.name.toLowerCase() === name.toLowerCase());
+  const canAdd = name !== "" && !exists;
+
+  function addItem() {
+    if (!canAdd) return;
+    onChange({ ...draft, items: [...draft.items, { name, price: null }] });
+    setNewName("");
+  }
+
   return (
     <SectionCard
       title="Price of each piece"
@@ -276,8 +287,41 @@ function PerPieceCard({
             inputMode="numeric"
             textClass="text-[17px] font-bold"
           />
+          <button
+            type="button"
+            onClick={() => onChange({ ...draft, items: draft.items.filter((_, j) => j !== idx) })}
+            aria-label={`Remove ${item.name}`}
+            className="ml-1.5 flex size-11 shrink-0 items-center justify-center rounded-[10px] text-deletered"
+          >
+            <IcDelete size={20} />
+          </button>
         </div>
       ))}
+      <div className="mt-2 flex w-full items-center gap-2">
+        <FieldBox
+          value={newName}
+          onChange={setNewName}
+          inputProps={{ enterKeyHint: "done", onKeyDown: (e) => { if (e.key === "Enter") addItem(); } }}
+          placeholder="Add a cloth, e.g. Blazer"
+          h={48}
+          className="min-w-0 flex-1"
+        />
+        <button
+          type="button"
+          onClick={addItem}
+          disabled={!canAdd}
+          className={cls(
+            "flex h-12 shrink-0 items-center gap-1 rounded-[10px] px-3.5 text-[15px] font-bold",
+            canAdd ? "bg-bluelight text-blue" : "bg-neutralfill text-muted",
+          )}
+        >
+          <IcAdd size={18} />
+          Add
+        </button>
+      </div>
+      {exists && name !== "" ? (
+        <span className="mt-1 text-[13px] text-muted">{name} is already in the list</span>
+      ) : null}
     </SectionCard>
   );
 }

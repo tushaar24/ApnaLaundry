@@ -412,7 +412,39 @@ private fun PerPieceCard(draft: Service, emptyHint: Boolean = false, onChange: (
                     prefix = "₹", placeholder = "—", modifier = Modifier.width(110.dp), height = 48.dp,
                     keyboardType = KeyboardType.Number, textStyle = fig(17, FontWeight.Bold),
                 )
+                Box(
+                    Modifier.padding(start = 6.dp).size(44.dp).rounded(10.dp)
+                        .tap { onChange(draft.copy(items = draft.items.filterIndexed { j, _ -> j != idx })) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Outlined.DeleteOutline, "Remove ${item.name}", tint = Tokens.DeleteRed, modifier = Modifier.size(20.dp))
+                }
             }
+        }
+        var newName by remember { mutableStateOf("") }
+        val name = newName.trim()
+        val exists = draft.items.any { it.name.equals(name, ignoreCase = true) }
+        val canAdd = name.isNotEmpty() && !exists
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FieldBox(newName, { newName = it }, placeholder = "Add a cloth, e.g. Blazer", height = 48.dp, modifier = Modifier.weight(1f))
+            Row(
+                Modifier.height(48.dp).rounded(10.dp).background(if (canAdd) Tokens.BlueLight else Tokens.NeutralFill)
+                    .tap(enabled = canAdd) {
+                        onChange(draft.copy(items = draft.items + ServiceItem(name, null)))
+                        newName = ""
+                    }
+                    .padding(horizontal = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                val c = if (canAdd) Tokens.Blue else Tokens.Muted
+                Icon(Icons.Filled.Add, null, tint = c, modifier = Modifier.size(18.dp))
+                Text("Add", style = fig(15, FontWeight.Bold, c))
+            }
+        }
+        if (exists && name.isNotEmpty()) {
+            Text("$name is already in the list", style = fig(13, color = Tokens.Muted), modifier = Modifier.padding(top = 4.dp))
         }
     }
 }
