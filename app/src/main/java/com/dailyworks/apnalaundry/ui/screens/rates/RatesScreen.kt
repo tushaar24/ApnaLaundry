@@ -165,11 +165,11 @@ private fun RateListPage(
 
             Text("YOUR SERVICES (${services.size})", style = fig(13, FontWeight.Bold, Tokens.InkSecondary))
 
+            AddServiceCard(onAdd)
+
             services.forEach { s ->
                 ServiceCard(s, onEdit = { onEdit(s.id) }, onDelete = { shopVm.deleteService(s.id) })
             }
-
-            AddServiceCard(onAdd)
 
             Text("OTHER SETTINGS · OPTIONAL", style = fig(13, FontWeight.Bold, Tokens.InkSecondary))
             Row(

@@ -127,10 +127,6 @@ function RateListPage({
 
         <span className="text-[13px] font-bold text-inksecondary">YOUR SERVICES ({services.length})</span>
 
-        {services.map((s) => (
-          <ServiceCard key={s.id} s={s} onEdit={() => onEdit(s.id)} onDelete={() => Repo.deleteService(s.id)} />
-        ))}
-
         <button
           type="button"
           onClick={onAdd}
@@ -144,6 +140,10 @@ function RateListPage({
             <span className="text-[13px] text-muted">Only if you do something extra, like Steam Press</span>
           </span>
         </button>
+
+        {services.map((s) => (
+          <ServiceCard key={s.id} s={s} onEdit={() => onEdit(s.id)} onDelete={() => Repo.deleteService(s.id)} />
+        ))}
 
         <span className="text-[13px] font-bold text-inksecondary">OTHER SETTINGS · OPTIONAL</span>
         <div className="flex w-full items-center rounded-2xl border border-cardborder bg-card p-4">
