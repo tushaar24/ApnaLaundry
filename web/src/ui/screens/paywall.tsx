@@ -29,7 +29,8 @@ const WAS_MONTHLY = 799;
 const WAS_ANNUAL = 8999;
 
 // backend TRIAL_DAYS (laundry-razorpay.js)
-const TRIAL_DAYS = 7;
+const TRIAL_DAYS = 1;
+const TRIAL_PERIOD = TRIAL_DAYS === 1 ? "1 day" : `${TRIAL_DAYS} days`;
 
 // The trial paywall lists features with a subtitle each (design 08b).
 const TRIAL_FEATURES: { Icon: typeof IcReceipt; title: string; sub: string }[] = [
@@ -163,7 +164,7 @@ export function PaywallScreen({ onDone }: {
               <span className="bric text-[40px] leading-none">{rupees(trialR)}</span>
               <div className="min-w-0 flex-1">
                 <div className="text-[16px] font-bold leading-snug">That&apos;s all you pay today</div>
-                <div className="text-[13px] text-bluebar">Every feature unlocked for {TRIAL_DAYS} days</div>
+                <div className="text-[13px] text-bluebar">Every feature unlocked for {TRIAL_PERIOD}</div>
               </div>
             </div>
           </div>
@@ -183,7 +184,7 @@ export function PaywallScreen({ onDone }: {
             ))}
           </div>
 
-          <SectionLabel text={`Your plan after ${TRIAL_DAYS} days`} className="mt-4" />
+          <SectionLabel text={`Your plan after ${TRIAL_PERIOD}`} className="mt-4" />
           <div className="mt-2 flex flex-col gap-2">
             <PlanCard
               selected={plan === "annual"}
