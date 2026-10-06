@@ -293,6 +293,14 @@ function PerPieceCard({
             inputMode="numeric"
             textClass="text-[17px] font-bold"
           />
+          <button
+            type="button"
+            onClick={() => onChange({ ...draft, items: draft.items.filter((_, j) => j !== idx) })}
+            aria-label={`Remove ${item.name}`}
+            className="ml-1.5 flex size-11 shrink-0 items-center justify-center rounded-[10px] text-deletered"
+          >
+            <IcDelete size={20} />
+          </button>
         </div>
       ))}
       <div className="mt-2 flex w-full items-center gap-2">

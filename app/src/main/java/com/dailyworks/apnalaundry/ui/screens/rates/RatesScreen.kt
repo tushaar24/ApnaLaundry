@@ -417,6 +417,13 @@ private fun PerPieceCard(draft: Service, emptyHint: Boolean = false, onChange: (
                     prefix = "₹", placeholder = "—", modifier = Modifier.width(110.dp), height = 48.dp,
                     keyboardType = KeyboardType.Number, textStyle = fig(17, FontWeight.Bold),
                 )
+                Box(
+                    Modifier.padding(start = 6.dp).size(44.dp).rounded(10.dp)
+                        .tap { onChange(draft.copy(items = draft.items.filterIndexed { j, _ -> j != idx })) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Outlined.DeleteOutline, "Remove ${item.name}", tint = Tokens.DeleteRed, modifier = Modifier.size(20.dp))
+                }
             }
         }
         var newName by remember { mutableStateOf("") }
