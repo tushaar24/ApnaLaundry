@@ -91,7 +91,6 @@ function RateListPage({
   const state = useLaundryState();
   const services = state.services;
   const [shopName, setShopName] = useState(state.shop.name);
-  const [expressPct, setExpressPct] = useState(String(state.shop.expressPct));
 
   /** Onboarding only: keep the prefilled rate list and shop as-is. */
   function skip() {
@@ -100,7 +99,7 @@ function RateListPage({
   }
 
   function commitAndDone() {
-    const pct = parseInt(expressPct, 10) || 50;
+    const pct = state.shop.expressPct;
     Repo.updateShop(setup ? (shopName.trim() || "My Shop") : state.shop.name, pct);
     if (setup) Analytics.setupCompleted(services.length, pct);
     onDone();
@@ -157,23 +156,6 @@ function RateListPage({
           <ServiceCard key={s.id} s={s} onEdit={() => onEdit(s.id)} onDelete={() => Repo.deleteService(s.id)} />
         ))}
 
-        <span className="text-[13px] font-bold text-inksecondary">OTHER SETTINGS · OPTIONAL</span>
-        <div className="flex w-full items-center rounded-2xl border border-cardborder bg-card p-4">
-          <div className="min-w-0 flex-1">
-            <div className="text-[16px] font-bold">Express charge</div>
-            <div className="text-[13px] text-muted">Extra you take for urgent orders</div>
-          </div>
-          <FieldBox
-            value={expressPct}
-            onChange={(v) => setExpressPct(v.replace(/\D/g, "").slice(0, 3))}
-            prefix="+"
-            suffix="%"
-            h={48}
-            className="w-[104px]"
-            inputMode="numeric"
-            textClass="text-[18px] font-bold"
-          />
-        </div>
       </div>
 
       <div className="sticky bottom-0 w-full border-t border-divider bg-card">
