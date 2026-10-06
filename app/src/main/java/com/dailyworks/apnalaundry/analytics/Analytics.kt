@@ -92,6 +92,8 @@ object Analytics {
     fun setupCompleted(servicesCount: Int, expressPct: Int) =
         track("Setup Completed", mapOf("services_count" to servicesCount, "express_pct" to expressPct))
 
+    fun setupSkipped(servicesCount: Int) = track("Setup Skipped", mapOf("services_count" to servicesCount))
+
     fun loggedOut() = track("Logged Out")
 
     // ---- order creation & lifecycle ----

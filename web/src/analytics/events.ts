@@ -48,6 +48,9 @@ export const Analytics = {
   setupCompleted(servicesCount: number, expressPct: number) {
     rawTrack("Setup Completed", { services_count: servicesCount, express_pct: expressPct });
   },
+  setupSkipped(servicesCount: number) {
+    rawTrack("Setup Skipped", { services_count: servicesCount });
+  },
   loggedOut() {
     rawTrack("Logged Out");
   },
