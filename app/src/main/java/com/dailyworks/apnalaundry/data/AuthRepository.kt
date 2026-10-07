@@ -1,6 +1,7 @@
 package com.dailyworks.apnalaundry.data
 
 import com.dailyworks.apnalaundry.analytics.Analytics
+import com.dailyworks.apnalaundry.analytics.MetaEvents
 import com.dailyworks.apnalaundry.data.remote.AuthApi
 import com.dailyworks.apnalaundry.data.remote.parseIsoMs
 import com.dailyworks.apnalaundry.data.sync.SyncManager
@@ -98,6 +99,8 @@ class AuthRepository(
         // funnel event. is_new_user / needs_setup = this account had no shop yet.
         Analytics.identify(user.id, user.phone, repo.currentShopName())
         Analytics.loggedIn(isNewUser = !existingAccount, needsSetup = !existingAccount)
+        MetaEvents.identify(user.id, user.phone)
+        MetaEvents.loginSuccess(isNewUser = !existingAccount)
     }
 
     /**
@@ -117,6 +120,7 @@ class AuthRepository(
             runCatching { api.logout(token) } // best-effort server-side revoke
         }
         Analytics.loggedOut()
+        MetaEvents.clearIdentity()
         prefs.logoutAndReset()
         repo.clearAll()
     }

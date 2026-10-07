@@ -92,6 +92,9 @@ dependencies {
     // Razorpay Standard Checkout — UPI AutoPay subscription authorization.
     implementation(libs.razorpay.checkout)
 
+    // Meta (Facebook) SDK — app events only (no Login/Share), for Meta ads.
+    implementation(libs.facebook.core)
+
     // Room
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)

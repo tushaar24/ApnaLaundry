@@ -40,6 +40,12 @@
         <meta-data android:name="CLEVERTAP_ACCOUNT_ID" android:value="@string/clevertap_account_id" />
         <meta-data android:name="CLEVERTAP_TOKEN" android:value="@string/clevertap_token" />
 
+        <!-- Meta (Facebook) SDK (values from strings.xml). Auto-init is off so
+             nothing is sent while they're blank — MetaEvents.init() turns it on. -->
+        <meta-data android:name="com.facebook.sdk.ApplicationId" android:value="@string/facebook_app_id" />
+        <meta-data android:name="com.facebook.sdk.ClientToken" android:value="@string/facebook_client_token" />
+        <meta-data android:name="com.facebook.sdk.AutoInitEnabled" android:value="false" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -7,4 +7,10 @@
     <string name="clevertap_account_id">RZ7-7RW-Z97Z</string>
     <string name="clevertap_token">02a-a12</string>
     <string name="clevertap_region"></string>
+
+    <!-- Meta (Facebook) SDK — App ID (App settings → Basic) and Client Token
+         (App settings → Advanced) from developers.facebook.com. Leave either
+         blank to disable Meta app events. -->
+    <string name="facebook_app_id" translatable="false"></string>
+    <string name="facebook_client_token" translatable="false"></string>
 </resources>

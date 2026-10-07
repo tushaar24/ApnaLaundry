@@ -4,6 +4,7 @@ import android.app.Activity
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dailyworks.apnalaundry.analytics.Analytics
+import com.dailyworks.apnalaundry.analytics.MetaEvents
 import com.dailyworks.apnalaundry.data.Prefs
 import com.dailyworks.apnalaundry.data.billing.BillingRepository
 import com.dailyworks.apnalaundry.data.billing.BillingStatus
@@ -62,6 +63,10 @@ class PaywallViewModel(
     // actually launched Checkout may react to a result.
     private var awaitingCheckout = false
 
+    // The subscription currently open in Checkout, for the Meta events.
+    private var checkoutSubscriptionId: String? = null
+    private var checkoutChargePaise = 0
+
     init {
         refresh()
         viewModelScope.launch {
@@ -69,8 +74,19 @@ class PaywallViewModel(
                 if (!awaitingCheckout) return@collect
                 awaitingCheckout = false
                 when (result) {
-                    is CheckoutResult.Success -> onCheckoutApproved()
-                    is CheckoutResult.Failure -> onCheckoutFailed(result.code, result.description)
+                    is CheckoutResult.Success -> {
+                        MetaEvents.subscriptionSuccessful(
+                            checkoutSubscriptionId, purchasedOrSelected(), checkoutChargePaise,
+                        )
+                        onCheckoutApproved()
+                    }
+                    is CheckoutResult.Failure -> {
+                        MetaEvents.subscriptionFailed(
+                            checkoutSubscriptionId, purchasedOrSelected(),
+                            result.description?.takeIf { it.isNotBlank() } ?: "code_${result.code}",
+                        )
+                        onCheckoutFailed(result.code, result.description)
+                    }
                 }
             }
         }
@@ -110,6 +126,10 @@ class PaywallViewModel(
                 _ui.value = _ui.value.copy(purchasedPlan = res.plan)
                 Analytics.checkoutStarted(res.plan, res.amount, res.trialAmount)
                 val contact = runCatching { prefs.userPhone.first() }.getOrNull()
+                // What this approval charges now: the ₹2 trial, else the plan amount.
+                checkoutSubscriptionId = res.subscriptionId
+                checkoutChargePaise = if (res.trialAmount > 0) res.trialAmount else res.amount
+                MetaEvents.subscriptionInitiated(res.subscriptionId, res.plan, checkoutChargePaise)
                 awaitingCheckout = true
                 RazorpayCheckout.launch(activity, res, contact = contact, email = null)
             } catch (e: Exception) {
