@@ -80,7 +80,7 @@ export function PaywallScreen({ onDone }: {
   // Stop polling on unmount.
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
 
-  const trialStart = useMemo(() => fmtTill(TRIAL_DAYS), []);
+  const trialEnd = useMemo(() => fmtDayMonth(TRIAL_DAYS), []);
 
   async function pay() {
     if (busy) return;
@@ -156,15 +156,16 @@ export function PaywallScreen({ onDone }: {
         <WaitingView onBack={() => { setStage("plans"); setBusy(false); }} />
       ) : (
         <div className="relative flex flex-1 flex-col justify-center px-5 py-6">
-          {/* ₹2 trial hero */}
-          <div className="rounded-2xl bg-blue px-4 py-3.5 text-ondark">
-            <div className="text-[11px] font-bold tracking-[0.08em] text-bluebar">{TRIAL_DAYS}-DAY FULL TRIAL</div>
-            <div className="mt-1 flex items-center gap-4">
-              <span className="bric text-[40px] leading-none">{rupees(trialR)}</span>
-              <div className="min-w-0 flex-1">
-                <div className="text-[16px] font-bold leading-snug">That&apos;s all you pay today</div>
-                <div className="text-[13px] text-bluebar">Every feature unlocked for {TRIAL_DAYS} days</div>
-              </div>
+          {/* "7 days FREE" trial hero */}
+          <div className="rounded-2xl bg-blue px-4 py-4 text-ondark">
+            <div className="flex items-center gap-2.5">
+              <span className="bric text-[40px] leading-none">{TRIAL_DAYS} days</span>
+              <span className="bric rounded-lg bg-ondark px-2 py-0.5 text-[32px] leading-none text-blue">FREE</span>
+            </div>
+            <div className="mt-2 text-[15px] font-semibold">Use the full app. Nothing to pay till {trialEnd}.</div>
+            <div className="mt-3 flex items-center gap-3 rounded-xl bg-ondark/15 px-3 py-2.5">
+              <span className="bric text-[24px] leading-none">{rupees(trialR)}</span>
+              <span className="text-[13px] leading-snug text-bluelight">is all you pay today — it sets up UPI AutoPay for later</span>
             </div>
           </div>
 
@@ -183,7 +184,7 @@ export function PaywallScreen({ onDone }: {
             ))}
           </div>
 
-          <SectionLabel text={`Your plan after ${TRIAL_DAYS} days`} className="mt-4" />
+          <SectionLabel text={`After your ${TRIAL_DAYS} free days`} className="mt-4" />
           <div className="mt-2 flex flex-col gap-2">
             <PlanCard
               selected={plan === "annual"}
@@ -209,10 +210,10 @@ export function PaywallScreen({ onDone }: {
           {error ? <p className="mt-2 text-[13px] font-semibold text-orangetext">{error}</p> : null}
 
           <PrimaryButton className="mt-5" onClick={pay} disabled={busy}>
-            {busy ? "Starting…" : `Start trial for ${rupees(trialR)}`}
+            {busy ? "Starting…" : `Start my ${TRIAL_DAYS} free days · Pay ${rupees(trialR)}`}
           </PrimaryButton>
           <p className="mt-2 text-center text-[12px] text-muted">
-            {`Then ${rupees(plan === "annual" ? annualR : monthlyR)}/${plan === "annual" ? "year" : "month"} from ${trialStart} by UPI AutoPay. Cancel anytime before.`}
+            {`After ${trialEnd}: ${rupees(plan === "annual" ? annualR : monthlyR)}/${plan === "annual" ? "year" : "month"} by UPI AutoPay — only if you keep it. Cancel anytime before.`}
           </p>
         </div>
       )}
@@ -378,10 +379,10 @@ function SummaryRow({ k, v, last }: { k: string; v: string; last?: boolean }) {
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-// "25 Sep 2027" from today + offsetDays.
-function fmtTill(offsetDays: number): string {
-  const [y, m, d] = AppDate.add(AppDate.today(), offsetDays).split("-");
-  return `${parseInt(d, 10)} ${MONTHS[parseInt(m, 10) - 1]} ${y}`;
+// "2 Oct" from today + offsetDays.
+function fmtDayMonth(offsetDays: number): string {
+  const [, m, d] = AppDate.add(AppDate.today(), offsetDays).split("-");
+  return `${parseInt(d, 10)} ${MONTHS[parseInt(m, 10) - 1]}`;
 }
 
 // "25 Sep 2027" from an ISO timestamp.

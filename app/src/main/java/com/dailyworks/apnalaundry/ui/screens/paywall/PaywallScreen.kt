@@ -44,6 +44,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -53,6 +54,9 @@ import com.dailyworks.apnalaundry.ui.components.fig
 import com.dailyworks.apnalaundry.ui.components.tap
 import com.dailyworks.apnalaundry.ui.theme.Tokens
 import org.koin.androidx.compose.koinViewModel
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 private const val WAS_MONTHLY = 799
 private const val WAS_ANNUAL = 8999
@@ -87,6 +91,10 @@ private fun rupees(paise: Int): String {
     return "₹$sb"
 }
 
+/** "2 Oct" — today + [TRIAL_DAYS]. */
+private fun trialEndLabel(): String =
+    LocalDate.now().plusDays(TRIAL_DAYS.toLong()).format(DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH))
+
 /**
  * The ₹2-trial paywall. [hardGate] is the post-login BillingGate (no close, Back
  * consumed); otherwise it's Settings → Subscription, which shows the active plan
@@ -110,6 +118,8 @@ fun PaywallScreen(
     val monthlyR = ui.monthlyAmount / 100
     val perMonth = ui.annualAmount / 12 / 100
     val saveVsMonthly = (ui.monthlyAmount * 12 - ui.annualAmount) / 100
+    // "2 Oct" — the day the first plan charge lands.
+    val trialEnd = remember { trialEndLabel() }
 
     Box(
         Modifier
@@ -148,20 +158,35 @@ fun PaywallScreen(
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = 20.dp),
                 ) {
-                    // ₹2 trial hero
+                    // "7 days FREE" trial hero
                     Spacer(Modifier.height(4.dp))
                     Column(
                         Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Tokens.Blue).padding(20.dp),
                     ) {
-                        Text("$TRIAL_DAYS-DAY FULL TRIAL", style = fig(12, FontWeight.Bold, Tokens.BlueBar))
-                        Spacer(Modifier.height(6.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(rupees(ui.trialAmount), style = bric(52, FontWeight.Bold, Tokens.OnDark))
-                            Spacer(Modifier.width(16.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text("That's all you pay today", style = fig(18, FontWeight.Bold, Tokens.OnDark))
-                                Text("Every feature unlocked for $TRIAL_DAYS days", style = fig(14, FontWeight.Normal, Tokens.BlueBar))
-                            }
+                            Text("$TRIAL_DAYS days", style = bric(44, FontWeight.Bold, Tokens.OnDark))
+                            Spacer(Modifier.width(10.dp))
+                            Box(
+                                Modifier.clip(RoundedCornerShape(10.dp)).background(Tokens.OnDark)
+                                    .padding(horizontal = 10.dp, vertical = 2.dp),
+                            ) { Text("FREE", style = bric(34, FontWeight.Bold, Tokens.Blue)) }
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Text("Use the full app. Nothing to pay till $trialEnd.", style = fig(16, FontWeight.SemiBold, Tokens.OnDark))
+                        Spacer(Modifier.height(14.dp))
+                        Row(
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                                .background(Tokens.OnDark.copy(alpha = 0.15f))
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(rupees(ui.trialAmount), style = bric(26, FontWeight.Bold, Tokens.OnDark))
+                            Spacer(Modifier.width(12.dp))
+                            Text(
+                                "is all you pay today — it sets up UPI AutoPay for later",
+                                style = fig(13, FontWeight.Normal, Tokens.BlueLight),
+                                modifier = Modifier.weight(1f),
+                            )
                         }
                     }
 
@@ -186,7 +211,7 @@ fun PaywallScreen(
                     }
 
                     Spacer(Modifier.height(20.dp))
-                    Text("YOUR PLAN AFTER $TRIAL_DAYS DAYS", style = fig(12, FontWeight.Bold, Tokens.Muted))
+                    Text("AFTER YOUR $TRIAL_DAYS FREE DAYS", style = fig(12, FontWeight.Bold, Tokens.Muted))
                     Spacer(Modifier.height(12.dp))
                     PlanCard(
                         selected = ui.plan == PaywallPlan.ANNUAL,
@@ -223,7 +248,7 @@ fun PaywallScreen(
                         .padding(20.dp),
                 ) {
                     PrimaryButton(
-                        text = if (ui.busy) "Starting…" else "Start trial for ${rupees(ui.trialAmount)}",
+                        text = if (ui.busy) "Starting…" else "Start my $TRIAL_DAYS free days · Pay ${rupees(ui.trialAmount)}",
                         enabled = !ui.busy,
                         onClick = { vm.pay(activity) },
                     )
@@ -232,8 +257,9 @@ fun PaywallScreen(
                     val amt = if (ui.plan == PaywallPlan.ANNUAL) ui.annualAmount else ui.monthlyAmount
                     val per = if (ui.plan == PaywallPlan.ANNUAL) "year" else "month"
                     Text(
-                        "Then ${rupees(amt)}/$per after the $TRIAL_DAYS-day trial · cancel anytime",
+                        "After $trialEnd: ${rupees(amt)}/$per by UPI AutoPay — only if you keep it. Cancel anytime before.",
                         style = fig(12, FontWeight.Normal, Tokens.Muted),
+                        textAlign = TextAlign.Center,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
