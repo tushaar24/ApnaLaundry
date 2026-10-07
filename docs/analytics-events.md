@@ -4,8 +4,15 @@ One shared taxonomy for **both** clients (the Next.js website in `web/` and the
 Android app in `app/`). Same event names and property keys on both, so funnels
 in CleverTap are directly comparable across platforms.
 
-Platform is distinguished by a profile/event property `platform` = `web` |
-`android`, stamped automatically on every event — never add it by hand.
+Platform is distinguished by two event properties stamped automatically on
+every client event (incl. `Charged`) — never add them by hand, and never use
+either key as an event-specific property:
+
+- `platform` = `web` | `android`
+- `source` = `website` | `android`
+
+Where in the app an action started is `entry_point` (see `New Order Started`,
+`Customer Added`).
 
 ## Identity
 
@@ -55,7 +62,7 @@ Custom property keys are `snake_case`. `Charged` uses CleverTap's reserved
 
 | Event | Properties | Fired when |
 | ----- | ---------- | ---------- |
-| `New Order Started` | `source` (`home`\|`empty_home`\|`customer`), `is_edit` | New/Edit order screen opened (`empty_home` = the CTA on an empty Home) |
+| `New Order Started` | `entry_point` (`home`\|`empty_home`\|`customer`), `is_edit` | New/Edit order screen opened (`empty_home` = the CTA on an empty Home) |
 | `Order Saved` | `order_id`, `is_edit`, `has_bill`, `pickup`, `delivery`, `express`, `discount`, `fee`, `pieces`, `kg`, `services_count`, `total`, `quick_bill` | order created or edited |
 | `Order Picked Up` | `order_id` | mark picked up (already-counted order) |
 | `Clothes Counted` | `order_id`, `next_status`, `total` | Count-clothes sheet saved |
@@ -76,7 +83,7 @@ Custom property keys are `snake_case`. `Charged` uses CleverTap's reserved
 
 | Event | Properties | Fired when |
 | ----- | ---------- | ---------- |
-| `Customer Added` | `source` (`order`\|`list`), `with_old_baaki` | new customer saved |
+| `Customer Added` | `entry_point` (`order`\|`list`), `with_old_baaki` | new customer saved |
 | `Reminder Sent` | `customer_id`, `amount` | WhatsApp baaki reminder |
 | `Bill Sent` | `order_id`, `channel` (`whatsapp`) | send bill |
 | `Bill Viewed` | `order_id` | customer-facing bill preview opened |

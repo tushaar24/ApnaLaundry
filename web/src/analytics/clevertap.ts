@@ -72,8 +72,9 @@ function queue(): CleverTapQueue | null {
 export function rawTrack(name: string, props?: Record<string, unknown>): void {
   const q = queue();
   if (!q) return;
-  // Stamp platform so web/android funnels stay separable without manual props.
-  q.event.push(name, { platform: "web", ...(props ?? {}) });
+  // Stamp platform + source (last, so no event prop can override them) so
+  // web/android funnels stay separable without manual props.
+  q.event.push(name, { ...(props ?? {}), platform: "web", source: "website" });
 }
 
 /** Identify the shop owner so events attribute across sessions. */
@@ -98,9 +99,10 @@ export function rawCharged(amount: number, props: Record<string, unknown>, items
   const q = queue();
   if (!q) return;
   q.event.push("Charged", {
-    platform: "web",
     Amount: amount,
     ...props,
     ...(items ? { Items: items } : {}),
+    platform: "web",
+    source: "website",
   });
 }
