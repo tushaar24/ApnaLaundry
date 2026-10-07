@@ -56,8 +56,8 @@ export const Analytics = {
   },
 
   // ---- order creation & lifecycle ----
-  newOrderStarted(source: "home" | "empty_home" | "customer", isEdit: boolean) {
-    rawTrack("New Order Started", { source, is_edit: isEdit });
+  newOrderStarted(entryPoint: "home" | "empty_home" | "customer", isEdit: boolean) {
+    rawTrack("New Order Started", { entry_point: entryPoint, is_edit: isEdit });
   },
   orderSaved(p: {
     orderId: number; isEdit: boolean; hasBill: boolean; pickup: string; delivery: string;
@@ -113,8 +113,8 @@ export const Analytics = {
   },
 
   // ---- customers, bills, rates, engagement ----
-  customerAdded(source: "order" | "list", withOldBaaki: boolean) {
-    rawTrack("Customer Added", { source, with_old_baaki: withOldBaaki });
+  customerAdded(entryPoint: "order" | "list", withOldBaaki: boolean) {
+    rawTrack("Customer Added", { entry_point: entryPoint, with_old_baaki: withOldBaaki });
   },
   reminderSent(customerId: string, amount: number) {
     rawTrack("Reminder Sent", { customer_id: customerId, amount });
