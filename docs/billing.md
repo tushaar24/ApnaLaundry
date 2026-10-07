@@ -31,7 +31,7 @@ Config / `LAUNDRY_PAYWALL_VARIANTS` switch were removed on 2026-10-06.)
 shows until that check resolves** (no flash of the app or wrong screen).
 
 - no active sub (`paywallDue`) → non-cancellable paywall (BillingGate). No close/back.
-  Razorpay Checkout closing unpaid (failed, cancelled, Back) opens a "Your 7 free days are
+  Razorpay Checkout closing unpaid (failed, cancelled, Back) opens a "Your N free day(s) are
   waiting" sheet whose CTA reopens Checkout; subscribe-API errors stay inline.
 - otherwise (active sub, or billing unconfigured/unreachable) → the app renders.
   Billing being unreachable **fails open** (never locks the owner out of their shop).

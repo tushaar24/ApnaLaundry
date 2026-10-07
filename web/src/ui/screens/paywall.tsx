@@ -236,7 +236,7 @@ export function PaywallScreen({ onDone }: {
       {card}
       {retrySheet && stage === "plans" ? (
         <AppSheet
-          title={`Your ${TRIAL_DAYS} free days are waiting`}
+          title={TRIAL_DAYS === 1 ? "Your 1 free day is waiting" : `Your ${TRIAL_DAYS} free days are waiting`}
           noSidebar
           onDismiss={() => setRetrySheet(false)}
           leading={(

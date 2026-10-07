@@ -257,7 +257,7 @@ fun PaywallScreen(
 @Composable
 private fun RetrySheet(trialAmount: Int, onRetry: () -> Unit, onDismiss: () -> Unit) {
     AppBottomSheet(
-        title = "Your $TRIAL_DAYS free days are waiting",
+        title = if (TRIAL_DAYS == 1) "Your 1 free day is waiting" else "Your $TRIAL_DAYS free days are waiting",
         onDismiss = onDismiss,
         leading = {
             Box(
