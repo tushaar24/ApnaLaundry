@@ -56,11 +56,9 @@ export function initAnalytics(): void {
   const script = document.createElement("script");
   script.type = "text/javascript";
   script.async = true;
-  // Region-specific CDN (eu1 → …bby2u); global/other → the default CDN.
-  const host = REGION.startsWith("eu")
-    ? "https://d2r1yp2w7bby2u.cloudfront.net"
-    : "https://d2r1yp2w7bby2p.cloudfront.net";
-  script.src = `${host}/js/clevertap.min.js`;
+  // One SDK file for every region — the region only picks the ingestion host,
+  // which the SDK derives from `clevertap.region` above.
+  script.src = "https://static.clevertap.com/js/clevertap.min.js";
   document.head.appendChild(script);
 }
 
