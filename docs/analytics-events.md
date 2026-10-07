@@ -47,7 +47,7 @@ Custom property keys are `snake_case`. `Charged` uses CleverTap's reserved
 | `OTP Request Failed` | `reason` | request-otp returned an error |
 | `OTP Submitted` | — | user taps Verify |
 | `OTP Verification Failed` | `reason`, `attempts_remaining?` | verify-otp failed |
-| `Logged In` | `is_new_user`, `needs_setup` | verify-otp succeeded (also fires `onUserLogin`) |
+| `Logged In` | `is_new_user` (server just created the account), `needs_setup` (no shop yet) | verify-otp succeeded (also fires `onUserLogin`) |
 | `Setup Completed` | `services_count`, `express_pct` | first-run rate card saved ("Start taking orders") |
 | `Logged Out` | — | user logs out from Settings |
 
@@ -55,7 +55,7 @@ Custom property keys are `snake_case`. `Charged` uses CleverTap's reserved
 
 | Event | Properties | Fired when |
 | ----- | ---------- | ---------- |
-| `New Order Started` | `source` (`home`\|`empty_home`\|`customer`), `is_edit` | New/Edit order screen opened |
+| `New Order Started` | `source` (`home`\|`empty_home`\|`customer`), `is_edit` | New/Edit order screen opened (`empty_home` = the CTA on an empty Home) |
 | `Order Saved` | `order_id`, `is_edit`, `has_bill`, `pickup`, `delivery`, `express`, `discount`, `fee`, `pieces`, `kg`, `services_count`, `total`, `quick_bill` | order created or edited |
 | `Order Picked Up` | `order_id` | mark picked up (already-counted order) |
 | `Clothes Counted` | `order_id`, `next_status`, `total` | Count-clothes sheet saved |
@@ -89,30 +89,33 @@ Custom property keys are `snake_case`. `Charged` uses CleverTap's reserved
 | `Earnings Period Changed` | `period` (`today`\|`week`\|`month`) | period toggle on Earnings |
 | `Order Search Opened` | — | search opened on Home |
 
-### Billing / paywall (A/B: `trial_2` \| `free_50`)
+### Billing / paywall (₹2 trial → monthly \| annual)
 
-The variant is assigned by the backend (Firebase-weighted, stable per user) and
-returned by `GET /billing/status`. The **client** fires the UI funnel below and
-sets the `paywall_variant` profile property. The **backend** fires the
-money-confirmed events from the Razorpay webhook (server-side CleverTap), so
-revenue events can't be spoofed or lost if the app closes.
+Single hard gate — the A/B (`trial_2` / `free_50`) was removed 2026-10-06, so
+no event carries a `variant`. The **client** fires the UI funnel below. The
+**backend** (`courses/backend/routes/laundry-billing.js`) fires the
+money-confirmed events server-side (stamped `platform: "backend"`), so revenue
+events can't be spoofed or lost if the app closes. The backend no-ops until
+`LAUNDRY_CLEVERTAP_ACCOUNT_ID` + `LAUNDRY_CLEVERTAP_PASSCODE` (+
+`LAUNDRY_CLEVERTAP_REGION`) are set on the server.
 
 | Event | Source | Properties | Fired when |
 | ----- | ------ | ---------- | ---------- |
-| `Paywall Shown` | client | `variant`, `order_count` | paywall/trial screen shown |
-| `Plan Selected` | client | `variant`, `plan` | user taps a plan |
-| `Checkout Started` | client | `variant`, `plan`, `amount`, `trial_amount` | UPI intent opened |
-| `Checkout Succeeded` | client | `variant`, `plan` | returned from UPI app as success (optimistic) |
-| `Checkout Failed` | client | `variant`, `plan`, `reason` | cancelled / failed |
+| `Paywall Shown` | client | — | paywall/trial screen shown |
+| `Plan Selected` | client | `plan` | user taps a plan / Pay |
+| `Checkout Started` | client | `plan`, `amount`, `trial_amount` | subscription created, Razorpay checkout opened |
+| `Checkout Succeeded` | client | `plan` | status poll sees the subscription active (optimistic) |
+| `Checkout Failed` | client | `plan`, `reason` | checkout dismissed / errored |
 | `Subscription Cancel Requested` | client | `plan` | user taps cancel |
-| `Subscription Activated` | server | `plan`, `variant` | `subscription.authenticated`/`activated` webhook |
-| `Subscription Charged` | server | `plan`, `amount`, `variant` | `subscription.charged` webhook (recurring success) |
-| `Subscription Payment Failed` | server | `plan`, `variant` | `subscription.pending` (will retry) |
-| `Subscription Halted` | server | `plan`, `variant` | `subscription.halted` (retries exhausted) |
-| `Subscription Cancelled` | server | `plan`, `variant` | `subscription.cancelled` |
+| `Subscription Activated` | server | `plan`, `trial` | `subscription.authenticated` webhook |
+| `Subscription Charged` | server | `plan`, `amount` | `subscription.charged` webhook (recurring success) |
+| `Subscription Payment Failed` | server | `plan` | `subscription.pending` webhook (will retry) |
+| `Subscription Halted` | server | `plan` | `subscription.halted` webhook (retries exhausted) |
+| `Subscription Cancelled` | server | `plan` | user cancel via `POST /billing/cancel` |
 
-Profile property `subscription_status` (+ `plan`, `paywall_variant`) is kept
-current from the webhook, for retention/win-back journeys.
+Profile property `subscription_status` (`authenticated` → `active` →
+`halted` \| `cancelled`) + `plan` is kept current from the webhook, for
+retention/win-back journeys.
 
 ## Where it lives
 

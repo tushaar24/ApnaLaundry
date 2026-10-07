@@ -74,7 +74,11 @@ function NewOrderScreen() {
   // New Order Started — once per screen open, tagged new vs edit + entry point.
   useEffect(() => {
     Analytics.screen("new_order");
-    Analytics.newOrderStarted(presetCustId ? "customer" : "home", editId != null);
+    const from = params.get("from");
+    Analytics.newOrderStarted(
+      presetCustId ? "customer" : from === "empty_home" ? "empty_home" : "home",
+      editId != null,
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
