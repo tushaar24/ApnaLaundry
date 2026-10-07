@@ -94,6 +94,9 @@ export const IcDelete = (p: P) => (
 export const IcInfo = (p: P) => (
   <Base {...p}><circle cx={12} cy={12} r={9} /><path d="M12 11v5" /><circle cx={12} cy={8} r={0.5} fill="currentColor" /></Base>
 );
+export const IcWarning = (p: P) => (
+  <Base {...p}><path d="M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" /><path d="M12 9v4" /><circle cx={12} cy={17} r={0.5} fill="currentColor" /></Base>
+);
 export const IcLock = (p: P) => (
   <Base {...p}><rect x={5} y={11} width={14} height={10} rx={2} /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></Base>
 );

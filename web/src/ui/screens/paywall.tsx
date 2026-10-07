@@ -8,7 +8,8 @@ import { paywallInfo, useBillingStore } from "@/data/billingStore";
 import { Analytics } from "@/analytics/events";
 import { MetaPixel } from "@/analytics/metaPixel";
 import { cls, PrimaryButton, SectionLabel } from "@/ui/basics";
-import { IcBook, IcChart, IcChat, IcCheck, IcReceipt } from "@/ui/icons";
+import { IcBook, IcChart, IcChat, IcCheck, IcReceipt, IcWarning } from "@/ui/icons";
+import { AppSheet } from "@/ui/sheet";
 
 /**
  * Paywall / plans screen for the ₹2 trial, built from the handoff (docs
@@ -52,6 +53,9 @@ export function PaywallScreen({ onDone }: {
   const [stage, setStage] = useState<Stage>("plans");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Razorpay Checkout closed without paying (failed, cancelled or Back) —
+  // the "try again" sheet over the plans.
+  const [retrySheet, setRetrySheet] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const annual = status?.plans.annual.amount ?? 499900;
@@ -86,6 +90,7 @@ export function PaywallScreen({ onDone }: {
     if (busy) return;
     setBusy(true);
     setError(null);
+    setRetrySheet(false);
     Analytics.planSelected(plan);
     // If the mount-time warm-up failed or hasn't finished, this restarts the
     // checkout.js load in parallel with the subscribe call instead of after it.
@@ -102,14 +107,20 @@ export function PaywallScreen({ onDone }: {
       await openSubscriptionCheckout(res, {
         onSuccess: () => {
           MetaPixel.subscriptionActivated(res.subscriptionId, res.plan, chargeRupees);
+          setRetrySheet(false);
           setStage("waiting");
           startPolling(res.plan);
         },
-        onDismiss: () => { setBusy(false); },
+        onDismiss: () => {
+          setBusy(false);
+          setRetrySheet(true);
+        },
+        // Checkout stays open on a failed payment (Razorpay offers its own
+        // retry); the sheet sits behind it and is there once it's closed.
         onError: (msg) => {
-          setError(msg);
           Analytics.checkoutFailed(res.plan, msg);
           setBusy(false);
+          setRetrySheet(true);
         },
       });
     } catch (e) {
@@ -222,6 +233,25 @@ export function PaywallScreen({ onDone }: {
   return (
     <div className="flex min-h-dvh justify-center bg-bg">
       {card}
+      {retrySheet && stage === "plans" ? (
+        <AppSheet
+          title={`Your ${TRIAL_DAYS} free days are waiting`}
+          noSidebar
+          onDismiss={() => setRetrySheet(false)}
+          leading={(
+            <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-orangelight text-orange">
+              <IcWarning size={28} />
+            </span>
+          )}
+        >
+          <p className="text-[15px] text-muted">
+            The {rupees(trialR)} didn&apos;t go through. Nothing was charged — try once more and the full app opens right away.
+          </p>
+          <PrimaryButton className="mt-5" onClick={pay} disabled={busy}>
+            {`Try again · Pay ${rupees(trialR)}`}
+          </PrimaryButton>
+        </AppSheet>
+      ) : null}
     </div>
   );
 }

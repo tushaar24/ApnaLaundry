@@ -30,6 +30,8 @@ fun AppBottomSheet(
     title: String,
     onDismiss: () -> Unit,
     subtitle: String? = null,
+    // Optional badge left of the title (e.g. a warning icon).
+    leading: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -49,7 +51,14 @@ fun AppBottomSheet(
                     .background(Tokens.CardBorder)
                     .align(Alignment.CenterHorizontally),
             ) {}
-            Text(title, style = bric(24, FontWeight.Bold))
+            if (leading != null) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    leading()
+                    Text(title, style = bric(24, FontWeight.Bold), modifier = Modifier.weight(1f))
+                }
+            } else {
+                Text(title, style = bric(24, FontWeight.Bold))
+            }
             if (!subtitle.isNullOrBlank()) {
                 Text(subtitle, style = fig(14, FontWeight.Normal, Tokens.Muted), modifier = Modifier.padding(top = 4.dp))
             }

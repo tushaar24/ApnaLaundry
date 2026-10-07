@@ -29,6 +29,7 @@ import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -47,6 +48,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dailyworks.apnalaundry.ui.components.AppBottomSheet
 import com.dailyworks.apnalaundry.ui.components.PrimaryButton
 import com.dailyworks.apnalaundry.ui.components.bric
 import com.dailyworks.apnalaundry.ui.components.fig
@@ -238,6 +240,38 @@ fun PaywallScreen(
                     )
                 }
             }
+        }
+    }
+
+    if (ui.retrySheet && ui.stage == PaywallStage.PLANS && !ui.hasActive) {
+        RetrySheet(
+            trialAmount = ui.trialAmount,
+            onRetry = { vm.retry(activity) },
+            onDismiss = { vm.dismissRetry() },
+        )
+    }
+}
+
+/** Shown when Razorpay Checkout comes back unpaid (failed, cancelled or Back). */
+@Composable
+private fun RetrySheet(trialAmount: Int, onRetry: () -> Unit, onDismiss: () -> Unit) {
+    AppBottomSheet(
+        title = "Your $TRIAL_DAYS free days are waiting",
+        onDismiss = onDismiss,
+        leading = {
+            Box(
+                Modifier.size(56.dp).clip(CircleShape).background(Tokens.OrangeLight),
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Outlined.WarningAmber, null, tint = Tokens.Orange, modifier = Modifier.size(28.dp)) }
+        },
+    ) {
+        Column {
+            Text(
+                "The ${rupees(trialAmount)} didn't go through. Nothing was charged — try once more and the full app opens right away.",
+                style = fig(15, FontWeight.Normal, Tokens.Muted),
+            )
+            Spacer(Modifier.height(20.dp))
+            PrimaryButton(text = "Try again · Pay ${rupees(trialAmount)}", onClick = onRetry)
         }
     }
 }
