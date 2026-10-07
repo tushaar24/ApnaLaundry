@@ -28,6 +28,9 @@ data class PaywallUiState(
     val purchasedPlan: String? = null,
     val busy: Boolean = false,
     val error: String? = null,
+    // Razorpay Checkout came back without paying (failed, cancelled or Back) —
+    // show the "try again" sheet over the plans.
+    val retrySheet: Boolean = false,
 ) {
     val hasActive: Boolean get() = status?.hasActiveSubscription == true
     val annualAmount: Int get() = status?.plans?.annual?.amount ?: 499900
@@ -43,7 +46,8 @@ data class PaywallUiState(
 /**
  * Drives the paywall: loads billing status, creates the subscription, hands it to
  * Razorpay Standard Checkout (which owns the UPI AutoPay approval UI), then
- * waits for the server webhook to confirm activation. Failure states surface as
+ * waits for the server webhook to confirm activation. A Checkout that ends
+ * without paying opens [PaywallUiState.retrySheet]; other failures surface as
  * [PaywallUiState.error] back on the plans screen.
  */
 class PaywallViewModel(
@@ -70,7 +74,10 @@ class PaywallViewModel(
                 awaitingCheckout = false
                 when (result) {
                     is CheckoutResult.Success -> onCheckoutApproved()
-                    is CheckoutResult.Failure -> onCheckoutFailed(result.code, result.description)
+                    is CheckoutResult.Failure -> {
+                        onCheckoutFailed(result.code, result.description)
+                        _ui.value = _ui.value.copy(error = null, retrySheet = true)
+                    }
                 }
             }
         }
@@ -95,7 +102,7 @@ class PaywallViewModel(
     fun pay(activity: Activity) {
         val s = _ui.value
         if (s.busy) return
-        _ui.value = s.copy(busy = true, error = null)
+        _ui.value = s.copy(busy = true, error = null, retrySheet = false)
         // The user's chosen plan; the ₹2 trial is layered on top of it. The
         // server prices it from its own table (never trusts the client for money).
         val planArg = if (s.plan == PaywallPlan.ANNUAL) "annual" else "monthly"
@@ -120,6 +127,14 @@ class PaywallViewModel(
             }
         }
     }
+
+    /** Retry sheet CTA: open Checkout again for the same plan. */
+    fun retry(activity: Activity) {
+        _ui.value = _ui.value.copy(retrySheet = false)
+        pay(activity)
+    }
+
+    fun dismissRetry() { _ui.value = _ui.value.copy(retrySheet = false) }
 
     /** Cancel the active subscription, then refetch status. */
     fun cancel() {
