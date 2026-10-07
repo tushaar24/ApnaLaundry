@@ -45,7 +45,10 @@ object RazorpayCheckout {
 /** The result of a Razorpay Checkout attempt, surfaced from the Activity. */
 sealed interface CheckoutResult {
     data class Success(val paymentId: String?) : CheckoutResult
-    data class Failure(val code: Int, val description: String?) : CheckoutResult
+    data class Failure(val code: Int, val description: String?) : CheckoutResult {
+        /** User closed Checkout (Back / cancel) rather than a failed payment. */
+        val cancelled: Boolean get() = code == Checkout.PAYMENT_CANCELED
+    }
 }
 
 /**

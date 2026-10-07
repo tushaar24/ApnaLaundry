@@ -104,6 +104,9 @@ revenue events can't be spoofed or lost if the app closes.
 | `Checkout Started` | client | `variant`, `plan`, `amount`, `trial_amount` | UPI intent opened |
 | `Checkout Succeeded` | client | `variant`, `plan` | returned from UPI app as success (optimistic) |
 | `Checkout Failed` | client | `variant`, `plan`, `reason` | cancelled / failed |
+| `Payment Retry Shown` | client | `plan`, `reason` (`failed`\|`cancelled`) | "try again" sheet opens after Checkout closes unpaid (once per close) |
+| `Payment Retry Tapped` | client | `plan` | user taps "Try again · Pay ₹2" (Checkout reopens → `Checkout Started`) |
+| `Payment Retry Dismissed` | client | `plan` | user closes the sheet (scrim / Back / Esc) without retrying |
 | `Subscription Cancel Requested` | client | `plan` | user taps cancel |
 | `Subscription Activated` | server | `plan`, `variant` | `subscription.authenticated`/`activated` webhook |
 | `Subscription Charged` | server | `plan`, `amount`, `variant` | `subscription.charged` webhook (recurring success) |

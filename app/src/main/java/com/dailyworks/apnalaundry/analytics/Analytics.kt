@@ -222,6 +222,17 @@ object Analytics {
     fun checkoutFailed(plan: String, reason: String) =
         track("Checkout Failed", mapOf("plan" to plan, "reason" to reason))
 
+    // The "try again" sheet shown when Razorpay Checkout closes unpaid.
+    // reason: "failed" | "cancelled".
+    fun paymentRetryShown(plan: String, reason: String) =
+        track("Payment Retry Shown", mapOf("plan" to plan, "reason" to reason))
+
+    fun paymentRetryTapped(plan: String) =
+        track("Payment Retry Tapped", mapOf("plan" to plan))
+
+    fun paymentRetryDismissed(plan: String) =
+        track("Payment Retry Dismissed", mapOf("plan" to plan))
+
     fun subscriptionCancelRequested(plan: String) =
         track("Subscription Cancel Requested", mapOf("plan" to plan))
 }

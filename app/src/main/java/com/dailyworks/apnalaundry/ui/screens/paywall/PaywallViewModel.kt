@@ -76,6 +76,9 @@ class PaywallViewModel(
                     is CheckoutResult.Success -> onCheckoutApproved()
                     is CheckoutResult.Failure -> {
                         onCheckoutFailed(result.code, result.description)
+                        if (!_ui.value.retrySheet) {
+                            Analytics.paymentRetryShown(purchasedOrSelected(), if (result.cancelled) "cancelled" else "failed")
+                        }
                         _ui.value = _ui.value.copy(error = null, retrySheet = true)
                     }
                 }
@@ -130,11 +133,15 @@ class PaywallViewModel(
 
     /** Retry sheet CTA: open Checkout again for the same plan. */
     fun retry(activity: Activity) {
+        Analytics.paymentRetryTapped(purchasedOrSelected())
         _ui.value = _ui.value.copy(retrySheet = false)
         pay(activity)
     }
 
-    fun dismissRetry() { _ui.value = _ui.value.copy(retrySheet = false) }
+    fun dismissRetry() {
+        Analytics.paymentRetryDismissed(purchasedOrSelected())
+        _ui.value = _ui.value.copy(retrySheet = false)
+    }
 
     /** Cancel the active subscription, then refetch status. */
     fun cancel() {

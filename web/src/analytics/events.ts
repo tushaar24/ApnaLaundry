@@ -166,6 +166,16 @@ export const Analytics = {
   checkoutFailed(plan: string, reason: string) {
     rawTrack("Checkout Failed", { plan, reason });
   },
+  // The "try again" sheet shown when Razorpay Checkout closes unpaid.
+  paymentRetryShown(plan: string, reason: "failed" | "cancelled") {
+    rawTrack("Payment Retry Shown", { plan, reason });
+  },
+  paymentRetryTapped(plan: string) {
+    rawTrack("Payment Retry Tapped", { plan });
+  },
+  paymentRetryDismissed(plan: string) {
+    rawTrack("Payment Retry Dismissed", { plan });
+  },
   subscriptionCancelRequested(plan: string) {
     rawTrack("Subscription Cancel Requested", { plan });
   },
