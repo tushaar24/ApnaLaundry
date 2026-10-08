@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AuthError, requestOtp, verifyOtp, type Challenge } from "@/data/auth";
 import { Analytics } from "@/analytics/events";
 import { useScreenView } from "@/analytics/useScreenView";
-import { cls, FieldBox, PrimaryButton } from "@/ui/basics";
+import { cls } from "@/ui/basics";
 import { Gate } from "@/ui/gate";
 import { LegalFooter } from "@/ui/legal";
 
@@ -25,6 +25,7 @@ export default function LoginPage() {
 }
 
 const OTP_LEN = 6;
+const WRONG_OTP = "Wrong OTP. Check your WhatsApp / SMS again.";
 
 function LoginScreen() {
   const [phone, setPhone] = useState("");
@@ -34,6 +35,7 @@ function LoginScreen() {
   const [error, setError] = useState<string | null>(null);
   const [resendInSecs, setResendInSecs] = useState(0);
   const [attemptsRemaining, setAttemptsRemaining] = useState<number | null>(null);
+  const [resent, setResent] = useState(false);
   const challengeRef = useRef<Challenge | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -65,6 +67,7 @@ function LoginScreen() {
     try {
       const ch = await requestOtp(phone);
       challengeRef.current = ch;
+      setResent(step === "otp");
       setStep("otp");
       setOtp("");
       setAttemptsRemaining(ch.attemptsRemaining);
@@ -92,12 +95,15 @@ function LoginScreen() {
       await verifyOtp(ch, otp);
       // The Gate reacts to authed/setupDone and routes to /setup or /.
     } catch (e) {
-      setOtp("");
       const attempts = e instanceof AuthError ? e.attemptsRemaining : undefined;
       if (attempts != null) setAttemptsRemaining(attempts);
       const msg = e instanceof Error ? e.message : "Verification failed — try again";
       Analytics.otpVerificationFailed(msg, attempts);
-      setError(msg);
+      // A rejected code (attempts still left) keeps the digits, shown red, until
+      // edited; anything else (expired, exhausted, offline) shows the server text.
+      const wrongCode = attempts != null && attempts > 0;
+      if (!wrongCode) setOtp("");
+      setError(wrongCode ? WRONG_OTP : msg);
       setLoading(false);
     }
   }
@@ -110,6 +116,7 @@ function LoginScreen() {
     setError(null);
     setResendInSecs(0);
     setAttemptsRemaining(null);
+    setResent(false);
   }
 
   return (
@@ -131,33 +138,30 @@ function LoginScreen() {
             <Sheet>
               <div className="flex flex-col gap-2.5">
                 <label htmlFor="phone" className="text-[14px] font-semibold">Mobile number</label>
-                <FieldBox
-                  value={phone}
-                  onChange={(v) => { setPhone(v.replace(/\D/g, "").slice(0, 10)); setError(null); }}
-                  prefix="+91"
-                  h={60}
-                  borderColor="var(--color-cardborder)"
-                  borderWidth={2}
-                  className="focus-within:border-blue!"
-                  inputMode="tel"
-                  placeholder="Mobile Number"
-                  textClass="text-[19px] font-semibold tracking-[0.02em]"
-                  autoFocus
-                  inputProps={{
-                    id: "phone",
-                    autoComplete: "tel-national",
-                    onKeyDown: (e) => { if (e.key === "Enter") void sendOtp(); },
-                  }}
-                />
+                <div className="flex h-[60px] items-center gap-2.5 rounded-[14px] border-2 border-cardborder bg-card px-4 focus-within:border-blue">
+                  <span className="text-[19px] font-semibold text-muted">+91</span>
+                  <input
+                    id="phone"
+                    value={phone.length > 5 ? `${phone.slice(0, 5)} ${phone.slice(5)}` : phone}
+                    onChange={(e) => { setPhone(e.target.value.replace(/\D/g, "").slice(0, 10)); setError(null); }}
+                    onKeyDown={(e) => { if (e.key === "Enter") void sendOtp(); }}
+                    type="tel"
+                    inputMode="numeric"
+                    autoComplete="tel-national"
+                    placeholder="Mobile Number"
+                    autoFocus
+                    className="min-w-0 flex-1 bg-transparent text-[19px] font-semibold tracking-[0.02em] text-ink placeholder:text-placeholder"
+                  />
+                </div>
                 {error ? (
                   <p className="text-[14px] font-semibold text-errorred">{error}</p>
                 ) : (
-                  <p className="text-[14px] text-muted">We&apos;ll send an OTP to your WhatsApp / SMS</p>
+                  <p className="text-[14px] leading-[1.4] text-muted">The OTP will arrive on your WhatsApp / SMS</p>
                 )}
               </div>
-              <PrimaryButton h={58} disabled={!phoneValid || loading} onClick={() => void sendOtp()}>
+              <CtaButton disabled={!phoneValid || loading} onClick={() => void sendOtp()}>
                 {loading ? "Sending OTP…" : "Get started"}
-              </PrimaryButton>
+              </CtaButton>
               <p className="text-center text-[13px] text-muted">
                 By continuing, you agree to our{" "}
                 <Link href="/terms" className="text-blue underline">Terms</Link> and{" "}
@@ -184,12 +188,16 @@ function LoginScreen() {
               <div className="flex flex-col gap-2">
                 <h1 className="bric text-[34px] leading-[1.05]">Enter OTP</h1>
                 <p className="text-[16px] leading-[1.45] text-onbluemuted">
-                  Sent via WhatsApp / SMS to{" "}
+                  Sent on WhatsApp / SMS to{" "}
                   <strong className="whitespace-nowrap text-ondark">+91 {phone.slice(0, 5)} {phone.slice(5)}</strong>
+                  {" · "}
+                  <button type="button" onClick={backToPhone} className="font-semibold text-ondark underline">
+                    Change number
+                  </button>
                 </p>
               </div>
             </div>
-            <Sheet grow>
+            <Sheet grow gap={18}>
               <div className="flex flex-col gap-3.5">
                 <OtpBoxes
                   value={otp}
@@ -197,29 +205,32 @@ function LoginScreen() {
                   onChange={(v) => { setOtp(v.replace(/\D/g, "").slice(0, OTP_LEN)); setError(null); }}
                   onEnter={() => void verify()}
                 />
-                <OtpStatus otp={otp} error={error} attemptsRemaining={attemptsRemaining} />
+                <OtpStatus otp={otp} error={error} attemptsRemaining={attemptsRemaining} resent={resent} />
               </div>
-              <div className="flex min-h-11 items-center justify-between gap-3">
+              <div className="flex min-h-11 flex-col justify-center gap-2.5">
                 {resendInSecs > 0 ? (
-                  <span className="text-[14px] text-muted">Didn&apos;t get it? Resend in {resendInSecs}s</span>
+                  <span className="text-[14px] text-muted">
+                    Didn&apos;t get the OTP? You can resend in {resendInSecs} sec
+                  </span>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => void sendOtp()}
-                    disabled={loading}
-                    className="h-11 rounded-xl border-[1.5px] border-blue bg-card px-4 text-[15px] font-bold text-blue hover:bg-bluelight"
-                  >
-                    Resend OTP
-                  </button>
+                  <>
+                    <span className="text-[14px] font-semibold text-inksecondary">Didn&apos;t get the OTP?</span>
+                    <button
+                      type="button"
+                      onClick={() => void sendOtp()}
+                      disabled={loading}
+                      className="flex h-12 items-center justify-center gap-2 rounded-xl border-[1.5px] border-blue bg-card text-[15px] font-bold text-blue hover:bg-bluelight"
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+                      {loading ? "Sending…" : "Resend OTP"}
+                    </button>
+                  </>
                 )}
-                <button type="button" onClick={backToPhone} className="shrink-0 text-[14px] font-semibold text-blue underline">
-                  Change number
-                </button>
               </div>
               <div className="flex-1" />
-              <PrimaryButton h={58} disabled={!otpValid || loading} onClick={() => void verify()}>
+              <CtaButton disabled={!otpValid || error != null || loading} onClick={() => void verify()}>
                 {loading ? "Verifying…" : "Continue"}
-              </PrimaryButton>
+              </CtaButton>
             </Sheet>
           </>
         )}
@@ -229,11 +240,28 @@ function LoginScreen() {
 }
 
 /** The cream bottom sheet holding the form. */
-function Sheet({ children, grow }: { children: ReactNode; grow?: boolean }) {
+function Sheet({ children, grow, gap = 16 }: { children: ReactNode; grow?: boolean; gap?: number }) {
   return (
-    <div className={cls("flex flex-col gap-4 rounded-t-[28px] bg-bg px-6 pb-8 pt-6 text-ink", grow && "flex-1")}>
+    <div style={{ gap }} className={cls("flex flex-col rounded-t-[28px] bg-bg px-6 pb-8 pt-6 text-ink", grow && "flex-1")}>
       {children}
     </div>
+  );
+}
+
+/** Full-width 58px CTA; disabled is the design's grey, not the app's pale blue. */
+function CtaButton({ children, disabled, onClick }: { children: ReactNode; disabled?: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={cls(
+        "h-[58px] w-full rounded-[14px] text-[17px] font-bold transition-colors",
+        disabled ? "bg-cardborder text-disabledfg" : "bg-blue text-ondark hover:bg-blue/90 active:bg-blue/80",
+      )}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -311,7 +339,9 @@ function OtpBoxes({ value, error, onChange, onEnter }: {
   );
 }
 
-function OtpStatus({ otp, error, attemptsRemaining }: { otp: string; error: string | null; attemptsRemaining: number | null }) {
+function OtpStatus({ otp, error, attemptsRemaining, resent }: {
+  otp: string; error: string | null; attemptsRemaining: number | null; resent: boolean;
+}) {
   if (error) {
     return (
       <div role="alert" className="flex items-start gap-2 text-[14px] font-semibold text-errorred">
@@ -329,14 +359,14 @@ function OtpStatus({ otp, error, attemptsRemaining }: { otp: string; error: stri
         <span className="flex size-5 items-center justify-center rounded-full bg-green text-ondark">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5" /></svg>
         </span>
-        OTP entered
+        OTP filled in
       </div>
     );
   }
   return (
     <div className="flex items-center gap-2 text-[14px] text-inksecondary">
       <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-blue)" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9" /></svg>
-      Waiting for your OTP on WhatsApp / SMS
+      {resent ? "OTP sent again — check your WhatsApp / SMS" : "Waiting for the OTP on WhatsApp / SMS"}
     </div>
   );
 }

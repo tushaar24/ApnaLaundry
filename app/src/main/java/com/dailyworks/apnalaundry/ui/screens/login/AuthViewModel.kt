@@ -20,6 +20,8 @@ data class AuthUiState(
     val done: Boolean = false,
     val resendInSecs: Int = 0,
     val attemptsRemaining: Int? = null,
+    /** The current OTP came from a resend (changes the waiting line's copy). */
+    val resent: Boolean = false,
 ) {
     enum class Step { PHONE, OTP }
 
@@ -29,6 +31,8 @@ data class AuthUiState(
         (phone.first() in '6'..'9' || phone.startsWith("10000000"))
     val otpValid get() = otp.length == 6
 }
+
+private const val WRONG_OTP = "Wrong OTP. Check your WhatsApp / SMS again."
 
 class AuthViewModel(private val auth: AuthRepository) : ViewModel() {
     private val _ui = MutableStateFlow(AuthUiState())
@@ -43,7 +47,7 @@ class AuthViewModel(private val auth: AuthRepository) : ViewModel() {
     fun backToPhone() {
         countdownJob?.cancel()
         challenge = null
-        _ui.value = _ui.value.copy(step = AuthUiState.Step.PHONE, otp = "", error = null, resendInSecs = 0, attemptsRemaining = null)
+        _ui.value = _ui.value.copy(step = AuthUiState.Step.PHONE, otp = "", error = null, resendInSecs = 0, attemptsRemaining = null, resent = false)
     }
 
     /** Sends (or resends) the OTP. Resending supersedes the old challenge server-side. */
@@ -61,7 +65,7 @@ class AuthViewModel(private val auth: AuthRepository) : ViewModel() {
                     challenge = ch
                     _ui.value = _ui.value.copy(
                         loading = false, step = AuthUiState.Step.OTP, otp = "",
-                        attemptsRemaining = ch.attemptsRemaining,
+                        attemptsRemaining = ch.attemptsRemaining, resent = s.step == AuthUiState.Step.OTP,
                     )
                     startResendCountdown(ch.nextSendAtMs)
                 }
@@ -88,8 +92,14 @@ class AuthViewModel(private val auth: AuthRepository) : ViewModel() {
                 .onFailure { e ->
                     val attempts = (e as? AuthRepository.AuthException)?.attemptsRemaining
                     Analytics.otpVerificationFailed(e.message ?: "Verification failed", attempts)
+                    // A rejected code (attempts still left) keeps the digits, shown red,
+                    // until edited; anything else (expired, exhausted, offline) shows the
+                    // server text.
+                    val wrongCode = attempts != null && attempts > 0
                     _ui.value = _ui.value.copy(
-                        loading = false, error = e.message, otp = "",
+                        loading = false,
+                        error = if (wrongCode) WRONG_OTP else e.message,
+                        otp = if (wrongCode) s.otp else "",
                         attemptsRemaining = attempts ?: _ui.value.attemptsRemaining,
                     )
                 }
