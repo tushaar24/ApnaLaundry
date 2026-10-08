@@ -183,8 +183,9 @@ export const Analytics = {
   paymentRetryShown(plan: string, reason: "failed" | "cancelled") {
     rawTrack("Payment Retry Shown", { plan, reason });
   },
-  paymentRetryTapped(plan: string) {
-    rawTrack("Payment Retry Tapped", { plan });
+  // switchedFrom: the plan that failed, when the sheet moved them to another.
+  paymentRetryTapped(plan: string, switchedFrom?: string) {
+    rawTrack("Payment Retry Tapped", switchedFrom ? { plan, switched_from: switchedFrom } : { plan });
   },
   paymentRetryDismissed(plan: string) {
     rawTrack("Payment Retry Dismissed", { plan });

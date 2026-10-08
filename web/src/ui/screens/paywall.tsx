@@ -117,18 +117,19 @@ export function PaywallScreen({ onDone }: {
     setRetrySheet(false);
   }
 
-  async function pay() {
+  // `chosen` lets the retry sheet switch a failed Yearly attempt to Monthly.
+  async function pay(chosen: Plan = plan) {
     if (busy) return;
     setBusy(true);
     setError(null);
     hideRetry();
-    Analytics.planSelected(plan);
+    Analytics.planSelected(chosen);
     // If the mount-time warm-up failed or hasn't finished, this restarts the
     // checkout.js load in parallel with the subscribe call instead of after it.
     preloadCheckout();
     try {
       // The server decides the real plan/amount (never trust the client for money).
-      const res = await subscribe(plan);
+      const res = await subscribe(chosen);
       Analytics.checkoutStarted(res.plan, res.amount, res.trialAmount || 0);
       // Value in rupees: what this approval charges now (the ₹2 trial).
       const chargeRupees = (res.trialAmount || res.amount) / 100;
@@ -156,7 +157,7 @@ export function PaywallScreen({ onDone }: {
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not start — try again");
-      Analytics.checkoutFailed(plan, e instanceof Error ? e.message : "error");
+      Analytics.checkoutFailed(chosen, e instanceof Error ? e.message : "error");
       setBusy(false);
       // e.g. ALREADY_SUBSCRIBED from another device — refetch so an active
       // subscription lets the user through instead of a broken Pay button.
@@ -276,7 +277,7 @@ export function PaywallScreen({ onDone }: {
             </p>
             <button
               type="button"
-              onClick={pay}
+              onClick={() => void pay()}
               disabled={busy}
               className={cls(
                 "h-14 w-full rounded-[14px] text-[16px] font-extrabold tracking-wide text-white transition-opacity disabled:opacity-60",
@@ -329,16 +330,56 @@ export function PaywallScreen({ onDone }: {
           <p className="text-[15px] text-muted">
             The {rupees(trialR)} didn&apos;t go through. Nothing was charged — try once more and the full app opens right away.
           </p>
-          <PrimaryButton
-            className="mt-5"
-            onClick={() => {
-              Analytics.paymentRetryTapped(plan);
-              void pay();
-            }}
-            disabled={busy}
-          >
-            {`Try again · Pay ${rupees(trialR)}`}
-          </PrimaryButton>
+          {plan === "annual" ? (
+            // A failed Yearly attempt: recommend the smaller Monthly plan.
+            <>
+              <div className="mt-4 rounded-2xl border-2 border-blue bg-bluelight px-4 py-3">
+                <div className="text-[11px] font-bold tracking-[0.08em] text-blue">RECOMMENDED</div>
+                <div className="mt-0.5 flex items-baseline justify-between gap-3">
+                  <span className="text-[16px] font-bold text-bluetext">Try the Monthly plan</span>
+                  <span className="bric text-[18px] text-bluetext">
+                    {rupees(monthlyR)}<span className="text-[12px] font-normal">/month</span>
+                  </span>
+                </div>
+                <div className="mt-0.5 text-[13px] text-bluetext">
+                  {`Same ${TRIAL_DAYS} free days and ${rupees(trialR)} today — then a smaller monthly payment.`}
+                </div>
+              </div>
+              <PrimaryButton
+                className="mt-4"
+                onClick={() => {
+                  Analytics.paymentRetryTapped("monthly", "annual");
+                  setPlan("monthly");
+                  void pay("monthly");
+                }}
+                disabled={busy}
+              >
+                {`Switch to Monthly · Pay ${rupees(trialR)}`}
+              </PrimaryButton>
+              <button
+                type="button"
+                onClick={() => {
+                  Analytics.paymentRetryTapped("annual");
+                  void pay("annual");
+                }}
+                disabled={busy}
+                className="mt-2 w-full py-3 text-[14px] font-bold text-muted"
+              >
+                Try Yearly again
+              </button>
+            </>
+          ) : (
+            <PrimaryButton
+              className="mt-5"
+              onClick={() => {
+                Analytics.paymentRetryTapped(plan);
+                void pay();
+              }}
+              disabled={busy}
+            >
+              {`Try again · Pay ${rupees(trialR)}`}
+            </PrimaryButton>
+          )}
         </AppSheet>
       ) : null}
     </div>
