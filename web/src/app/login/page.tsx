@@ -124,18 +124,24 @@ function LoginScreen() {
       <div className="mx-auto flex min-h-dvh w-full max-w-[520px] flex-col">
         {step === "phone" ? (
           <>
-            <div className="flex flex-col gap-[18px] px-6 pb-6 pt-12">
-              <BrandPill />
-              <HeroArt />
-              <h1 className="bric text-[34px] leading-[1.05]">Laundry Business Made Easy!</h1>
-              <ul className="flex flex-col gap-2.5">
-                <Perk>Bills on WhatsApp</Perk>
-                <Perk>Pickup &amp; delivery tracking</Perk>
-                <Perk>All your accounts in one place</Perk>
-              </ul>
-            </div>
-            <div className="flex-1" />
-            <Sheet>
+            {/* The field and CTA must fit the first screen on every phone, so the
+                sheet keeps its size and the hero gives way: the art shrinks into
+                whatever height is left, and on short screens the ticks and then
+                the headline drop out. The policy links sit below the fold. */}
+            <div className="flex h-dvh flex-col">
+              <div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-hidden px-6 pb-6 pt-12 [@media(max-height:720px)]:gap-3 [@media(max-height:720px)]:pb-4 [@media(max-height:720px)]:pt-6">
+                <BrandPill />
+                <div className="flex max-h-[200px] min-h-0 flex-1 [@media(max-height:520px)]:hidden">
+                  <HeroArt />
+                </div>
+                <h1 className="bric shrink-0 text-[34px] leading-[1.05] [@media(max-height:440px)]:hidden">Laundry Business Made Easy!</h1>
+                <ul className="flex shrink-0 flex-col gap-2.5 [@media(max-height:680px)]:hidden">
+                  <Perk>Bills on WhatsApp</Perk>
+                  <Perk>Pickup &amp; delivery tracking</Perk>
+                  <Perk>All your accounts in one place</Perk>
+                </ul>
+              </div>
+              <Sheet>
               <div className="flex flex-col gap-2.5">
                 <label htmlFor="phone" className="text-[14px] font-semibold">Mobile number</label>
                 <div className="flex h-[60px] items-center gap-2.5 rounded-[14px] border-2 border-cardborder bg-card px-4 focus-within:border-blue">
@@ -149,7 +155,9 @@ function LoginScreen() {
                     inputMode="numeric"
                     autoComplete="tel-national"
                     placeholder="Mobile Number"
-                    autoFocus
+                    // Only when coming back via "Change number": focusing on first
+                    // load pops the keyboard over the hero on phones.
+                    autoFocus={phone.length > 0}
                     className="min-w-0 flex-1 bg-transparent text-[19px] font-semibold tracking-[0.02em] text-ink placeholder:text-placeholder"
                   />
                 </div>
@@ -167,12 +175,15 @@ function LoginScreen() {
                 <Link href="/terms" className="text-blue underline">Terms</Link> and{" "}
                 <Link href="/privacy" className="text-blue underline">Privacy Policy</Link>
               </p>
+              </Sheet>
+            </div>
+            <div className="bg-bg px-6 pb-8">
               <LegalFooter />
-            </Sheet>
+            </div>
           </>
         ) : (
           <>
-            <div className="flex flex-col gap-[18px] px-6 pb-7 pt-12">
+            <div className="flex flex-col gap-[18px] px-6 pb-7 pt-12 [@media(max-height:720px)]:gap-3 [@media(max-height:720px)]:pb-5 [@media(max-height:720px)]:pt-6">
               <div className="flex items-center gap-3">
                 <button
                   type="button"
@@ -184,7 +195,10 @@ function LoginScreen() {
                 </button>
                 <BrandPill small />
               </div>
-              <OtpArt />
+              {/* Dropped on short screens so the boxes and Continue stay in view. */}
+              <div className="[@media(max-height:720px)]:hidden">
+                <OtpArt />
+              </div>
               <div className="flex flex-col gap-2">
                 <h1 className="bric text-[34px] leading-[1.05]">Enter OTP</h1>
                 <p className="text-[16px] leading-[1.45] text-onbluemuted">
@@ -374,7 +388,7 @@ function OtpStatus({ otp, error, attemptsRemaining, resent }: {
 /** Ironed shirts on a rail, folded clothes and a phone showing a sent bill. */
 function HeroArt() {
   return (
-    <svg className="block h-auto w-full max-w-[342px]" viewBox="0 0 342 260" role="img" aria-label="Ironed shirts on a rail, a stack of folded clothes and a phone showing a sent bill" style={{ maxHeight: 200 }}>
+    <svg className="block h-full w-full max-w-[342px]" viewBox="0 0 342 260" role="img" aria-label="Ironed shirts on a rail, a stack of folded clothes and a phone showing a sent bill">
       <g fill="none" stroke="#16191D" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M40 18 V30 M232 18 V30" stroke="#FFFFFF" strokeOpacity="0.7" />
         <path d="M36 30 H236" stroke="#FFFFFF" strokeWidth="4" />
