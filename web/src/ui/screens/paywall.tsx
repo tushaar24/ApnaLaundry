@@ -303,8 +303,8 @@ export function PaywallScreen({ onDone }: {
             <FaqItem q="When is my plan charged?">
               {`After ${trialEnd}, when your free days end: ${rupees(annualR)}/year or ${rupees(monthlyR)}/month, whichever you picked, by UPI AutoPay.`}
             </FaqItem>
-            <FaqItem q="Can I cancel?">
-              {`Yes, anytime from Settings → Subscription. Cancel before ${trialEnd} and the plan is never charged.`}
+            <FaqItem q="Can I cancel the trial?">
+              Yes, you can cancel anytime during the trial. No charges will be applied if you cancel before the trial ends.
             </FaqItem>
             <FaqItem q="Which UPI apps work?">
               Any UPI app that supports AutoPay — GPay, PhonePe, Paytm, BHIM and more.

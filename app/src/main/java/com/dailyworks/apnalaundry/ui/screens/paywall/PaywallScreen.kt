@@ -362,8 +362,8 @@ fun PaywallScreen(
                     "After $trialEnd, when your free days end: $annualText/year or $monthlyText/month, whichever you picked, by UPI AutoPay.",
                 )
                 FaqItem(
-                    "Can I cancel?",
-                    "Yes, anytime from Settings → Subscription. Cancel before $trialEnd and the plan is never charged.",
+                    "Can I cancel the trial?",
+                    "Yes, you can cancel anytime during the trial. No charges will be applied if you cancel before the trial ends.",
                 )
                 FaqItem(
                     "Which UPI apps work?",
