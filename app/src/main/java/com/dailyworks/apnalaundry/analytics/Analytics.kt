@@ -216,6 +216,8 @@ object Analytics {
 
     fun paywallVideoCompleted() = track("Paywall Video Completed")
 
+    fun paywallFaqOpened() = track("Paywall FAQ Opened")
+
     fun planSelected(plan: String) =
         track("Plan Selected", mapOf("plan" to plan))
 

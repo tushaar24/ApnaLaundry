@@ -33,6 +33,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,11 +42,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.style.TextAlign
+import androidx.core.view.WindowCompat
+import com.dailyworks.apnalaundry.analytics.Analytics
+import com.dailyworks.apnalaundry.ui.components.AppBottomSheet
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dailyworks.apnalaundry.ui.components.PrimaryButton
 import com.dailyworks.apnalaundry.ui.components.bric
@@ -60,16 +72,38 @@ private const val WAS_ANNUAL = 8999
 // backend TRIAL_DAYS (laundry-razorpay.js)
 private const val TRIAL_DAYS = 7
 
-private data class TrialFeature(val icon: ImageVector, val title: String, val sub: String)
+private data class TrialFeature(val icon: ImageVector, val label: String)
 
-// The paywall lists features with a subtitle each (design 08b).
+// Feature row under the video — four icons, two-line labels.
 private val TRIAL_FEATURES = listOf(
-    TrialFeature(Icons.AutoMirrored.Outlined.ReceiptLong, "Unlimited orders", "Walk-in, home pickup and delivery"),
-    TrialFeature(Icons.AutoMirrored.Outlined.Chat, "Bills on WhatsApp", "Make and send a bill in one tap"),
-    TrialFeature(Icons.AutoMirrored.Outlined.MenuBook, "Khata for every customer", "Always know who owes you money"),
-    TrialFeature(Icons.Outlined.CheckCircle, "“Clothes ready” message", "Customers get a WhatsApp automatically"),
-    TrialFeature(Icons.Outlined.BarChart, "Daily earnings", "Cash and UPI added up for you"),
+    TrialFeature(Icons.AutoMirrored.Outlined.Chat, "Bills on WhatsApp"),
+    TrialFeature(Icons.AutoMirrored.Outlined.MenuBook, "Khata for customers"),
+    TrialFeature(Icons.AutoMirrored.Outlined.ReceiptLong, "Unlimited orders"),
+    TrialFeature(Icons.Outlined.BarChart, "Daily earnings"),
 )
+
+// UPI apps that support AutoPay mandates (text chips — no third-party logos).
+private val UPI_APPS = listOf("GPay", "PhonePe", "Paytm", "BHIM")
+
+// Dark paywall palette — navy with the brand blue/orange as accents.
+private object Pw {
+    val Bg = Brush.verticalGradient(
+        0f to Color(0xFF10255C),
+        0.42f to Color(0xFF0B1838),
+        1f to Color(0xFF08112A),
+    )
+    val Bar = Color(0xF208112A)
+    val Text = Color(0xFFB4C3E9)
+    val Accent = Color(0xFF8FB0FF)
+    val Eyebrow = Color(0xFFFDBA74)
+    val Surface = Color(0x0FFFFFFF)
+    val Selected = Color(0xFF5B8CFF)
+    val Cta = Brush.horizontalGradient(listOf(Color(0xFF4876FF), Tokens.Blue))
+}
+
+/** "15 Oct" — the real date the free days end (AppDate's "today" is pinned for demos). */
+private fun trialEndLabel(): String =
+    LocalDate.now().plusDays(TRIAL_DAYS.toLong()).format(DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH))
 
 /** "₹4,999" from paise. */
 private fun rupees(paise: Int): String {
@@ -111,10 +145,24 @@ fun PaywallScreen(
     val perMonth = ui.annualAmount / 12 / 100
     val saveVsMonthly = (ui.monthlyAmount * 12 - ui.annualAmount) / 100
 
+    // The offer is the dark screen; waiting / active plan stay on the light theme.
+    val offer = ui.stage != PaywallStage.DONE && ui.stage != PaywallStage.WAITING && !ui.hasActive
+    var faq by remember { mutableStateOf(false) }
+    val trialEnd = remember { trialEndLabel() }
+
+    // Light status-bar icons over the navy offer; restore on leave.
+    val view = LocalView.current
+    DisposableEffect(offer) {
+        val controller = WindowCompat.getInsetsController(activity.window, view)
+        val wasLight = controller.isAppearanceLightStatusBars
+        if (offer) controller.isAppearanceLightStatusBars = false
+        onDispose { controller.isAppearanceLightStatusBars = wasLight }
+    }
+
     Box(
         Modifier
             .fillMaxSize()
-            .background(Tokens.Bg)
+            .then(if (offer) Modifier.background(Pw.Bg) else Modifier.background(Tokens.Bg))
             .windowInsetsPadding(WindowInsets.systemBars),
     ) {
         when {
@@ -129,17 +177,28 @@ fun PaywallScreen(
             ui.hasActive -> ActiveView(ui = ui, onClose = onClose, onCancel = { vm.cancel() })
 
             else -> Column(Modifier.fillMaxSize()) {
-                // Close — hidden on the hard gate (non-cancellable).
-                if (!hardGate) {
-                    Box(
-                        Modifier
-                            .size(44.dp)
-                            .padding(start = 8.dp, top = 4.dp)
-                            .tap(onClick = onClose),
-                        contentAlignment = Alignment.Center,
-                    ) { Text("✕", style = fig(22, FontWeight.Normal, Tokens.Muted)) }
-                } else {
-                    Spacer(Modifier.height(12.dp))
+                // Close (hidden on the non-cancellable hard gate) + FAQs.
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (!hardGate) {
+                        Box(
+                            Modifier.size(44.dp).tap(onClick = onClose),
+                            contentAlignment = Alignment.Center,
+                        ) { Text("✕", style = fig(22, FontWeight.Normal, Pw.Text)) }
+                    }
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        "FAQs",
+                        style = fig(14, FontWeight.Bold, Pw.Text),
+                        modifier = Modifier
+                            .tap {
+                                faq = true
+                                Analytics.paywallFaqOpened()
+                            }
+                            .padding(12.dp),
+                    )
                 }
 
                 Column(
@@ -147,50 +206,62 @@ fun PaywallScreen(
                         .weight(1f)
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = 20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    // ₹2 trial hero
+                    // Hero: 7 days FREE, then the ₹2
+                    Text(
+                        "• YOUR LAUNDRY SHOP APP •",
+                        style = fig(12, FontWeight.ExtraBold, Pw.Eyebrow).copy(letterSpacing = 0.16.em),
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Start your $TRIAL_DAYS-day ", style = fig(19, FontWeight.Bold, Tokens.OnDark))
+                        Text(
+                            "FREE",
+                            style = fig(19, FontWeight.Bold, Tokens.OnDark),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Tokens.Orange)
+                                .padding(horizontal = 6.dp, vertical = 1.dp),
+                        )
+                        Text(" trial for", style = fig(19, FontWeight.Bold, Tokens.OnDark))
+                    }
                     Spacer(Modifier.height(4.dp))
-                    Column(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Tokens.Blue).padding(20.dp),
-                    ) {
-                        Text("$TRIAL_DAYS-DAY FULL TRIAL", style = fig(12, FontWeight.Bold, Tokens.BlueBar))
-                        Spacer(Modifier.height(6.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(rupees(ui.trialAmount), style = bric(52, FontWeight.Bold, Tokens.OnDark))
-                            Spacer(Modifier.width(16.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text("That's all you pay today", style = fig(18, FontWeight.Bold, Tokens.OnDark))
-                                Text("Every feature unlocked for $TRIAL_DAYS days", style = fig(14, FontWeight.Normal, Tokens.BlueBar))
+                    Text(rupees(ui.trialAmount), style = bric(64, FontWeight.Bold, Pw.Accent))
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "ALL YOU PAY TODAY · NOTHING MORE TILL ${trialEnd.uppercase()}",
+                        style = fig(11, FontWeight.ExtraBold, Pw.Text).copy(letterSpacing = 0.12.em),
+                        textAlign = TextAlign.Center,
+                    )
+
+                    Spacer(Modifier.height(20.dp))
+                    PaywallVideo(paused = ui.busy || faq)
+
+                    Spacer(Modifier.height(24.dp))
+                    Row(Modifier.fillMaxWidth()) {
+                        TRIAL_FEATURES.forEach { f ->
+                            Column(
+                                Modifier.weight(1f),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                Box(
+                                    Modifier.size(48.dp).clip(CircleShape).background(Pw.Surface),
+                                    contentAlignment = Alignment.Center,
+                                ) { Icon(f.icon, null, tint = Pw.Accent, modifier = Modifier.size(22.dp)) }
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    f.label,
+                                    style = fig(12, FontWeight.SemiBold, Tokens.OnDark),
+                                    textAlign = TextAlign.Center,
+                                )
                             }
                         }
                     }
 
+                    Spacer(Modifier.height(28.dp))
+                    Text("Your plan after $TRIAL_DAYS free days", style = fig(16, FontWeight.Bold, Tokens.OnDark))
                     Spacer(Modifier.height(16.dp))
-                    PaywallVideo(paused = ui.busy)
-
-                    Spacer(Modifier.height(20.dp))
-                    Text("EVERYTHING IN THE APP", style = fig(12, FontWeight.Bold, Tokens.Muted))
-                    Spacer(Modifier.height(12.dp))
-                    TRIAL_FEATURES.forEach { f ->
-                        Row(
-                            Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            Box(
-                                Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(Tokens.BlueLight),
-                                contentAlignment = Alignment.Center,
-                            ) { Icon(f.icon, null, tint = Tokens.Blue, modifier = Modifier.size(22.dp)) }
-                            Column(Modifier.weight(1f)) {
-                                Text(f.title, style = fig(16, FontWeight.Bold))
-                                Text(f.sub, style = fig(13, FontWeight.Normal, Tokens.Muted))
-                            }
-                        }
-                    }
-
-                    Spacer(Modifier.height(20.dp))
-                    Text("YOUR PLAN AFTER $TRIAL_DAYS DAYS", style = fig(12, FontWeight.Bold, Tokens.Muted))
-                    Spacer(Modifier.height(12.dp))
                     PlanCard(
                         selected = ui.plan == PaywallPlan.ANNUAL,
                         onSelect = { vm.selectPlan(PaywallPlan.ANNUAL) },
@@ -201,7 +272,7 @@ fun PaywallScreen(
                         was = rupees(WAS_ANNUAL * 100),
                         badge = "BEST VALUE · SAVE ${rupees(saveVsMonthly * 100)}",
                     )
-                    Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height(12.dp))
                     PlanCard(
                         selected = ui.plan == PaywallPlan.MONTHLY,
                         onSelect = { vm.selectPlan(PaywallPlan.MONTHLY) },
@@ -212,36 +283,103 @@ fun PaywallScreen(
                         was = rupees(WAS_MONTHLY * 100),
                         badge = null,
                     )
-                    ui.error?.let {
-                        Spacer(Modifier.height(8.dp))
-                        Text(it, style = fig(13, FontWeight.SemiBold, Tokens.OrangeText))
+
+                    Spacer(Modifier.height(28.dp))
+                    Text("Works with your UPI app", style = fig(16, FontWeight.Bold, Tokens.OnDark))
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        UPI_APPS.forEach { app ->
+                            Text(
+                                app,
+                                style = fig(13, FontWeight.Bold, Tokens.Ink),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(50))
+                                    .background(Tokens.OnDark)
+                                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                            )
+                        }
                     }
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(8.dp))
+                    Text("and more", style = fig(13, FontWeight.Normal, Pw.Text))
+
+                    ui.error?.let {
+                        Spacer(Modifier.height(12.dp))
+                        Text(it, style = fig(13, FontWeight.SemiBold, Pw.Eyebrow), textAlign = TextAlign.Center)
+                    }
+                    Spacer(Modifier.height(20.dp))
                 }
 
+                // Fixed bottom bar so the video never pushes the CTA off-screen.
                 Column(
                     Modifier
                         .fillMaxWidth()
-                        .background(Tokens.Card)
-                        .padding(20.dp),
+                        .background(Pw.Bar)
+                        .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    PrimaryButton(
-                        text = if (ui.busy) "Starting…" else "Start trial for ${rupees(ui.trialAmount)}",
-                        enabled = !ui.busy,
-                        onClick = { vm.pay(activity) },
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    // The chosen plan kicks in after the trial.
                     val amt = if (ui.plan == PaywallPlan.ANNUAL) ui.annualAmount else ui.monthlyAmount
                     val per = if (ui.plan == PaywallPlan.ANNUAL) "year" else "month"
                     Text(
-                        "Then ${rupees(amt)}/$per after the $TRIAL_DAYS-day trial · cancel anytime",
-                        style = fig(12, FontWeight.Normal, Tokens.Muted),
-                        modifier = Modifier.fillMaxWidth(),
+                        "Autopays ${rupees(amt)}/$per after $trialEnd · cancel anytime before",
+                        style = fig(12, FontWeight.Normal, Pw.Text),
+                        textAlign = TextAlign.Center,
                     )
+                    Spacer(Modifier.height(10.dp))
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(56.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Pw.Cta, alpha = if (ui.busy) 0.6f else 1f)
+                            .tap(enabled = !ui.busy) { vm.pay(activity) },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            if (ui.busy) "Starting…" else "START $TRIAL_DAYS-DAY FREE TRIAL · ${rupees(ui.trialAmount)}",
+                            style = fig(16, FontWeight.ExtraBold, Tokens.OnDark),
+                        )
+                    }
                 }
             }
         }
+    }
+
+    if (faq) {
+        val annualText = rupees(ui.annualAmount)
+        val monthlyText = rupees(ui.monthlyAmount)
+        val trialText = rupees(ui.trialAmount)
+        AppBottomSheet(title = "Questions", onDismiss = { faq = false }) {
+            Column(
+                Modifier.padding(horizontal = 20.dp).padding(bottom = 28.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                FaqItem(
+                    "Why do I pay $trialText today?",
+                    "The $trialText sets up UPI AutoPay for your plan. It is the only payment today — you get the full app for $TRIAL_DAYS days.",
+                )
+                FaqItem(
+                    "When is my plan charged?",
+                    "After $trialEnd, when your free days end: $annualText/year or $monthlyText/month, whichever you picked, by UPI AutoPay.",
+                )
+                FaqItem(
+                    "Can I cancel?",
+                    "Yes, anytime from Settings → Subscription. Cancel before $trialEnd and the plan is never charged.",
+                )
+                FaqItem(
+                    "Which UPI apps work?",
+                    "Any UPI app that supports AutoPay — GPay, PhonePe, Paytm, BHIM and more.",
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FaqItem(q: String, a: String) {
+    Column {
+        Text(q, style = fig(15, FontWeight.Bold))
+        Spacer(Modifier.height(4.dp))
+        Text(a, style = fig(14, FontWeight.Normal, Tokens.Muted))
     }
 }
 
@@ -256,37 +394,40 @@ private fun PlanCard(
     was: String,
     badge: String?,
 ) {
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(Tokens.Card)
-            .border(2.dp, if (selected) Tokens.Blue else Tokens.CardBorder, RoundedCornerShape(16.dp))
-            .tap(onClick = onSelect)
-            .padding(16.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(
-                Modifier.size(20.dp).clip(CircleShape)
-                    .border(2.dp, if (selected) Tokens.Blue else Tokens.CardBorder, CircleShape),
-                contentAlignment = Alignment.Center,
-            ) { if (selected) Box(Modifier.size(10.dp).clip(CircleShape).background(Tokens.Blue)) }
-            Column(Modifier.weight(1f)) {
-                Text(name, style = fig(16, FontWeight.Bold))
-                Text(note, style = fig(13, FontWeight.Normal, Tokens.Muted))
-            }
-            Column(horizontalAlignment = Alignment.End) {
-                Text(price, style = bric(20, FontWeight.Bold))
-                Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(was, style = fig(12, FontWeight.Normal, Tokens.Muted).copy(textDecoration = TextDecoration.LineThrough))
-                    Text(per, style = fig(12, FontWeight.Normal, Tokens.Muted))
+    Box(Modifier.fillMaxWidth()) {
+        Box(
+            Modifier
+                .padding(top = if (badge != null) 10.dp else 0.dp)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(if (selected) Pw.Selected.copy(alpha = 0.15f) else Color(0x0AFFFFFF))
+                .border(2.dp, if (selected) Pw.Selected else Color(0x26FFFFFF), RoundedCornerShape(16.dp))
+                .tap(onClick = onSelect)
+                .padding(16.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box(
+                    Modifier.size(20.dp).clip(CircleShape)
+                        .border(2.dp, if (selected) Pw.Accent else Color(0x4DFFFFFF), CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) { if (selected) Box(Modifier.size(10.dp).clip(CircleShape).background(Pw.Accent)) }
+                Column(Modifier.weight(1f)) {
+                    Text(name, style = fig(16, FontWeight.Bold, Tokens.OnDark))
+                    Text(note, style = fig(13, FontWeight.Normal, Pw.Text))
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(price, style = bric(20, FontWeight.Bold, Tokens.OnDark))
+                    Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text(was, style = fig(12, FontWeight.Normal, Pw.Text).copy(textDecoration = TextDecoration.LineThrough))
+                        Text(per, style = fig(12, FontWeight.Normal, Pw.Text))
+                    }
                 }
             }
         }
         if (badge != null) {
             Box(
                 Modifier
-                    .padding(start = 4.dp)
+                    .padding(start = 16.dp)
                     .clip(RoundedCornerShape(50))
                     .background(Tokens.Orange)
                     .padding(horizontal = 8.dp, vertical = 2.dp),
