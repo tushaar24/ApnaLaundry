@@ -41,6 +41,12 @@ object Tokens {
     val OrangeBar = Color(0xFFF6B98A)
     val DeleteRed = Color(0xFF9A3412)
 
+    // Login (blue hero) states
+    val Green = Color(0xFF16A34A)
+    val GreenText = Color(0xFF15803D)
+    val ErrorRed = Color(0xFFB42318)
+    val OnBlueMuted = Color(0xFFDCE5FB)
+
     // On-dark
     val OnDark = Color(0xFFFFFFFF)
     val OnDarkMuted = Color(0xFFD9D6CF)
