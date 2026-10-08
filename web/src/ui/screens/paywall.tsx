@@ -219,7 +219,7 @@ export function PaywallScreen({ onDone }: {
           </h1>
           <div className={cls("bric mt-2 text-center text-[64px] leading-none", PW.accent)}>{rupees(trialR)}</div>
           <div className={cls("mt-2 text-center text-[11px] font-extrabold tracking-[0.12em]", PW.text)}>
-            {rupees(trialR)} REFUNDED INSTANTLY · NOTHING TO PAY TILL {trialEnd.toUpperCase()}
+            {rupees(trialR)} REFUNDED INSTANTLY
           </div>
 
           <div className="mt-5">
