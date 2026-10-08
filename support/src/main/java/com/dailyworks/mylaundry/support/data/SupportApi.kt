@@ -36,13 +36,9 @@ import java.io.InputStream
 class ApiException(message: String, val status: Int = 0) : Exception(message)
 
 /**
- * Client for the backend's /api/laundry/support routes. Every request
- * carries the shared X-Support-Key (there is no agent login).
+ * Client for the backend's /api/laundry/support routes (open — no login, no key).
  */
-class SupportApi(
-    private val baseUrl: String = BuildConfig.API_BASE_URL,
-    private val key: String = BuildConfig.SUPPORT_API_KEY,
-) {
+class SupportApi(private val baseUrl: String = BuildConfig.API_BASE_URL) {
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
 
     private val client = HttpClient(OkHttp) {
@@ -51,7 +47,6 @@ class SupportApi(
             connectTimeoutMillis = 15_000
             requestTimeoutMillis = 30_000
         }
-        defaultRequest { header("X-Support-Key", key) }
     }
 
     // Recording PUTs can be tens of MB on a slow network: no request timeout.
@@ -79,8 +74,6 @@ class SupportApi(
         }
 
     private fun url(path: String) = "$baseUrl$path"
-
-    val isConfigured get() = key.isNotBlank()
 
     suspend fun shops(filters: ShopFilters, page: Int, pageSize: Int = 30): ShopsPage = call {
         client.get(url("/shops")) { filters.toQuery(page, pageSize).forEach { (k, v) -> parameter(k, v) } }

@@ -18,26 +18,19 @@ backend repo (`routes/laundry-support.js`).
   uploaded to Supabase Storage in the background. Unanswered calls are marked
   "No answer" automatically.
 
-No login: each agent types their name once (shown on their calls). The app
-talks to the backend with a shared key.
+No login and no API key (owner decision): each agent types their name once
+(shown on their calls).
 
 ## Build
 
-1. Put the server's `LAUNDRY_SUPPORT_KEY` in the repo's `local.properties`
-   (gitignored):
+Build with Android Studio's JDK (see the main app's notes):
 
-   ```
-   support.apiKey=<same value as LAUNDRY_SUPPORT_KEY on the server>
-   ```
+```
+./gradlew :support:assembleRelease
+```
 
-2. Build (with Android Studio's JDK, see the main app's notes):
-
-   ```
-   ./gradlew :support:assembleRelease
-   ```
-
-   APK: `support/build/outputs/apk/release/support-release.apk` (debug-signed —
-   fine for sideloading). Share it to team phones and install.
+APK: `support/build/outputs/apk/release/support-release.apk` (debug-signed —
+fine for sideloading). Share it to team phones and install.
 
 ## Call recording on team phones
 

@@ -11,6 +11,4 @@ public final class BuildConfig {
   public static final String VERSION_NAME = "1.0";
   // Field from default config.
   public static final String API_BASE_URL = "https://shwetamakeover.online/api/laundry/support";
-  // Field from default config.
-  public static final String SUPPORT_API_KEY = "";
 }

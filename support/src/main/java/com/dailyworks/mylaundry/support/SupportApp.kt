@@ -13,7 +13,7 @@ class Graph(app: Application) {
     val prefs = Prefs(app)
     val monitor = CallMonitor(app)
     val finder = RecordingFinder(app)
-    val calls = CallFlow(app, api, prefs, monitor)
+    val calls = CallFlow(app, api, prefs, monitor, finder)
 }
 
 class SupportApp : Application() {

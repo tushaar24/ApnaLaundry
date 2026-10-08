@@ -113,15 +113,6 @@ fun SettingsScreen(graph: Graph, isSetup: Boolean, onDone: () -> Unit) {
             Text("Three quick steps so your calls are logged and recorded.", style = fig(15, color = Tokens.Muted))
         }
 
-        if (!graph.api.isConfigured) {
-            SectionCard {
-                Text(
-                    "This build has no support API key. Add support.apiKey to local.properties and rebuild.",
-                    style = fig(14, FontWeight.SemiBold, Tokens.Red),
-                )
-            }
-        }
-
         SectionCard("1 · Your name") {
             Text("Shown on every call you make.", style = fig(14, color = Tokens.Muted))
             OutlinedTextField(
@@ -167,8 +158,13 @@ fun SettingsScreen(graph: Graph, isSetup: Boolean, onDone: () -> Unit) {
                 style = fig(14, color = Tokens.InkSecondary),
             )
             Text(
-                "Usually: Samsung › Recordings/Call · Xiaomi/Redmi › MIUI/sound_recorder/call_rec · " +
-                    "Realme/Oppo/OnePlus › Music/Recordings/Call Recordings or Recordings/Call · Vivo › Record/Call",
+                "Xiaomi / Redmi / Poco: pick MIUI › sound_recorder › call_rec. This one is required — " +
+                    "Xiaomi hides call recordings from the audio library, so without it nothing uploads.",
+                style = fig(13, FontWeight.SemiBold, Tokens.InkSecondary),
+            )
+            Text(
+                "Others: Samsung › Recordings/Call · Realme/Oppo/OnePlus › Music/Recordings/Call Recordings " +
+                    "or Recordings/Call · Vivo › Record/Call",
                 style = fig(13, color = Tokens.Muted),
             )
             Text(

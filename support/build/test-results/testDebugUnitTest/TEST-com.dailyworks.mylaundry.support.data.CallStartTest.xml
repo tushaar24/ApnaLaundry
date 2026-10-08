@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.dailyworks.mylaundry.support.data.CallStartTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-08T12:05:13.539Z" hostname="Tushars-MacBook-Air-4.local" time="0.025">
+  <properties/>
+  <testcase name="otherwiseSaveTimeMinusLength" classname="com.dailyworks.mylaundry.support.data.CallStartTest" time="0.014"/>
+  <testcase name="ignoresImplausibleStampsAndUnknownSaveTime" classname="com.dailyworks.mylaundry.support.data.CallStartTest" time="0.009"/>
+  <testcase name="xiaomiNameStampIsTheCallStart" classname="com.dailyworks.mylaundry.support.data.CallStartTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

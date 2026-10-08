@@ -158,7 +158,7 @@ class RecordingFinder(private val context: Context) {
         return out
     }
 
-    /** Size + display name for a file the agent attached by hand. */
+    /** Size, display name and (when the provider reports it) save time of a file the agent picked. */
     fun describe(uri: Uri): RecordingCandidate? = runCatching {
         context.contentResolver.query(
             uri,
@@ -167,9 +167,40 @@ class RecordingFinder(private val context: Context) {
         )?.use { c ->
             if (!c.moveToFirst()) return@use null
             RecordingCandidate(
-                uri = uri.toString(), name = c.getString(0).orEmpty(), lastModifiedMs = 0,
+                uri = uri.toString(), name = c.getString(0).orEmpty(), lastModifiedMs = lastModified(uri),
                 size = c.getLong(1), mime = context.contentResolver.getType(uri),
             )
         }
     }.getOrNull()
+
+    // Separate query: not every provider supports COLUMN_LAST_MODIFIED (0 = unknown).
+    private fun lastModified(uri: Uri): Long = runCatching {
+        context.contentResolver.query(uri, arrayOf(DocumentsContract.Document.COLUMN_LAST_MODIFIED), null, null, null)
+            ?.use { c -> if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else 0L } ?: 0L
+    }.getOrDefault(0L)
+
+    /** Length of an audio file in ms, or 0 if it can't be read. */
+    fun durationMs(uri: Uri): Long = runCatching {
+        val r = android.media.MediaMetadataRetriever()
+        try {
+            r.setDataSource(context, uri)
+            r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+        } finally {
+            r.release()
+        }
+    }.getOrDefault(0L)
+}
+
+/**
+ * When a recording file says its call started: a 13-digit epoch-ms in the
+ * name (Xiaomi's `record-<ms>.wav` = the call's start, matching the call log),
+ * else the save time minus the audio length, else now minus the length.
+ * Pure — unit-tested.
+ */
+fun callStartFor(name: String, lastModifiedMs: Long, durationMs: Long, nowMs: Long): Long {
+    val fromName = Regex("""(?<!\d)(1\d{12})(?!\d)""").find(name)?.value?.toLongOrNull()
+    // Only trust a name stamp that's a plausible past time (2020 .. now).
+    if (fromName != null && fromName in 1_577_836_800_000L..nowMs) return fromName
+    val end = if (lastModifiedMs in 1..nowMs) lastModifiedMs else nowMs
+    return end - durationMs
 }
