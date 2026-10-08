@@ -18,7 +18,7 @@ browser ──▶ nginx (web container, :443)
 | --- | --- | --- |
 | `BACKEND_URL` | runtime | `http://backend:5001` (internal compose network) |
 | `NEXT_PUBLIC_CLEVERTAP_ACCOUNT_ID` | build | the CleverTap account id (blank = analytics off) |
-| `NEXT_PUBLIC_CLEVERTAP_REGION` | build | `eu1` |
+| `NEXT_PUBLIC_CLEVERTAP_REGION` | build | `global` (the ApnaLaundry account, RZ7-7RW-Z97Z) |
 | `NEXT_PUBLIC_PINNED_TODAY` | build | leave **unset** in prod for the real clock |
 | `NEXT_PUBLIC_PINNED_NOW_MINUTES` | build | leave **unset** in prod |
 
@@ -37,7 +37,7 @@ adjust the `context:` path to match the server layout):
       context: ../ApnaLaundry/web        # path to this repo's web/ on the server
       args:
         NEXT_PUBLIC_CLEVERTAP_ACCOUNT_ID: ${LAUNDRY_CLEVERTAP_ACCOUNT_ID}
-        NEXT_PUBLIC_CLEVERTAP_REGION: ${LAUNDRY_CLEVERTAP_REGION:-eu1}
+        NEXT_PUBLIC_CLEVERTAP_REGION: ${LAUNDRY_CLEVERTAP_REGION:-global}
     environment:
       BACKEND_URL: http://backend:5001   # internal — reaches the backend container
     # No published ports — nginx proxies laundry.<domain> → laundry:3000.

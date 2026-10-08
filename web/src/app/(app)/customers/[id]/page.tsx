@@ -3,7 +3,7 @@
 import { use, useState } from "react";
 import * as AppDate from "@/core/appdate";
 import { rupees } from "@/core/money";
-import { amtOf } from "@/domain/laundryMath";
+import { amtOf, isOpen } from "@/domain/laundryMath";
 import type { LaundryState, Order, PayMethod } from "@/domain/models";
 import * as Sel from "@/domain/selectors";
 import { useLaundryState } from "@/data/store";
@@ -55,7 +55,6 @@ function khataRows(state: LaundryState, custId: string): KhataRow[] {
     const before = run;
     const whenStr = AppDate.plain(e.date).split(", ")[1] + (e.time ? ` · ${e.time}` : "");
     let isAdd = false;
-    let counts = true;
     let title = "";
     let sub = "";
     switch (e.kind) {
@@ -84,25 +83,13 @@ function khataRows(state: LaundryState, custId: string): KhataRow[] {
         sub = `${whenStr} · order edited after delivery`;
         break;
       case "GOT": {
-        const o = e.tag === "PRE" && e.ref != null ? Sel.order(state, e.ref) : undefined;
-        counts = !(e.tag === "PRE" && (!o || o.status !== "DELIVERED"));
-        if (counts) run -= e.amt;
+        run -= e.amt;
         title = e.tag === "PRE" ? `Paid for order #${e.ref} · ${methodName(e.method)}` : `Got ${rupees(e.amt)} · ${methodName(e.method)}`;
-        sub =
-          whenStr +
-          (!counts
-            ? " · counts when order is delivered"
-            : e.toAdv > 0
-              ? ` · ${rupees(e.toAdv)} kept as advance`
-              : "");
+        sub = whenStr + (e.toAdv > 0 ? ` · ${rupees(e.toAdv)} kept as advance` : "");
         break;
       }
     }
-    const fg = !counts
-      ? "var(--color-muteddot)"
-      : isAdd
-        ? "var(--color-orangetext)"
-        : "var(--color-bluetext)";
+    const fg = isAdd ? "var(--color-orangetext)" : "var(--color-bluetext)";
     return {
       key: e.id,
       title,
@@ -112,6 +99,23 @@ function khataRows(state: LaundryState, custId: string): KhataRow[] {
       after: balWord(run),
     };
   });
+  // Open orders are already in the baaki at their current total (newest last).
+  const open = state.orders
+    .filter((o) => o.custId === custId && isOpen(o))
+    .sort((a, b) => a.id - b.id);
+  for (const o of open) {
+    const amt = amtOf(o);
+    run += amt;
+    const desc = o.lines.length > 0 ? `${Sel.itemsLabel(o)} · ${Sel.svcLabel(o)}` : "clothes not counted yet";
+    out.push({
+      key: `open-${o.id}`,
+      title: `Order #${o.id} · in progress`,
+      sub: `${AppDate.plain(o.createdOn || o.pickupDate).split(", ")[1]} · ${desc}`,
+      amount: "+ " + rupees(amt),
+      amtColor: "var(--color-orangetext)",
+      after: balWord(run),
+    });
+  }
   return out.reverse();
 }
 
@@ -177,10 +181,10 @@ function CustomerScreen({ custId }: { custId: string }) {
           <span className="bric text-[30px]" style={{ color: balFg }}>{rupees(bal)}</span>
           <span className="text-[12px]" style={{ color: balFg }}>
             {bal > 0
-              ? "Baaki from delivered orders. Orders in progress are not counted yet."
+              ? "Includes orders in progress at their current total."
               : bal < 0
                 ? "Used automatically on the next bill."
-                : "Nothing to collect from delivered orders."}
+                : "Nothing to collect."}
           </span>
           {bal > 0 ? (
             <div className="flex w-full gap-2">
@@ -212,7 +216,7 @@ function CustomerScreen({ custId }: { custId: string }) {
 
         {inProgress.length > 0 ? (
           <>
-            <span className="text-[12px] font-bold text-muted">ORDERS IN PROGRESS · NOT IN KHATA YET</span>
+            <span className="text-[12px] font-bold text-muted">ORDERS IN PROGRESS</span>
             {inProgress.map((o) => (
               <OrderMiniRow key={o.id} o={o} onClick={() => nav.openOrder(o.id)} />
             ))}

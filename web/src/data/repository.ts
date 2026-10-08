@@ -207,7 +207,7 @@ export function deliver(orderId: number, amountReceived: number, method: PayMeth
   const st = deriveState(rows());
   const total = amtOf(o);
   const pre = o.pre;
-  const oldBal = balance(o.custId, st.ledger, st.orders);
+  const oldBal = balance(o.custId, st.ledger, st.orders, o.id);
   const alloc = deliverAllocation(total, pre, oldBal, amountReceived);
   const entries: LedgerRow[] = [mkEntry({ cust: o.custId, kind: "BILL", amt: total, ref: o.id })];
   if (amountReceived > 0) {

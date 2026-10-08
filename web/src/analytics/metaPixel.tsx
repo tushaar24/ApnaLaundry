@@ -45,12 +45,17 @@ export const MetaPixel = {
 export function MetaPixelScript() {
   const pathname = usePathname();
   const first = useRef(true);
+  // Customer-facing bill pages (/b/<token>) are visited by the shops' own
+  // customers, not prospects — keep them out of the ad audiences entirely.
+  const isCustomerBill = pathname?.startsWith("/b/") ?? false;
   useEffect(() => {
+    if (isCustomerBill) return;
     // The init snippet already sends the first PageView.
     if (first.current) { first.current = false; return; }
     fbq("track", "PageView");
-  }, [pathname]);
+  }, [pathname, isCustomerBill]);
 
+  if (isCustomerBill) return null;
   return (
     <>
       <Script id="meta-pixel" strategy="afterInteractive">{`
