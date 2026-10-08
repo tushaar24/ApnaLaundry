@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Headset on brand blue: tells the support app apart from the MyLaundry app. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M36,62 v-8 a18,18 0 0 1 36,0 v8"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="5"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M31,58 h7 a3,3 0 0 1 3,3 v10 a3,3 0 0 1 -3,3 h-4 a3,3 0 0 1 -3,-3 z M77,58 h-7 a3,3 0 0 0 -3,3 v10 a3,3 0 0 0 3,3 h4 a3,3 0 0 0 3,-3 z"
+        android:fillColor="#FFFFFFFF" />
+</vector>

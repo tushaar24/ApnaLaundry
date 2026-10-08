@@ -21,3 +21,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "ApnaLaundry"
 include(":app")
+include(":support")

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.dailyworks.mylaundry.support.data.RecordingPickTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-10-08T10:00:51.081Z" hostname="Tushars-MacBook-Air-4.local" time="0.033">
+  <properties/>
+  <testcase name="prefersFileNamedWithTheNumber" classname="com.dailyworks.mylaundry.support.data.RecordingPickTest" time="0.028"/>
+  <testcase name="otherwiseClosestToCallEndInACallFolder" classname="com.dailyworks.mylaundry.support.data.RecordingPickTest" time="0.005"/>
+  <testcase name="ignoresFilesOutsideTheWindowEmptyOrNotAudio" classname="com.dailyworks.mylaundry.support.data.RecordingPickTest" time="0.0"/>
+  <testcase name="mimeAndExt" classname="com.dailyworks.mylaundry.support.data.RecordingPickTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

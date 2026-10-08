@@ -1,0 +1,10 @@
+R_DEF: Internal format may change without notice
+local
+color app_bg
+color brand
+drawable ic_launcher_foreground
+font bricolage_grotesque
+font figtree
+mipmap ic_launcher
+string app_name
+style Theme.Support
