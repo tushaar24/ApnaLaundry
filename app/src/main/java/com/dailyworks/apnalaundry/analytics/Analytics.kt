@@ -208,6 +208,14 @@ object Analytics {
     // Cancelled) from the Razorpay webhook.
     fun paywallShown() = track("Paywall Shown")
 
+    // Paywall intro video (autoplays with sound; muted = the user muted it).
+    fun paywallVideoStarted(muted: Boolean) =
+        track("Paywall Video Started", mapOf("muted" to muted))
+
+    fun paywallVideoUnmuted() = track("Paywall Video Unmuted")
+
+    fun paywallVideoCompleted() = track("Paywall Video Completed")
+
     fun planSelected(plan: String) =
         track("Plan Selected", mapOf("plan" to plan))
 

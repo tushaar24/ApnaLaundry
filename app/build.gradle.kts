@@ -92,6 +92,10 @@ dependencies {
     // Razorpay Standard Checkout — UPI AutoPay subscription authorization.
     implementation(libs.razorpay.checkout)
 
+    // Media3 — the paywall intro video.
+    implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.media3.ui.compose)
+
     // Room
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)

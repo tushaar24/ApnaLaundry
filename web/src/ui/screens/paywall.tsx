@@ -8,7 +8,7 @@ import { paywallInfo, useBillingStore } from "@/data/billingStore";
 import { Analytics } from "@/analytics/events";
 import { MetaPixel } from "@/analytics/metaPixel";
 import { cls, PrimaryButton, SectionLabel } from "@/ui/basics";
-import { IcBook, IcChart, IcChat, IcCheck, IcReceipt } from "@/ui/icons";
+import { IcBook, IcChart, IcChat, IcCheck, IcPlay, IcReceipt, IcReplay, IcVolume, IcVolumeOff } from "@/ui/icons";
 
 /**
  * Paywall / plans screen for the ₹2 trial, built from the handoff (docs
@@ -30,6 +30,10 @@ const WAS_ANNUAL = 8999;
 
 // backend TRIAL_DAYS (laundry-razorpay.js)
 const TRIAL_DAYS = 7;
+
+// Paywall intro video (CloudFront, faststart MP4 — streams as it plays).
+const PAYWALL_VIDEO_URL =
+  "https://d2ol7oe51mr4n9.cloudfront.net/user_3ESV0PHoaONgMaS1Oeue2wCtXlS/432527c7-e72a-412a-8e18-ba8a85635ad7.mp4";
 
 // The trial paywall lists features with a subtitle each (design 08b).
 const TRIAL_FEATURES: { Icon: typeof IcReceipt; title: string; sub: string }[] = [
@@ -155,9 +159,11 @@ export function PaywallScreen({ onDone }: {
       {stage === "waiting" ? (
         <WaitingView onBack={() => { setStage("plans"); setBusy(false); }} />
       ) : (
-        <div className="relative flex flex-1 flex-col justify-center px-5 py-6">
+        <div className="relative flex flex-1 flex-col justify-center px-5 pt-6">
+          <PaywallVideo paused={busy} />
+
           {/* ₹2 trial hero */}
-          <div className="rounded-2xl bg-blue px-4 py-3.5 text-ondark">
+          <div className="mt-4 rounded-2xl bg-blue px-4 py-3.5 text-ondark">
             <div className="text-[11px] font-bold tracking-[0.08em] text-bluebar">{TRIAL_DAYS}-DAY FULL TRIAL</div>
             <div className="mt-1 flex items-center gap-4">
               <span className="bric text-[40px] leading-none">{rupees(trialR)}</span>
@@ -208,12 +214,15 @@ export function PaywallScreen({ onDone }: {
 
           {error ? <p className="mt-2 text-[13px] font-semibold text-orangetext">{error}</p> : null}
 
-          <PrimaryButton className="mt-5" onClick={pay} disabled={busy}>
-            {busy ? "Starting…" : `Start trial for ${rupees(trialR)}`}
-          </PrimaryButton>
-          <p className="mt-2 text-center text-[12px] text-muted">
-            {`Then ${rupees(plan === "annual" ? annualR : monthlyR)}/${plan === "annual" ? "year" : "month"} from ${trialStart} by UPI AutoPay. Cancel anytime before.`}
-          </p>
+          {/* Sticky so the video above never pushes the CTA off-screen. */}
+          <div className="sticky bottom-0 -mx-5 mt-2 bg-bg px-5 pb-6 pt-3">
+            <PrimaryButton onClick={pay} disabled={busy}>
+              {busy ? "Starting…" : `Start trial for ${rupees(trialR)}`}
+            </PrimaryButton>
+            <p className="mt-2 text-center text-[12px] text-muted">
+              {`Then ${rupees(plan === "annual" ? annualR : monthlyR)}/${plan === "annual" ? "year" : "month"} from ${trialStart} by UPI AutoPay. Cancel anytime before.`}
+            </p>
+          </div>
         </div>
       )}
     </div>
@@ -222,6 +231,122 @@ export function PaywallScreen({ onDone }: {
   return (
     <div className="flex min-h-dvh justify-center bg-bg">
       {card}
+    </div>
+  );
+}
+
+/**
+ * Paywall intro video. Tries to autoplay WITH sound; browsers only allow that
+ * after a tap on the page (Chrome carries the OTP "Verify" tap over, since the
+ * Gate reaches the paywall by client-side navigation — a reload or iOS Safari
+ * blocks it). If blocked it plays muted with a "Tap for sound" pill, which
+ * unmutes and restarts from the beginning. Paused while Checkout is open or the
+ * tab is hidden; hidden entirely if the video fails to load.
+ */
+function PaywallVideo({ paused }: { paused: boolean }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  const startedRef = useRef(false);
+  const [muted, setMuted] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [ended, setEnded] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  function started(wasMuted: boolean) {
+    if (startedRef.current) return;
+    startedRef.current = true;
+    Analytics.paywallVideoStarted(wasMuted);
+  }
+
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    let cancelled = false;
+    v.muted = false;
+    v.play().then(
+      () => { if (!cancelled) started(false); },
+      (e: unknown) => {
+        // AbortError = paused/unmounted mid-start; only NotAllowedError means
+        // "sound not allowed yet" → fall back to muted autoplay.
+        if (cancelled || (e as Error)?.name !== "NotAllowedError") return;
+        v.muted = true;
+        setMuted(true);
+        v.play().then(() => { if (!cancelled) started(true); }, () => {});
+      },
+    );
+    const onVisibility = () => { if (document.hidden) v.pause(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => { if (paused) ref.current?.pause(); }, [paused]);
+
+  function play(fromStart: boolean) {
+    const v = ref.current;
+    if (!v) return;
+    if (fromStart) v.currentTime = 0;
+    setEnded(false);
+    void v.play().catch(() => {});
+  }
+
+  function setSound(on: boolean) {
+    const v = ref.current;
+    if (!v) return;
+    v.muted = !on;
+    setMuted(!on);
+    if (on) Analytics.paywallVideoUnmuted();
+  }
+
+  // Tapping the video: first tap on a muted video turns sound on and restarts
+  // it (they missed the audio); otherwise replay / resume / pause.
+  function onTap() {
+    if (muted) { setSound(true); play(true); }
+    else if (ended) play(true);
+    else if (!playing) play(false);
+    else ref.current?.pause();
+  }
+
+  if (failed) return null;
+
+  return (
+    <div className="relative aspect-video w-full overflow-hidden rounded-2xl bg-black">
+      <video
+        ref={ref}
+        src={PAYWALL_VIDEO_URL}
+        playsInline
+        preload="auto"
+        className="size-full object-cover"
+        onClick={onTap}
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onEnded={() => { setEnded(true); Analytics.paywallVideoCompleted(); }}
+        onError={() => setFailed(true)}
+      />
+      {ended ? (
+        <button type="button" onClick={() => play(true)} className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/50 text-[14px] font-bold text-white">
+          <IcReplay size={32} />
+          Watch again
+        </button>
+      ) : muted ? (
+        <button type="button" onClick={onTap} className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-black/70 px-4 py-2 text-[14px] font-bold text-white">
+          <IcVolume size={18} />
+          Tap for sound
+        </button>
+      ) : (
+        <>
+          {!playing ? (
+            <button type="button" onClick={() => play(false)} aria-label="Play" className="absolute inset-0 flex items-center justify-center text-white">
+              <span className="flex size-14 items-center justify-center rounded-full bg-black/60"><IcPlay size={26} /></span>
+            </button>
+          ) : null}
+          <button type="button" onClick={() => setSound(false)} aria-label="Mute" className="absolute bottom-2 right-2 flex size-9 items-center justify-center rounded-full bg-black/60 text-white">
+            <IcVolumeOff size={18} />
+          </button>
+        </>
+      )}
     </div>
   );
 }

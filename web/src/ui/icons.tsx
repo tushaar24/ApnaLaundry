@@ -124,3 +124,15 @@ export const IcChat = (p: P) => (
 export const IcBook = (p: P) => (
   <Base {...p}><path d="M6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5V4.5A1.5 1.5 0 0 1 6.5 3Z" /><path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19M9 8h6" /></Base>
 );
+export const IcVolume = (p: P) => (
+  <Base {...p}><path d="M11 5 6 9H3v6h3l5 4z" /><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" /></Base>
+);
+export const IcVolumeOff = (p: P) => (
+  <Base {...p}><path d="M11 5 6 9H3v6h3l5 4z" /><path d="m22 9-6 6M16 9l6 6" /></Base>
+);
+export const IcReplay = (p: P) => (
+  <Base {...p}><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /></Base>
+);
+export const IcPlay = (p: P) => (
+  <Base {...p}><path d="M7 4.5v15l12-7.5z" fill="currentColor" /></Base>
+);

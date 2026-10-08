@@ -151,6 +151,16 @@ export const Analytics = {
   paywallShown() {
     rawTrack("Paywall Shown");
   },
+  // Paywall intro video: muted = the browser blocked autoplay with sound.
+  paywallVideoStarted(muted: boolean) {
+    rawTrack("Paywall Video Started", { muted });
+  },
+  paywallVideoUnmuted() {
+    rawTrack("Paywall Video Unmuted");
+  },
+  paywallVideoCompleted() {
+    rawTrack("Paywall Video Completed");
+  },
   planSelected(plan: string) {
     rawTrack("Plan Selected", { plan });
   },
