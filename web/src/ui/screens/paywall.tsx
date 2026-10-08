@@ -31,9 +31,8 @@ const WAS_ANNUAL = 8999;
 // backend TRIAL_DAYS (laundry-razorpay.js)
 const TRIAL_DAYS = 7;
 
-// Paywall intro video (CloudFront, faststart MP4 — streams as it plays).
-const PAYWALL_VIDEO_URL =
-  "https://d2ol7oe51mr4n9.cloudfront.net/user_3ESV0PHoaONgMaS1Oeue2wCtXlS/432527c7-e72a-412a-8e18-ba8a85635ad7.mp4";
+// Paywall intro video — 720p faststart MP4 (~3.7 MB) served from public/.
+const PAYWALL_VIDEO_URL = "/paywall-intro.mp4";
 
 // The trial paywall lists features with a subtitle each (design 08b).
 const TRIAL_FEATURES: { Icon: typeof IcReceipt; title: string; sub: string }[] = [

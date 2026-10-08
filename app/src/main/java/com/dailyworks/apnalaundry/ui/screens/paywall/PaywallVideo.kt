@@ -49,9 +49,8 @@ import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.ui.components.fig
 import com.dailyworks.apnalaundry.ui.components.tap
 
-// Paywall intro video (CloudFront, faststart MP4 — streams as it plays).
-private const val PAYWALL_VIDEO_URL =
-    "https://d2ol7oe51mr4n9.cloudfront.net/user_3ESV0PHoaONgMaS1Oeue2wCtXlS/432527c7-e72a-412a-8e18-ba8a85635ad7.mp4"
+// Paywall intro video — the website's 720p faststart MP4 (~3.7 MB), streamed.
+private const val PAYWALL_VIDEO_URL = "https://mylaundry.work/paywall-intro.mp4"
 
 /**
  * Paywall intro video: autoplays WITH sound as soon as the paywall opens (no
