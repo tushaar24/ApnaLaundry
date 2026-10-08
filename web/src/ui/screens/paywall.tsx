@@ -131,7 +131,7 @@ export function PaywallScreen({ onDone }: {
     if (pollRef.current) clearInterval(pollRef.current);
     let polls = 0;
     pollRef.current = setInterval(async () => {
-      await refresh();
+      await refresh(0); // the poll itself is the retry
       const s = useBillingStore.getState().status;
       if (s?.hasActiveSubscription) {
         if (pollRef.current) clearInterval(pollRef.current);
