@@ -8,7 +8,7 @@ import { paywallInfo, useBillingStore } from "@/data/billingStore";
 import { Analytics } from "@/analytics/events";
 import { MetaPixel } from "@/analytics/metaPixel";
 import { cls, PrimaryButton, SectionLabel } from "@/ui/basics";
-import { IcBook, IcChart, IcChat, IcCheck, IcPlay, IcReceipt, IcReplay, IcVolume, IcVolumeOff } from "@/ui/icons";
+import { IcBook, IcChart, IcChat, IcCheck, IcPlay, IcReceipt, IcVolume, IcVolumeOff } from "@/ui/icons";
 
 /**
  * Paywall / plans screen for the ₹2 trial, built from the handoff (docs
@@ -159,10 +159,8 @@ export function PaywallScreen({ onDone }: {
         <WaitingView onBack={() => { setStage("plans"); setBusy(false); }} />
       ) : (
         <div className="relative flex flex-1 flex-col justify-center px-5 pt-6">
-          <PaywallVideo paused={busy} />
-
           {/* ₹2 trial hero */}
-          <div className="mt-4 rounded-2xl bg-blue px-4 py-3.5 text-ondark">
+          <div className="rounded-2xl bg-blue px-4 py-3.5 text-ondark">
             <div className="text-[11px] font-bold tracking-[0.08em] text-bluebar">{TRIAL_DAYS}-DAY FULL TRIAL</div>
             <div className="mt-1 flex items-center gap-4">
               <span className="bric text-[40px] leading-none">{rupees(trialR)}</span>
@@ -171,6 +169,10 @@ export function PaywallScreen({ onDone }: {
                 <div className="text-[13px] text-bluebar">Every feature unlocked for {TRIAL_DAYS} days</div>
               </div>
             </div>
+          </div>
+
+          <div className="mt-4">
+            <PaywallVideo paused={busy} />
           </div>
 
           <SectionLabel text="Everything in the app" className="mt-4" />
@@ -239,15 +241,15 @@ export function PaywallScreen({ onDone }: {
  * after a tap on the page (Chrome carries the OTP "Verify" tap over, since the
  * Gate reaches the paywall by client-side navigation — a reload or iOS Safari
  * blocks it). If blocked it plays muted with a "Tap for sound" pill, which
- * unmutes and restarts from the beginning. Paused while Checkout is open or the
- * tab is hidden; hidden entirely if the video fails to load.
+ * unmutes and restarts from the beginning. Loops; paused while Checkout is open
+ * or the tab is hidden; hidden entirely if the video fails to load.
  */
 function PaywallVideo({ paused }: { paused: boolean }) {
   const ref = useRef<HTMLVideoElement>(null);
   const startedRef = useRef(false);
+  const completedRef = useRef(false);
   const [muted, setMuted] = useState(false);
   const [playing, setPlaying] = useState(false);
-  const [ended, setEnded] = useState(false);
   const [failed, setFailed] = useState(false);
 
   function started(wasMuted: boolean) {
@@ -287,7 +289,6 @@ function PaywallVideo({ paused }: { paused: boolean }) {
     const v = ref.current;
     if (!v) return;
     if (fromStart) v.currentTime = 0;
-    setEnded(false);
     void v.play().catch(() => {});
   }
 
@@ -300,10 +301,9 @@ function PaywallVideo({ paused }: { paused: boolean }) {
   }
 
   // Tapping the video: first tap on a muted video turns sound on and restarts
-  // it (they missed the audio); otherwise replay / resume / pause.
+  // it (they missed the audio); otherwise resume / pause.
   function onTap() {
     if (muted) { setSound(true); play(true); }
-    else if (ended) play(true);
     else if (!playing) play(false);
     else ref.current?.pause();
   }
@@ -321,15 +321,18 @@ function PaywallVideo({ paused }: { paused: boolean }) {
         onClick={onTap}
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
-        onEnded={() => { setEnded(true); Analytics.paywallVideoCompleted(); }}
+        loop
+        // A looping video never fires "ended" — count the first time it reaches the end.
+        onTimeUpdate={(e) => {
+          const v = e.currentTarget;
+          if (!completedRef.current && v.duration && v.currentTime >= v.duration - 0.5) {
+            completedRef.current = true;
+            Analytics.paywallVideoCompleted();
+          }
+        }}
         onError={() => setFailed(true)}
       />
-      {ended ? (
-        <button type="button" onClick={() => play(true)} className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/50 text-[14px] font-bold text-white">
-          <IcReplay size={32} />
-          Watch again
-        </button>
-      ) : muted ? (
+      {muted ? (
         <button type="button" onClick={onTap} className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-black/70 px-4 py-2 text-[14px] font-bold text-white">
           <IcVolume size={18} />
           Tap for sound
