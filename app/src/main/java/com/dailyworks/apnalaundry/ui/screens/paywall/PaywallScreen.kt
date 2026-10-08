@@ -230,7 +230,7 @@ fun PaywallScreen(
                     Text(rupees(ui.trialAmount), style = bric(64, FontWeight.Bold, Pw.Accent))
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "ALL YOU PAY TODAY · NOTHING MORE TILL ${trialEnd.uppercase()}",
+                        "${rupees(ui.trialAmount)} REFUNDED INSTANTLY · NOTHING TO PAY TILL ${trialEnd.uppercase()}",
                         style = fig(11, FontWeight.ExtraBold, Pw.Text).copy(letterSpacing = 0.12.em),
                         textAlign = TextAlign.Center,
                     )
@@ -335,7 +335,7 @@ fun PaywallScreen(
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            if (ui.busy) "Starting…" else "START $TRIAL_DAYS-DAY FREE TRIAL · ${rupees(ui.trialAmount)}",
+                            if (ui.busy) "Starting…" else "START $TRIAL_DAYS-DAY FREE TRIAL",
                             style = fig(16, FontWeight.ExtraBold, Tokens.OnDark),
                         )
                     }
@@ -355,7 +355,7 @@ fun PaywallScreen(
             ) {
                 FaqItem(
                     "Why do I pay $trialText today?",
-                    "The $trialText sets up UPI AutoPay for your plan. It is the only payment today — you get the full app for $TRIAL_DAYS days.",
+                    "The $trialText sets up UPI AutoPay for your plan, and it is refunded to you instantly. You get the full app free for $TRIAL_DAYS days.",
                 )
                 FaqItem(
                     "When is my plan charged?",

@@ -219,7 +219,7 @@ export function PaywallScreen({ onDone }: {
           </h1>
           <div className={cls("bric mt-2 text-center text-[64px] leading-none", PW.accent)}>{rupees(trialR)}</div>
           <div className={cls("mt-2 text-center text-[11px] font-extrabold tracking-[0.12em]", PW.text)}>
-            ALL YOU PAY TODAY · NOTHING MORE TILL {trialEnd.toUpperCase()}
+            {rupees(trialR)} REFUNDED INSTANTLY · NOTHING TO PAY TILL {trialEnd.toUpperCase()}
           </div>
 
           <div className="mt-5">
@@ -284,7 +284,7 @@ export function PaywallScreen({ onDone }: {
                 PW.cta,
               )}
             >
-              {busy ? "Starting…" : `START ${TRIAL_DAYS}-DAY FREE TRIAL · ${rupees(trialR)}`}
+              {busy ? "Starting…" : `START ${TRIAL_DAYS}-DAY FREE TRIAL`}
             </button>
           </div>
         </div>
@@ -299,7 +299,7 @@ export function PaywallScreen({ onDone }: {
         <AppSheet title="Questions" noSidebar onDismiss={() => setFaq(false)}>
           <div className="flex flex-col gap-4">
             <FaqItem q={`Why do I pay ${rupees(trialR)} today?`}>
-              {`The ${rupees(trialR)} sets up UPI AutoPay for your plan. It is the only payment today — you get the full app for ${TRIAL_DAYS} days.`}
+              {`The ${rupees(trialR)} sets up UPI AutoPay for your plan, and it is refunded to you instantly. You get the full app free for ${TRIAL_DAYS} days.`}
             </FaqItem>
             <FaqItem q="When is my plan charged?">
               {`After ${trialEnd}, when your free days end: ${rupees(annualR)}/year or ${rupees(monthlyR)}/month, whichever you picked, by UPI AutoPay.`}
@@ -328,7 +328,7 @@ export function PaywallScreen({ onDone }: {
           )}
         >
           <p className="text-[15px] text-muted">
-            The {rupees(trialR)} didn&apos;t go through. Nothing was charged — try once more and the full app opens right away.
+            The {rupees(trialR)} didn&apos;t go through, so nothing was charged. Try once more — the {rupees(trialR)} is refunded instantly and the full app opens right away.
           </p>
           {plan === "annual" ? (
             // A failed Yearly attempt: recommend the smaller Monthly plan.
@@ -342,7 +342,7 @@ export function PaywallScreen({ onDone }: {
                   </span>
                 </div>
                 <div className="mt-0.5 text-[13px] text-bluetext">
-                  {`Same ${TRIAL_DAYS} free days and ${rupees(trialR)} today — then a smaller monthly payment.`}
+                  {`Same ${TRIAL_DAYS} free days, ${rupees(trialR)} refunded instantly — then a smaller monthly payment.`}
                 </div>
               </div>
               <PrimaryButton
@@ -354,7 +354,7 @@ export function PaywallScreen({ onDone }: {
                 }}
                 disabled={busy}
               >
-                {`Switch to Monthly · Pay ${rupees(trialR)}`}
+                Switch to Monthly
               </PrimaryButton>
               <button
                 type="button"
@@ -377,7 +377,7 @@ export function PaywallScreen({ onDone }: {
               }}
               disabled={busy}
             >
-              {`Try again · Pay ${rupees(trialR)}`}
+              Try again
             </PrimaryButton>
           )}
         </AppSheet>
