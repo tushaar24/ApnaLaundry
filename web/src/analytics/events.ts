@@ -164,6 +164,9 @@ export const Analytics = {
   paywallVideoCompleted() {
     rawTrack("Paywall Video Completed");
   },
+  paywallFaqOpened() {
+    rawTrack("Paywall FAQ Opened");
+  },
   planSelected(plan: string) {
     rawTrack("Plan Selected", { plan });
   },

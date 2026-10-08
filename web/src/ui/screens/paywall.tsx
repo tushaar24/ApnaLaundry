@@ -7,7 +7,7 @@ import { cancelSubscription, openSubscriptionCheckout, preloadCheckout, subscrib
 import { paywallInfo, useBillingStore } from "@/data/billingStore";
 import { Analytics } from "@/analytics/events";
 import { MetaPixel } from "@/analytics/metaPixel";
-import { cls, PrimaryButton, SectionLabel } from "@/ui/basics";
+import { cls, PrimaryButton } from "@/ui/basics";
 import { IcBook, IcChart, IcChat, IcCheck, IcPlay, IcReceipt, IcVolume, IcVolumeOff, IcWarning } from "@/ui/icons";
 import { AppSheet } from "@/ui/sheet";
 
@@ -35,14 +35,27 @@ const TRIAL_DAYS = 7;
 // Paywall intro video — 720p faststart MP4 (~3.7 MB) served from public/.
 const PAYWALL_VIDEO_URL = "/paywall-intro.mp4";
 
-// The trial paywall lists features with a subtitle each (design 08b).
-const TRIAL_FEATURES: { Icon: typeof IcReceipt; title: string; sub: string }[] = [
-  { Icon: IcReceipt, title: "Unlimited orders", sub: "Walk-in, home pickup and delivery" },
-  { Icon: IcChat, title: "Bills on WhatsApp", sub: "Make and send a bill in one tap" },
-  { Icon: IcBook, title: "Khata for every customer", sub: "Always know who owes you money" },
-  { Icon: IcCheck, title: "“Clothes ready” message", sub: "Customers get a WhatsApp automatically" },
-  { Icon: IcChart, title: "Daily earnings", sub: "Cash and UPI added up for you" },
+// Feature row under the video — four icons, two-line labels.
+const TRIAL_FEATURES: { Icon: typeof IcReceipt; label: string }[] = [
+  { Icon: IcChat, label: "Bills on WhatsApp" },
+  { Icon: IcBook, label: "Khata for customers" },
+  { Icon: IcReceipt, label: "Unlimited orders" },
+  { Icon: IcChart, label: "Daily earnings" },
 ];
+
+// UPI apps that support AutoPay mandates (text chips — no third-party logos).
+const UPI_APPS = ["GPay", "PhonePe", "Paytm", "BHIM"];
+
+// Dark paywall palette — navy with the brand blue/orange as accents.
+const PW = {
+  bg: "bg-[linear-gradient(180deg,#10255C_0%,#0B1838_42%,#08112A_100%)]",
+  bar: "bg-[#08112A]/95",
+  text: "text-[#B4C3E9]",
+  accent: "text-[#8FB0FF]",
+  eyebrow: "text-[#FDBA74]",
+  surface: "bg-white/[0.06]",
+  cta: "bg-[linear-gradient(90deg,#4876FF_0%,#1D4ED8_100%)] shadow-[0_8px_24px_rgba(29,78,216,0.45)]",
+};
 
 export function PaywallScreen({ onDone }: {
   /** Subscription is active — the Gate lets the user through. */
@@ -56,6 +69,7 @@ export function PaywallScreen({ onDone }: {
   const [stage, setStage] = useState<Stage>("plans");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [faq, setFaq] = useState(false);
   // Razorpay Checkout closed without paying (failed, cancelled or Back) —
   // the "try again" sheet over the plans.
   const [retrySheet, setRetrySheet] = useState(false);
@@ -183,41 +197,47 @@ export function PaywallScreen({ onDone }: {
       {stage === "waiting" ? (
         <WaitingView onBack={() => { setStage("plans"); setBusy(false); }} />
       ) : (
-        <div className="relative flex flex-1 flex-col justify-center px-5 pt-6">
-          {/* "7 days FREE" trial hero */}
-          <div className="rounded-2xl bg-blue px-4 py-4 text-ondark">
-            <div className="flex items-center gap-2.5">
-              <span className="bric text-[40px] leading-none">{TRIAL_DAYS} days</span>
-              <span className="bric rounded-lg bg-ondark px-2 py-0.5 text-[32px] leading-none text-blue">FREE</span>
-            </div>
-            <div className="mt-2 text-[15px] font-semibold">Use the full app. Nothing to pay till {trialEnd}.</div>
-            <div className="mt-3 flex items-center gap-3 rounded-xl bg-ondark/15 px-3 py-2.5">
-              <span className="bric text-[24px] leading-none">{rupees(trialR)}</span>
-              <span className="text-[13px] leading-snug text-bluelight">is all you pay today — it sets up UPI AutoPay for later</span>
-            </div>
+        <div className="relative flex flex-1 flex-col px-5 pt-3 text-white">
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => { setFaq(true); Analytics.paywallFaqOpened(); }}
+              className={cls("py-1 text-[14px] font-bold", PW.text)}
+            >
+              FAQs
+            </button>
           </div>
 
-          <div className="mt-4">
-            <PaywallVideo paused={busy} />
+          {/* Hero: 7 days FREE, then the ₹2 */}
+          <div className={cls("text-center text-[12px] font-extrabold tracking-[0.16em]", PW.eyebrow)}>
+            • YOUR LAUNDRY SHOP APP •
+          </div>
+          <h1 className="mt-3 text-center text-[19px] font-bold leading-snug">
+            Start your {TRIAL_DAYS}-day{" "}
+            <span className="rounded-md bg-orange px-1.5 py-0.5">FREE</span> trial for
+          </h1>
+          <div className={cls("bric mt-2 text-center text-[64px] leading-none", PW.accent)}>{rupees(trialR)}</div>
+          <div className={cls("mt-2 text-center text-[11px] font-extrabold tracking-[0.12em]", PW.text)}>
+            ALL YOU PAY TODAY · NOTHING MORE TILL {trialEnd.toUpperCase()}
           </div>
 
-          <SectionLabel text="Everything in the app" className="mt-4" />
-          <div className="mt-2 flex flex-col gap-1.5">
+          <div className="mt-5">
+            <PaywallVideo paused={busy || faq} />
+          </div>
+
+          <div className="mt-6 grid grid-cols-4 gap-2">
             {TRIAL_FEATURES.map((f) => (
-              <div key={f.title} className="flex items-center gap-2.5">
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-bluelight text-blue">
-                  <f.Icon size={18} />
+              <div key={f.label} className="flex flex-col items-center gap-2 text-center">
+                <span className={cls("flex size-12 items-center justify-center rounded-full", PW.surface, PW.accent)}>
+                  <f.Icon size={22} />
                 </span>
-                <div className="min-w-0">
-                  <div className="text-[15px] font-bold leading-tight">{f.title}</div>
-                  <div className="text-[12px] text-muted leading-tight">{f.sub}</div>
-                </div>
+                <span className="text-[12px] font-semibold leading-tight">{f.label}</span>
               </div>
             ))}
           </div>
 
-          <SectionLabel text={`After your ${TRIAL_DAYS} free days`} className="mt-4" />
-          <div className="mt-2 flex flex-col gap-2">
+          <div className="mt-7 text-center text-[16px] font-bold">Your plan after {TRIAL_DAYS} free days</div>
+          <div className="mt-4 flex flex-col gap-3">
             <PlanCard
               selected={plan === "annual"}
               onSelect={() => setPlan("annual")}
@@ -239,16 +259,32 @@ export function PaywallScreen({ onDone }: {
             />
           </div>
 
-          {error ? <p className="mt-2 text-[13px] font-semibold text-orangetext">{error}</p> : null}
+          <div className="mt-7 text-center text-[16px] font-bold">Works with your UPI app</div>
+          <div className="mt-3 flex flex-wrap justify-center gap-2">
+            {UPI_APPS.map((a) => (
+              <span key={a} className="rounded-full bg-white px-3.5 py-1.5 text-[13px] font-bold text-ink">{a}</span>
+            ))}
+          </div>
+          <div className={cls("mt-2 text-center text-[13px]", PW.text)}>and more</div>
+
+          {error ? <p className="mt-3 text-center text-[13px] font-semibold text-[#FDBA74]">{error}</p> : null}
 
           {/* Sticky so the video above never pushes the CTA off-screen. */}
-          <div className="sticky bottom-0 -mx-5 mt-2 bg-bg px-5 pb-6 pt-3">
-            <PrimaryButton onClick={pay} disabled={busy}>
-              {busy ? "Starting…" : `Start my ${TRIAL_DAYS} free days · Pay ${rupees(trialR)}`}
-            </PrimaryButton>
-            <p className="mt-2 text-center text-[12px] text-muted">
-              {`After ${trialEnd}: ${rupees(plan === "annual" ? annualR : monthlyR)}/${plan === "annual" ? "year" : "month"} by UPI AutoPay — only if you keep it. Cancel anytime before.`}
+          <div className={cls("sticky bottom-0 -mx-5 mt-5 border-t border-white/10 px-5 pb-6 pt-3 backdrop-blur", PW.bar)}>
+            <p className={cls("mb-2.5 text-center text-[12px]", PW.text)}>
+              {`Autopays ${plan === "annual" ? `${rupees(annualR)}/year` : `${rupees(monthlyR)}/month`} after ${trialEnd} · cancel anytime before`}
             </p>
+            <button
+              type="button"
+              onClick={pay}
+              disabled={busy}
+              className={cls(
+                "h-14 w-full rounded-[14px] text-[16px] font-extrabold tracking-wide text-white transition-opacity disabled:opacity-60",
+                PW.cta,
+              )}
+            >
+              {busy ? "Starting…" : `START ${TRIAL_DAYS}-DAY FREE TRIAL · ${rupees(trialR)}`}
+            </button>
           </div>
         </div>
       )}
@@ -256,8 +292,26 @@ export function PaywallScreen({ onDone }: {
   );
 
   return (
-    <div className="flex min-h-dvh justify-center bg-bg">
+    <div className={cls("flex min-h-dvh justify-center", stage === "plans" ? PW.bg : "bg-bg")}>
       {card}
+      {faq ? (
+        <AppSheet title="Questions" noSidebar onDismiss={() => setFaq(false)}>
+          <div className="flex flex-col gap-4">
+            <FaqItem q={`Why do I pay ${rupees(trialR)} today?`}>
+              {`The ${rupees(trialR)} sets up UPI AutoPay for your plan. It is the only payment today — you get the full app for ${TRIAL_DAYS} days.`}
+            </FaqItem>
+            <FaqItem q="When is my plan charged?">
+              {`After ${trialEnd}, when your free days end: ${rupees(annualR)}/year or ${rupees(monthlyR)}/month, whichever you picked, by UPI AutoPay.`}
+            </FaqItem>
+            <FaqItem q="Can I cancel?">
+              {`Yes, anytime from Settings → Subscription. Cancel before ${trialEnd} and the plan is never charged.`}
+            </FaqItem>
+            <FaqItem q="Which UPI apps work?">
+              Any UPI app that supports AutoPay — GPay, PhonePe, Paytm, BHIM and more.
+            </FaqItem>
+          </div>
+        </AppSheet>
+      ) : null}
       {retrySheet && stage === "plans" ? (
         <AppSheet
           title={`Your ${TRIAL_DAYS} free days are waiting`}
@@ -388,8 +442,8 @@ function PaywallVideo({ paused }: { paused: boolean }) {
         onError={() => setFailed(true)}
       />
       {muted ? (
-        <button type="button" onClick={onTap} className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-black/70 px-4 py-2 text-[14px] font-bold text-white">
-          <IcVolume size={18} />
+        <button type="button" onClick={onTap} className="absolute left-2.5 top-2.5 flex items-center gap-1.5 rounded-full bg-black/70 px-3 py-1.5 text-[13px] font-bold text-white">
+          <IcVolume size={16} />
           Tap for sound
         </button>
       ) : (
@@ -425,12 +479,12 @@ function PlanCard({
       type="button"
       onClick={onSelect}
       className={cls(
-        "relative w-full rounded-2xl border-2 bg-card px-4 py-2.5 text-left",
-        selected ? "border-blue" : "border-cardborder",
+        "relative w-full rounded-2xl border-2 px-4 py-3 text-left text-white",
+        selected ? "border-[#5B8CFF] bg-[#5B8CFF]/15" : "border-white/15 bg-white/[0.04]",
       )}
     >
       {badge ? (
-        <span className="absolute -top-2.5 left-4 rounded-full bg-orange px-2 py-0.5 text-[10px] font-bold tracking-wide text-ondark">
+        <span className="absolute -top-2.5 left-4 rounded-full bg-orange px-2 py-0.5 text-[10px] font-bold tracking-wide text-white">
           {badge}
         </span>
       ) : null}
@@ -438,23 +492,32 @@ function PlanCard({
         <span
           className={cls(
             "flex size-5 shrink-0 items-center justify-center rounded-full border-2",
-            selected ? "border-blue" : "border-cardborder",
+            selected ? "border-[#8FB0FF]" : "border-white/30",
           )}
         >
-          {selected ? <span className="size-2.5 rounded-full bg-blue" /> : null}
+          {selected ? <span className="size-2.5 rounded-full bg-[#8FB0FF]" /> : null}
         </span>
         <div className="min-w-0 flex-1">
           <div className="text-[16px] font-bold">{name}</div>
-          <div className="text-[13px] text-muted">{note}</div>
+          <div className={cls("text-[13px]", PW.text)}>{note}</div>
         </div>
         <div className="text-right">
           <div className="bric text-[20px]">{price}</div>
-          <div className="text-[12px] text-muted">
+          <div className={cls("text-[12px]", PW.text)}>
             <span className="line-through">{was}</span> {per}
           </div>
         </div>
       </div>
     </button>
+  );
+}
+
+function FaqItem({ q, children }: { q: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="text-[15px] font-bold">{q}</div>
+      <p className="mt-1 text-[14px] text-muted">{children}</p>
+    </div>
   );
 }
 
