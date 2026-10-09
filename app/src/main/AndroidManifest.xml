@@ -3,6 +3,9 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Add a customer from the phone's contacts (asked only when the owner taps
+         "Choose from contacts"; manual entry works without it). -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
 
     <!-- Android 11+ package visibility: let the app (and the Razorpay SDK)
          enumerate installed UPI apps so UPI Intent / AutoPay shows in Checkout. -->

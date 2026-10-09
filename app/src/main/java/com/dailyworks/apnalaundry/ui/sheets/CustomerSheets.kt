@@ -35,6 +35,25 @@ import com.dailyworks.apnalaundry.ui.components.fig
 import com.dailyworks.apnalaundry.ui.components.rounded
 import com.dailyworks.apnalaundry.ui.components.tap
 import com.dailyworks.apnalaundry.ui.theme.Tokens
+import kotlinx.coroutines.launch
+import com.dailyworks.apnalaundry.data.PhoneContacts
+import com.dailyworks.apnalaundry.data.PhoneContact
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.outlined.Contacts
+import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.core.content.ContextCompat
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.rememberLauncherForActivityResult
+import android.content.pm.PackageManager
+import android.Manifest
 import kotlin.math.max
 
 @Composable
@@ -47,11 +66,45 @@ fun CustomerFormSheet(state: LaundryState, form: ActiveSheet.CustomerForm, vm: S
     var oldBaaki by remember { mutableStateOf("") }
 
     val dup = if (phone.length == 10) state.customers.firstOrNull { it.phone == phone && !(editing && it.id == form.editId) } else null
+
+    // ── add from the phone's contacts (manual entry below still works) ──
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var picking by remember { mutableStateOf(false) }
+    fun fill(c: PhoneContact) { name = c.name; phone = c.phone; picking = false }
+    // Permission refused: Android's own contact picker needs none.
+    val systemPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickContact()) { uri ->
+        if (uri != null) scope.launch {
+            PhoneContacts.fromPickerUri(context, uri)?.let(::fill)
+                ?: vm.showInfo("That contact has no 10-digit mobile number")
+        }
+    }
+    val askContacts = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) picking = true else systemPicker.launch(null)
+    }
+    fun chooseFromContacts() {
+        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
+        if (granted) picking = true else askContacts.launch(Manifest.permission.READ_CONTACTS)
+    }
+    if (picking) {
+        ContactPickerSheet(state, onPick = ::fill, onBack = { picking = false })
+        return
+    }
     val addrNeeded = form.needAddress && form.ctx == "order"
     val valid = name.trim().isNotEmpty() && phone.length == 10 && dup == null && (!addrNeeded || address.trim().isNotEmpty())
 
     AppBottomSheet(title = if (editing) "Edit customer" else "New customer", onDismiss = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (!editing) {
+                Row(
+                    Modifier.fillMaxWidth().height(48.dp).rounded(14.dp).background(Tokens.BlueLight).tap { chooseFromContacts() },
+                    horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Outlined.Contacts, null, tint = Tokens.Blue, modifier = Modifier.size(20.dp))
+                    Text("  Choose from contacts", style = fig(15, FontWeight.Bold, Tokens.Blue))
+                }
+                Text("or type the details", style = fig(12, color = Tokens.Muted), modifier = Modifier.align(Alignment.CenterHorizontally))
+            }
             Field("Name", name, { name = it }, "Customer name")
             Field("Phone", phone, { phone = it.filter { c -> c.isDigit() }.take(10) }, "10-digit number", prefix = "+91", kb = KeyboardType.Phone)
             if (dup != null) {
@@ -77,6 +130,44 @@ fun CustomerFormSheet(state: LaundryState, form: ActiveSheet.CustomerForm, vm: S
                     form.onSaved(id)
                 }
                 onDismiss()
+            }
+        }
+    }
+}
+
+/** Searchable list of the phone's contacts; tapping one fills the customer form. */
+@Composable
+private fun ContactPickerSheet(state: LaundryState, onPick: (PhoneContact) -> Unit, onBack: () -> Unit) {
+    val context = LocalContext.current
+    var all by remember { mutableStateOf<List<PhoneContact>?>(null) }
+    var query by remember { mutableStateOf("") }
+    LaunchedEffect(Unit) { all = runCatching { PhoneContacts.load(context) }.getOrDefault(emptyList()) }
+    val saved = remember(state.customers) { state.customers.map { it.phone }.toSet() }
+    val q = query.trim().lowercase()
+    val shown = all.orEmpty().filter { q.isEmpty() || it.name.lowercase().contains(q) || it.phone.contains(q.filter { c -> c.isDigit() }.ifEmpty { "\u0000" }) }
+    AppBottomSheet(title = "Choose from contacts", subtitle = "Tap a contact to fill the name and number.", onDismiss = onBack) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            FieldBox(query, { query = it }, placeholder = "Search name or number", height = 48.dp)
+            when {
+                all == null -> Text("Loading contacts…", style = fig(14, color = Tokens.Muted), modifier = Modifier.padding(vertical = 24.dp))
+                shown.isEmpty() -> Text(if (all!!.isEmpty()) "No contacts with a 10-digit mobile number" else "No match", style = fig(14, color = Tokens.Muted), modifier = Modifier.padding(vertical = 24.dp))
+                else -> LazyColumn(Modifier.fillMaxWidth().heightIn(max = 420.dp)) {
+                    items(shown, key = { it.phone }) { c ->
+                        Row(
+                            Modifier.fillMaxWidth().heightIn(min = 56.dp).tap { onPick(c) }.padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Box(Modifier.size(40.dp).rounded(999.dp).background(Tokens.BlueLight), contentAlignment = Alignment.Center) {
+                                Text(Selectors.initials(c.name), style = fig(14, FontWeight.Bold, Tokens.Blue))
+                            }
+                            Column(Modifier.weight(1f)) {
+                                Text(c.name, style = fig(15, FontWeight.SemiBold), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text("+91 ${Selectors.fmtPhone(c.phone)}", style = fig(13, color = Tokens.Muted))
+                            }
+                            if (c.phone in saved) Text("Saved", style = fig(12, FontWeight.Bold, Tokens.Muted))
+                        }
+                    }
+                }
             }
         }
     }
