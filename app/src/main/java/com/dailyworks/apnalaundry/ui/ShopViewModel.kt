@@ -145,7 +145,7 @@ class ShopViewModel(
 
     /** Resizes + uploads a picked logo; the id, or the failure for a toast. */
     suspend fun uploadLogo(uri: Uri): Result<String> =
-        runCatching { logos.upload(uri) }.onSuccess { _logoTick.value++ }
+        runCatching { logos.upload(uri) }.onSuccess { _logoTick.value++; com.dailyworks.apnalaundry.analytics.Analytics.logoUploaded() }
 
     private var sampleUrl: String? = null
 

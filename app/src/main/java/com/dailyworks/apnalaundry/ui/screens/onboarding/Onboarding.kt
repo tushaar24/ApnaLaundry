@@ -88,6 +88,11 @@ fun OnboardingFlow(shopVm: ShopViewModel, onFinished: () -> Unit) {
         step = if (saved == "" || saved == "done") "intro" else saved
     }
     var finished by remember { mutableStateOf(false) }
+    // One event per step shown, so the funnel shows where new shops drop off.
+    LaunchedEffect(step) {
+        val s = step ?: return@LaunchedEffect
+        Analytics.onboardingStepViewed(s, listOf("intro", "name", "services", "bill").indexOf(s))
+    }
     fun goTo(s: String) {
         step = s
         shopVm.setOnboardingStep(s)

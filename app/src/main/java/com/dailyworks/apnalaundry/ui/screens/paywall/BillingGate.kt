@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Arrangement
 import org.koin.androidx.compose.koinViewModel
+import com.dailyworks.apnalaundry.analytics.Analytics
 
 /**
  * Subscription gate for the authed app (mirrors the web Gate). The subscription
@@ -66,6 +67,18 @@ private fun GatedContent(content: @Composable () -> Unit) {
         if (!decided && ui.loaded) {
             gated = ui.shouldHardGate
             decided = true
+            // Unsubscribed but let in without the paywall: say why, so the
+            // login -> setup funnel adds up.
+            val s = ui.status
+            if (!gated && s?.hasActiveSubscription != true) {
+                Analytics.paywallSkipped(
+                    when {
+                        s == null -> "status_failed"
+                        !s.configured -> "not_configured"
+                        else -> "not_due"
+                    }
+                )
+            }
         }
     }
 

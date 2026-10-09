@@ -170,7 +170,7 @@ fun OrderDetailScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: I
                     // bill actions
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlineButton("View bill", Modifier.weight(1f), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { active = ActiveSheet.BillView(o.id) }
-                        OutlineButton("Download", Modifier.weight(1f), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { shareBillPdf(context, state, o) }
+                        OutlineButton("Download", Modifier.weight(1f), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { Analytics.billDownloaded(o.id, "order_detail"); shareBillPdf(context, state, o) }
                         if (o.billSent) OutlineButton("Sent ✓", Modifier.weight(1f), height = 48.dp, border = Tokens.BlueBorder, fg = Tokens.BlueText) { sendBillOnWhatsApp(context, state, o); shopVm.sendBill(o.id) }
                         else PrimaryButton("WhatsApp", Modifier.weight(1f), height = 48.dp) { sendBillOnWhatsApp(context, state, o); shopVm.sendBill(o.id) }
                     }

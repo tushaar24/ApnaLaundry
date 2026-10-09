@@ -119,7 +119,7 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
                     Text("Bill", style = fig(13, FontWeight.Bold, Tokens.Muted))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlineButton("View bill", Modifier.weight(1f), height = 50.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { active = ActiveSheet.BillView(o.id) }
-                        OutlineButton("Download", Modifier.weight(1f), height = 50.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { shareBillPdf(context, state, o) }
+                        OutlineButton("Download", Modifier.weight(1f), height = 50.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { Analytics.billDownloaded(o.id, "bill"); shareBillPdf(context, state, o) }
                     }
                     PrimaryButton(if (o.billSent) "Send again" else "Send on WhatsApp", height = 54.dp) { sendBillOnWhatsApp(context, state, o); shopVm.sendBill(o.id) }
                     Text(

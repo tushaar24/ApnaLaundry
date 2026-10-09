@@ -515,6 +515,7 @@ class LaundryRepository(private val db: AppDatabase) {
             touchCustomer(custId)
         }
         trackOrderSaved(order, isEdit = false)
+        trackOrderMilestone()
         return if (fields.lines.isEmpty()) {
             val toast = if (pickup == Route.HOME)
                 "Pickup scheduled for $nm" + (if (order.pickupTime.isNotBlank()) " · ${order.pickupTime}" else "")
@@ -529,6 +530,15 @@ class LaundryRepository(private val db: AppDatabase) {
     private suspend fun touchCustomer(custId: String) {
         val c = customerDao.observeOnce().firstOrNull { it.id == custId } ?: return
         customerDao.upsert(c.copy(lastLabel = "Today", agoRank = 0, dirty = true, updatedAt = SyncClock.now()))
+    }
+
+    /** Profile props for segments/journeys, e.g. "paid but no order after 2 days". */
+    private suspend fun trackOrderMilestone() {
+        val count = orderDao.observeOnce().size
+        val today = java.time.LocalDate.now().toString()
+        val props = mutableMapOf<String, Any>("orders_count" to count, "last_order_date" to today)
+        if (count == 1) props["first_order_date"] = today
+        Analytics.updateProfile(props)
     }
 
     private fun trackOrderSaved(o: Order, isEdit: Boolean) {

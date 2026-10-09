@@ -183,6 +183,7 @@ fun BillDesignScreen(shopVm: ShopViewModel, editing: Boolean, onBack: () -> Unit
                 val receipt = receipts[index]
                 scope.launch {
                     sendTestBillOnWhatsApp(context, receipt, shopVm.sampleBillUrl())
+                    Analytics.testBillSent(BillDetails.TEMPLATES[index].first, editing)
                     tested = true
                     shopVm.showInfo("Opening WhatsApp · pick who gets the test bill")
                 }

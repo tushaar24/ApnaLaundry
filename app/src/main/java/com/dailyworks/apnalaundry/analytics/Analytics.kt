@@ -96,6 +96,18 @@ object Analytics {
 
     fun loggedOut() = track("Logged Out")
 
+    // ---- onboarding (after the paywall: intro -> name -> services -> bill) ----
+
+    /** Each onboarding step as it appears, incl. a resumed step after a restart. */
+    fun onboardingStepViewed(step: String, index: Int) =
+        track("Onboarding Step Viewed", mapOf("step" to step, "step_index" to index))
+
+    fun logoUploaded() = track("Logo Uploaded")
+
+    /** "Test on WhatsApp" on the bill step: a sample bill sent to the owner's own chat. */
+    fun testBillSent(template: String, editing: Boolean) =
+        track("Test Bill Sent", mapOf("template" to template, "from" to if (editing) "settings" else "onboarding"))
+
     // ---- order creation & lifecycle ----
 
     fun newOrderStarted(entryPoint: String, isEdit: Boolean) =
@@ -190,6 +202,10 @@ object Analytics {
 
     fun billViewed(orderId: Int) = track("Bill Viewed", mapOf("order_id" to orderId))
 
+    /** Bill PDF opened in the system share sheet ("Download"). [from] = "bill" | "order_detail". */
+    fun billDownloaded(orderId: Int, from: String) =
+        track("Bill Downloaded", mapOf("order_id" to orderId, "from" to from))
+
     fun combinedBillSent(customerId: String, orders: Int, total: Int, toPay: Int) =
         track("Combined Bill Sent", mapOf("customer_id" to customerId, "orders" to orders, "total" to total, "to_pay" to toPay, "channel" to "whatsapp"))
 
@@ -244,6 +260,17 @@ object Analytics {
 
     fun paymentRetryDismissed(plan: String) =
         track("Payment Retry Dismissed", mapOf("plan" to plan))
+
+    /** Razorpay reported success but the server didn't confirm the subscription in time. */
+    fun checkoutUnconfirmed(plan: String) =
+        track("Checkout Unconfirmed", mapOf("plan" to plan))
+
+    /**
+     * The gate let an unsubscribed user into the app without the paywall.
+     * reason: "status_failed" | "not_configured" | "not_due".
+     */
+    fun paywallSkipped(reason: String) =
+        track("Paywall Skipped", mapOf("reason" to reason))
 
     fun checkoutFailed(plan: String, reason: String) =
         track("Checkout Failed", mapOf("plan" to plan, "reason" to reason))

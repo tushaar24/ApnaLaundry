@@ -23,8 +23,10 @@ This ties every subsequent event to one shop owner across sessions and devices.
 ## Core funnels
 
 1. **Activation** — `Screen Viewed {screen:"login"}` → `OTP Requested` →
-   `OTP Submitted` → `Logged In` → `Setup Completed` → `New Order Started` →
-   `Order Saved` → `Order Delivered`.
+   `OTP Submitted` → `Logged In` → `Paywall Shown` (or `Paywall Skipped`) →
+   `Checkout Started` → `Checkout Succeeded` (or `Checkout Unconfirmed`) →
+   `Onboarding Step Viewed {step}` ×4 → `Setup Completed` →
+   `New Order Started` → `Order Saved` → `Order Delivered`.
 2. **Order creation** — `New Order Started` → `Order Saved {has_bill}` →
    `Bill Sent` → `Order Delivered`.
 3. **Order fulfilment** — `Order Picked Up` → `Clothes Counted` →
@@ -48,7 +50,10 @@ Custom property keys are `snake_case`. `Charged` uses CleverTap's reserved
 | `OTP Submitted` | — | user taps Verify |
 | `OTP Verification Failed` | `reason`, `attempts_remaining?` | verify-otp failed |
 | `Logged In` | `is_new_user`, `needs_setup` | verify-otp succeeded (also fires `onUserLogin`) |
-| `Setup Completed` | `services_count`, `express_pct` | first-run rate card saved ("Start taking orders") |
+| `Onboarding Step Viewed` | `step` (`intro`\|`name`\|`services`\|`bill`), `step_index` (0–3) | each onboarding step shown (Android), incl. a resumed step |
+| `Logo Uploaded` | — | shop logo uploaded (onboarding or Settings) (Android) |
+| `Test Bill Sent` | `template`, `from` (`onboarding`\|`settings`) | "Test on WhatsApp" sample bill (Android) |
+| `Setup Completed` | `services_count`, `express_pct` | last onboarding step finished |
 | `Logged Out` | — | user logs out from Settings |
 
 ### Order creation & lifecycle
@@ -80,6 +85,7 @@ Custom property keys are `snake_case`. `Charged` uses CleverTap's reserved
 | `Reminder Sent` | `customer_id`, `amount` | WhatsApp baaki reminder |
 | `Bill Sent` | `order_id`, `channel` (`whatsapp`) | send bill |
 | `Bill Viewed` | `order_id` | customer-facing bill preview opened |
+| `Bill Downloaded` | `order_id`, `from` (`bill`\|`order_detail`) | bill PDF opened in the share sheet (Android) |
 | `Combined Bill Sent` | `customer_id`, `orders`, `total`, `to_pay`, `channel` (`whatsapp`) | many orders of one customer sent as one bill |
 | `Summary Shared` | `period` | earnings day/week/month summary shared |
 | `Rates Opened` | `from` (`home`\|`settings`) | rate card opened |
@@ -104,6 +110,8 @@ revenue events can't be spoofed or lost if the app closes.
 | `Plan Selected` | client | `variant`, `plan` | user taps a plan |
 | `Checkout Started` | client | `variant`, `plan`, `amount`, `trial_amount` | UPI intent opened |
 | `Checkout Succeeded` | client | `variant`, `plan` | returned from UPI app as success (optimistic) |
+| `Checkout Unconfirmed` | client | `plan` | Razorpay said success but the server didn't confirm in time (Android) |
+| `Paywall Skipped` | client | `reason` (`status_failed`\|`not_configured`\|`not_due`) | gate let an unsubscribed user in without the paywall (Android) |
 | `Checkout Failed` | client | `variant`, `plan`, `reason` | cancelled / failed |
 | `Subscription Cancel Requested` | client | `plan` | user taps cancel |
 | `Subscription Activated` | server | `plan`, `variant` | `subscription.authenticated`/`activated` webhook |
@@ -111,6 +119,9 @@ revenue events can't be spoofed or lost if the app closes.
 | `Subscription Payment Failed` | server | `plan`, `variant` | `subscription.pending` (will retry) |
 | `Subscription Halted` | server | `plan`, `variant` | `subscription.halted` (retries exhausted) |
 | `Subscription Cancelled` | server | `plan`, `variant` | `subscription.cancelled` |
+
+Android also keeps profile properties `orders_count`, `last_order_date` and
+`first_order_date` (ISO dates) current on every new order.
 
 Profile property `subscription_status` (+ `plan`, `paywall_variant`) is kept
 current from the webhook, for retention/win-back journeys.

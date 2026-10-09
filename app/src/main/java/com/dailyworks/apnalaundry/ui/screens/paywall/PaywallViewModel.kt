@@ -204,6 +204,7 @@ class PaywallViewModel(
                 _ui.value = _ui.value.copy(status = status, stage = PaywallStage.DONE, busy = false)
             } else {
                 // Approved on-device but not yet confirmed — let the user re-check.
+                Analytics.checkoutUnconfirmed(purchasedOrSelected())
                 _ui.value = _ui.value.copy(
                     stage = PaywallStage.PLANS, busy = false,
                     error = "Payment is processing. If it was approved, pull to refresh in a moment.",
