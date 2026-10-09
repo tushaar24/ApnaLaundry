@@ -153,7 +153,9 @@ fun RescheduleSheet(state: LaundryState, orderId: Int, kind: String, vm: ShopVie
     val o = Selectors.order(state, orderId) ?: return onDismiss()
     val c = Selectors.customer(state, o.custId)
     val isPickup = kind == "pickup"
-    val base = if (isPickup) o.pickupDate else o.deliveryDate.ifBlank { AppDate.TODAY }
+    // No delivery date yet: nothing is pre-selected — the owner picks one (an
+    // order only takes today's date by itself when it's marked delivered).
+    val base = if (isPickup) o.pickupDate else o.deliveryDate
     var date by remember { mutableStateOf(base) }
     var time by remember { mutableStateOf(if (isPickup) AppDate.to24h(o.pickupTime) else AppDate.to24h(o.deliveryTime)) }
     var notify by remember { mutableStateOf(true) }
@@ -171,16 +173,16 @@ fun RescheduleSheet(state: LaundryState, orderId: Int, kind: String, vm: ShopVie
             Row(
                 Modifier.fillMaxWidth().height(52.dp).rounded(12.dp).background(Tokens.Card)
                     .border(1.5.dp, Tokens.FieldBorder, RoundedCornerShape(12.dp))
-                    .tap { showDatePicker(context, date, if (isPickup) null else o.pickupDate) { date = it } }
+                    .tap { showDatePicker(context, date.ifBlank { AppDate.TODAY }, if (isPickup) null else o.pickupDate) { date = it } }
                     .padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Icon(Icons.Outlined.CalendarMonth, null, tint = Tokens.Blue, modifier = Modifier.size(20.dp))
-                Text("Selected: ${AppDate.short(date)}", style = fig(15, FontWeight.SemiBold), modifier = Modifier.weight(1f))
+                Text(if (date.isNotBlank()) "Selected: ${AppDate.short(date)}" else "Pick a date", style = fig(15, FontWeight.SemiBold, if (date.isNotBlank()) Tokens.Ink else Tokens.Muted), modifier = Modifier.weight(1f))
                 Text("Change", style = fig(14, FontWeight.Bold, Tokens.Blue))
             }
-            if (isPickup && o.deliveryDate.isNotBlank() && o.ddAuto) {
+            if (isPickup && date.isNotBlank() && o.deliveryDate.isNotBlank() && o.ddAuto) {
                 val shift = AppDate.daysBetween(o.pickupDate, date)
                 Text("Delivery moves too: ${AppDate.short(AppDate.add(o.deliveryDate, shift))}", style = fig(13, color = Tokens.Muted))
             }
@@ -188,7 +190,9 @@ fun RescheduleSheet(state: LaundryState, orderId: Int, kind: String, vm: ShopVie
                 Text("Tell customer on WhatsApp", style = fig(15, FontWeight.SemiBold), modifier = Modifier.weight(1f))
                 Toggle(notify) { notify = !notify }
             }
-            PrimaryButton("Save", height = 56.dp) { vm.reschedule(orderId, kind, date, time, notify); onDismiss() }
+            PrimaryButton(if (date.isBlank()) "Pick a date to save" else "Save", height = 56.dp, enabled = date.isNotBlank()) {
+                if (date.isNotBlank()) { vm.reschedule(orderId, kind, date, time, notify); onDismiss() }
+            }
         }
     }
 }

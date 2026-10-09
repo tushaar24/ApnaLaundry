@@ -165,7 +165,9 @@ export function RescheduleSheet({
   const o = Sel.order(state, orderId);
   const c = Sel.customer(state, o?.custId ?? "");
   const isPickup = which === "pickup";
-  const base = o ? (isPickup ? o.pickupDate : o.deliveryDate || AppDate.today()) : AppDate.today();
+  // No delivery date yet: nothing is pre-selected — the owner picks one (an
+  // order only takes today's date by itself when it's marked delivered).
+  const base = o ? (isPickup ? o.pickupDate : o.deliveryDate) : "";
   const [date, setDate] = useState(base);
   const [time] = useState(o ? AppDate.to24h(isPickup ? o.pickupTime : o.deliveryTime) : "");
   const [notify, setNotify] = useState(true);
@@ -190,14 +192,14 @@ export function RescheduleSheet({
         <DateTimeBox
           icon={<IcCalendar size={20} />}
           iconTint="var(--color-blue)"
-          text={`Selected: ${AppDate.short(date)}`}
-          isSet
+          text={date ? `Selected: ${AppDate.short(date)}` : "Pick a date"}
+          isSet={date !== ""}
           type="date"
-          value={date}
+          value={date || AppDate.today()}
           min={isPickup ? undefined : o.pickupDate}
           onPick={setDate}
         />
-        {isPickup && o.deliveryDate !== "" && o.ddAuto ? (
+        {isPickup && date && o.deliveryDate !== "" && o.ddAuto ? (
           <span className="text-[13px] text-muted">
             Delivery moves too: {AppDate.short(AppDate.add(o.deliveryDate, AppDate.daysBetween(o.pickupDate, date)))}
           </span>
@@ -207,12 +209,14 @@ export function RescheduleSheet({
           <Toggle on={notify} onToggle={() => setNotify((v) => !v)} />
         </div>
         <PrimaryButton
+          disabled={date === ""}
           onClick={() => {
+            if (date === "") return;
             Repo.reschedule(orderId, which, date, time, notify);
             onDismiss();
           }}
         >
-          Save
+          {date === "" ? "Pick a date to save" : "Save"}
         </PrimaryButton>
       </div>
     </AppSheet>
