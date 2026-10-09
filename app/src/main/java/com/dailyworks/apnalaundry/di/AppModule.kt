@@ -36,7 +36,7 @@ val appModule = module {
     single { TokenManager(get(), get()) }
     single { SyncApi(get(), get()) }
     single { BillingApi(get(), get()) }
-    single { BillingRepository(get()) }
+    single { BillingRepository(get(), get()) }
     single { CheckoutBridge() }
 
     single { LaundryRepository(get()) }

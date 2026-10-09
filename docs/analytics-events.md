@@ -23,7 +23,7 @@ This ties every subsequent event to one shop owner across sessions and devices.
 ## Core funnels
 
 1. **Activation** — `Screen Viewed {screen:"login"}` → `OTP Requested` →
-   `OTP Submitted` → `Logged In` → `Paywall Shown` (or `Paywall Skipped`) →
+   `OTP Submitted` → `Logged In` → `Paywall Shown` →
    `Checkout Started` → `Checkout Succeeded` (or `Checkout Unconfirmed`) →
    `Onboarding Step Viewed {step}` ×4 → `Setup Completed` →
    `New Order Started` → `Order Saved` → `Order Delivered`.
@@ -111,7 +111,6 @@ revenue events can't be spoofed or lost if the app closes.
 | `Checkout Started` | client | `variant`, `plan`, `amount`, `trial_amount` | UPI intent opened |
 | `Checkout Succeeded` | client | `variant`, `plan` | returned from UPI app as success (optimistic) |
 | `Checkout Unconfirmed` | client | `plan` | Razorpay said success but the server didn't confirm in time (Android) |
-| `Paywall Skipped` | client | `reason` (`status_failed`\|`not_configured`\|`not_due`) | gate let an unsubscribed user in without the paywall (Android) |
 | `Checkout Failed` | client | `variant`, `plan`, `reason` | cancelled / failed |
 | `Subscription Cancel Requested` | client | `plan` | user taps cancel |
 | `Subscription Activated` | server | `plan`, `variant` | `subscription.authenticated`/`activated` webhook |

@@ -14,7 +14,11 @@ const K = {
   USER_ID: "al_user_id",
   USER_PHONE: "al_user_phone",
   DEVICE_ID: "al_device_id", // stable installation id, survives logout
+  SUB_ACTIVE: "al_sub_active", // {u: userId, at: epoch ms} of the last check that saw an active subscription
 } as const;
+
+/** How long a cached "subscription active" result lets the owner in while billing is unreachable. */
+const SUB_CACHE_MS = 7 * 24 * 60 * 60 * 1000;
 
 const mem = new Map<string, string>(); // SSR-safe fallback
 
@@ -69,6 +73,26 @@ export const prefs = {
     remove(K.REFRESH_TOKEN);
   },
 
+  /** Remember that the server just confirmed an active subscription for this user. */
+  markSubActive() {
+    const u = get(K.USER_ID);
+    if (u) set(K.SUB_ACTIVE, JSON.stringify({ u, at: Date.now() }));
+  },
+  clearSubActive() { remove(K.SUB_ACTIVE); },
+  /**
+   * True when, within the last 7 days, the server confirmed an active
+   * subscription for the logged-in user. Only used when billing can't be reached.
+   */
+  get subActiveCached(): boolean {
+    try {
+      const c = JSON.parse(get(K.SUB_ACTIVE) ?? "null") as { u?: string; at?: number } | null;
+      const age = Date.now() - (c?.at ?? 0);
+      return !!c && c.u === get(K.USER_ID) && age >= 0 && age < SUB_CACHE_MS;
+    } catch {
+      return false;
+    }
+  },
+
   /** Stable per-install device id. */
   deviceId(): string {
     let id = get(K.DEVICE_ID);
@@ -90,6 +114,7 @@ export const prefs = {
     remove(K.REFRESH_TOKEN);
     remove(K.USER_ID);
     remove(K.USER_PHONE);
+    remove(K.SUB_ACTIVE);
     // DEVICE_ID survives — it identifies the installation, not the user.
   },
 };

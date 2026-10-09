@@ -21,7 +21,9 @@ enum class PaywallPlan { ANNUAL, MONTHLY }
 
 data class PaywallUiState(
     val status: BillingStatus? = null,
-    val loaded: Boolean = false, // true once the first /status call resolves (ok or failed)
+    val loaded: Boolean = false, // true once a /status attempt resolves (ok or failed)
+    // The last check failed even after retrying (status keeps its last good value).
+    val failed: Boolean = false,
     val stage: PaywallStage = PaywallStage.PLANS,
     val plan: PaywallPlan = PaywallPlan.ANNUAL,
     // The plan the SERVER put on the subscription — analytics use this, never
@@ -38,10 +40,9 @@ data class PaywallUiState(
     val monthlyAmount: Int get() = status?.plans?.monthly?.amount ?: 49900
     val trialAmount: Int get() = status?.plans?.trial?.amount ?: 200
 
-    // No active subscription and the backend says the paywall is due → the
-    // non-cancellable hard gate. False if billing is unconfigured/unreachable so
-    // an outage never locks the owner out of their shop.
-    val shouldHardGate: Boolean get() = status?.configured == true && !hasActive && status?.paywallDue == true
+    // ONLY an active subscription gets in: not "unconfigured", not "not due".
+    // (No status at all is undecided; the gate falls back to the local cache.)
+    val shouldHardGate: Boolean get() = status != null && !hasActive
 }
 
 /**
@@ -103,16 +104,22 @@ class PaywallViewModel(
 
     fun refresh() {
         viewModelScope.launch {
-            val status = runCatching { repo.status() }.getOrNull()
-            _ui.value = _ui.value.copy(status = status ?: _ui.value.status, loaded = true)
+            // Before the first good status, go back to "not loaded" so the gate
+            // shows its loader while this attempt (with retries) is in flight.
+            if (_ui.value.status == null) _ui.value = _ui.value.copy(loaded = false, failed = false)
+            val status = repo.statusWithRetry()
+            _ui.value = _ui.value.copy(status = status ?: _ui.value.status, loaded = true, failed = status == null)
             // Only count it when the plans are actually on screen (not for a
             // subscribed user passing through the gate).
-            if (status != null && status.configured && !status.hasActiveSubscription && !shownTracked) {
+            if (status != null && !status.hasActiveSubscription && !shownTracked) {
                 shownTracked = true
                 Analytics.paywallShown()
             }
         }
     }
+
+    /** A recent server-confirmed active subscription (for the gate when billing is unreachable). */
+    suspend fun cachedActive(): Boolean = repo.cachedActive()
 
     fun selectPlan(plan: PaywallPlan) { _ui.value = _ui.value.copy(plan = plan) }
 

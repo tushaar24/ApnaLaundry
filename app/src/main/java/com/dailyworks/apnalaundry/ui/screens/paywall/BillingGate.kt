@@ -29,7 +29,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Arrangement
 import org.koin.androidx.compose.koinViewModel
-import com.dailyworks.apnalaundry.analytics.Analytics
+import com.dailyworks.apnalaundry.ui.components.PrimaryButton
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.text.style.TextAlign
 
 /**
  * Subscription gate for the authed app (mirrors the web Gate). The subscription
@@ -37,8 +39,12 @@ import com.dailyworks.apnalaundry.analytics.Analytics
  * login -> subscription -> setup -> app.
  * Flow: logged in -> check subscription -> route; a loader shows until the
  * check resolves.
- *  - no active subscription -> non-cancellable ₹2-trial paywall (app unreachable).
- *  - otherwise (active sub, or billing unconfigured/unreachable) -> the content.
+ *  - active subscription -> the content. Nothing else gets in: not "billing
+ *    unconfigured", not "paywall not due".
+ *  - no active subscription -> non-cancellable ₹2-trial paywall.
+ *  - billing unreachable (after retries) -> the content only if the server
+ *    confirmed an active subscription for this user in the last 7 days (cached
+ *    in Prefs); otherwise a "Try again" screen.
  *
  * [enabled] is false only on the login screen, where billing must not be checked.
  */
@@ -63,26 +69,27 @@ private fun GatedContent(content: @Composable () -> Unit) {
     var decided by remember { mutableStateOf(false) }
     var gated by remember { mutableStateOf(false) }
 
-    LaunchedEffect(ui.loaded) {
-        if (!decided && ui.loaded) {
+    // Billing unreachable and no recent cached "active": can't let them in.
+    var offline by remember { mutableStateOf(false) }
+
+    LaunchedEffect(ui.loaded, ui.failed) {
+        if (decided || !ui.loaded) return@LaunchedEffect
+        offline = false
+        if (ui.status != null) {
+            // Only an active subscription gets in.
             gated = ui.shouldHardGate
             decided = true
-            // Unsubscribed but let in without the paywall: say why, so the
-            // login -> setup funnel adds up.
-            val s = ui.status
-            if (!gated && s?.hasActiveSubscription != true) {
-                Analytics.paywallSkipped(
-                    when {
-                        s == null -> "status_failed"
-                        !s.configured -> "not_configured"
-                        else -> "not_due"
-                    }
-                )
-            }
+        } else if (vm.cachedActive()) {
+            // Offline, but the server confirmed an active subscription recently.
+            gated = false
+            decided = true
+        } else {
+            offline = true
         }
     }
 
     when {
+        !decided && offline -> CheckFailed(onRetry = vm::refresh)
         !ui.loaded || !decided -> ShopLoader()
         gated -> PaywallScreen(
             hardGate = true,
@@ -91,6 +98,24 @@ private fun GatedContent(content: @Composable () -> Unit) {
             vm = vm,
         )
         else -> content()
+    }
+}
+
+/** Billing couldn't be reached and there's no recent cached active subscription. */
+@Composable
+private fun CheckFailed(onRetry: () -> Unit) {
+    Column(
+        Modifier.fillMaxSize().background(Tokens.Bg).padding(horizontal = 32.dp),
+        verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text("Can't check your subscription", style = fig(20, FontWeight.Bold), textAlign = TextAlign.Center)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Check your internet connection and try again.",
+            style = fig(14, color = Tokens.Muted), textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(20.dp))
+        PrimaryButton("Try again", height = 52.dp, onClick = onRetry)
     }
 }
 

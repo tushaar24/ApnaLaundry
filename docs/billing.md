@@ -30,9 +30,16 @@ Config / `LAUNDRY_PAYWALL_VARIANTS` switch were removed on 2026-10-06.)
 **Gate flow (both platforms):** logged in? → subscription active? → route; **a loader
 shows until that check resolves** (no flash of the app or wrong screen).
 
-- no active sub (`paywallDue`) → non-cancellable paywall (BillingGate). No close/back.
-- otherwise (active sub, or billing unconfigured/unreachable) → the app renders.
-  Billing being unreachable **fails open** (never locks the owner out of their shop).
+- **Only an active subscription (`hasActiveSubscription`) gets in.** Anything else —
+  no sub, billing unconfigured (`configured: false`), or `paywallDue: false` without an
+  active sub — gets the non-cancellable paywall. No close/back. (Changed 2026-10-10:
+  the gate used to fail open.)
+- Billing unreachable: the status call is retried twice with backoff. If it still
+  fails, the owner gets in **only** if a check in the last 7 days confirmed an active
+  subscription for the same user (cached locally: Android `Prefs.subActiveCached`,
+  web `prefs.subActiveCached` in localStorage). Otherwise a "Can't check your
+  subscription · Try again" screen. Every good status refreshes or clears the cache;
+  logout clears it.
 
 ## 3. Backend (`courses` repo, `backend/`)
 

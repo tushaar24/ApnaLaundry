@@ -265,13 +265,6 @@ object Analytics {
     fun checkoutUnconfirmed(plan: String) =
         track("Checkout Unconfirmed", mapOf("plan" to plan))
 
-    /**
-     * The gate let an unsubscribed user into the app without the paywall.
-     * reason: "status_failed" | "not_configured" | "not_due".
-     */
-    fun paywallSkipped(reason: String) =
-        track("Paywall Skipped", mapOf("reason" to reason))
-
     fun checkoutFailed(plan: String, reason: String) =
         track("Checkout Failed", mapOf("plan" to plan, "reason" to reason))
 
