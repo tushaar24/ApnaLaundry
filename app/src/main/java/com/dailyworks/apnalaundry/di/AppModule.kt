@@ -45,7 +45,7 @@ val appModule = module {
     single { SyncScheduler(get()) }
     single { AuthRepository(get(), get(), get(), get()) }
 
-    viewModel { ShopViewModel(get(), get(), get(), get()) }
+    viewModel { ShopViewModel(get(), get(), get(), get(), get()) }
     viewModel { AuthViewModel(get()) }
     viewModel { PaywallViewModel(get(), get(), get()) }
 }

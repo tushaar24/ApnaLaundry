@@ -1,4 +1,4 @@
-import type { BillDetails, BillTemplate, LaundryState, OnboardingStep, Order, OrderLine, Service } from "./models";
+import type { BillDetails, BillTemplate, OnboardingStep, Order, OrderLine, Service } from "./models";
 import * as AppDate from "@/core/appdate";
 
 /**
@@ -140,8 +140,8 @@ function pieceLine(s: Service, name: string, qty: number): OrderLine | null {
 }
 
 /** A believable order built from the owner's own rates. */
-export function sampleOrder(state: LaundryState, nextOrderNo: number): Order {
-  const svcs = state.services.filter((s) => s.mode === "PIECE" && priced(s).length > 0);
+export function sampleOrder(services: Service[], expressPct: number, nextOrderNo: number): Order {
+  const svcs = services.filter((s) => s.mode === "PIECE" && priced(s).length > 0);
   const wi = svcs.find((s) => /wash\s*&?\s*iron/i.test(s.name)) ?? svcs[0];
   const dc = svcs.find((s) => /dry\s*clean/i.test(s.name)) ?? svcs.find((s) => s !== wi);
   const lines: OrderLine[] = [];
@@ -163,14 +163,14 @@ export function sampleOrder(state: LaundryState, nextOrderNo: number): Order {
     if (saree) lines.push(saree);
   }
   if (lines.length < 2) {
-    const kgSvc = state.services.find((s) => s.mode === "WEIGHT" && (s.ratePerKg ?? 0) > 0);
+    const kgSvc = services.find((s) => s.mode === "WEIGHT" && (s.ratePerKg ?? 0) > 0);
     if (kgSvc && kgSvc.ratePerKg != null) {
       const rate = kgSvc.ratePerKg;
       lines.push({ serviceId: kgSvc.id, serviceName: kgSvc.name, itemName: "By weight", qty: 0, kg: 4, price: rate, base: rate, amt: rate * 4 });
     }
   }
   const subtotal = lines.reduce((a, l) => a + l.amt, 0);
-  const exAmt = Math.round((subtotal * state.shop.expressPct) / 100);
+  const exAmt = Math.round((subtotal * expressPct) / 100);
   const today = AppDate.today();
   return {
     id: nextOrderNo,

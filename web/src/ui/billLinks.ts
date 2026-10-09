@@ -14,18 +14,31 @@ import { authedFetch } from "@/data/syncApi";
 const tokens = new Map<string, string>();
 const inflight = new Map<string, Promise<string | null>>();
 
-const key = (orderId: number) => `${prefs.userPhone ?? ""}:${orderId}`;
+const key = (orderId: number | "sample") => `${prefs.userPhone ?? ""}:${orderId}`;
 
 const urlFor = (token: string) => `${window.location.origin}/b/${token}`;
 
 /** Fetches (once) and caches the order's bill link. Null when offline/failed. */
 export function prefetchBillLink(orderId: number): Promise<string | null> {
-  const k = key(orderId);
+  return fetchLink(key(orderId), `/api/laundry/bills/${orderId}/link`);
+}
+
+/** The shop's sample bill link (onboarding "Test on WhatsApp"). */
+export function prefetchSampleLink(): Promise<string | null> {
+  return fetchLink(key("sample"), "/api/laundry/bills/sample/link");
+}
+
+export function cachedSampleLink(): string | null {
+  const t = tokens.get(key("sample"));
+  return t ? urlFor(t) : null;
+}
+
+function fetchLink(k: string, path: string): Promise<string | null> {
   const have = tokens.get(k);
   if (have) return Promise.resolve(urlFor(have));
   const pending = inflight.get(k);
   if (pending) return pending;
-  const p = authedFetch(`/api/laundry/bills/${orderId}/link`, { method: "POST" })
+  const p = authedFetch(path, { method: "POST" })
     .then((r) => r.json() as Promise<{ success?: boolean; token?: string }>)
     .then((b) => {
       if (!b.success || !b.token) return null;

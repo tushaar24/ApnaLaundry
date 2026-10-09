@@ -64,6 +64,18 @@ class SyncApi(private val client: HttpClient, private val tokens: TokenManager) 
         return body.logoId
     }
 
+    /** Token of the shop's sample-bill page (mylaundry.work/b/<token>). */
+    suspend fun sampleBillLink(): String {
+        val res = authed { token ->
+            client.post("$base/bills/sample/link") { bearerAuth(token) }
+        }
+        val body: BillLinkResponse = runCatching { res.body<BillLinkResponse>() }.getOrDefault(BillLinkResponse(false))
+        if (res.status.value !in 200..299 || !body.success || body.token.isNullOrBlank()) {
+            throw SyncHttpException(res.status.value)
+        }
+        return body.token
+    }
+
     /** A shop logo's bytes (public, immutable per id). */
     suspend fun fetchLogo(logoId: String): ByteArray? {
         val res = client.get("$base/public/logos/$logoId")

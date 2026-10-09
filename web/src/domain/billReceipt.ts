@@ -1,9 +1,9 @@
 import * as AppDate from "@/core/appdate";
 import { rupees } from "@/core/money";
 import { amtOf, clothesOf } from "@/domain/laundryMath";
-import type { BillDetails, BillTemplate, LaundryState, Order, OrderLine, Shop } from "@/domain/models";
+import type { BillDetails, BillTemplate, LaundryState, Order, OrderLine, Service, Shop } from "@/domain/models";
 import {
-  billDetailsFrom, fmtBillPhone, isGstinValid, isUpiValid, termLines, upiPayload,
+  billDetailsFrom, fmtBillPhone, isGstinValid, isUpiValid, sampleOrder, termLines, upiPayload,
 } from "@/domain/billDetails";
 import * as Sel from "@/domain/selectors";
 
@@ -68,6 +68,26 @@ export interface BillData {
   shop: BillShop;
   customer: { name: string; phone: string };
   order: BillOrder;
+}
+
+/** The public page's payload for a shop's sample bill (no saved order). */
+export interface SampleBillData {
+  sample: true;
+  shop: BillShop & { expressPct: number };
+  services: { id: string; name: string; mode: string; ratePerKg: number | null; minKg: number | null; sortOrder: number; items: { name: string; price: number | null }[] }[];
+}
+
+/** The sample bill exactly as the onboarding preview drew it. */
+export function receiptFromSample(d: SampleBillData): BillReceipt {
+  const services: Service[] = d.services.map((s) => ({
+    id: s.id, name: s.name, mode: s.mode === "WEIGHT" ? "WEIGHT" : "PIECE", ratePerKg: s.ratePerKg, minKg: s.minKg,
+    readyInDays: null, lockedToPiece: false, sortOrder: s.sortOrder, items: s.items,
+  }));
+  const shop: Shop = {
+    name: d.shop.name, phone: d.shop.phone, expressPct: d.shop.expressPct, onboardingStep: "",
+    ...billDetailsFrom(d.shop, d.shop.phone),
+  };
+  return sampleReceipt(shop, sampleOrder(services, shop.expressPct, 1001), shop.billTemplate);
 }
 
 export interface ReceiptOptions {

@@ -12,6 +12,7 @@ import { prefs } from "@/data/prefs";
 import { billPreviewUrl } from "../billPdf";
 import { billHeight, prepareBillAssets } from "../billRender";
 import { sendTestBill } from "../billActions";
+import { prefetchSampleLink } from "../billLinks";
 import { cls, FieldBox, OutlineButton, PrimaryButton, TopBar } from "../basics";
 import { IcAdd, IcChevronLeft, IcChevronRight, IcWhatsApp } from "../icons";
 import { BottomBar, StepBar } from "./steps";
@@ -56,7 +57,11 @@ export function BillDesignScreen({
   }, [editing]);
 
   // ── the three bills ──
-  const order = useMemo(() => sampleOrder(state, 1001), [state]);
+  const order = useMemo(() => sampleOrder(state.services, shop.expressPct, 1001), [state.services, shop.expressPct]);
+  // "Test on WhatsApp" sends the sample-bill link; fetch it before the tap.
+  useEffect(() => {
+    void prefetchSampleLink();
+  }, []);
   const receipts = useMemo(
     () => BILL_TEMPLATES.map((t) =>
       sampleReceipt({ ...shop, ...draft, name: editing ? cleanName(name) || shop.name : shop.name }, order, t.id)),

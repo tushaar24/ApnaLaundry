@@ -6,6 +6,8 @@ import com.dailyworks.apnalaundry.data.CmdResult
 import android.net.Uri
 import com.dailyworks.apnalaundry.data.LaundryRepository
 import com.dailyworks.apnalaundry.data.LogoStore
+import com.dailyworks.apnalaundry.data.sync.SyncApi
+import com.dailyworks.apnalaundry.ui.screens.bill.BILL_PAGE_URL
 import com.dailyworks.apnalaundry.data.Prefs
 import com.dailyworks.apnalaundry.data.Snapshot
 import com.dailyworks.apnalaundry.data.sync.SyncScheduler
@@ -33,6 +35,7 @@ class ShopViewModel(
     private val prefs: Prefs,
     private val sync: SyncScheduler,
     val logos: LogoStore,
+    private val api: SyncApi,
 ) : ViewModel() {
 
     private val empty = LaundryState(
@@ -112,6 +115,12 @@ class ShopViewModel(
     /** Resizes + uploads a picked logo; the id, or the failure for a toast. */
     suspend fun uploadLogo(uri: Uri): Result<String> =
         runCatching { logos.upload(uri) }.onSuccess { _logoTick.value++ }
+
+    private var sampleUrl: String? = null
+
+    /** The shop's sample-bill page (onboarding "Test on WhatsApp"); null offline. */
+    suspend fun sampleBillUrl(): String? = sampleUrl
+        ?: runCatching { "$BILL_PAGE_URL${api.sampleBillLink()}" }.getOrNull()?.also { sampleUrl = it }
 
     /** The login number (bill phone default, "Test on WhatsApp" target). */
     suspend fun loginPhone(): String = prefs.userPhone.first() ?: state.value.shop.phone

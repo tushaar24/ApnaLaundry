@@ -124,3 +124,4 @@ fun DayCloseDto.toEntity() = DayCloseEntity(date, closedAt, cashCounted, deleted
 
 @Serializable data class LogoUpload(val contentType: String, val dataBase64: String)
 @Serializable data class LogoUploadResponse(val success: Boolean, val logoId: String? = null, val message: String? = null)
+@Serializable data class BillLinkResponse(val success: Boolean, val token: String? = null)

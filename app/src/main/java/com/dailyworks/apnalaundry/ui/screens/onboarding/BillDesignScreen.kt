@@ -173,9 +173,12 @@ fun BillDesignScreen(shopVm: ShopViewModel, editing: Boolean, onBack: () -> Unit
                 if (tested) "Sent · again" else "Test on WhatsApp",
                 Modifier.weight(1f), height = 48.dp, border = Tokens.FieldBorder, fg = Tokens.Ink,
             ) {
-                sendTestBillOnWhatsApp(context, receipts[index])
-                tested = true
-                shopVm.showInfo("Opening WhatsApp · pick who gets the test bill")
+                val receipt = receipts[index]
+                scope.launch {
+                    sendTestBillOnWhatsApp(context, receipt, shopVm.sampleBillUrl())
+                    tested = true
+                    shopVm.showInfo("Opening WhatsApp · pick who gets the test bill")
+                }
             }
         }
 

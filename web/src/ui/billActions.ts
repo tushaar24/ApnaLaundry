@@ -9,7 +9,7 @@ import type { LaundryState, Order } from "@/domain/models";
 import * as Sel from "@/domain/selectors";
 import * as Repo from "@/data/repository";
 import { billPdfFile, shareOrSaveFile } from "@/ui/billPdf";
-import { cachedBillLink, prefetchBillLink } from "@/ui/billLinks";
+import { cachedBillLink, cachedSampleLink, prefetchBillLink, prefetchSampleLink } from "@/ui/billLinks";
 
 /**
  * "Send on WhatsApp" and "Download" for a bill.
@@ -114,21 +114,37 @@ export function downloadBill(state: LaundryState, o: Order): void {
   });
 }
 
+/** The test bill message: like a real bill's, with the shop's sample-bill link. */
+function testMessage(r: BillReceipt, link: string | null): string {
+  return [
+    `Here is a sample bill from *${r.shop.name}* — Total *${r.total}*.`,
+    link ? `View / download the bill:\n${link}` : "",
+    "Thank you!",
+  ].filter(Boolean).join("\n\n");
+}
+
 /**
- * Onboarding "Test on WhatsApp": the same wa.me path real bills take, but
- * with no number, so WhatsApp lets the owner pick who gets the test bill
- * (real bills open the customer's chat directly). The sample order has no
- * /b/ page, so the message carries a text version of the bill.
+ * Onboarding "Test on WhatsApp": the same message + bill link real bills
+ * send (the link opens the shop's sample bill), but with no number, so
+ * WhatsApp lets the owner pick who gets it. Real bills open the customer's
+ * chat directly.
  */
 export function sendTestBill(r: BillReceipt): void {
-  const text = [
-    `*${r.shop.name}* — test bill`,
-    `${r.billNo} · ${r.date}`,
-    ...r.lines.map((l) => `${l.item}  ${l.amount}`),
-    ...r.extras.map((e) => `${e.label}  ${e.value}`),
-    `*Total ${r.total}*`,
-    r.upi ? `Pay by UPI: ${r.upi.id}` : "",
-    "Thank you!",
-  ].filter(Boolean).join("\n");
-  window.open(waUrl("", text), "_blank", "noopener,noreferrer");
+  const link = cachedSampleLink();
+  if (link) {
+    window.open(waUrl("", testMessage(r, link)), "_blank", "noopener,noreferrer");
+    return;
+  }
+  // Link not fetched yet: open the tab inside the tap, point it at WhatsApp
+  // once the link arrives (without it if that fails).
+  const tab = window.open("about:blank", "_blank");
+  void prefetchSampleLink().then((l) => {
+    const url = waUrl("", testMessage(r, l));
+    if (tab) {
+      tab.opener = null;
+      tab.location.href = url;
+    } else {
+      window.location.href = url;
+    }
+  });
 }

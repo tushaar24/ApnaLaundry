@@ -124,19 +124,24 @@ fun shareBillImage(context: Context, state: LaundryState, o: Order) {
     context.startActivity(Intent.createChooser(share, "Bill #${o.id}").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 }
 
+/** Public bill pages: mylaundry.work/b/<token>. */
+const val BILL_PAGE_URL = "https://mylaundry.work/b/"
+
 /**
- * Onboarding "Test on WhatsApp": the same wa.me text bill real bills use, but
- * with no number, so WhatsApp lets the owner pick who gets the test bill
- * (real bills open the customer's chat directly).
+ * Onboarding "Test on WhatsApp": a message with the link to the shop's sample
+ * bill page (in the chosen design), with no number, so WhatsApp lets the
+ * owner pick who gets it. Real bills open the customer's chat directly.
+ * Offline (no link) it falls back to the bill as text.
  */
-fun sendTestBillOnWhatsApp(context: Context, r: BillReceipt) {
-    val text = buildString {
-        appendLine("*${r.shopName}* — test bill")
+fun sendTestBillOnWhatsApp(context: Context, r: BillReceipt, link: String?) {
+    val text = if (link != null) {
+        "Here is a sample bill from *${r.shopName}* — Total *${r.total}*.\n\nView / download the bill:\n$link\n\nThank you!"
+    } else buildString {
+        appendLine("*${r.shopName}* — sample bill")
         appendLine("${r.billNo} · ${r.date}")
         r.lines.forEach { appendLine("${it.item}  ${it.amount}") }
         r.extras.forEach { appendLine("${it.label}  ${it.value}") }
         appendLine("*Total ${r.total}*")
-        r.upi?.let { appendLine("Pay by UPI: ${it.id}") }
         append("Thank you!")
     }
     openWhatsApp(context, "https://wa.me/?text=${Uri.encode(text)}")

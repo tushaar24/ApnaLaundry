@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { receiptFrom, type BillData } from "@/domain/billReceipt";
+import { receiptFrom, receiptFromSample, type BillData, type BillReceipt, type SampleBillData } from "@/domain/billReceipt";
 import { PrimaryButton } from "@/ui/basics";
 import { billPdfFile, billPreviewUrl, shareOrSaveFile } from "@/ui/billPdf";
 import { prepareBillAssets } from "@/ui/billRender";
@@ -12,7 +12,7 @@ type View =
   | { kind: "loading" }
   | { kind: "missing" }
   | { kind: "error" }
-  | { kind: "ok"; bill: BillData; src: string };
+  | { kind: "ok"; receipt: BillReceipt; no: number; shopName: string; src: string };
 
 export function PublicBill({ token }: { token: string }) {
   const [view, setView] = useState<View>({ kind: "loading" });
@@ -23,11 +23,13 @@ export function PublicBill({ token }: { token: string }) {
     fetch(`/api/laundry/public/bills/${encodeURIComponent(token)}`, { cache: "no-store" })
       .then(async (r) => {
         if (r.status === 404) return { kind: "missing" } as const;
-        const body = (await r.json()) as { success?: boolean; bill?: BillData };
+        const body = (await r.json()) as { success?: boolean; bill?: BillData | SampleBillData };
         if (!r.ok || !body.success || !body.bill) return { kind: "error" } as const;
-        const receipt = receiptFrom(body.bill);
+        const bill = body.bill;
+        const receipt = "sample" in bill ? receiptFromSample(bill) : receiptFrom(bill);
         await prepareBillAssets(receipt); // fonts + logo, so the PDF below can draw synchronously
-        return { kind: "ok", bill: body.bill, src: billPreviewUrl(receipt) } as const;
+        const no = "sample" in bill ? 1001 : bill.order.id;
+        return { kind: "ok", receipt, no, shopName: bill.shop.name, src: billPreviewUrl(receipt) } as const;
       })
       .catch(() => ({ kind: "error" }) as const)
       .then((v) => {
@@ -39,15 +41,15 @@ export function PublicBill({ token }: { token: string }) {
   }, [token]);
 
   useEffect(() => {
-    if (view.kind === "ok") document.title = `Bill #${view.bill.order.id} · ${view.bill.shop.name}`;
+    if (view.kind === "ok") document.title = `Bill #${view.no} · ${view.shopName}`;
   }, [view]);
 
   const download = () => {
     if (view.kind !== "ok" || busy) return;
     setBusy(true);
     // Built + shared synchronously inside the tap (iOS Safari requirement).
-    const file = billPdfFile(receiptFrom(view.bill), view.bill.order.id);
-    void shareOrSaveFile(file, `Bill #${view.bill.order.id}`).finally(() => setBusy(false));
+    const file = billPdfFile(view.receipt, view.no);
+    void shareOrSaveFile(file, `Bill #${view.no}`).finally(() => setBusy(false));
   };
 
   return (
@@ -59,7 +61,7 @@ export function PublicBill({ token }: { token: string }) {
           {/* eslint-disable-next-line @next/next/no-img-element -- a data: URL, nothing to optimise */}
           <img
             src={view.src}
-            alt={`Bill #${view.bill.order.id} from ${view.bill.shop.name}`}
+            alt={`Bill #${view.no} from ${view.shopName}`}
             className="w-full rounded-2xl border border-cardborder bg-white"
           />
           <PrimaryButton h={54} onClick={download} disabled={busy}>
