@@ -75,6 +75,8 @@ export interface Order {
   createdOn: string;
   billSent: boolean;
   serialNo: string; // owner-set bill / serial number ("" = use the order id)
+  exPct: number; // express as % of the clothes (0 = exAmt is a fixed ₹ amount)
+  discPct: number; // discount as % of the clothes (0 = discount is a fixed ₹ amount)
   pieces: number; // optional piece count for quick bills
   lines: OrderLine[];
 }

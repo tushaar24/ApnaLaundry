@@ -95,6 +95,8 @@ data class OrderEntity(
     @ColumnInfo(defaultValue = "0") val updatedAt: Long = SyncClock.now(),
     @ColumnInfo(defaultValue = "1") val dirty: Boolean = true,
     @ColumnInfo(defaultValue = "") val serialNo: String = "", // v5
+    @ColumnInfo(defaultValue = "0") val exPct: Int = 0, // v6
+    @ColumnInfo(defaultValue = "0") val discPct: Int = 0, // v6
 )
 
 @Entity(tableName = "ledger")

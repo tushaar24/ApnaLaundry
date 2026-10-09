@@ -53,6 +53,8 @@ data class OrderDto(
     val deleted: Boolean = false, val updatedAt: Long,
     // Owner-set bill / serial no. Always sent back (the server writes it only when present).
     val serialNo: String? = null,
+    // % extras (0 = fixed ₹); older servers / clients omit them.
+    val exPct: Int? = null, val discPct: Int? = null,
 )
 
 @Serializable
@@ -110,12 +112,13 @@ fun CustomerDto.toEntity() = CustomerEntity(id, name, phone, address, pastOrders
 fun OrderEntity.toDto() = OrderDto(
     id, custId, pickup, delivery, pickupDate, pickupTime, deliveryDate, deliveryTime, ddAuto, status,
     cancelReason, fee, express, exAmt, discount, pre, paid, doneAt, doneDate, createdOn, billSent,
-    pieces, linesJson, deleted, updatedAt, serialNo,
+    pieces, linesJson, deleted, updatedAt, serialNo, exPct, discPct,
 )
 fun OrderDto.toEntity() = OrderEntity(
     id, custId, pickup, delivery, pickupDate, pickupTime, deliveryDate, deliveryTime, ddAuto, status,
     cancelReason, fee, express, exAmt, discount, pre, paid, doneAt, doneDate, createdOn, billSent,
     pieces, linesJson, deleted, updatedAt, dirty = false, serialNo = serialNo ?: "",
+    exPct = exPct ?: 0, discPct = discPct ?: 0,
 )
 
 fun LedgerEntity.toDto() = LedgerDto(id, custId, date, time, ts, kind, amt, method, tag, cover, toOld, toAdv, ref, note, deleted, updatedAt)

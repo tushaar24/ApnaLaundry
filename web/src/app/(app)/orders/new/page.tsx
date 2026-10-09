@@ -63,7 +63,11 @@ function NewOrderScreen() {
   const [express, setExpress] = useState(false);
   // null = follow the automatic amount (pct of clothes); a string = the owner
   // typed their own, which may be "" mid-edit (must NOT snap back to auto).
-  const [exOverride, setExOverride] = useState<string | null>(null);
+  // Express and discount: each a % of the clothes or a fixed ₹ amount.
+  const [exMode, setExMode] = useState<"pct" | "amt">("pct");
+  const [exPctText, setExPctText] = useState(String(state.shop.expressPct));
+  const [exAmtText, setExAmtText] = useState("");
+  const [discMode, setDiscMode] = useState<"pct" | "amt">("amt");
   const [discountText, setDiscountText] = useState("");
   const [serialText, setSerialText] = useState(""); // "" = the order id
   const [serialTouched, setSerialTouched] = useState(false);
@@ -97,13 +101,14 @@ function NewOrderScreen() {
     setNDD(o.deliveryDate === "" ? "none" : o.ddAuto ? "" : o.deliveryDate);
     setFeeText(o.fee > 0 ? String(o.fee) : "");
     setExpress(o.express);
-    setDiscountText(o.discount > 0 ? String(o.discount) : "");
+    if (o.discPct > 0) { setDiscMode("pct"); setDiscountText(String(o.discPct)); }
+    else { setDiscMode("amt"); setDiscountText(o.discount > 0 ? String(o.discount) : ""); }
     setSerialText(Sel.orderNo(o)); // the number it shows today (its serial, else the order id)
     // Same base as the live auto amount below: every line, quick amount included.
     const clothesTotalForEx = o.lines.reduce((s, l) => s + l.amt, 0);
-    setExOverride(
-      o.express && o.exAmt !== expressAuto(clothesTotalForEx, state.shop.expressPct) ? String(o.exAmt) : null,
-    );
+    if (o.express && o.exPct > 0) { setExMode("pct"); setExPctText(String(o.exPct)); }
+    else if (o.express && o.exAmt > 0) { setExMode("amt"); setExAmtText(String(o.exAmt)); }
+    else { setExMode("pct"); setExPctText(String(state.shop.expressPct)); }
     for (const l of o.lines) {
       if (l.isQuick) {
         setQuickAmt(String(l.amt));
@@ -136,14 +141,15 @@ function NewOrderScreen() {
 
   const cust = custId != null ? Sel.customer(state, custId) : null;
   const anyHome = pickup === "HOME" || delivery === "HOME";
-  const pct = state.shop.expressPct;
+  const exPct = parseInt(exPctText, 10) || 0;
+  const discPct = discMode === "pct" ? Math.min(100, parseInt(discountText, 10) || 0) : 0;
 
   const quickAmount = showQuickBox ? parseInt(quickAmt, 10) || 0 : 0;
   const clothesTotal = clothes.total(services) + quickAmount;
-  const exAuto = expressAuto(clothesTotal, pct);
-  const exAmt = express ? (exOverride === null ? exAuto : parseInt(exOverride, 10) || 0) : 0;
+  const exAuto = expressAuto(clothesTotal, exPct);
+  const exAmt = express ? (exMode === "pct" ? exAuto : parseInt(exAmtText, 10) || 0) : 0;
   const fee = anyHome ? parseInt(feeText, 10) || 0 : 0;
-  const discount = parseInt(discountText, 10) || 0;
+  const discount = discMode === "pct" ? Math.round((clothesTotal * discPct) / 100) : parseInt(discountText, 10) || 0;
   const grand = Math.max(0, clothesTotal + exAmt + fee - discount);
   const empty = clothesTotal === 0;
 
@@ -200,7 +206,9 @@ function NewOrderScreen() {
       fee,
       express,
       exAmt,
+      exPct: express && exMode === "pct" ? exPct : 0,
       discount,
+      discPct,
       lines: clothes.lines(services),
       quickAmount: showQuickBox ? parseInt(quickAmt, 10) || 0 : 0,
       quickPieces: showQuickBox ? parseInt(quickPcs, 10) || 0 : 0,
@@ -427,29 +435,29 @@ function NewOrderScreen() {
                 <div className="min-w-0 flex-1">
                   <div className="text-[15px] font-bold text-orangetext">Express order</div>
                   <div className="text-[13px] text-muted">
-                    +{pct}% on clothes{express && clothesTotal > 0 ? ` = ${rupees(exAuto)}` : ""} · washed first
+                    {express && exAmt > 0 ? `+ ${rupees(exAmt)}` : "Extra charge"} · washed first
                   </div>
                 </div>
-                <Toggle on={express} onColor="var(--color-orange)" onToggle={() => { setExpress((v) => !v); setExOverride(null); }} />
+                <Toggle on={express} onColor="var(--color-orange)" onToggle={() => setExpress((v) => !v)} />
               </div>
             </AppCard>
             {express ? (
-              <FieldBox
-                value={exOverride ?? String(exAuto)}
-                onChange={(v) => setExOverride(v.replace(/\D/g, "").slice(0, 5))}
-                prefix="₹"
-                suffix="express"
-                h={48}
-                inputMode="numeric"
+              <PctOrAmount
+                mode={exMode}
+                onMode={setExMode}
+                value={exMode === "pct" ? exPctText : exAmtText}
+                onChange={(v) => (exMode === "pct" ? setExPctText(v) : setExAmtText(v))}
+                label="express"
+                hint={exMode === "pct" && clothesTotal > 0 ? `= ${rupees(exAuto)}` : undefined}
               />
             ) : null}
-            <FieldBox
+            <PctOrAmount
+              mode={discMode}
+              onMode={(m) => { setDiscMode(m); setDiscountText(""); }}
               value={discountText}
-              onChange={(v) => setDiscountText(v.replace(/\D/g, "").slice(0, 5))}
-              prefix="₹"
-              suffix="discount (optional)"
-              h={48}
-              inputMode="numeric"
+              onChange={setDiscountText}
+              label="discount (optional)"
+              hint={discMode === "pct" && discount > 0 ? `= − ${rupees(discount)}` : undefined}
             />
           </div>
 
@@ -625,6 +633,46 @@ function BillLine({ label, value, tone }: { label: string; value: string; tone?:
     <div className="flex w-full justify-between">
       <span className="text-[15px] text-inksecondary">{label}</span>
       <span className="text-[15px] font-semibold" style={tone ? { color: tone } : undefined}>{value}</span>
+    </div>
+  );
+}
+
+/** An extra charge / discount entered as a % of the clothes or a fixed ₹ amount. */
+function PctOrAmount({
+  mode, onMode, value, onChange, label, hint,
+}: {
+  mode: "pct" | "amt";
+  onMode: (m: "pct" | "amt") => void;
+  value: string;
+  onChange: (v: string) => void;
+  label: string;
+  hint?: string;
+}) {
+  return (
+    <div className="flex w-full items-center gap-2">
+      <div className="flex shrink-0 gap-1 rounded-xl bg-segtrack p-1" role="radiogroup" aria-label={`${label} as`}>
+        {(["pct", "amt"] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            role="radio"
+            aria-checked={mode === m}
+            onClick={() => onMode(m)}
+            className={cls("h-10 w-11 rounded-[9px] text-[15px] font-bold", mode === m ? "bg-card text-ink" : "text-inksecondary")}
+          >
+            {m === "pct" ? "%" : "₹"}
+          </button>
+        ))}
+      </div>
+      <FieldBox
+        value={value}
+        onChange={(v) => onChange(v.replace(/\D/g, "").slice(0, mode === "pct" ? 3 : 5))}
+        prefix={mode === "amt" ? "₹" : undefined}
+        suffix={mode === "pct" ? `% ${label}${hint ? ` ${hint}` : ""}` : label}
+        h={48}
+        inputMode="numeric"
+        className="min-w-0 flex-1"
+      />
     </div>
   );
 }

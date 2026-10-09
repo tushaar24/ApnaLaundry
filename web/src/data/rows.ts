@@ -72,7 +72,7 @@ export interface OrderDto {
   ddAuto: boolean; status: string; cancelReason: string; fee: number;
   express: boolean; exAmt: number; discount: number; pre: number; paid: number;
   doneAt: string; doneDate: string; createdOn: string; billSent: boolean;
-  pieces: number; linesJson: string; serialNo?: string; deleted: boolean; updatedAt: number;
+  pieces: number; linesJson: string; serialNo?: string; exPct?: number; discPct?: number; deleted: boolean; updatedAt: number;
 }
 export interface LedgerDto {
   id: string; custId: string; date: string; time: string; ts: number;
@@ -155,7 +155,8 @@ export function orderToDto(r: OrderRow): OrderDto {
     cancelReason: r.cancelReason, fee: r.fee, express: r.express, exAmt: r.exAmt,
     discount: r.discount, pre: r.pre, paid: r.paid, doneAt: r.doneAt, doneDate: r.doneDate,
     createdOn: r.createdOn, billSent: r.billSent, pieces: r.pieces,
-    linesJson: JSON.stringify(r.lines), serialNo: r.serialNo, deleted: r.deleted, updatedAt: r.updatedAt,
+    linesJson: JSON.stringify(r.lines), serialNo: r.serialNo, exPct: r.exPct, discPct: r.discPct,
+    deleted: r.deleted, updatedAt: r.updatedAt,
   };
 }
 export function orderFromDto(d: OrderDto): OrderRow {
@@ -173,7 +174,7 @@ export function orderFromDto(d: OrderDto): OrderRow {
     express: !!d.express, exAmt: d.exAmt ?? 0, discount: d.discount ?? 0,
     pre: d.pre ?? 0, paid: d.paid ?? 0, doneAt: d.doneAt ?? "", doneDate: d.doneDate ?? "",
     createdOn: d.createdOn ?? "", billSent: !!d.billSent, pieces: d.pieces ?? 0, lines,
-    serialNo: d.serialNo ?? "",
+    serialNo: d.serialNo ?? "", exPct: d.exPct ?? 0, discPct: d.discPct ?? 0,
     updatedAt: d.updatedAt, deleted: !!d.deleted, dirty: false,
   };
 }

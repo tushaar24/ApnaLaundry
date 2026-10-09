@@ -157,7 +157,7 @@ object BillDetails {
             id = billNo, custId = "", pickup = Route.SHOP, delivery = Route.SHOP,
             pickupDate = t, pickupTime = "", deliveryDate = today.plusDays(1).toString(), deliveryTime = "6 PM", ddAuto = false,
             status = OrderStatus.RECEIVED, cancelReason = "", fee = 0, express = exAmt > 0, exAmt = exAmt,
-            discount = if (subtotal >= 100) 20 else 0, pre = 0, paid = 0, doneAt = "", doneDate = "",
+            exPct = expressPct, discount = if (subtotal >= 100) 20 else 0, pre = 0, paid = 0, doneAt = "", doneDate = "",
             createdOn = t, billSent = false, pieces = 0, lines = lines,
         )
     }

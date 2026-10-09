@@ -107,7 +107,11 @@ fun NewOrderScreen(
     var express by remember { mutableStateOf(false) }
     // null = follow the automatic amount (pct of clothes); a string = the owner
     // typed their own, which may be "" mid-edit (must NOT snap back to auto).
-    var exOverride by remember { mutableStateOf<String?>(null) }
+    // Express and discount: each a % of the clothes or a fixed ₹ amount.
+    var exIsPct by remember { mutableStateOf(true) }
+    var exPctText by remember { mutableStateOf(state.shop.expressPct.toString()) }
+    var exAmtText by remember { mutableStateOf("") }
+    var discIsPct by remember { mutableStateOf(false) }
     var discountText by remember { mutableStateOf("") }
     var serialText by remember { mutableStateOf("") } // "" = the order id
     var serialTouched by remember { mutableStateOf(false) } // owner typed in it
@@ -137,11 +141,14 @@ fun NewOrderScreen(
         }
         feeText = if (o.fee > 0) o.fee.toString() else ""
         express = o.express
-        discountText = if (o.discount > 0) o.discount.toString() else ""
+        if (o.discPct > 0) { discIsPct = true; discountText = o.discPct.toString() }
+        else { discIsPct = false; discountText = if (o.discount > 0) o.discount.toString() else "" }
         serialText = o.no() // the number it shows today (its serial, else the order id)
-        // Same base as the live auto amount below: every line, quick amount included.
-        val clothesTotalForEx = o.lines.sumOf { it.amt }
-        exOverride = if (o.express && o.exAmt != LaundryMath.expressAuto(clothesTotalForEx, state.shop.expressPct)) o.exAmt.toString() else null
+        when {
+            o.express && o.exPct > 0 -> { exIsPct = true; exPctText = o.exPct.toString() }
+            o.express && o.exAmt > 0 -> { exIsPct = false; exAmtText = o.exAmt.toString() }
+            else -> { exIsPct = true; exPctText = state.shop.expressPct.toString() }
+        }
         o.lines.forEach { l ->
             when {
                 l.isQuick -> { quickAmt = l.amt.toString(); quickPcs = if (l.qty > 0) l.qty.toString() else ""; showQuickBox = true }
@@ -162,12 +169,13 @@ fun NewOrderScreen(
 
     val cust = custId?.let { Selectors.customer(state, it) }
     val anyHome = pickup == Route.HOME || delivery == Route.HOME
-    val pct = state.shop.expressPct
+    val exPct = exPctText.toIntOrNull() ?: 0
+    val discPct = if (discIsPct) minOf(100, discountText.toIntOrNull() ?: 0) else 0
 
     val quickAmount = if (showQuickBox) quickAmt.toIntOrNull() ?: 0 else 0
     val clothesTotal = clothes.total(services) + quickAmount
-    val exAuto = LaundryMath.expressAuto(clothesTotal, pct)
-    val exAmt = if (express) exOverride.let { if (it == null) exAuto else it.toIntOrNull() ?: 0 } else 0
+    val exAuto = LaundryMath.expressAuto(clothesTotal, exPct)
+    val exAmt = if (express) (if (exIsPct) exAuto else exAmtText.toIntOrNull() ?: 0) else 0
     val fee = if (anyHome) feeText.toIntOrNull() ?: 0 else 0
     // A new order's serial starts as the last serial + 1 (and keeps following
     // it while orders load) until the owner types in the field.
@@ -175,7 +183,7 @@ fun NewOrderScreen(
     LaunchedEffect(nextSerial) {
         if (editId == null && !serialTouched) serialText = nextSerial
     }
-    val discount = discountText.toIntOrNull() ?: 0
+    val discount = if (discIsPct) (clothesTotal * discPct / 100.0).roundToInt() else discountText.toIntOrNull() ?: 0
     val grand = max(0, clothesTotal + exAmt + fee - discount)
     val empty = clothesTotal == 0
 
@@ -366,15 +374,24 @@ fun NewOrderScreen(
                     Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text("Express order", style = fig(15, FontWeight.Bold, Tokens.OrangeText))
-                            Text("+$pct% on clothes" + (if (express && clothesTotal > 0) " = ${Money.rupees(exAuto)}" else "") + " · washed first", style = fig(13, color = Tokens.Muted))
+                            Text((if (express && exAmt > 0) "+ ${Money.rupees(exAmt)}" else "Extra charge") + " · washed first", style = fig(13, color = Tokens.Muted))
                         }
-                        Toggle(express, onColor = Tokens.Orange) { express = !express; exOverride = null }
+                        Toggle(express, onColor = Tokens.Orange) { express = !express }
                     }
                 }
                 if (express) {
-                    FieldBox(exOverride ?: exAuto.toString(), { exOverride = it.filter { c -> c.isDigit() }.take(5) }, prefix = "₹", suffix = "express", height = 48.dp, keyboardType = KeyboardType.Number)
+                    PctOrAmount(
+                        isPct = exIsPct, onMode = { exIsPct = it },
+                        value = if (exIsPct) exPctText else exAmtText,
+                        onChange = { if (exIsPct) exPctText = it else exAmtText = it },
+                        label = "express", hint = if (exIsPct && clothesTotal > 0) "= ${Money.rupees(exAuto)}" else null,
+                    )
                 }
-                FieldBox(discountText, { discountText = it.filter { c -> c.isDigit() }.take(5) }, prefix = "₹", suffix = "discount (optional)", height = 48.dp, keyboardType = KeyboardType.Number)
+                PctOrAmount(
+                    isPct = discIsPct, onMode = { discIsPct = it; discountText = "" },
+                    value = discountText, onChange = { discountText = it },
+                    label = "discount (optional)", hint = if (discIsPct && discount > 0) "= − ${Money.rupees(discount)}" else null,
+                )
             }
 
             // ---- live bill ----
@@ -404,6 +421,7 @@ fun NewOrderScreen(
                     editId = editId, custId = cust!!.id, pickup = pickup, delivery = delivery,
                     pickupDate = pickupDate, pickupTime24 = pickupTime, deliveryDate = dropIso, deliveryTime24 = deliveryTime,
                     ddAuto = ddAuto, fee = fee, express = express, exAmt = exAmt, discount = discount,
+                    exPct = if (express && exIsPct) exPct else 0, discPct = discPct,
                     lines = clothes.lines(services), quickAmount = if (showQuickBox) quickAmt.toIntOrNull() ?: 0 else 0,
                     quickPieces = if (showQuickBox) quickPcs.toIntOrNull() ?: 0 else 0,
                     serialNo = serialText,
@@ -526,5 +544,30 @@ private fun BillLine(label: String, value: String, color: Color = Tokens.Ink) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(label, style = fig(15, color = Tokens.InkSecondary))
         Text(value, style = fig(15, FontWeight.SemiBold, color))
+    }
+}
+
+/** An extra charge / discount entered as a % of the clothes or a fixed ₹ amount. */
+@Composable
+private fun PctOrAmount(
+    isPct: Boolean, onMode: (Boolean) -> Unit, value: String, onChange: (String) -> Unit, label: String, hint: String?,
+) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.rounded(12.dp).background(Tokens.SegTrack).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            listOf(true to "%", false to "₹").forEach { (pct, sym) ->
+                val on = isPct == pct
+                Box(
+                    Modifier.width(44.dp).height(40.dp).rounded(9.dp).background(if (on) Tokens.Card else Color.Transparent).tap { onMode(pct) },
+                    contentAlignment = Alignment.Center,
+                ) { Text(sym, style = fig(15, FontWeight.Bold, if (on) Tokens.Ink else Tokens.InkSecondary)) }
+            }
+        }
+        FieldBox(
+            value, { onChange(it.filter { c -> c.isDigit() }.take(if (isPct) 3 else 5)) },
+            Modifier.weight(1f),
+            prefix = if (isPct) null else "₹",
+            suffix = if (isPct) "% $label" + (hint?.let { " $it" } ?: "") else label,
+            height = 48.dp, keyboardType = KeyboardType.Number,
+        )
     }
 }

@@ -225,7 +225,7 @@ export function BillDesignScreen({
 
         <div className="rounded-[14px] bg-[#FBEEDC] p-4 text-[13.5px] text-[#6B3A10]">
           <span className="font-bold">Good to know: </span>
-          Express charge and discount are sample lines. They show on a bill only when you add them to an order. Express % comes from your rate list.
+          Express charge and discount are sample lines. They show on a bill only when you add them to an order — as a % or a fixed amount.
         </div>
       </div>
 

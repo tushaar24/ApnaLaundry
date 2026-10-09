@@ -19,6 +19,23 @@ export function expressAuto(clothesTotal: number, pct: number): number {
   return Math.round((clothesTotal * pct) / 100);
 }
 
+/**
+ * Re-derives a %-based express / discount from the clothes (a fixed ₹ amount
+ * stays as is). Called whenever an order's clothes change — on a pickup order
+ * the % is set before the clothes are counted. `legacyExpressPct` covers older
+ * express orders that never stored a % and have no amount yet.
+ */
+export function withPctExtras<T extends Pick<Order, "lines" | "express" | "exAmt" | "exPct" | "discount" | "discPct">>(
+  o: T, legacyExpressPct: number,
+): T {
+  const clothes = clothesOf(o);
+  let { exAmt, discount } = o;
+  if (o.express && o.exPct > 0) exAmt = expressAuto(clothes, o.exPct);
+  else if (o.express && o.exAmt === 0) exAmt = expressAuto(clothes, legacyExpressPct);
+  if (o.discPct > 0) discount = Math.round((clothes * o.discPct) / 100);
+  return { ...o, exAmt: o.express ? exAmt : 0, discount };
+}
+
 export function serviceName(id: string, services: Service[], snapshot?: string | null): string {
   const s = services.find((sv) => sv.id === id);
   if (s) return s.name;

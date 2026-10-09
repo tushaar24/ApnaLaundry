@@ -21,6 +21,25 @@ object LaundryMath {
     fun expressAuto(clothesTotal: Int, pct: Int): Int =
         (clothesTotal * pct / 100.0).roundToInt()
 
+    /**
+     * Re-derives a %-based express / discount from the clothes (a fixed ₹
+     * amount stays as is). Called whenever an order's clothes change — on a
+     * pickup order the % is set before the clothes are counted.
+     * [legacyExpressPct] covers older express orders that never stored a %
+     * and have no amount yet. Port twin: web withPctExtras.
+     */
+    fun withPctExtras(o: Order, legacyExpressPct: Int): Order {
+        val clothes = clothesOf(o)
+        val exAmt = when {
+            !o.express -> 0
+            o.exPct > 0 -> expressAuto(clothes, o.exPct)
+            o.exAmt == 0 -> expressAuto(clothes, legacyExpressPct)
+            else -> o.exAmt
+        }
+        val discount = if (o.discPct > 0) (clothes * o.discPct / 100.0).roundToInt() else o.discount
+        return o.copy(exAmt = exAmt, discount = discount)
+    }
+
     fun serviceName(id: String, services: List<Service>, snapshot: String? = null): String {
         services.firstOrNull { it.id == id }?.let { return it.name }
         if (!snapshot.isNullOrBlank()) return snapshot

@@ -218,7 +218,7 @@ fun BillDesignScreen(shopVm: ShopViewModel, editing: Boolean, onBack: () -> Unit
         Text(
             buildAnnotatedString {
                 withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("Good to know: ") }
-                append("Express charge and discount are sample lines. They show on a bill only when you add them to an order. Express % comes from your rate list.")
+                append("Express charge and discount are sample lines. They show on a bill only when you add them to an order — as a % or a fixed amount.")
             },
             style = fig(13, color = Color(0xFF6B3A10)),
             modifier = Modifier.fillMaxWidth().rounded(14.dp).background(Color(0xFFFBEEDC)).padding(16.dp),

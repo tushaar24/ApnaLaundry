@@ -33,13 +33,13 @@ fun Customer.toEntity() = CustomerEntity(id, name, phone, address, pastOrders, l
 fun OrderEntity.toDomain() = Order(
     id, custId, Route.valueOf(pickup), Route.valueOf(delivery), pickupDate, pickupTime, deliveryDate,
     deliveryTime, ddAuto, OrderStatus.valueOf(status), cancelReason, fee, express, exAmt, discount,
-    pre, paid, doneAt, doneDate, createdOn, billSent, pieces, decodeLines(linesJson), serialNo,
+    pre, paid, doneAt, doneDate, createdOn, billSent, pieces, decodeLines(linesJson), serialNo, exPct, discPct,
 )
 
 fun Order.toEntity() = OrderEntity(
     id, custId, pickup.name, delivery.name, pickupDate, pickupTime, deliveryDate, deliveryTime, ddAuto,
     status.name, cancelReason, fee, express, exAmt, discount, pre, paid, doneAt, doneDate, createdOn,
-    billSent, pieces, encodeLines(lines), serialNo = serialNo,
+    billSent, pieces, encodeLines(lines), serialNo = serialNo, exPct = exPct, discPct = discPct,
 )
 
 fun LedgerEntity.toDomain() = LedgerEntry(

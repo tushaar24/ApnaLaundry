@@ -83,6 +83,8 @@ data class Order(
     val pieces: Int,                 // optional piece count for quick bills
     val lines: List<OrderLine>,
     val serialNo: String = "",       // owner-set bill / serial no.; "" = use the order id
+    val exPct: Int = 0,              // express as % of the clothes (0 = exAmt is a fixed ₹ amount)
+    val discPct: Int = 0,            // discount as % of the clothes (0 = discount is a fixed ₹ amount)
 ) {
     /** The number shown as "#…" on the order and its bill: the owner's serial, else the id. */
     fun no(): String = serialNo.trim().ifEmpty { id.toString() }

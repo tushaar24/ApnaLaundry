@@ -5,7 +5,7 @@ import { rupees } from "@/core/money";
 import { syncNow as clockNow } from "@/core/syncclock";
 import {
   amtOf, balance, deliverAllocation, expressAuto, receiveAllocation,
-} from "@/domain/laundryMath";
+withPctExtras, } from "@/domain/laundryMath";
 import type {
   BillDetails, LedgerEntry, LedgerKind, OnboardingStep, Order, OrderLine, OrderStatus, PayMethod, PayTag, Route, Service,
 } from "@/domain/models";
@@ -229,8 +229,9 @@ export function saveCount(orderId: number, next: OrderStatus, lines: OrderLine[]
   const nm = custName(o.custId);
   const st = deriveState(rows());
   const total = lines.reduce((s, l) => s + l.amt, 0);
-  const exAmt = o.express ? expressAuto(total, st.shop.expressPct) : o.exAmt;
-  updateOrder(orderId, { status: next, lines, exAmt, billSent: false });
+  // A % express / discount set when the pickup was booked applies now the clothes are counted.
+  const { exAmt, discount } = withPctExtras({ ...o, lines }, st.shop.expressPct);
+  updateOrder(orderId, { status: next, lines, exAmt, discount, billSent: false });
   Analytics.clothesCounted(orderId, next, total);
   const head = next === "READY" ? `Marked ready · ${waReady(nm)}` : "Picked up";
   publish({ toast: `${head} · bill of ${rupees(total)} made — send it from the order`, undo: undoSnap });
@@ -483,7 +484,9 @@ export interface SaveOrderArgs {
   fee: number;
   express: boolean;
   exAmt: number;
+  exPct: number; // 0 = exAmt is a fixed ₹ amount
   discount: number;
+  discPct: number; // 0 = discount is a fixed ₹ amount
   lines: OrderLine[];
   quickAmount: number;
   quickPieces: number;
@@ -513,7 +516,8 @@ export function saveOrder(a: SaveOrderArgs): SaveOrderResult {
     pickupTime: AppDate.to12h(a.pickupTime24), deliveryDate: a.deliveryDate,
     deliveryTime: AppDate.to12h(a.deliveryTime24), ddAuto: a.ddAuto,
     fee: anyHome ? a.fee : 0, express: a.express, exAmt: a.express ? a.exAmt : 0,
-    discount: a.discount, lines: a.lines, serialNo: a.serialNo.trim(),
+    exPct: a.express ? a.exPct : 0, discount: a.discount, discPct: a.discPct,
+    lines: a.lines, serialNo: a.serialNo.trim(),
   };
   const nm = custName(a.custId);
 
@@ -529,8 +533,10 @@ export function saveOrder(a: SaveOrderArgs): SaveOrderResult {
       pickupDate: fields.pickupDate, pickupTime: fields.pickupTime,
       deliveryDate: fields.deliveryDate, deliveryTime: fields.deliveryTime,
       ddAuto: fields.ddAuto, fee: fields.fee, express: fields.express, exAmt: fields.exAmt,
-      discount: fields.discount, lines: newLines, serialNo: fields.serialNo,
+      exPct: fields.exPct, discount: fields.discount, discPct: fields.discPct,
+      lines: newLines, serialNo: fields.serialNo,
     };
+    updated = withPctExtras(updated, st.shop.expressPct);
     if (updated.status === "CREATED" && newLines.length > 0 && a.pickup === "SHOP") {
       updated = { ...updated, status: "RECEIVED" };
     }
@@ -569,7 +575,8 @@ export function saveOrder(a: SaveOrderArgs): SaveOrderResult {
     pickupDate: fields.pickupDate, pickupTime: fields.pickupTime,
     deliveryDate: fields.deliveryDate, deliveryTime: fields.deliveryTime,
     ddAuto: fields.ddAuto, status, cancelReason: "", fee: fields.fee,
-    express: fields.express, exAmt: fields.exAmt, discount: fields.discount,
+    express: fields.express, exAmt: fields.exAmt, exPct: fields.exPct,
+    discount: fields.discount, discPct: fields.discPct,
     pre: 0, paid: 0, doneAt: "", doneDate: "", createdOn: AppDate.today(),
     billSent: false, pieces: 0, lines: fields.lines, serialNo: fields.serialNo,
   };

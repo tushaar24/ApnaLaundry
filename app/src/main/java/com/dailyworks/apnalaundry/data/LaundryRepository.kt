@@ -206,8 +206,9 @@ class LaundryRepository(private val db: AppDatabase) {
         val o = st.orders.first { it.id == orderId }
         val nm = firstName(st.customers.first { it.id == o.custId }.name)
         val total = lines.sumOf { it.amt }
-        val exAmt = if (o.express) LaundryMath.expressAuto(total, st.shop.expressPct) else o.exAmt
-        orderDao.upsert(o.copy(status = next, lines = lines, exAmt = exAmt, billSent = false).toEntity())
+        // A % express / discount set when the pickup was booked applies now the clothes are counted.
+        val priced = LaundryMath.withPctExtras(o.copy(lines = lines), st.shop.expressPct)
+        orderDao.upsert(o.copy(status = next, lines = lines, exAmt = priced.exAmt, discount = priced.discount, billSent = false).toEntity())
         Analytics.clothesCounted(orderId, next.name, total)
         val head = if (next == OrderStatus.READY) "Marked ready · ${waReady(nm)}" else "Picked up"
         return CmdResult("$head · bill of ${money(total)} made — send it from the order", undo)
@@ -420,6 +421,8 @@ class LaundryRepository(private val db: AppDatabase) {
         deliveryDate: String, deliveryTime24: String, ddAuto: Boolean, fee: Int, express: Boolean, exAmt: Int,
         discount: Int, lines: List<OrderLine>, quickAmount: Int, quickPieces: Int,
         serialNo: String = "",
+        exPct: Int = 0, // 0 = exAmt is a fixed ₹ amount
+        discPct: Int = 0, // 0 = discount is a fixed ₹ amount
     ): SaveOrderResult {
         val undo = snapshot()
         val st = current()
@@ -441,7 +444,9 @@ class LaundryRepository(private val db: AppDatabase) {
                 pickupTime = fields.pickupTime, deliveryDate = fields.deliveryDate, deliveryTime = fields.deliveryTime,
                 ddAuto = fields.ddAuto, fee = fields.fee, express = fields.express, exAmt = fields.exAmt,
                 discount = fields.discount, lines = newLines, serialNo = serialNo.trim(),
+                exPct = if (fields.express) exPct else 0, discPct = discPct,
             )
+            updated = LaundryMath.withPctExtras(updated, st.shop.expressPct)
             if (updated.status == OrderStatus.CREATED && newLines.isNotEmpty() && pickup == Route.SHOP) {
                 updated = updated.copy(status = OrderStatus.RECEIVED)
             }
@@ -472,7 +477,7 @@ class LaundryRepository(private val db: AppDatabase) {
             fee = fields.fee, express = fields.express, exAmt = fields.exAmt, discount = fields.discount,
             pre = 0, paid = 0, doneAt = "", doneDate = "", createdOn = AppDate.TODAY, billSent = false,
             pieces = 0, lines = fields.lines,
-            serialNo = serialNo.trim(),
+            serialNo = serialNo.trim(), exPct = if (fields.express) exPct else 0, discPct = discPct,
         )
         db.withTransaction {
             orderDao.upsert(order.toEntity())

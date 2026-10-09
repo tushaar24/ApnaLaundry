@@ -180,7 +180,7 @@ export function sampleOrder(services: Service[], expressPct: number, nextOrderNo
     status: "RECEIVED", cancelReason: "", fee: 0,
     express: exAmt > 0, exAmt,
     discount: subtotal >= 100 ? 20 : 0,
-    pre: 0, paid: 0, doneAt: "", doneDate: "", createdOn: today, billSent: false, serialNo: "", pieces: 0,
+    pre: 0, paid: 0, doneAt: "", doneDate: "", createdOn: today, billSent: false, serialNo: "", exPct: expressPct, discPct: 0, pieces: 0,
     lines,
   };
 }
