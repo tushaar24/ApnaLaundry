@@ -257,26 +257,30 @@ function layout(ctx: CanvasRenderingContext2D, r: BillReceipt, draw: boolean, mi
   p.y += 12;
   rule();
 
-  // 4. items
+  // 4. items — each numbered (serial no.) in a narrow left column
+  const SN_W = 28;
+  const itemX = left + SN_W;
   if (t === "bold") {
     p.y += 18;
     font(11, 700);
-    text("ITEM", left, p.y, "left", C.muted);
+    text("NO.", left, p.y, "left", C.muted);
+    text("ITEM", itemX, p.y, "left", C.muted);
     text("AMOUNT", right, p.y, "right", C.muted);
     p.y += 8;
     rule();
   }
-  for (const l of r.lines) {
+  r.lines.forEach((l, n) => {
     p.y += 21;
     font(14, receipt ? 400 : 600);
     text(l.amount, right, p.y, "right");
-    const itemW = right - left - 90;
+    text(`${n + 1}.`, left, p.y, "left", C.muted);
+    const itemW = right - itemX - 90;
     wrap(ctx, l.item, itemW).forEach((s, i) => {
       if (i > 0) p.y += 18;
-      text(s, left, p.y, "left");
+      text(s, itemX, p.y, "left");
     });
-    if (l.sub) lines(l.sub, 12, 400, BODY, itemW, left, "left", C.muted, 15);
-  }
+    if (l.sub) lines(l.sub, 12, 400, BODY, itemW, itemX, "left", C.muted, 15);
+  });
   p.y += 12;
   rule();
 

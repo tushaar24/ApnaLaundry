@@ -7,7 +7,7 @@ import * as Repo from "@/data/repository";
 import { cls, PrimaryButton } from "../basics";
 import { AppSheet } from "../sheet";
 import {
-  IcCalendar, IcCall, IcCancel, IcCheck, IcEdit, IcEye, IcPerson, IcReceipt, IcTruck,
+  IcCalendar, IcCall, IcCancel, IcCheck, IcDelete, IcEdit, IcEye, IcPerson, IcReceipt, IcTruck,
 } from "../icons";
 import type { ActiveSheet } from "./types";
 import type { useNav } from "../shell";
@@ -74,6 +74,12 @@ export function OrderMenuSheet({
         {o.status === "CREATED" ? (
           <MenuRow icon={<IcCancel size={22} />} label="Cancel this pickup" danger onClick={() => onOpen({ kind: "cancel", orderId: o.id })} />
         ) : null}
+        <MenuRow
+          icon={<IcDelete size={22} />}
+          label={o.lines.length > 0 ? "Delete bill" : "Delete order"}
+          danger
+          onClick={() => onOpen({ kind: "deleteOrder", orderId: o.id })}
+        />
       </div>
     </AppSheet>
   );

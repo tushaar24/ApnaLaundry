@@ -1,4 +1,4 @@
-import type { Customer, LaundryState, Order } from "./models";
+import type { Customer, LaundryState, Order, OrderLine } from "./models";
 import { balance as khataBalance } from "./laundryMath";
 
 /** Small derived-data helpers shared by screens. Port of ui/Selectors.kt. */
@@ -36,20 +36,26 @@ export function initials(name: string): string {
     .join("");
 }
 
-/** "3 items", "2 kg", "3 items + 2 kg", "Not itemised". */
+/** "3 items", "2 kg", "2 kg (12 clothes)", "3 items + 2 kg", "Not itemised". */
 export function itemsLabel(o: Order): string {
   if (o.lines.length === 0) return o.pieces > 0 ? `${o.pieces} pieces` : "";
   if (o.lines.every((l) => l.isQuick && l.qty === 0)) return "Not itemised";
   let pieces = 0;
   let kg = 0;
+  let kgClothes = 0; // optional count of clothes in the by-weight bags
   for (const l of o.lines) {
-    if (l.kg > 0) kg += l.kg;
+    if (l.kg > 0) { kg += l.kg; kgClothes += l.qty; }
     else pieces += l.qty;
   }
   const parts: string[] = [];
   if (pieces > 0) parts.push(`${pieces} ${pieces === 1 ? "item" : "items"}`);
-  if (kg > 0) parts.push(`${trimKg(kg)} kg`);
+  if (kg > 0) parts.push(`${trimKg(kg)} kg` + (kgClothes > 0 ? ` (${kgClothes} clothes)` : ""));
   return parts.join(" + ");
+}
+
+/** "Wash & Fold · 4 kg" or, with the clothes counted, "Wash & Fold · 4 kg · 12 clothes". */
+export function weightLabel(l: OrderLine): string {
+  return `${l.serviceName} · ${trimKg(l.kg)} kg` + (l.qty > 0 ? ` · ${l.qty} ${l.qty === 1 ? "cloth" : "clothes"}` : "");
 }
 
 export function svcLabel(o: Order): string {

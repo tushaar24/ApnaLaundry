@@ -287,6 +287,22 @@ export function cancelOrder(orderId: number, reason: string) {
   publish({ toast: `Pickup cancelled · ${custName(o.custId)}`, undo: undoSnap });
 }
 
+/**
+ * Deletes an order and its bill for good: the order and every khata entry
+ * made for it (bill, payments, edits) become tombstones, so the customer's
+ * balance is as if it never existed. Undo restores it all.
+ */
+export function deleteOrder(orderId: number) {
+  const undoSnap = snapshot();
+  const o = orderOf(orderId);
+  setRows((r) => ({
+    ...r,
+    orders: r.orders.map((x) => (x.id === orderId ? { ...x, deleted: true, ...stamp() } : x)),
+    ledger: r.ledger.map((e) => (e.ref === orderId && !e.deleted ? { ...e, deleted: true, ...stamp() } : e)),
+  }));
+  publish({ toast: `Bill #${o.id} deleted · ${custName(o.custId)}`, undo: undoSnap });
+}
+
 /** kind = "pickup" or "drop". */
 export function reschedule(orderId: number, kind: string, dateIso: string, time24: string, notify: boolean) {
   const undoSnap = snapshot();

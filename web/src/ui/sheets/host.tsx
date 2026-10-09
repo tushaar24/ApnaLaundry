@@ -4,7 +4,7 @@ import type { LaundryState } from "@/domain/models";
 import type { useNav } from "../shell";
 import type { ActiveSheet } from "./types";
 import {
-  BillViewSheet, CancelSheet, CollectPaymentSheet, CountClothesSheet, RescheduleSheet,
+  BillViewSheet, CancelSheet, CollectPaymentSheet, CountClothesSheet, DeleteOrderSheet, RescheduleSheet,
 } from "./orderSheets";
 import { AddOldBaakiSheet, CustomerFormSheet, ReceivePaymentSheet } from "./customerSheets";
 import { OrderMenuSheet, ShareSummarySheet } from "./menuShare";
@@ -31,6 +31,8 @@ export function SheetHost({
       return <RescheduleSheet state={state} orderId={active.orderId} which={active.which} onDismiss={onDismiss} />;
     case "cancel":
       return <CancelSheet state={state} orderId={active.orderId} onDismiss={onDismiss} />;
+    case "deleteOrder":
+      return <DeleteOrderSheet state={state} orderId={active.orderId} nav={nav} onDismiss={onDismiss} />;
     case "customerForm":
       return <CustomerFormSheet state={state} form={active} onDismiss={onDismiss} />;
     case "receive":

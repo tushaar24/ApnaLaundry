@@ -7,6 +7,7 @@ export type ActiveSheet =
   | { kind: "count"; orderId: number; next: OrderStatus }
   | { kind: "reschedule"; orderId: number; which: string } // "pickup" | "drop"
   | { kind: "cancel"; orderId: number }
+  | { kind: "deleteOrder"; orderId: number }
   | {
       kind: "customerForm";
       editId: string | null;

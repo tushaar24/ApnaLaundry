@@ -108,6 +108,7 @@ function NewOrderScreen() {
         setShowQuickBox(true);
       } else if (l.kg > 0) {
         clothes.setWeight(l.serviceId, Sel.trimKg(l.kg));
+        if (l.qty > 0) clothes.setPcs(l.serviceId, String(l.qty));
       } else {
         clothes.bump(l.serviceId, l.itemName, l.qty);
         const base =
@@ -324,7 +325,6 @@ function NewOrderScreen() {
               dateText={AppDate.short(pickupDate)}
               dateIsSet
               dateValue={pickupDate}
-              minIso={AppDate.today()}
               time24={pickupTime}
               onPickDate={setPickupDate}
               onPickTime={setPickupTime}
@@ -562,7 +562,7 @@ function DateRow({
   dateText: string;
   dateIsSet: boolean;
   dateValue: string;
-  minIso: string;
+  minIso?: string;
   time24: string;
   onPickDate: (iso: string) => void;
   onPickTime: (t: string) => void;

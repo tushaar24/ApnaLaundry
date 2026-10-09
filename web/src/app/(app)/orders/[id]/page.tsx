@@ -157,7 +157,7 @@ function OrderDetailScreen({ orderId }: { orderId: number }) {
                   <div key={i} className="flex w-full justify-between gap-2">
                     <span className="flex min-w-0 flex-1 flex-col">
                       <span className="text-[15px] font-semibold">
-                        {l.kg > 0 ? `${l.serviceName} · ${Sel.trimKg(l.kg)} kg` : `${l.itemName} × ${l.qty}`}
+                        {l.kg > 0 ? Sel.weightLabel(l) : `${l.itemName} × ${l.qty}`}
                       </span>
                       <span className="text-[12px] text-muted">
                         {l.serviceName}

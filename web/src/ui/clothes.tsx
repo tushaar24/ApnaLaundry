@@ -14,6 +14,7 @@ import { cls, FieldBox, Stepper } from "./basics";
 export interface ClothesState {
   qty: Record<string, Record<string, number>>; // svcId -> itemName -> qty
   weight: Record<string, string>; // svcId -> weight text
+  pcs: Record<string, string>; // svcId -> optional cloth count for a by-weight service
   price: Record<string, Record<string, string>>; // svcId -> itemName -> override text
   selected: string;
 }
@@ -23,6 +24,7 @@ export interface ClothesApi {
   qtyOf(svc: string, item: string): number;
   bump(svc: string, item: string, d: number): void;
   setWeight(svc: string, v: string): void;
+  setPcs(svc: string, v: string): void;
   priceText(svc: string, item: string): string | undefined;
   setPrice(svc: string, item: string, v: string): void;
   priceFor(svc: Service, item: string, base: number): number;
@@ -35,7 +37,7 @@ export function useClothesState(services: Service[]): ClothesApi {
   const initialSelected =
     (services.find((s) => s.mode === "PIECE") ?? services[0])?.id ?? "";
   const [state, setState] = useState<ClothesState>({
-    qty: {}, weight: {}, price: {}, selected: initialSelected,
+    qty: {}, weight: {}, pcs: {}, price: {}, selected: initialSelected,
   });
 
   // Keep selection valid if the service list changes under us.
@@ -54,6 +56,7 @@ export function useClothesState(services: Service[]): ClothesApi {
           },
         })),
       setWeight: (svc, v) => setState((s) => ({ ...s, weight: { ...s.weight, [svc]: v } })),
+      setPcs: (svc, v) => setState((s) => ({ ...s, pcs: { ...s.pcs, [svc]: v } })),
       priceText: (svc, item) => state.price[svc]?.[item],
       setPrice: (svc, item, v) =>
         setState((s) => ({
@@ -79,7 +82,8 @@ export function useClothesState(services: Service[]): ClothesApi {
               const min = s.minKg ?? 0;
               out.push({
                 serviceId: s.id, serviceName: s.name, itemName: "By weight",
-                qty: 0, price: rate, base: rate, kg, amt: Math.round(Math.max(kg, min) * rate),
+                // qty on a weight line = clothes in the bag (0 = not counted)
+                qty: parseInt(state.pcs[s.id] ?? "", 10) || 0, price: rate, base: rate, kg, amt: Math.round(Math.max(kg, min) * rate),
               });
             }
           } else {
@@ -218,6 +222,7 @@ function WeightEditor({ cur, api }: { cur: Service; api: ClothesApi }) {
   const rate = cur.ratePerKg ?? 0;
   const min = cur.minKg ?? 0;
   const w = api.state.weight[cur.id] ?? "";
+  const pcs = api.state.pcs[cur.id] ?? "";
   const kg = parseFloat(w) || 0;
   const amt = kg > 0 ? Math.round(Math.max(kg, min) * rate) : 0;
   return (
@@ -234,6 +239,14 @@ function WeightEditor({ cur, api }: { cur: Service; api: ClothesApi }) {
         />
         <span className="bric text-[22px]">{rupees(amt)}</span>
       </div>
+      <FieldBox
+        value={pcs}
+        onChange={(v) => api.setPcs(cur.id, v.replace(/\D/g, "").slice(0, 4))}
+        placeholder="Number of clothes (optional)"
+        suffix={pcs !== "" ? "clothes" : undefined}
+        h={48}
+        inputMode="numeric"
+      />
       <p className="text-[13px] text-muted">
         ₹{rate} per kg. Bags under {trimKg(min)} kg are charged for {trimKg(min)} kg.
       </p>

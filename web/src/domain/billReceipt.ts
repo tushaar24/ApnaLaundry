@@ -100,7 +100,7 @@ export interface ReceiptOptions {
 }
 
 function line(l: OrderLine): ReceiptLine {
-  if (l.kg > 0) return { item: `${l.serviceName} · ${Sel.trimKg(l.kg)} kg`, sub: "", amount: rupees(l.amt) };
+  if (l.kg > 0) return { item: Sel.weightLabel(l), sub: "", amount: rupees(l.amt) };
   if (l.isQuick) return { item: l.qty > 0 ? `${l.itemName} × ${l.qty}` : l.itemName, sub: "", amount: rupees(l.amt) };
   return { item: `${l.itemName} × ${l.qty}`, sub: l.serviceName, amount: rupees(l.amt) };
 }

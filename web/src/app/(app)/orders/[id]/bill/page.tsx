@@ -80,7 +80,7 @@ function BillScreen({ orderId }: { orderId: number }) {
             {o.lines.map((l, i) => (
               <BillRow
                 key={i}
-                label={l.kg > 0 ? `${l.serviceName} · ${Sel.trimKg(l.kg)} kg` : `${l.itemName} × ${l.qty}`}
+                label={l.kg > 0 ? Sel.weightLabel(l) : `${l.itemName} × ${l.qty}`}
                 value={rupees(l.amt)}
               />
             ))}
@@ -151,7 +151,7 @@ function BillScreen({ orderId }: { orderId: number }) {
           </div>
         ) : null}
 
-        <div className="mt-1 flex w-full gap-2 pb-6">
+        <div className="mt-1 flex w-full gap-2">
           <OutlineButton
             h={52}
             className="flex-1"
@@ -165,6 +165,13 @@ function BillScreen({ orderId }: { orderId: number }) {
             Done
           </PrimaryButton>
         </div>
+        <button
+          type="button"
+          onClick={() => setActive({ kind: "deleteOrder", orderId: o.id })}
+          className="mx-auto mb-6 h-11 px-4 text-[14px] font-bold text-orangetext"
+        >
+          Delete bill
+        </button>
       </div>
 
       <SheetHost active={active} state={state} nav={nav} onOpen={setActive} onDismiss={() => setActive(null)} />

@@ -9,11 +9,13 @@ import type { LaundryState, Order, OrderStatus, PayMethod } from "@/domain/model
 import * as Sel from "@/domain/selectors";
 import * as Repo from "@/data/repository";
 import { Analytics } from "@/analytics/events";
-import { cls, Divider, FieldBox, PillChip, PrimaryButton, Toggle } from "../basics";
+import { cls, DateTimeBox, Divider, FieldBox, PillChip, PrimaryButton, Toggle } from "../basics";
 import { billPreviewUrl } from "../billPdf";
 import { prepareBillAssets } from "../billRender";
+import { IcCalendar } from "../icons";
 import { AppSheet } from "../sheet";
 import { ClothesEditor, useClothesState } from "../clothes";
+import type { useNav } from "../shell";
 
 /** Ports of ui/sheets/OrderSheets.kt. */
 
@@ -184,7 +186,17 @@ export function RescheduleSheet({
             <PillChip key={label} label={label} selected={date === iso} onClick={() => setDate(iso)} />
           ))}
         </div>
-        <span className="text-[15px] font-semibold">Selected: {AppDate.short(date)}</span>
+        {/* Any date, past ones included — e.g. entering an order after the fact. */}
+        <DateTimeBox
+          icon={<IcCalendar size={20} />}
+          iconTint="var(--color-blue)"
+          text={`Selected: ${AppDate.short(date)}`}
+          isSet
+          type="date"
+          value={date}
+          min={isPickup ? undefined : o.pickupDate}
+          onPick={setDate}
+        />
         {isPickup && o.deliveryDate !== "" && o.ddAuto ? (
           <span className="text-[13px] text-muted">
             Delivery moves too: {AppDate.short(AppDate.add(o.deliveryDate, AppDate.daysBetween(o.pickupDate, date)))}
@@ -242,6 +254,51 @@ export function CancelSheet({
             }}
           >
             Cancel pickup
+          </PrimaryButton>
+        </div>
+      </div>
+    </AppSheet>
+  );
+}
+
+export function DeleteOrderSheet({
+  state, orderId, nav, onDismiss,
+}: { state: LaundryState; orderId: number; nav: ReturnType<typeof useNav>; onDismiss: () => void }) {
+  const o = Sel.order(state, orderId);
+  const c = Sel.customer(state, o?.custId ?? "");
+  if (!o) { onDismiss(); return null; }
+  const what = o.lines.length > 0 ? "bill" : "order";
+  const paidAny = state.ledger.some((e) => e.ref === o.id && e.kind === "GOT");
+
+  return (
+    <AppSheet title={`Delete ${what} #${o.id}?`} subtitle={`${c.name} · ${rupees(amtOf(o))}`} onDismiss={onDismiss}>
+      <div className="flex flex-col gap-3.5">
+        <div className="rounded-xl bg-orangelight p-3.5">
+          <span className="text-[14px] font-semibold text-orangedeep">
+            The {what} is removed from orders, earnings and {Sel.firstName(c.name)}&apos;s khata
+            {paidAny ? ", along with the payments recorded on it" : ""}. You can undo right after.
+          </span>
+        </div>
+        <div className="flex w-full gap-2">
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="h-[54px] flex-1 rounded-[14px] bg-neutralfill text-[16px] font-bold text-inksecondary"
+          >
+            Keep
+          </button>
+          <PrimaryButton
+            h={54}
+            bg="orange"
+            className="flex-1"
+            onClick={() => {
+              onDismiss();
+              Repo.deleteOrder(orderId);
+              // The order's own pages would show "not found" — leave them.
+              if (window.location.pathname.startsWith("/orders/")) nav.openHome({ replace: true });
+            }}
+          >
+            Delete {what}
           </PrimaryButton>
         </div>
       </div>
