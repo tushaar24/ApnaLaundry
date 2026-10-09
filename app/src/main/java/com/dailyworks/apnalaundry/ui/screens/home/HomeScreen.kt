@@ -69,6 +69,13 @@ import com.dailyworks.apnalaundry.ui.nav.AppNavigator
 import com.dailyworks.apnalaundry.ui.sheets.ActiveSheet
 import com.dailyworks.apnalaundry.ui.sheets.SheetHost
 import com.dailyworks.apnalaundry.ui.theme.Tokens
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.ui.platform.LocalDensity
+import com.dailyworks.apnalaundry.ui.components.showDatePicker
 
 @Composable
 fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
@@ -290,21 +297,57 @@ private fun TabRow(state: LaundryState, pickup: Boolean, selDate: String, onSele
     }
 }
 
+/** Days the strip shows around today (orders can be dated in the past). */
+private const val STRIP_BACK = 60
+private const val STRIP_AHEAD = 30
+
 @Composable
 private fun DateStrip(state: LaundryState, pickup: Boolean, selDate: String, onPick: (String) -> Unit) {
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp).padding(bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-        (-1..5).forEach { i ->
-            val iso = AppDate.add(AppDate.TODAY, i)
-            val on = selDate == iso
-            val n = state.orders.count { onDate(it, iso, pickup) && it.status != OrderStatus.CANCELLED }
-            Column(
-                Modifier.width(50.dp).height(58.dp).rounded(12.dp).background(if (on) Tokens.Ink else Color.Transparent).border(1.5.dp, if (on) Tokens.Ink else Color.Transparent, RoundedCornerShape(12.dp)).tap { onPick(iso) },
-                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
-            ) {
-                Text(if (i == 0) "Today" else AppDate.dayName(iso), style = fig(11, FontWeight.Bold, if (on) Tokens.OnDarkMuted else if (i == 0) Tokens.Blue else Tokens.Muted))
-                Text("${AppDate.dayOfMonth(iso)}", style = fig(17, FontWeight.Bold, if (on) Tokens.OnDark else Tokens.Ink))
-                Text(if (n > 0) "$n" else "", style = fig(11, FontWeight.Bold, if (on) Tokens.BlueBar else Tokens.Blue))
+    val context = LocalContext.current
+    val today = AppDate.TODAY
+    // Stretch the range when the date picker jumps outside it.
+    val back = maxOf(STRIP_BACK, -AppDate.daysBetween(today, selDate))
+    val ahead = maxOf(STRIP_AHEAD, AppDate.daysBetween(today, selDate))
+    val days = (-back..ahead).toList()
+    val list = rememberLazyListState()
+    val density = LocalDensity.current
+    var first by remember { mutableStateOf(true) }
+    // Keep the selected day in view: centred on open, smoothly after a pick.
+    LaunchedEffect(selDate, back) {
+        val idx = days.indexOf(AppDate.daysBetween(today, selDate)).coerceAtLeast(0)
+        val half = list.layoutInfo.viewportSize.width / 2
+        val cell = with(density) { 52.dp.roundToPx() }
+        val offset = -(half - cell / 2).coerceAtLeast(0)
+        if (first) list.scrollToItem(idx, offset) else list.animateScrollToItem(idx, offset)
+        first = false
+    }
+    Row(Modifier.fillMaxWidth().padding(bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        LazyRow(
+            state = list,
+            modifier = Modifier.weight(1f),
+            contentPadding = PaddingValues(horizontal = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            items(days, key = { it }) { i ->
+                val iso = AppDate.add(today, i)
+                val on = selDate == iso
+                val n = state.orders.count { onDate(it, iso, pickup) && it.status != OrderStatus.CANCELLED }
+                Column(
+                    Modifier.width(50.dp).height(58.dp).rounded(12.dp).background(if (on) Tokens.Ink else Color.Transparent).border(1.5.dp, if (on) Tokens.Ink else Color.Transparent, RoundedCornerShape(12.dp)).tap { onPick(iso) },
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+                ) {
+                    Text(if (i == 0) "Today" else AppDate.dayName(iso), style = fig(11, FontWeight.Bold, if (on) Tokens.OnDarkMuted else if (i == 0) Tokens.Blue else Tokens.Muted))
+                    Text("${AppDate.dayOfMonth(iso)}", style = fig(17, FontWeight.Bold, if (on) Tokens.OnDark else Tokens.Ink))
+                    Text(if (n > 0) "$n" else "", style = fig(11, FontWeight.Bold, if (on) Tokens.BlueBar else Tokens.Blue))
+                }
             }
+        }
+        // Jump to any date (past orders included).
+        Box(
+            Modifier.padding(end = 8.dp).size(44.dp).rounded(12.dp).tap { showDatePicker(context, selDate, null, onPick) },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Outlined.CalendarMonth, "Pick a date", tint = Tokens.Blue, modifier = Modifier.size(22.dp))
         }
     }
 }
