@@ -149,8 +149,11 @@ fun PaywallScreen(
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = 20.dp),
                 ) {
-                    // ₹2 trial hero
                     Spacer(Modifier.height(4.dp))
+                    PaywallVideo(paused = ui.busy)
+
+                    // ₹2 trial hero
+                    Spacer(Modifier.height(16.dp))
                     Column(
                         Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Tokens.Blue).padding(20.dp),
                     ) {

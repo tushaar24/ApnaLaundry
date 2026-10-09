@@ -98,6 +98,10 @@ dependencies {
     // Meta (Facebook) SDK — app events only (no Login/Share), for Meta ads.
     implementation(libs.facebook.core)
 
+    // Media3 — the paywall intro video.
+    implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.media3.ui.compose)
+
     // Room
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
