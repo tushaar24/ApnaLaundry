@@ -43,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.domain.BillDetails
 import com.dailyworks.apnalaundry.domain.BillDetails.withFields
 import com.dailyworks.apnalaundry.domain.BillReceipt
@@ -73,7 +74,10 @@ fun BillDesignScreen(shopVm: ShopViewModel, editing: Boolean, onBack: () -> Unit
     val state by shopVm.state.collectAsStateWithLifecycle()
     val shop = state.shop
     var loginPhone by remember { mutableStateOf(shop.phone) }
-    LaunchedEffect(Unit) { loginPhone = shopVm.loginPhone() }
+    LaunchedEffect(Unit) {
+        if (editing) Analytics.screen("bill_design")
+        loginPhone = shopVm.loginPhone()
+    }
 
     var name by remember { mutableStateOf(shop.name) }
     var draft by remember { mutableStateOf(BillDetails.fieldsOf(shop)) }

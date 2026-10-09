@@ -93,7 +93,8 @@ private fun summaryLine(s: Service): String = if (s.mode == PricingMode.WEIGHT) 
 fun RatesScreen(shopVm: ShopViewModel, from: String, onDone: () -> Unit, onBack: () -> Unit) {
     val setup = from == "setup"
     LaunchedEffect(Unit) {
-        Analytics.screen("rates")
+        // Same screen names as the web: onboarding is "setup", the editor "rates".
+        Analytics.screen(if (setup) "setup" else "rates")
         if (!setup) Analytics.ratesOpened(from)
     }
     // First-run setup is the whole onboarding flow (intro → name → this rate

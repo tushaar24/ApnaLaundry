@@ -87,15 +87,26 @@ fun OnboardingFlow(shopVm: ShopViewModel, onFinished: () -> Unit) {
         val saved = repo.onboardingStep()
         step = if (saved == "" || saved == "done") "intro" else saved
     }
+    var finished by remember { mutableStateOf(false) }
     fun goTo(s: String) {
         step = s
         shopVm.setOnboardingStep(s)
     }
     fun finish() {
+        if (finished) return
+        finished = true
         shopVm.setOnboardingStep("done")
         Analytics.setupCompleted(state.services.size, state.shop.expressPct)
         shopVm.showInfo("All set! Take your first order.")
         onFinished()
+    }
+
+    // Finished on another device (or the website) while this one sat here.
+    LaunchedEffect(state.shop.onboardingStep) {
+        if (step != null && !finished && state.shop.onboardingStep == "done") {
+            finished = true
+            onFinished()
+        }
     }
 
     when (step) {
