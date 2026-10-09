@@ -45,6 +45,20 @@ object Selectors {
     fun weightLabel(l: OrderLine): String =
         "${l.serviceName} · ${trimKg(l.kg)} kg" + if (l.qty > 0) " · ${l.qty} ${if (l.qty == 1) "cloth" else "clothes"}" else ""
 
+    /**
+     * The serial a new order starts with: the latest order's serial + 1, keeping
+     * any prefix and zero-padding ("A-102" → "A-103", "0099" → "0100"). "" until
+     * the owner has given some order a serial, or when the last one has no
+     * number to bump. Port twin: web Sel.nextSerial.
+     */
+    fun nextSerial(state: LaundryState): String {
+        val last = state.orders.filter { it.serialNo.isNotBlank() }.maxByOrNull { it.id } ?: return ""
+        val m = Regex("^(.*?)(\\d+)$").find(last.serialNo.trim()) ?: return ""
+        val (prefix, digits) = m.destructured
+        val next = (digits.toBigInteger() + java.math.BigInteger.ONE).toString().padStart(digits.length, '0')
+        return (prefix + next).take(12)
+    }
+
     fun trimKg(kg: Double): String = if (kg % 1.0 == 0.0) kg.toInt().toString() else kg.toString()
 
     /** Orders for a customer that are not yet in khata (in progress). */

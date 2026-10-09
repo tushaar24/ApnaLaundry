@@ -109,6 +109,7 @@ fun NewOrderScreen(
     var exOverride by remember { mutableStateOf<String?>(null) }
     var discountText by remember { mutableStateOf("") }
     var serialText by remember { mutableStateOf("") } // "" = the order id
+    var serialTouched by remember { mutableStateOf(false) } // owner typed in it
     var quickAmt by remember { mutableStateOf("") }
     var quickPcs by remember { mutableStateOf("") }
     var showQuickBox by remember { mutableStateOf(false) }
@@ -167,6 +168,12 @@ fun NewOrderScreen(
     val exAuto = LaundryMath.expressAuto(clothesTotal, pct)
     val exAmt = if (express) exOverride.let { if (it == null) exAuto else it.toIntOrNull() ?: 0 } else 0
     val fee = if (anyHome) feeText.toIntOrNull() ?: 0 else 0
+    // A new order's serial starts as the last serial + 1 (and keeps following
+    // it while orders load) until the owner types in the field.
+    val nextSerial = Selectors.nextSerial(state)
+    LaunchedEffect(nextSerial) {
+        if (editId == null && !serialTouched) serialText = nextSerial
+    }
     val discount = discountText.toIntOrNull() ?: 0
     val grand = max(0, clothesTotal + exAmt + fee - discount)
     val empty = clothesTotal == 0
@@ -362,7 +369,7 @@ fun NewOrderScreen(
                 }
                 FieldBox(discountText, { discountText = it.filter { c -> c.isDigit() }.take(5) }, prefix = "₹", suffix = "discount (optional)", height = 48.dp, keyboardType = KeyboardType.Number)
                 FieldBox(
-                    serialText, { serialText = it.filter { c -> c.isLetterOrDigit() && c.code < 128 || c in "_/-" }.take(12) },
+                    serialText, { serialTouched = true; serialText = it.filter { c -> c.isLetterOrDigit() && c.code < 128 || c in "_/-" }.take(12) },
                     prefix = "#", placeholder = editId?.toString() ?: "Same as order number",
                     suffix = "bill / serial no.", height = 48.dp,
                 )
