@@ -90,7 +90,7 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
                         Divider()
                         o.lines.forEach { l ->
                             BillRow(
-                                if (l.kg > 0) "${l.serviceName} · ${Selectors.trimKg(l.kg)} kg" else "${l.itemName} × ${l.qty}",
+                                if (l.kg > 0) Selectors.weightLabel(l) else "${l.itemName} × ${l.qty}",
                                 Money.rupees(l.amt),
                             )
                         }
@@ -144,7 +144,12 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
                     OutlineButton("Edit bill", Modifier.weight(1f), height = 52.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { navigator.openNewOrder(editId = o.id, from = "bill") }
                     PrimaryButton("Done", Modifier.weight(1f), height = 52.dp) { if (from == "new") navigator.openHome() else navigator.back() }
                 }
-                Spacer(Modifier.height(24.dp))
+                Text(
+                    "Delete bill",
+                    style = fig(14, FontWeight.Bold, Tokens.OrangeText),
+                    modifier = Modifier.align(Alignment.CenterHorizontally).tap { active = ActiveSheet.DeleteOrder(o.id) }.padding(12.dp),
+                )
+                Spacer(Modifier.height(12.dp))
             }
         }
         SheetHost(active, state, shopVm, navigator, onOpen = { active = it }, onDismiss = { active = null })

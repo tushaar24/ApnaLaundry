@@ -13,6 +13,7 @@ sealed interface ActiveSheet {
     data class Count(val orderId: Int, val next: OrderStatus) : ActiveSheet
     data class Reschedule(val orderId: Int, val kind: String) : ActiveSheet
     data class Cancel(val orderId: Int) : ActiveSheet
+    data class DeleteOrder(val orderId: Int) : ActiveSheet
     data class CustomerForm(
         val editId: String?, val ctx: String,
         val prefillName: String = "", val prefillPhone: String = "",
@@ -42,6 +43,7 @@ fun SheetHost(
         is ActiveSheet.Count -> CountClothesSheet(state, active.orderId, active.next, vm, onDismiss)
         is ActiveSheet.Reschedule -> RescheduleSheet(state, active.orderId, active.kind, vm, onDismiss)
         is ActiveSheet.Cancel -> CancelSheet(state, active.orderId, vm, onDismiss)
+        is ActiveSheet.DeleteOrder -> DeleteOrderSheet(state, active.orderId, vm, navigator, onDismiss)
         is ActiveSheet.CustomerForm -> CustomerFormSheet(state, active, vm, onDismiss)
         is ActiveSheet.Receive -> ReceivePaymentSheet(state, active.custId, vm, onDismiss)
         is ActiveSheet.AddOld -> AddOldBaakiSheet(state, active.custId, vm, onDismiss)

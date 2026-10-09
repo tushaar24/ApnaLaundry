@@ -270,6 +270,26 @@ class LaundryRepository(private val db: AppDatabase) {
         return CmdResult("Pickup cancelled · $nm", undo)
     }
 
+    /**
+     * Deletes an order and its bill for good: the order and every khata entry
+     * made for it (bill, payments, edits) become tombstones, so the customer's
+     * balance is as if it never existed. Undo restores it all.
+     */
+    suspend fun deleteOrder(orderId: Int): CmdResult {
+        val undo = snapshot()
+        val st = current()
+        val o = st.orders.first { it.id == orderId }
+        val nm = firstName(st.customers.first { it.id == o.custId }.name)
+        val now = SyncClock.now()
+        db.withTransaction {
+            orderDao.get(orderId)?.let { orderDao.upsert(it.copy(deleted = true, dirty = true, updatedAt = now)) }
+            ledgerDao.getAll().filter { it.ref == orderId && !it.deleted }.forEach {
+                ledgerDao.insert(it.copy(deleted = true, dirty = true, updatedAt = now))
+            }
+        }
+        return CmdResult("Bill #$orderId deleted · $nm", undo)
+    }
+
     /** kind = "pickup" or "drop". */
     suspend fun reschedule(orderId: Int, kind: String, dateIso: String, time24: String, notify: Boolean): CmdResult {
         val undo = snapshot()

@@ -39,6 +39,8 @@ class ClothesState(services: List<Service>) {
     val qty = mutableStateMapOf<String, MutableMap<String, Int>>()
     // svcId -> weight text
     val weight = mutableStateMapOf<String, String>()
+    // svcId -> optional count of clothes in a by-weight bag (stored as the line's qty)
+    val pcs = mutableStateMapOf<String, String>()
     // svcId -> (itemName -> price override text)
     val price = mutableStateMapOf<String, MutableMap<String, String>>()
     var selected by mutableStateOf(
@@ -53,6 +55,7 @@ class ClothesState(services: List<Service>) {
     }
 
     fun setWeight(svc: String, v: String) { weight[svc] = v }
+    fun setPcs(svc: String, v: String) { pcs[svc] = v }
     fun priceText(svc: String, item: String): String? = price[svc]?.get(item)
     fun setPrice(svc: String, item: String, v: String) {
         val m = price.getOrPut(svc) { mutableMapOf() }.toMutableMap(); m[item] = v; price[svc] = m
@@ -71,7 +74,9 @@ class ClothesState(services: List<Service>) {
                 if (kg > 0) {
                     val rate = s.ratePerKg ?: 0
                     val min = s.minKg ?: 0.0
-                    out += OrderLine(s.id, s.name, "By weight", 0, rate, rate, kg, (max(kg, min) * rate).roundToInt())
+                    // qty on a weight line = clothes in the bag (0 = not counted)
+                    val clothes = pcs[s.id]?.toIntOrNull() ?: 0
+                    out += OrderLine(s.id, s.name, "By weight", clothes, rate, rate, kg, (max(kg, min) * rate).roundToInt())
                 }
             } else {
                 val q = qty[s.id] ?: emptyMap()
@@ -174,6 +179,12 @@ fun ClothesEditor(
                     Spacer8()
                     Text(Money.rupees(amt), style = bric(22, FontWeight.Bold))
                 }
+                val pc = state.pcs[cur.id] ?: ""
+                FieldBox(
+                    value = pc, onValueChange = { state.setPcs(cur.id, it.filter { ch -> ch.isDigit() }.take(4)) },
+                    placeholder = "Number of clothes (optional)", suffix = if (pc.isNotEmpty()) "clothes" else null,
+                    height = 48.dp, keyboardType = KeyboardType.Number,
+                )
                 Text("₹$rate per kg. Bags under ${trimK(min)} kg are charged for ${trimK(min)} kg.", style = fig(13, color = Tokens.Muted))
             }
         }

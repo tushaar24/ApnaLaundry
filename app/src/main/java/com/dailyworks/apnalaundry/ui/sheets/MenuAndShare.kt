@@ -16,6 +16,7 @@ import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Cancel
+import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.LocalShipping
@@ -83,6 +84,9 @@ fun OrderMenuSheet(
             }
             if (o.status == OrderStatus.CREATED)
                 MenuRow(Icons.Outlined.Cancel, "Cancel this pickup", danger = true) { onOpen(ActiveSheet.Cancel(o.id)) }
+            MenuRow(Icons.Outlined.DeleteOutline, if (o.lines.isNotEmpty()) "Delete bill" else "Delete order", danger = true) {
+                onOpen(ActiveSheet.DeleteOrder(o.id))
+            }
         }
     }
 }

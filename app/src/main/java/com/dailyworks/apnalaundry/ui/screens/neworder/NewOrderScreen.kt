@@ -76,6 +76,7 @@ import com.dailyworks.apnalaundry.ui.nav.AppNavigator
 import com.dailyworks.apnalaundry.ui.sheets.ActiveSheet
 import com.dailyworks.apnalaundry.ui.sheets.SheetHost
 import com.dailyworks.apnalaundry.ui.sheets.Toggle
+import com.dailyworks.apnalaundry.ui.components.showDatePicker
 import com.dailyworks.apnalaundry.ui.theme.Tokens
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -140,7 +141,10 @@ fun NewOrderScreen(
         o.lines.forEach { l ->
             when {
                 l.isQuick -> { quickAmt = l.amt.toString(); quickPcs = if (l.qty > 0) l.qty.toString() else ""; showQuickBox = true }
-                l.kg > 0 -> clothes.setWeight(l.serviceId, Selectors.trimKg(l.kg))
+                l.kg > 0 -> {
+                    clothes.setWeight(l.serviceId, Selectors.trimKg(l.kg))
+                    if (l.qty > 0) clothes.setPcs(l.serviceId, l.qty.toString())
+                }
                 else -> {
                     clothes.bump(l.serviceId, l.itemName, l.qty)
                     val base = services.firstOrNull { it.id == l.serviceId }?.items?.firstOrNull { it.name == l.itemName }?.price ?: l.base
@@ -289,7 +293,7 @@ fun NewOrderScreen(
                     seedIso = pickupDate,
                     dateText = AppDate.short(pickupDate),
                     dateIsSet = true,
-                    minIso = AppDate.TODAY,
+                    minIso = null, // past pickups allowed (orders entered after the fact)
                     time24 = pickupTime,
                     onPickDate = { pickupDate = it },
                     onPickTime = { pickupTime = it },
@@ -438,7 +442,7 @@ private fun DateRow(
     seedIso: String,
     dateText: String,
     dateIsSet: Boolean,
-    minIso: String,
+    minIso: String?,
     time24: String,
     onPickDate: (String) -> Unit,
     onPickTime: (String) -> Unit,
@@ -495,23 +499,6 @@ private fun DateTimeBox(
 private fun Modifier.dashedBorder(color: Color, width: Dp, radius: Dp): Modifier = drawBehind {
     val stroke = Stroke(width = width.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(11f, 8f)))
     drawRoundRect(color = color, style = stroke, cornerRadius = CornerRadius(radius.toPx()))
-}
-
-private fun showDatePicker(context: Context, seedIso: String, minIso: String, onSet: (String) -> Unit) {
-    val d = runCatching { LocalDate.parse(seedIso) }.getOrElse { LocalDate.parse(AppDate.TODAY) }
-    val dlg = DatePickerDialog(
-        context,
-        { _, y, m, day ->
-            val picked = String.format(Locale.US, "%04d-%02d-%02d", y, m + 1, day)
-            onSet(if (picked < minIso) minIso else picked)
-        },
-        d.year, d.monthValue - 1, d.dayOfMonth,
-    )
-    runCatching {
-        val minMillis = LocalDate.parse(minIso).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        dlg.datePicker.minDate = minMillis - 24L * 60 * 60 * 1000 // margin avoids a timezone off-by-one
-    }
-    dlg.show()
 }
 
 private fun showTimePicker(context: Context, time24: String, onSet: (String) -> Unit) {

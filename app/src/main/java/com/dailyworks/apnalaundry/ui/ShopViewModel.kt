@@ -95,6 +95,7 @@ class ShopViewModel(
     fun saveCount(id: Int, next: OrderStatus, lines: List<OrderLine>) = launchCmd { repo.saveCount(id, next, lines) }
     fun prepay(id: Int, method: PayMethod) = launchCmd { repo.prepay(id, method) }
     fun cancelOrder(id: Int, reason: String) = launchCmd { repo.cancelOrder(id, reason) }
+    fun deleteOrder(id: Int) = launchCmd { repo.deleteOrder(id) }
     fun reschedule(id: Int, kind: String, date: String, time24: String, notify: Boolean) =
         launchCmd { repo.reschedule(id, kind, date, time24, notify) }
     fun sendBill(id: Int) = launchCmd { repo.sendBill(id) }

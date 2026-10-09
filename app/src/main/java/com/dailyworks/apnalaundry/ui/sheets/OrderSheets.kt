@@ -52,6 +52,12 @@ import com.dailyworks.apnalaundry.ui.components.rounded
 import com.dailyworks.apnalaundry.ui.components.tap
 import com.dailyworks.apnalaundry.ui.nav.AppNavigator
 import com.dailyworks.apnalaundry.ui.screens.bill.rememberBillImages
+import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material3.Icon
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.platform.LocalContext
+import com.dailyworks.apnalaundry.domain.LedgerKind
+import com.dailyworks.apnalaundry.ui.components.showDatePicker
 import com.dailyworks.apnalaundry.ui.theme.Tokens
 import kotlin.math.max
 
@@ -160,7 +166,20 @@ fun RescheduleSheet(state: LaundryState, orderId: Int, kind: String, vm: ShopVie
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 chips.forEach { (label, iso) -> PillChip(label, date == iso) { date = iso } }
             }
-            Text("Selected: ${AppDate.short(date)}", style = fig(15, FontWeight.SemiBold))
+            // Any date, past ones included — e.g. entering an order after the fact.
+            val context = LocalContext.current
+            Row(
+                Modifier.fillMaxWidth().height(52.dp).rounded(12.dp).background(Tokens.Card)
+                    .border(1.5.dp, Tokens.FieldBorder, RoundedCornerShape(12.dp))
+                    .tap { showDatePicker(context, date, if (isPickup) null else o.pickupDate) { date = it } }
+                    .padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(Icons.Outlined.CalendarMonth, null, tint = Tokens.Blue, modifier = Modifier.size(20.dp))
+                Text("Selected: ${AppDate.short(date)}", style = fig(15, FontWeight.SemiBold), modifier = Modifier.weight(1f))
+                Text("Change", style = fig(14, FontWeight.Bold, Tokens.Blue))
+            }
             if (isPickup && o.deliveryDate.isNotBlank() && o.ddAuto) {
                 val shift = AppDate.daysBetween(o.pickupDate, date)
                 Text("Delivery moves too: ${AppDate.short(AppDate.add(o.deliveryDate, shift))}", style = fig(13, color = Tokens.Muted))
@@ -170,6 +189,36 @@ fun RescheduleSheet(state: LaundryState, orderId: Int, kind: String, vm: ShopVie
                 Toggle(notify) { notify = !notify }
             }
             PrimaryButton("Save", height = 56.dp) { vm.reschedule(orderId, kind, date, time, notify); onDismiss() }
+        }
+    }
+}
+
+/** Confirm deleting an order / bill (and its khata entries); undo comes in the toast. */
+@Composable
+fun DeleteOrderSheet(state: LaundryState, orderId: Int, vm: ShopViewModel, navigator: AppNavigator, onDismiss: () -> Unit) {
+    val o = Selectors.order(state, orderId) ?: return onDismiss()
+    val c = Selectors.customer(state, o.custId)
+    val what = if (o.lines.isNotEmpty()) "bill" else "order"
+    val paidAny = state.ledger.any { it.ref == o.id && it.kind == LedgerKind.GOT }
+    AppBottomSheet(title = "Delete $what #${o.id}?", subtitle = "${c.name} · ${Money.rupees(LaundryMath.amtOf(o))}", onDismiss = onDismiss) {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text(
+                "The $what is removed from orders, earnings and ${Selectors.firstName(c.name)}'s khata" +
+                    (if (paidAny) ", along with the payments recorded on it" else "") + ". You can undo right after.",
+                style = fig(14, FontWeight.SemiBold, Tokens.OrangeDeep),
+                modifier = Modifier.fillMaxWidth().rounded(12.dp).background(Tokens.OrangeLight).padding(14.dp),
+            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.weight(1f).height(54.dp).rounded(14.dp).background(Tokens.NeutralFill).tap { onDismiss() }, contentAlignment = Alignment.Center) {
+                    Text("Keep", style = fig(16, FontWeight.Bold, Tokens.InkSecondary))
+                }
+                PrimaryButton("Delete $what", Modifier.weight(1f), height = 54.dp, bg = Tokens.Orange) {
+                    onDismiss()
+                    vm.deleteOrder(orderId)
+                    // The order's own screens would show "not found" — leave them.
+                    navigator.openHome()
+                }
+            }
         }
     }
 }

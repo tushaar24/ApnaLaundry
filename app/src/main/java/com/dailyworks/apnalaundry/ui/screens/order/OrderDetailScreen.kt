@@ -149,7 +149,7 @@ fun OrderDetailScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: I
                             o.lines.forEach { l ->
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                     Column(Modifier.weight(1f)) {
-                                        Text(if (l.kg > 0) "${l.serviceName} · ${Selectors.trimKg(l.kg)} kg" else "${l.itemName} × ${l.qty}", style = fig(15, FontWeight.SemiBold))
+                                        Text(if (l.kg > 0) Selectors.weightLabel(l) else "${l.itemName} × ${l.qty}", style = fig(15, FontWeight.SemiBold))
                                         Text(l.serviceName + (if (l.kg > 0) "" else " · ₹${l.price} each"), style = fig(12, color = Tokens.Muted))
                                     }
                                     Text(Money.rupees(l.amt), style = fig(15, FontWeight.SemiBold))

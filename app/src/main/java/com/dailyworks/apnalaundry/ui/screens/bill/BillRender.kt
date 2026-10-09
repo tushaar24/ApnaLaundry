@@ -204,25 +204,31 @@ object BillRender {
         cy += 12
         rule(cy)
 
-        // 4. items
+        // 4. items — each numbered (serial no.) in a narrow left column
+        val snW = 28f
+        val itemX = left + snW
         if (t == BillDetails.BOLD) {
             cy += 18
             font(11f, 700)
-            text("ITEM", left, cy, Paint.Align.LEFT, MUTED)
+            text("NO.", left, cy, Paint.Align.LEFT, MUTED)
+            text("ITEM", itemX, cy, Paint.Align.LEFT, MUTED)
             text("AMOUNT", right, cy, Paint.Align.RIGHT, MUTED)
             cy += 8
             rule(cy)
         }
-        val itemW = right - left - 90
-        for (l in r.lines) {
+        val itemW = right - itemX - 90
+        r.lines.forEachIndexed { n, l ->
             cy += 21
             font(14f, if (receipt) 400 else 600)
             text(l.amount, right, cy, Paint.Align.RIGHT)
+            font(14f, 400)
+            text("${n + 1}.", left, cy, Paint.Align.LEFT, MUTED)
+            font(14f, if (receipt) 400 else 600)
             wrap(p, l.item, itemW).forEachIndexed { i, s ->
                 if (i > 0) cy += 18
-                text(s, left, cy, Paint.Align.LEFT)
+                text(s, itemX, cy, Paint.Align.LEFT)
             }
-            if (l.sub.isNotEmpty()) lines(l.sub, 12f, 400, false, itemW, left, Paint.Align.LEFT, MUTED, 15f)
+            if (l.sub.isNotEmpty()) lines(l.sub, 12f, 400, false, itemW, itemX, Paint.Align.LEFT, MUTED, 15f)
         }
         cy += 12
         rule(cy)

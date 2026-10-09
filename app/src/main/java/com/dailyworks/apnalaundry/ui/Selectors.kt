@@ -4,6 +4,7 @@ import com.dailyworks.apnalaundry.domain.Customer
 import com.dailyworks.apnalaundry.domain.LaundryMath
 import com.dailyworks.apnalaundry.domain.LaundryState
 import com.dailyworks.apnalaundry.domain.Order
+import com.dailyworks.apnalaundry.domain.OrderLine
 
 /** Small derived-data helpers shared by screens (ported from the prototype). */
 object Selectors {
@@ -29,16 +30,20 @@ object Selectors {
     fun itemsLabel(o: Order): String {
         if (o.lines.isEmpty()) return if (o.pieces > 0) "${o.pieces} pieces" else ""
         if (o.lines.all { it.isQuick && it.qty == 0 }) return "Not itemised"
-        var pieces = 0; var kg = 0.0
-        o.lines.forEach { if (it.kg > 0) kg += it.kg else pieces += it.qty }
+        var pieces = 0; var kg = 0.0; var kgClothes = 0 // optional count of clothes in the by-weight bags
+        o.lines.forEach { if (it.kg > 0) { kg += it.kg; kgClothes += it.qty } else pieces += it.qty }
         val parts = mutableListOf<String>()
         if (pieces > 0) parts += "$pieces ${if (pieces == 1) "item" else "items"}"
-        if (kg > 0) parts += "${trimKg(kg)} kg"
+        if (kg > 0) parts += "${trimKg(kg)} kg" + if (kgClothes > 0) " ($kgClothes clothes)" else ""
         return parts.joinToString(" + ")
     }
 
     fun svcLabel(o: Order): String =
         o.lines.map { it.serviceName }.distinct().joinToString(" + ")
+
+    /** "Wash & Fold · 4 kg" or, with the clothes counted, "Wash & Fold · 4 kg · 12 clothes". */
+    fun weightLabel(l: OrderLine): String =
+        "${l.serviceName} · ${trimKg(l.kg)} kg" + if (l.qty > 0) " · ${l.qty} ${if (l.qty == 1) "cloth" else "clothes"}" else ""
 
     fun trimKg(kg: Double): String = if (kg % 1.0 == 0.0) kg.toInt().toString() else kg.toString()
 
