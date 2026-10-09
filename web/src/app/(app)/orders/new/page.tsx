@@ -681,7 +681,7 @@ function BillLine({ label, value, tone }: { label: string; value: string; tone?:
 
 /**
  * Express charge / discount on an order: a card with an on/off switch; when on,
- * pick "% of clothes" or "Fixed ₹", type the number, and see what it does to
+ * pick "Perc %" or "Fixed ₹", type the number, and see what it does to
  * the bill in plain words.
  */
 function ExtraCard({
@@ -712,7 +712,7 @@ function ExtraCard({
         {on ? (
           <div className="flex flex-col gap-2.5 border-t border-divider p-3.5">
             <div className="flex w-full gap-1 rounded-xl bg-segtrack p-1" role="radiogroup" aria-label={`${title} as`}>
-              {([["pct", "% of clothes"], ["amt", "Fixed ₹"]] as const).map(([m, label]) => (
+              {([["pct", "Perc %"], ["amt", "Fixed ₹"]] as const).map(([m, label]) => (
                 <button
                   key={m}
                   type="button"

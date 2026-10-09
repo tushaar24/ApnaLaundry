@@ -593,7 +593,7 @@ private val Green = Color(0xFF15803D)
 
 /**
  * Express charge / discount on an order: a card with an on/off switch; when on,
- * pick "% of clothes" or "Fixed ₹", type the number, and see what it does to
+ * pick "Perc %" or "Fixed ₹", type the number, and see what it does to
  * the bill in plain words.
  */
 @Composable
@@ -616,7 +616,7 @@ private fun ExtraCard(
                 Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Divider))
                 Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(Modifier.fillMaxWidth().rounded(12.dp).background(Tokens.SegTrack).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        listOf(true to "% of clothes", false to "Fixed ₹").forEach { (pct, label) ->
+                        listOf(true to "Perc %", false to "Fixed ₹").forEach { (pct, label) ->
                             val sel = isPct == pct
                             Box(
                                 Modifier.weight(1f).height(40.dp).rounded(9.dp).background(if (sel) Tokens.Card else Color.Transparent).tap { onMode(pct) },
