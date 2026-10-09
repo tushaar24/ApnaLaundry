@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -79,7 +79,7 @@ fun CustomerScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: Strin
     val mine = state.orders.filter { it.custId == custId }.sortedByDescending { it.id }
     val inProgress = mine.filter { it.status in listOf(OrderStatus.CREATED, OrderStatus.RECEIVED, OrderStatus.READY) }
 
-    Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.statusBars)) {
+    Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars)) {
         TopBar(title = "", onBack = navigator::back)
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 40.dp),
@@ -166,12 +166,12 @@ private fun khataRows(state: com.dailyworks.apnalaundry.domain.LaundryState, cus
             LedgerKind.BILL -> {
                 isAdd = true; run += e.amt
                 val o = Selectors.order(state, e.ref ?: -1)
-                title = "Bill · Order #${e.ref}"
+                title = "Bill · Order #${o?.no() ?: e.ref}"
                 val desc = if (e.note.isNotBlank()) e.note else o?.let { "${Selectors.itemsLabel(it)} · ${Selectors.svcLabel(it)}" } ?: ""
                 sub = whenStr + (if (desc.isNotBlank()) " · $desc" else "") + (if (before < 0) " · ${Money.rupees(min(-before, e.amt))} advance used" else "")
             }
             LedgerKind.OLD -> { isAdd = true; run += e.amt; title = "Old baaki"; sub = "$whenStr · from notebook" }
-            LedgerKind.ADJ -> { isAdd = e.amt > 0; run += e.amt; title = "Bill changed · Order #${e.ref}"; sub = "$whenStr · order edited after delivery" }
+            LedgerKind.ADJ -> { isAdd = e.amt > 0; run += e.amt; title = "Bill changed · Order #${Selectors.order(state, e.ref ?: -1)?.no() ?: e.ref}"; sub = "$whenStr · order edited after delivery" }
             LedgerKind.GOT -> {
                 run -= e.amt
                 title = if (e.tag == PayTag.PRE) "Paid for order #${e.ref} · ${methodName(e.method)}" else "Got ${Money.rupees(e.amt)} · ${methodName(e.method)}"
