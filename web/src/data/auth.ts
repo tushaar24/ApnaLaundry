@@ -119,10 +119,11 @@ export async function verifyOtp(challenge: Challenge, otp: string): Promise<void
   store.setAuthed(true);
 
   // Identify the owner so every event attributes to this shop, then the
-  // funnel event. is_new_user / needs_setup = this account had no shop yet.
+  // funnel event. is_new_user = the server just created this account;
+  // needs_setup = no shop yet (also true for an old account that never set up).
   const shopName = deriveState(useAppStore.getState().rows).shop.name;
   Analytics.identify({ identity: user.id, phone: user.phone, name: shopName });
-  Analytics.loggedIn(!existingAccount, !existingAccount);
+  Analytics.loggedIn(body.isNewUser === true, !existingAccount);
   MetaPixel.loginSuccess(!existingAccount);
 }
 

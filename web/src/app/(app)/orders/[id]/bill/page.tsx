@@ -11,7 +11,7 @@ import * as Repo from "@/data/repository";
 import { useLaundryState } from "@/data/store";
 import { useScreenView } from "@/analytics/useScreenView";
 import { AppCard, cls, Divider, OutlineButton, PrimaryButton, TopBar } from "@/ui/basics";
-import { downloadBill, sendBillOnWhatsApp } from "@/ui/billActions";
+import { downloadBill, sendBillOnWhatsApp, usePrepareBillSend } from "@/ui/billActions";
 import { SheetHost } from "@/ui/sheets/host";
 import type { ActiveSheet } from "@/ui/sheets/types";
 import { Shell, useNav } from "@/ui/shell";
@@ -43,6 +43,7 @@ function BillScreen({ orderId }: { orderId: number }) {
   const nav = useNav();
   const [active, setActive] = useState<ActiveSheet | null>(null);
   useScreenView("bill");
+  usePrepareBillSend(orderId);
 
   const o = Sel.order(state, orderId);
   if (!o) {
@@ -116,7 +117,7 @@ function BillScreen({ orderId }: { orderId: number }) {
               className="flex-1"
               border="var(--color-cardborder)"
               fg="var(--color-ink)"
-              onClick={() => void downloadBill(state, o)}
+              onClick={() => downloadBill(state, o)}
             >
               Download
             </OutlineButton>

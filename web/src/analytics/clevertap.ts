@@ -56,11 +56,9 @@ export function initAnalytics(): void {
   const script = document.createElement("script");
   script.type = "text/javascript";
   script.async = true;
-  // Region-specific CDN (eu1 → …bby2u); global/other → the default CDN.
-  const host = REGION.startsWith("eu")
-    ? "https://d2r1yp2w7bby2u.cloudfront.net"
-    : "https://d2r1yp2w7bby2p.cloudfront.net";
-  script.src = `${host}/js/clevertap.min.js`;
+  // One SDK file for every region — the region only picks the ingestion host,
+  // which the SDK derives from `clevertap.region` above.
+  script.src = "https://static.clevertap.com/js/clevertap.min.js";
   document.head.appendChild(script);
 }
 
@@ -74,8 +72,9 @@ function queue(): CleverTapQueue | null {
 export function rawTrack(name: string, props?: Record<string, unknown>): void {
   const q = queue();
   if (!q) return;
-  // Stamp platform so web/android funnels stay separable without manual props.
-  q.event.push(name, { platform: "web", ...(props ?? {}) });
+  // Stamp platform + source (last, so no event prop can override them) so
+  // web/android funnels stay separable without manual props.
+  q.event.push(name, { ...(props ?? {}), platform: "web", source: "website" });
 }
 
 /** Identify the shop owner so events attribute across sessions. */
@@ -100,9 +99,10 @@ export function rawCharged(amount: number, props: Record<string, unknown>, items
   const q = queue();
   if (!q) return;
   q.event.push("Charged", {
-    platform: "web",
     Amount: amount,
     ...props,
     ...(items ? { Items: items } : {}),
+    platform: "web",
+    source: "website",
   });
 }

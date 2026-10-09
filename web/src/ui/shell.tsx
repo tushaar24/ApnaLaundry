@@ -69,7 +69,7 @@ function BottomNav({ current }: { current: NavTabKey | null }) {
 
 function Sidebar({ current }: { current: NavTabKey | null }) {
   const router = useRouter();
-  const shopName = useAppStore((s) => s.rows.shop?.name ?? "ApnaLaundry");
+  const shopName = useAppStore((s) => s.rows.shop?.name ?? "MyLaundry");
   const syncing = useAppStore((s) => s.syncing);
   return (
     <aside className="fixed inset-y-0 left-0 z-40 hidden w-[240px] flex-col border-r border-cardborder bg-card lg:flex">
@@ -79,7 +79,7 @@ function Sidebar({ current }: { current: NavTabKey | null }) {
         </div>
         <div className="min-w-0">
           <div className="bric truncate text-[17px]">{shopName}</div>
-          <div className="text-[11px] font-semibold text-muted">{syncing ? "Syncing…" : "ApnaLaundry"}</div>
+          <div className="text-[11px] font-semibold text-muted">{syncing ? "Syncing…" : "MyLaundry"}</div>
         </div>
       </div>
       <div className="flex flex-col gap-1 px-3">

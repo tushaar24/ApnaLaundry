@@ -32,6 +32,13 @@
   --color-orangebar: #f6b98a;
   --color-deletered: #9a3412;
 
+  --color-green: #16a34a;
+  --color-greentext: #15803d;
+  --color-errorred: #b42318;
+  --color-onbluemuted: #dce5fb;
+  --color-placeholder: #8a847a;
+  --color-disabledfg: #6b655c;
+
   --color-ondark: #ffffff;
   --color-ondarkmuted: #d9d6cf;
   --color-ondarkfaint: #c9c5bd;

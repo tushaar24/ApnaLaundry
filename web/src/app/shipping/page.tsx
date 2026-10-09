@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { COMPANY, H2, LegalShell, P } from "@/ui/legal";
 
-export const metadata: Metadata = { title: "Shipping & Exchange — ApnaLaundry" };
+export const metadata: Metadata = { title: "Shipping & Exchange — MyLaundry" };
 
 export default function ShippingPage() {
   return (

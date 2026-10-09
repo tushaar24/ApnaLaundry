@@ -48,13 +48,16 @@ export const Analytics = {
   setupCompleted(servicesCount: number, expressPct: number) {
     rawTrack("Setup Completed", { services_count: servicesCount, express_pct: expressPct });
   },
+  setupSkipped(servicesCount: number) {
+    rawTrack("Setup Skipped", { services_count: servicesCount });
+  },
   loggedOut() {
     rawTrack("Logged Out");
   },
 
   // ---- order creation & lifecycle ----
-  newOrderStarted(source: "home" | "empty_home" | "customer", isEdit: boolean) {
-    rawTrack("New Order Started", { source, is_edit: isEdit });
+  newOrderStarted(entryPoint: "home" | "empty_home" | "customer", isEdit: boolean) {
+    rawTrack("New Order Started", { entry_point: entryPoint, is_edit: isEdit });
   },
   orderSaved(p: {
     orderId: number; isEdit: boolean; hasBill: boolean; pickup: string; delivery: string;
@@ -110,8 +113,8 @@ export const Analytics = {
   },
 
   // ---- customers, bills, rates, engagement ----
-  customerAdded(source: "order" | "list", withOldBaaki: boolean) {
-    rawTrack("Customer Added", { source, with_old_baaki: withOldBaaki });
+  customerAdded(entryPoint: "order" | "list", withOldBaaki: boolean) {
+    rawTrack("Customer Added", { entry_point: entryPoint, with_old_baaki: withOldBaaki });
   },
   reminderSent(customerId: string, amount: number) {
     rawTrack("Reminder Sent", { customer_id: customerId, amount });
@@ -151,6 +154,19 @@ export const Analytics = {
   paywallShown() {
     rawTrack("Paywall Shown");
   },
+  // Paywall intro video: muted = the browser blocked autoplay with sound.
+  paywallVideoStarted(muted: boolean) {
+    rawTrack("Paywall Video Started", { muted });
+  },
+  paywallVideoUnmuted() {
+    rawTrack("Paywall Video Unmuted");
+  },
+  paywallVideoCompleted() {
+    rawTrack("Paywall Video Completed");
+  },
+  paywallFaqOpened() {
+    rawTrack("Paywall FAQ Opened");
+  },
   planSelected(plan: string) {
     rawTrack("Plan Selected", { plan });
   },
@@ -162,6 +178,17 @@ export const Analytics = {
   },
   checkoutFailed(plan: string, reason: string) {
     rawTrack("Checkout Failed", { plan, reason });
+  },
+  // The "try again" sheet shown when Razorpay Checkout closes unpaid.
+  paymentRetryShown(plan: string, reason: "failed" | "cancelled") {
+    rawTrack("Payment Retry Shown", { plan, reason });
+  },
+  // switchedFrom: the plan that failed, when the sheet moved them to another.
+  paymentRetryTapped(plan: string, switchedFrom?: string) {
+    rawTrack("Payment Retry Tapped", switchedFrom ? { plan, switched_from: switchedFrom } : { plan });
+  },
+  paymentRetryDismissed(plan: string) {
+    rawTrack("Payment Retry Dismissed", { plan });
   },
   subscriptionCancelRequested(plan: string) {
     rawTrack("Subscription Cancel Requested", { plan });

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { COMPANY, H2, LegalShell, P, UL } from "@/ui/legal";
 
-export const metadata: Metadata = { title: "Privacy Policy — ApnaLaundry" };
+export const metadata: Metadata = { title: "Privacy Policy — MyLaundry" };
 
 export default function PrivacyPage() {
   return (

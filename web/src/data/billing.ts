@@ -149,7 +149,7 @@ export async function openSubscriptionCheckout(result: SubscribeResult, cb: Chec
   const rzp = new RazorpayCtor({
     key: result.keyId,
     subscription_id: result.subscriptionId,
-    name: "ApnaLaundry",
+    name: "MyLaundry",
     description,
     prefill: { name: cb.name, email: cb.email, contact: cb.contact },
     theme: { color: "#1d4ed8" },

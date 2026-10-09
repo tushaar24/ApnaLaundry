@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { COMPANY, H2, LegalShell, P, UL } from "@/ui/legal";
 
-export const metadata: Metadata = { title: "Cancellation & Refund — ApnaLaundry" };
+export const metadata: Metadata = { title: "Cancellation & Refund — MyLaundry" };
 
 export default function RefundPage() {
   return (

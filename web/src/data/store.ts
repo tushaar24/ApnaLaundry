@@ -89,7 +89,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
 // ---------------- derived LaundryState ----------------
 
-const FALLBACK_SHOP = { name: "Apna Laundry", phone: "", expressPct: 50 };
+const FALLBACK_SHOP = { name: "MyLaundry", phone: "", expressPct: 50 };
 
 let lastRows: Rows | null = null;
 let lastDerived: LaundryState | null = null;

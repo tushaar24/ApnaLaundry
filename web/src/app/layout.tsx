@@ -17,9 +17,9 @@ const bricolage = Bricolage_Grotesque({
 });
 
 export const metadata: Metadata = {
-  title: "ApnaLaundry",
+  title: "MyLaundry",
   description: "Orders and bills, in two taps.",
-  applicationName: "ApnaLaundry",
+  applicationName: "MyLaundry",
 };
 
 export const viewport: Viewport = {

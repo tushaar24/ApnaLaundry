@@ -8,12 +8,11 @@ import { Analytics } from "@/analytics/events";
 import {
   cls, FieldBox, OutlineButton, PillChip, PrimaryButton, Segmented, TopBar,
 } from "../basics";
-import { IcAdd, IcCheck, IcDelete, IcEdit, IcInfo, IcLock } from "../icons";
+import { IcAdd, IcDelete, IcEdit, IcInfo, IcLock } from "../icons";
 
 /**
- * Rate card editor — port of ui/screens/rates/RatesScreen.kt. Serves both
- * the first-run setup (from="setup": shop-name field + "Start taking
- * orders") and later edits from Home/Settings.
+ * Rate card editor — port of ui/screens/rates/RatesScreen.kt. Opened from
+ * Home/Settings; first-run setup only asks the shop name (app/setup).
  */
 
 type RatePage = { kind: "list" } | { kind: "edit"; serviceId: string } | { kind: "add" };
@@ -36,9 +35,8 @@ function summaryLine(s: Service): string {
   );
 }
 
-export function RatesView({ from, onDone, onBack }: { from: string; onDone: () => void; onBack: () => void }) {
+export function RatesView({ onDone, onBack }: { from: string; onDone: () => void; onBack: () => void }) {
   const state = useLaundryState();
-  const setup = from === "setup";
   const [page, setPage] = useState<RatePage>({ kind: "list" });
 
   if (page.kind === "edit") {
@@ -68,7 +66,6 @@ export function RatesView({ from, onDone, onBack }: { from: string; onDone: () =
   }
   return (
     <RateListPage
-      setup={setup}
       onEdit={(id) => setPage({ kind: "edit", serviceId: id })}
       onAdd={() => setPage({ kind: "add" })}
       onDone={onDone}
@@ -80,9 +77,8 @@ export function RatesView({ from, onDone, onBack }: { from: string; onDone: () =
 // ───────────────────────── list ─────────────────────────
 
 function RateListPage({
-  setup, onEdit, onAdd, onDone, onBack,
+  onEdit, onAdd, onDone, onBack,
 }: {
-  setup: boolean;
   onEdit: (id: string) => void;
   onAdd: () => void;
   onDone: () => void;
@@ -90,46 +86,19 @@ function RateListPage({
 }) {
   const state = useLaundryState();
   const services = state.services;
-  const [shopName, setShopName] = useState(state.shop.name);
-  const [expressPct, setExpressPct] = useState(String(state.shop.expressPct));
 
   function commitAndDone() {
-    Repo.updateShop(
-      setup ? (shopName.trim() || "My Shop") : state.shop.name,
-      parseInt(expressPct, 10) || 50,
-    );
+    Repo.updateShop(state.shop.name, state.shop.expressPct);
     onDone();
   }
 
   return (
     <div className="flex min-h-dvh flex-col">
-      {!setup ? <TopBar title="Rate list" onBack={onBack} /> : null}
+      <TopBar title="Rate list" onBack={onBack} />
       <div className="flex flex-1 flex-col gap-4 px-4 py-4">
-        {setup ? (
-          <>
-            <div className="flex items-center gap-2">
-              <span className="text-blue"><IcCheck size={18} /></span>
-              <span className="text-[13px] font-semibold text-muted">Number verified · Last step</span>
-            </div>
-            <div className="flex flex-col gap-2">
-              <span className="text-[13px] font-bold text-inksecondary">SHOP NAME</span>
-              <FieldBox value={shopName} onChange={setShopName} h={56} borderColor="var(--color-blue)" borderWidth={2} />
-            </div>
-            <h1 className="bric text-[28px]">Your rate list</h1>
-            <InfoBox
-              title="Already filled for you"
-              body={`We added ${services.length} common services with usual prices. You can start taking orders now and change anything later from ₹ Rates on the home screen.`}
-            />
-          </>
-        ) : (
-          <InfoBox title="Change prices anytime" body="Tap Edit on a service to change its prices. New prices apply to new orders only." />
-        )}
+        <InfoBox title="Change prices anytime" body="Tap Edit on a service to change its prices. New prices apply to new orders only." />
 
         <span className="text-[13px] font-bold text-inksecondary">YOUR SERVICES ({services.length})</span>
-
-        {services.map((s) => (
-          <ServiceCard key={s.id} s={s} onEdit={() => onEdit(s.id)} onDelete={() => Repo.deleteService(s.id)} />
-        ))}
 
         <button
           type="button"
@@ -145,29 +114,16 @@ function RateListPage({
           </span>
         </button>
 
-        <span className="text-[13px] font-bold text-inksecondary">OTHER SETTINGS · OPTIONAL</span>
-        <div className="flex w-full items-center rounded-2xl border border-cardborder bg-card p-4">
-          <div className="min-w-0 flex-1">
-            <div className="text-[16px] font-bold">Express charge</div>
-            <div className="text-[13px] text-muted">Extra you take for urgent orders</div>
-          </div>
-          <FieldBox
-            value={expressPct}
-            onChange={(v) => setExpressPct(v.replace(/\D/g, "").slice(0, 3))}
-            prefix="+"
-            suffix="%"
-            h={48}
-            className="w-[104px]"
-            inputMode="numeric"
-            textClass="text-[18px] font-bold"
-          />
-        </div>
+        {services.map((s) => (
+          <ServiceCard key={s.id} s={s} onEdit={() => onEdit(s.id)} onDelete={() => Repo.deleteService(s.id)} />
+        ))}
+
       </div>
 
       <div className="sticky bottom-0 w-full border-t border-divider bg-card">
         <p className="px-4 pt-3 text-[13px] text-muted">Nothing else is needed. You can change prices anytime.</p>
         <div className="p-4">
-          <PrimaryButton onClick={commitAndDone}>{setup ? "Start taking orders" : "Done"}</PrimaryButton>
+          <PrimaryButton onClick={commitAndDone}>Done</PrimaryButton>
         </div>
       </div>
     </div>
@@ -253,6 +209,17 @@ function ChargeByCard({ draft, onChange }: { draft: Service; onChange: (s: Servi
 function PerPieceCard({
   draft, emptyHint, onChange,
 }: { draft: Service; emptyHint?: boolean; onChange: (s: Service) => void }) {
+  const [newName, setNewName] = useState("");
+  const name = newName.trim();
+  const exists = draft.items.some((it) => it.name.toLowerCase() === name.toLowerCase());
+  const canAdd = name !== "" && !exists;
+
+  function addItem() {
+    if (!canAdd) return;
+    onChange({ ...draft, items: [...draft.items, { name, price: null }] });
+    setNewName("");
+  }
+
   return (
     <SectionCard
       title="Price of each piece"
@@ -282,8 +249,41 @@ function PerPieceCard({
             inputMode="numeric"
             textClass="text-[17px] font-bold"
           />
+          <button
+            type="button"
+            onClick={() => onChange({ ...draft, items: draft.items.filter((_, j) => j !== idx) })}
+            aria-label={`Remove ${item.name}`}
+            className="ml-1.5 flex size-11 shrink-0 items-center justify-center rounded-[10px] text-deletered"
+          >
+            <IcDelete size={20} />
+          </button>
         </div>
       ))}
+      <div className="mt-2 flex w-full items-center gap-2">
+        <FieldBox
+          value={newName}
+          onChange={setNewName}
+          inputProps={{ enterKeyHint: "done", onKeyDown: (e) => { if (e.key === "Enter") addItem(); } }}
+          placeholder="Add a cloth, e.g. Blazer"
+          h={48}
+          className="min-w-0 flex-1"
+        />
+        <button
+          type="button"
+          onClick={addItem}
+          disabled={!canAdd}
+          className={cls(
+            "flex h-12 shrink-0 items-center gap-1 rounded-[10px] px-3.5 text-[15px] font-bold",
+            canAdd ? "bg-bluelight text-blue" : "bg-neutralfill text-muted",
+          )}
+        >
+          <IcAdd size={18} />
+          Add
+        </button>
+      </div>
+      {exists && name !== "" ? (
+        <span className="mt-1 text-[13px] text-muted">{name} is already in the list</span>
+      ) : null}
     </SectionCard>
   );
 }

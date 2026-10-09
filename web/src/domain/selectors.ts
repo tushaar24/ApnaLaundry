@@ -15,8 +15,8 @@ export function order(state: LaundryState, id: number): Order | undefined {
   return state.orders.find((o) => o.id === id);
 }
 
-export function balance(state: LaundryState, custId: string): number {
-  return khataBalance(custId, state.ledger, state.orders);
+export function balance(state: LaundryState, custId: string, exceptOrder?: number): number {
+  return khataBalance(custId, state.ledger, state.orders, exceptOrder);
 }
 
 export function firstName(name: string): string {

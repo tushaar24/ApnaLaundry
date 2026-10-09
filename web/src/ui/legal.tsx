@@ -11,7 +11,7 @@ import { IcLaundry } from "./icons";
  * and have the final text reviewed by legal counsel before relying on it.
  */
 export const COMPANY = {
-  name: "ApnaLaundry",
+  name: "MyLaundry",
   legalName: "[Your registered business / proprietor name]",
   email: "[support@yourdomain.com]",
   phone: "[+91 XXXXXXXXXX]",
