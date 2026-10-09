@@ -205,7 +205,7 @@ private data class IntroItem(val title: String, val body: String)
 private val INTRO = listOf(
     IntroItem("Laundry name", "Printed at the top of every bill"),
     IntroItem("Services & rates", "Common prices are already filled in — just check them"),
-    IntroItem("Your bill", "Pick a bill design. Add phone, address and GSTIN if you want"),
+    IntroItem("Your bill", "Pick a bill design. Add phone, email, address and GSTIN if you want"),
 )
 
 @Composable

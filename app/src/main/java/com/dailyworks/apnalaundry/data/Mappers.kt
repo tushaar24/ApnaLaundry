@@ -59,7 +59,7 @@ fun decodeTerms(v: String): List<String> = runCatching { json.decodeFromString(t
 
 fun ShopEntity.toDomain() = Shop(
     name, phone, expressPct,
-    billPhone = billPhone, address = address, gstin = gstin, upiId = upiId, logoId = logoId,
+    billPhone = billPhone, address = address, gstin = gstin, email = email, upiId = upiId, logoId = logoId,
     terms = decodeTerms(termsJson), termsCustom = termsCustom, billTemplate = billTemplate, onboardingStep = onboardingStep,
     nextOrder = nextOrder,
     gstOn = gstOn, gstPct = gstPct, gstMode = Gst.modeOrDefault(gstMode),

@@ -25,6 +25,7 @@ data class ShopDto(
     val billPhone: String = "", val address: String = "", val gstin: String = "",
     val upiId: String = "", val logoId: String = "", val terms: List<String> = emptyList(),
     val termsCustom: String = "", val billTemplate: String = "classic", val onboardingStep: String = "",
+    val email: String = "", // absent from servers before the email-on-bill field (2026-10-09)
     // Last-used GST setting — absent from servers before the GST release.
     val gstOn: Boolean = false, val gstPct: Double = Gst.DEFAULT_PCT, val gstMode: String = Gst.EXCL,
 )
@@ -100,14 +101,14 @@ data class SyncChanges(
 fun ShopEntity.toDto() = ShopDto(
     name, phone, expressPct, nextOrder, nextCust, updatedAt,
     billPhone, address, gstin, upiId, logoId, decodeTerms(termsJson), termsCustom, billTemplate, onboardingStep,
-    gstOn = gstOn, gstPct = gstPct, gstMode = gstMode,
+    email = email, gstOn = gstOn, gstPct = gstPct, gstMode = gstMode,
 )
 fun ShopDto.toEntity() = ShopEntity(
     1, name, phone, expressPct, nextOrder, nextCust, updatedAt, dirty = false,
     billPhone = billPhone.ifBlank { phone }, address = address, gstin = gstin, upiId = upiId, logoId = logoId,
     termsJson = encodeTerms(terms), termsCustom = termsCustom,
     billTemplate = BillDetails.templateOrDefault(billTemplate), onboardingStep = BillDetails.stepOrBlank(onboardingStep),
-    gstOn = gstOn, gstPct = Gst.pctFrom(gstPct, Gst.DEFAULT_PCT), gstMode = Gst.modeOrDefault(gstMode),
+    email = email, gstOn = gstOn, gstPct = Gst.pctFrom(gstPct, Gst.DEFAULT_PCT), gstMode = Gst.modeOrDefault(gstMode),
 )
 
 fun ServiceEntity.toDto() = ServiceDto(id, name, mode, ratePerKg, minKg, readyInDays, lockedToPiece, sortOrder, deleted, itemsJson, updatedAt)

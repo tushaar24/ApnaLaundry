@@ -200,11 +200,11 @@ object BillRender {
             }
         }
 
-        /** 1. Shop block: logo, name, phone / address / GSTIN — a blue band on Bold, centred otherwise. */
-        fun shopBlock(name: String, phone: String, address: String, gstin: String) {
+        /** 1. Shop block: logo, name, phone / email / address / GSTIN — a blue band on Bold, centred otherwise. */
+        fun shopBlock(name: String, phone: String, email: String, address: String, gstin: String) {
             val hasLogo = logo != null && logoId.isNotEmpty()
             val shopName = if (receipt) name.uppercase() else name
-            val details = listOf(phone, address, if (gstin.isNotEmpty()) "GSTIN $gstin" else "").filter { it.isNotEmpty() }
+            val details = listOf(phone, email, address, if (gstin.isNotEmpty()) "GSTIN $gstin" else "").filter { it.isNotEmpty() }
             if (bold) {
                 val textX = left + if (hasLogo) 56f else 0f
                 val textW = right - textX
@@ -329,7 +329,7 @@ object BillRender {
     private fun layout(context: Context, canvas: Canvas, r: BillReceipt, logo: Bitmap?, draw: Boolean, minH: Float): Float =
         with(Pen(context, canvas, r.template, logo, r.logoId, draw)) {
             // 1. shop block
-            shopBlock(r.shopName, r.shopPhone, r.address, r.gstin)
+            shopBlock(r.shopName, r.shopPhone, r.email, r.address, r.gstin)
 
             // 1b. "TAX INVOICE" — GST on the order and a GSTIN on the bill
             if (r.taxInvoice) {
@@ -421,7 +421,7 @@ object BillRender {
     private fun layoutCombined(context: Context, canvas: Canvas, r: CombinedReceipt, logo: Bitmap?, draw: Boolean, minH: Float): Float =
         with(Pen(context, canvas, r.template, logo, r.logoId, draw)) {
             // 1. shop block
-            shopBlock(r.shopName, r.shopPhone, r.address, r.gstin)
+            shopBlock(r.shopName, r.shopPhone, r.email, r.address, r.gstin)
 
             // 2. title + bill date, period
             cy += 22

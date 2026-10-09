@@ -16,6 +16,7 @@ data class BillReceipt(
     val shopPhone: String, // "+91 98765 43210" or ""
     val address: String,
     val gstin: String, // only when valid
+    val email: String, // only when valid
     val logoId: String,
     val taxInvoice: Boolean, // "TAX INVOICE" over the bill number: GST on the order + a valid GSTIN
     val billNo: String, // "Bill #1001"
@@ -93,6 +94,7 @@ data class BillReceipt(
                 shopPhone = BillDetails.fmtBillPhone(billPhone),
                 address = shop.address,
                 gstin = gstin,
+                email = if (BillDetails.isEmailValid(shop.email)) shop.email else "",
                 logoId = shop.logoId,
                 taxInvoice = gst.on && gstin.isNotEmpty(),
                 billNo = "Bill #${o.no()}",

@@ -54,7 +54,7 @@ export interface ShopDto {
   name: string; phone: string; expressPct: number;
   nextOrder: number; nextCust: number; updatedAt: number;
   // Bill details + onboarding — absent from servers before 2026-10-09.
-  billPhone?: string; address?: string; gstin?: string; upiId?: string; logoId?: string;
+  billPhone?: string; address?: string; gstin?: string; email?: string; upiId?: string; logoId?: string;
   terms?: string[]; termsCustom?: string; billTemplate?: string; onboardingStep?: string;
   // Last-used GST setting — absent from servers before the GST release.
   gstOn?: boolean; gstPct?: number; gstMode?: string;
@@ -105,12 +105,12 @@ export interface SyncChanges {
 export function shopToDto(r: ShopRow): ShopDto {
   const {
     name, phone, expressPct, nextOrder, nextCust, updatedAt,
-    billPhone, address, gstin, upiId, logoId, terms, termsCustom, billTemplate, onboardingStep,
+    billPhone, address, gstin, email, upiId, logoId, terms, termsCustom, billTemplate, onboardingStep,
     gstOn, gstPct, gstMode,
   } = r;
   return {
     name, phone, expressPct, nextOrder, nextCust, updatedAt,
-    billPhone, address, gstin, upiId, logoId, terms, termsCustom, billTemplate, onboardingStep,
+    billPhone, address, gstin, email, upiId, logoId, terms, termsCustom, billTemplate, onboardingStep,
     gstOn, gstPct, gstMode,
   };
 }

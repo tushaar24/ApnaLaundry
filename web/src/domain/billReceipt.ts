@@ -4,7 +4,7 @@ import { clothesOf, gstOf } from "@/domain/laundryMath";
 import { gstBillNote, gstDefaults, halfRate, roundOffValue } from "@/domain/gst";
 import type { BillDetails, BillTemplate, LaundryState, Order, OrderLine, Service, Shop } from "@/domain/models";
 import {
-  billDetailsFrom, fmtBillPhone, isGstinValid, isUpiValid, sampleOrder, termLines, upiPayload,
+  billDetailsFrom, fmtBillPhone, isEmailValid, isGstinValid, isUpiValid, sampleOrder, termLines, upiPayload,
 } from "@/domain/billDetails";
 import * as Sel from "@/domain/selectors";
 
@@ -40,6 +40,7 @@ export interface BillReceipt {
     phone: string; // "+91 98765 43210" or ""
     address: string;
     gstin: string; // only when valid
+    email: string; // only when valid
     logoId: string;
   };
   taxInvoice: boolean; // "TAX INVOICE" over the bill number: GST on the order + a valid GSTIN
@@ -162,6 +163,7 @@ export function receiptFrom({ shop, customer: c, order: o }: BillData, opts: Rec
       phone: fmtBillPhone(d.billPhone),
       address: d.address,
       gstin,
+      email: isEmailValid(d.email) ? d.email : "",
       logoId: d.logoId,
     },
     taxInvoice: gst.on && gstin !== "",

@@ -1,12 +1,12 @@
 {
   "formatVersion": 1,
   "database": {
-    "version": 7,
-    "identityHash": "2e771e0b87162fb0c9fee31f140f4a67",
+    "version": 8,
+    "identityHash": "579ccd9ae29530df043fb509277b0b53",
     "entities": [
       {
         "tableName": "shop",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `name` TEXT NOT NULL, `phone` TEXT NOT NULL, `expressPct` INTEGER NOT NULL, `nextOrder` INTEGER NOT NULL, `nextCust` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL DEFAULT 0, `dirty` INTEGER NOT NULL DEFAULT 1, `billPhone` TEXT NOT NULL DEFAULT '', `address` TEXT NOT NULL DEFAULT '', `gstin` TEXT NOT NULL DEFAULT '', `upiId` TEXT NOT NULL DEFAULT '', `logoId` TEXT NOT NULL DEFAULT '', `termsJson` TEXT NOT NULL DEFAULT '[]', `termsCustom` TEXT NOT NULL DEFAULT '', `billTemplate` TEXT NOT NULL DEFAULT 'classic', `onboardingStep` TEXT NOT NULL DEFAULT '', `email` TEXT NOT NULL DEFAULT '', PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `name` TEXT NOT NULL, `phone` TEXT NOT NULL, `expressPct` INTEGER NOT NULL, `nextOrder` INTEGER NOT NULL, `nextCust` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL DEFAULT 0, `dirty` INTEGER NOT NULL DEFAULT 1, `billPhone` TEXT NOT NULL DEFAULT '', `address` TEXT NOT NULL DEFAULT '', `gstin` TEXT NOT NULL DEFAULT '', `upiId` TEXT NOT NULL DEFAULT '', `logoId` TEXT NOT NULL DEFAULT '', `termsJson` TEXT NOT NULL DEFAULT '[]', `termsCustom` TEXT NOT NULL DEFAULT '', `billTemplate` TEXT NOT NULL DEFAULT 'classic', `onboardingStep` TEXT NOT NULL DEFAULT '', `email` TEXT NOT NULL DEFAULT '', `gstOn` INTEGER NOT NULL DEFAULT 0, `gstPct` REAL NOT NULL DEFAULT 18, `gstMode` TEXT NOT NULL DEFAULT 'excl', PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -127,6 +127,27 @@
             "affinity": "TEXT",
             "notNull": true,
             "defaultValue": "''"
+          },
+          {
+            "fieldPath": "gstOn",
+            "columnName": "gstOn",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "gstPct",
+            "columnName": "gstPct",
+            "affinity": "REAL",
+            "notNull": true,
+            "defaultValue": "18"
+          },
+          {
+            "fieldPath": "gstMode",
+            "columnName": "gstMode",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'excl'"
           }
         ],
         "primaryKey": {
@@ -305,7 +326,7 @@
       },
       {
         "tableName": "orders",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `custId` TEXT NOT NULL, `pickup` TEXT NOT NULL, `delivery` TEXT NOT NULL, `pickupDate` TEXT NOT NULL, `pickupTime` TEXT NOT NULL, `deliveryDate` TEXT NOT NULL, `deliveryTime` TEXT NOT NULL, `ddAuto` INTEGER NOT NULL, `status` TEXT NOT NULL, `cancelReason` TEXT NOT NULL, `fee` INTEGER NOT NULL, `express` INTEGER NOT NULL, `exAmt` INTEGER NOT NULL, `discount` INTEGER NOT NULL, `pre` INTEGER NOT NULL, `paid` INTEGER NOT NULL, `doneAt` TEXT NOT NULL, `doneDate` TEXT NOT NULL, `createdOn` TEXT NOT NULL, `billSent` INTEGER NOT NULL, `pieces` INTEGER NOT NULL, `linesJson` TEXT NOT NULL, `deleted` INTEGER NOT NULL DEFAULT 0, `updatedAt` INTEGER NOT NULL DEFAULT 0, `dirty` INTEGER NOT NULL DEFAULT 1, `serialNo` TEXT NOT NULL DEFAULT '', `exPct` INTEGER NOT NULL DEFAULT 0, `discPct` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `custId` TEXT NOT NULL, `pickup` TEXT NOT NULL, `delivery` TEXT NOT NULL, `pickupDate` TEXT NOT NULL, `pickupTime` TEXT NOT NULL, `deliveryDate` TEXT NOT NULL, `deliveryTime` TEXT NOT NULL, `ddAuto` INTEGER NOT NULL, `status` TEXT NOT NULL, `cancelReason` TEXT NOT NULL, `fee` INTEGER NOT NULL, `express` INTEGER NOT NULL, `exAmt` INTEGER NOT NULL, `discount` INTEGER NOT NULL, `pre` INTEGER NOT NULL, `paid` INTEGER NOT NULL, `doneAt` TEXT NOT NULL, `doneDate` TEXT NOT NULL, `createdOn` TEXT NOT NULL, `billSent` INTEGER NOT NULL, `pieces` INTEGER NOT NULL, `linesJson` TEXT NOT NULL, `deleted` INTEGER NOT NULL DEFAULT 0, `updatedAt` INTEGER NOT NULL DEFAULT 0, `dirty` INTEGER NOT NULL DEFAULT 1, `serialNo` TEXT NOT NULL DEFAULT '', `exPct` INTEGER NOT NULL DEFAULT 0, `discPct` INTEGER NOT NULL DEFAULT 0, `gstOn` INTEGER NOT NULL DEFAULT 0, `gstPct` REAL NOT NULL DEFAULT 0, `gstMode` TEXT NOT NULL DEFAULT 'excl', PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -486,6 +507,27 @@
             "affinity": "INTEGER",
             "notNull": true,
             "defaultValue": "0"
+          },
+          {
+            "fieldPath": "gstOn",
+            "columnName": "gstOn",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "gstPct",
+            "columnName": "gstPct",
+            "affinity": "REAL",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "gstMode",
+            "columnName": "gstMode",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'excl'"
           }
         ],
         "primaryKey": {
@@ -673,7 +715,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '2e771e0b87162fb0c9fee31f140f4a67')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '579ccd9ae29530df043fb509277b0b53')"
     ]
   }
 }

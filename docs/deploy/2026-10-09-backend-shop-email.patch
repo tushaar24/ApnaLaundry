@@ -1,0 +1,43 @@
+diff -ruN backend-orig/prisma/migrations/20261009170000_laundry_shop_email/migration.sql backend-live/prisma/migrations/20261009170000_laundry_shop_email/migration.sql
+--- backend-orig/prisma/migrations/20261009170000_laundry_shop_email/migration.sql	1970-01-01 05:30:00
++++ backend-live/prisma/migrations/20261009170000_laundry_shop_email/migration.sql	2026-10-09 22:45:56
+@@ -0,0 +1,3 @@
++-- Email address printed on the bill (optional, '' = none).
++-- AlterTable
++ALTER TABLE "laundry_shops" ADD COLUMN     "email" TEXT NOT NULL DEFAULT '';
+diff -ruN backend-orig/prisma/schema.prisma backend-live/prisma/schema.prisma
+--- backend-orig/prisma/schema.prisma	2026-10-09 22:45:40
++++ backend-live/prisma/schema.prisma	2026-10-09 22:45:56
+@@ -256,6 +256,7 @@
+   billPhone       String      @default("") @map("bill_phone")
+   address         String      @default("")
+   gstin           String      @default("")
++  email           String      @default("") // printed on the bill (2026-10-09)
+   upiId           String      @default("") @map("upi_id")
+   logoId          String      @default("") @map("logo_id") // laundry_shop_logos.id
+   terms           String[]    @default([]) // preset ids: check | fade | pocket | days
+diff -ruN backend-orig/services/laundry-shop-details.js backend-live/services/laundry-shop-details.js
+--- backend-orig/services/laundry-shop-details.js	2026-10-09 22:45:40
++++ backend-live/services/laundry-shop-details.js	2026-10-09 22:45:56
+@@ -1,4 +1,4 @@
+-// Bill details on the laundry shop row (phone on bill, address, GSTIN, UPI,
++// Bill details on the laundry shop row (phone on bill, email, address, GSTIN, UPI,
+ // logo, terms, bill design) and onboarding progress. Shared by sync/push and
+ // the public bill so both apply the same limits.
+ 
+@@ -14,6 +14,7 @@
+   billPhone: (v) => str(v, 20).replace(/\D/g, '').slice(-10),
+   address: (v) => str(v, 120).replace(/\s+/g, ' '),
+   gstin: (v) => str(v, 15).toUpperCase().replace(/[^0-9A-Z]/g, ''),
++  email: (v) => str(v, 80).replace(/\s+/g, '').toLowerCase(),
+   upiId: (v) => str(v, 60),
+   logoId: (v) => str(v, 40).replace(/[^A-Za-z0-9_-]/g, ''),
+   terms: (v) => (Array.isArray(v) ? [...new Set(v.map(String))].filter((t) => TERM_IDS.includes(t)) : []),
+@@ -40,6 +41,7 @@
+     billPhone: shop.billPhone || '',
+     address: shop.address || '',
+     gstin: shop.gstin || '',
++    email: shop.email || '',
+     upiId: shop.upiId || '',
+     logoId: shop.logoId || '',
+     terms: shop.terms || [],

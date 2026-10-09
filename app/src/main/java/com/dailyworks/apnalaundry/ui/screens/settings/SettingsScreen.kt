@@ -99,7 +99,7 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
                 ) {
                     Column(Modifier.weight(1f)) {
                         Text("Bill design & details", style = fig(16, FontWeight.Bold))
-                        Text("Design, logo, UPI QR, address, GSTIN, terms", style = fig(13, color = Tokens.Muted))
+                        Text("Design, logo, UPI QR, address, email, GSTIN, terms", style = fig(13, color = Tokens.Muted))
                     }
                     Text("Edit", style = fig(15, FontWeight.Bold, Tokens.Blue))
                 }

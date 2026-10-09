@@ -413,7 +413,7 @@ class LaundryRepository(private val db: AppDatabase) {
         var n = e.copy(dirty = true, updatedAt = SyncClock.now())
         if (name != null) n = n.copy(name = name)
         if (details != null) n = n.copy(
-            billPhone = details.billPhone, address = details.address, gstin = details.gstin,
+            billPhone = details.billPhone, address = details.address, gstin = details.gstin, email = details.email,
             upiId = details.upiId, logoId = details.logoId, termsJson = encodeTerms(details.terms),
             termsCustom = details.termsCustom, billTemplate = details.billTemplate,
         )

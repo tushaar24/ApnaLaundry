@@ -14,7 +14,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         LedgerEntity::class,
         DayCloseEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -87,8 +87,8 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        /** v6 -> v7: GST per order (on / rate / exclusive|inclusive) + the shop's last-used GST setting. */
-        val MIGRATION_6_7 = object : Migration(6, 7) {
+        /** v7 -> v8: GST per order (on / rate / exclusive|inclusive) + the shop's last-used GST setting. */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE orders ADD COLUMN gstOn INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE orders ADD COLUMN gstPct REAL NOT NULL DEFAULT 0")
@@ -96,6 +96,13 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE shop ADD COLUMN gstOn INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE shop ADD COLUMN gstPct REAL NOT NULL DEFAULT 18")
                 db.execSQL("ALTER TABLE shop ADD COLUMN gstMode TEXT NOT NULL DEFAULT 'excl'")
+            }
+        }
+
+        /** v6 -> v7: email address printed on the bill. */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE shop ADD COLUMN email TEXT NOT NULL DEFAULT ''")
             }
         }
 

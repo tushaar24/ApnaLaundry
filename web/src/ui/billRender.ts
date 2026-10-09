@@ -198,7 +198,7 @@ function layout(ctx: CanvasRenderingContext2D, r: BillReceipt, draw: boolean, mi
   };
   const hasLogo = !!r.shop.logoId && logos.has(r.shop.logoId);
   const shopName = receipt ? r.shop.name.toUpperCase() : r.shop.name;
-  const details = [r.shop.phone, r.shop.address, r.shop.gstin ? `GSTIN ${r.shop.gstin}` : ""].filter(Boolean);
+  const details = [r.shop.phone, r.shop.email, r.shop.address, r.shop.gstin ? `GSTIN ${r.shop.gstin}` : ""].filter(Boolean);
 
   // 1. shop block
   if (t === "bold") {

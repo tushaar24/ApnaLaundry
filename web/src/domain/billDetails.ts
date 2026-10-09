@@ -2,7 +2,7 @@ import type { BillDetails, BillTemplate, OnboardingStep, Order, OrderLine, Servi
 import * as AppDate from "@/core/appdate";
 
 /**
- * Optional bill details (phone on bill, address, GSTIN, UPI, logo, terms) and
+ * Optional bill details (phone on bill, email, address, GSTIN, UPI, logo, terms) and
  * the bill designs: defaults, validation, and the sample order the onboarding
  * "Your bill" step previews. Port twin: domain/BillDetails.kt.
  */
@@ -24,7 +24,7 @@ export const ONBOARDING_STEPS: OnboardingStep[] = ["intro", "name", "services", 
 
 export function emptyBillDetails(billPhone = ""): BillDetails {
   return {
-    billPhone, address: "", gstin: "", upiId: "", logoId: "",
+    billPhone, address: "", gstin: "", email: "", upiId: "", logoId: "",
     terms: [], termsCustom: "", billTemplate: "classic",
   };
 }
@@ -37,6 +37,7 @@ export function billDetailsFrom(d: Partial<Record<keyof BillDetails, unknown>>, 
     billPhone: str(d.billPhone) || fallbackPhone,
     address: str(d.address),
     gstin: str(d.gstin),
+    email: str(d.email),
     upiId: str(d.upiId),
     logoId: str(d.logoId),
     terms: Array.isArray(d.terms) ? d.terms.filter((t): t is string => typeof t === "string") : [],
@@ -55,6 +56,7 @@ export const cleanName = (s: string) => s.trim().replace(/\s+/g, " ").slice(0, 4
 export const cleanPhone = (s: string) => s.replace(/\D/g, "").slice(-10);
 export const cleanAddress = (s: string) => s.replace(/\s+/g, " ").trim().slice(0, 120);
 export const cleanGstin = (s: string) => s.toUpperCase().replace(/[^0-9A-Z]/g, "").slice(0, 15);
+export const cleanEmail = (s: string) => s.trim().replace(/\s+/g, "").toLowerCase().slice(0, 80);
 export const cleanUpi = (s: string) => s.trim().replace(/\s+/g, "").slice(0, 60);
 export const cleanTermsCustom = (s: string) => s.replace(/\s+/g, " ").trim().slice(0, 80);
 
@@ -65,9 +67,11 @@ export const isNameOk = (s: string) => s.trim().length >= NAME_MIN;
 
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]Z[0-9A-Z]$/;
 const UPI_RE = /^[A-Za-z0-9._-]{2,}@[A-Za-z]{2,}$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 export const isGstinValid = (s: string) => GSTIN_RE.test(s);
 export const isUpiValid = (s: string) => UPI_RE.test(s);
+export const isEmailValid = (s: string) => EMAIL_RE.test(s);
 export const isPhoneValid = (s: string) => /^\d{10}$/.test(s);
 
 export type Check = { ok: boolean; message: string } | null;
@@ -77,6 +81,12 @@ export function gstinCheck(s: string): Check {
   if (s === "") return null;
   if (s.length !== 15) return { ok: false, message: `A GSTIN has 15 characters — you typed ${s.length}` };
   if (!isGstinValid(s)) return { ok: false, message: "This does not look like a GSTIN — please check it" };
+  return { ok: true, message: "Looks right — prints under your laundry name" };
+}
+
+export function emailCheck(s: string): Check {
+  if (s === "") return null;
+  if (!isEmailValid(s)) return { ok: false, message: "An email looks like name@gmail.com — please check it" };
   return { ok: true, message: "Looks right — prints under your laundry name" };
 }
 
@@ -106,6 +116,7 @@ export function addedFieldsCount(d: BillDetails, loginPhone: string): number {
   if (d.address) n++;
   if (termLines(d).length) n++;
   if (isGstinValid(d.gstin)) n++;
+  if (isEmailValid(d.email)) n++;
   if (d.billPhone && d.billPhone !== loginPhone) n++;
   return n;
 }

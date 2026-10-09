@@ -114,6 +114,7 @@ export interface BillDetails {
   billPhone: string; // 10 digits ("" = none)
   address: string;
   gstin: string; // printed only when valid
+  email: string; // printed only when valid
   upiId: string; // QR printed only when valid
   logoId: string; // uploaded logo ("" = none)
   terms: string[]; // preset ids, see domain/billDetails TERM_PRESETS
