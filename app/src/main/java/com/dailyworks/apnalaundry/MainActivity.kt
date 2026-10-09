@@ -29,6 +29,7 @@ import com.dailyworks.apnalaundry.ui.theme.Tokens
 import com.razorpay.Checkout
 import com.razorpay.PaymentData
 import com.razorpay.PaymentResultWithDataListener
+import com.dailyworks.apnalaundry.data.sync.SyncScheduler
 import org.koin.android.ext.android.inject
 import org.koin.androidx.compose.koinViewModel
 
@@ -36,6 +37,18 @@ import org.koin.androidx.compose.koinViewModel
 // AutoPay outcome here, which we forward to the paywall via CheckoutBridge.
 class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
     private val checkoutBridge: CheckoutBridge by inject()
+    private val syncScheduler: SyncScheduler by inject()
+
+    // Sync on open and every minute while visible (edits from other devices).
+    override fun onStart() {
+        super.onStart()
+        syncScheduler.onForeground()
+    }
+
+    override fun onStop() {
+        syncScheduler.onBackground()
+        super.onStop()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
