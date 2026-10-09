@@ -191,7 +191,7 @@ private fun khataRows(state: com.dailyworks.apnalaundry.domain.LaundryState, cus
         run += amt
         val desc = if (o.lines.isNotEmpty()) "${Selectors.itemsLabel(o)} · ${Selectors.svcLabel(o)}" else "clothes not counted yet"
         out += KhataRow(
-            title = "Order #${o.id} · in progress",
+            title = "Order #${o.no()} · in progress",
             sub = AppDate.plain(o.createdOn.ifBlank { o.pickupDate }).substringAfter(", ") + " · $desc",
             amount = "+ " + Money.rupees(amt), amtColor = Tokens.OrangeText,
             after = balWord(run), isAdd = true, icBg = Tokens.OrangeLight, icFg = Tokens.OrangeText,
@@ -221,7 +221,7 @@ private fun OrderMiniRow(state: com.dailyworks.apnalaundry.domain.LaundryState, 
         Row(Modifier.fillMaxWidth().tap(onClick = onClick).padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("#${o.id}", style = fig(15, FontWeight.Bold))
+                    Text("#${o.no()}", style = fig(15, FontWeight.Bold))
                     Text(if (o.lines.isNotEmpty()) Money.rupees(LaundryMath.amtOf(o)) else "Not counted", style = fig(14, FontWeight.SemiBold, Tokens.InkSecondary))
                 }
                 Text(

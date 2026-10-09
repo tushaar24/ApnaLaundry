@@ -84,7 +84,7 @@ data class BillReceipt(
                 address = shop.address,
                 gstin = if (BillDetails.isGstinValid(shop.gstin)) shop.gstin else "",
                 logoId = shop.logoId,
-                billNo = "Bill #${o.id}",
+                billNo = "Bill #${o.no()}",
                 date = AppDate.plain(o.createdOn),
                 customerName = custName,
                 customerPhone = if (phone.isNotEmpty()) "+91 ${Selectors.fmtPhone(phone)}" else "",

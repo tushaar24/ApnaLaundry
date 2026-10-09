@@ -33,7 +33,7 @@ const val BILL_PAGE_URL = "https://mylaundry.work/b/"
 private fun billPdfUri(context: Context, state: LaundryState, o: Order): Uri {
     val receipt = BillReceipt.of(state, o)
     val logo = GlobalContext.get().get<LogoStore>().cached(receipt.logoId)
-    val file = File(File(context.cacheDir, "bills").apply { mkdirs() }, "Bill-${o.id}.pdf")
+    val file = File(File(context.cacheDir, "bills").apply { mkdirs() }, "Bill-${o.no().replace('/', '-')}.pdf")
     val doc = PdfDocument()
     try {
         val h = kotlin.math.ceil(BillRender.height(context, receipt, logo)).toInt()
@@ -54,7 +54,7 @@ private val WHATSAPP_PACKAGES = listOf("com.whatsapp", "com.whatsapp.w4b")
 /** Short message that travels with the PDF. */
 private fun billCaption(state: LaundryState, o: Order): String {
     val c = Selectors.customer(state, o.custId)
-    return "Hi ${Selectors.firstName(c.name)}, here is your bill for order #${o.id} from ${state.shop.name} — " +
+    return "Hi ${Selectors.firstName(c.name)}, here is your bill for order #${o.no()} from ${state.shop.name} — " +
         "Total ${Money.rupees(LaundryMath.amtOf(o))}. Thank you!"
 }
 
@@ -73,7 +73,7 @@ fun sendBillOnWhatsApp(context: Context, state: LaundryState, o: Order) {
     // Exactly one WhatsApp → go straight in; both (personal + Business) or
     // none → let the owner pick from the share sheet.
     val installed = WHATSAPP_PACKAGES.filter { context.packageManager.getLaunchIntentForPackage(it) != null }
-    val chooser = Intent.createChooser(send, "Send bill #${o.id}").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    val chooser = Intent.createChooser(send, "Send bill #${o.no()}").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     try {
         if (installed.size == 1) {
             context.startActivity(Intent(send).setPackage(installed[0]).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -93,7 +93,7 @@ fun shareBillPdf(context: Context, state: LaundryState, o: Order) {
         putExtra(Intent.EXTRA_STREAM, uri)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
-    context.startActivity(Intent.createChooser(share, "Bill #${o.id}").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    context.startActivity(Intent.createChooser(share, "Bill #${o.no()}").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 }
 
 /**

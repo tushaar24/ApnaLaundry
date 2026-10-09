@@ -97,7 +97,7 @@ fun OrderCard(
         else -> ""
     }
 
-    val meta = "#${o.id} · " + if (counted) "${Selectors.itemsLabel(o)} · ${Selectors.svcLabel(o)}"
+    val meta = "#${o.no()} · " + if (counted) "${Selectors.itemsLabel(o)} · ${Selectors.svcLabel(o)}"
     else if (o.pickup == Route.HOME && o.status == OrderStatus.CREATED) "Clothes will be counted at pickup"
     else (if (o.pieces > 0) "${o.pieces} pieces · " else "") + "Bill not made yet"
 

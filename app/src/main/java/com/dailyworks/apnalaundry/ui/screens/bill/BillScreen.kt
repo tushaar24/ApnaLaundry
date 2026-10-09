@@ -74,7 +74,7 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 // banner
                 Column(Modifier.fillMaxWidth().rounded(16.dp).background(Tokens.Ink).padding(16.dp)) {
-                    Text(if (from == "new") "Order #${o.id} saved" else "Bill for order #${o.id}", style = bric(20, FontWeight.Bold, Tokens.OnDark))
+                    Text(if (from == "new") "Order #${o.no()} saved" else "Bill for order #${o.no()}", style = bric(20, FontWeight.Bold, Tokens.OnDark))
                     Text(
                         (if (o.lines.isNotEmpty()) "${Selectors.itemsLabel(o)} · " else "") + "Total ${Money.rupees(amt)}",
                         style = fig(13, FontWeight.SemiBold, Tokens.OnDarkFaint),

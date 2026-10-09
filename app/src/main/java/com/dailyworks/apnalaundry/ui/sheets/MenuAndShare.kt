@@ -66,7 +66,7 @@ fun OrderMenuSheet(
     val c = Selectors.customer(state, o.custId)
     val context = LocalContext.current
 
-    AppBottomSheet(title = c.name, subtitle = "#${o.id} · +91 ${Selectors.fmtPhone(c.phone)}", onDismiss = onDismiss) {
+    AppBottomSheet(title = c.name, subtitle = "#${o.no()} · +91 ${Selectors.fmtPhone(c.phone)}", onDismiss = onDismiss) {
         Column {
             MenuRow(Icons.Outlined.Visibility, "View order details") { onDismiss(); navigator.openOrder(o.id) }
             if (o.lines.isNotEmpty()) MenuRow(Icons.AutoMirrored.Outlined.ReceiptLong, "View / send bill") { onDismiss(); navigator.openBill(o.id) }

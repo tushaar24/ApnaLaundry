@@ -108,6 +108,7 @@ fun NewOrderScreen(
     // typed their own, which may be "" mid-edit (must NOT snap back to auto).
     var exOverride by remember { mutableStateOf<String?>(null) }
     var discountText by remember { mutableStateOf("") }
+    var serialText by remember { mutableStateOf("") } // "" = the order id
     var quickAmt by remember { mutableStateOf("") }
     var quickPcs by remember { mutableStateOf("") }
     var showQuickBox by remember { mutableStateOf(false) }
@@ -135,6 +136,7 @@ fun NewOrderScreen(
         feeText = if (o.fee > 0) o.fee.toString() else ""
         express = o.express
         discountText = if (o.discount > 0) o.discount.toString() else ""
+        serialText = o.serialNo
         // Same base as the live auto amount below: every line, quick amount included.
         val clothesTotalForEx = o.lines.sumOf { it.amt }
         exOverride = if (o.express && o.exAmt != LaundryMath.expressAuto(clothesTotalForEx, state.shop.expressPct)) o.exAmt.toString() else null
@@ -197,7 +199,7 @@ fun NewOrderScreen(
         TopBar(
             title = if (editId != null) "Edit order" else "New order",
             onBack = { navigator.back() },
-            trailing = { if (editId != null) Text("#$editId", style = fig(14, color = Tokens.Muted)) },
+            trailing = { if (editingOrder != null) Text("#${editingOrder.no()}", style = fig(14, color = Tokens.Muted)) },
         )
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
@@ -359,6 +361,11 @@ fun NewOrderScreen(
                     FieldBox(exOverride ?: exAuto.toString(), { exOverride = it.filter { c -> c.isDigit() }.take(5) }, prefix = "₹", suffix = "express", height = 48.dp, keyboardType = KeyboardType.Number)
                 }
                 FieldBox(discountText, { discountText = it.filter { c -> c.isDigit() }.take(5) }, prefix = "₹", suffix = "discount (optional)", height = 48.dp, keyboardType = KeyboardType.Number)
+                FieldBox(
+                    serialText, { serialText = it.filter { c -> c.isLetterOrDigit() && c.code < 128 || c in "_/-" }.take(12) },
+                    prefix = "#", placeholder = editId?.toString() ?: "Same as order number",
+                    suffix = "bill / serial no.", height = 48.dp,
+                )
             }
 
             // ---- live bill ----
@@ -390,6 +397,7 @@ fun NewOrderScreen(
                     ddAuto = ddAuto, fee = fee, express = express, exAmt = exAmt, discount = discount,
                     lines = clothes.lines(services), quickAmount = if (showQuickBox) quickAmt.toIntOrNull() ?: 0 else 0,
                     quickPieces = if (showQuickBox) quickPcs.toIntOrNull() ?: 0 else 0,
+                    serialNo = serialText,
                 ) { result ->
                     if (editId != null) navigator.back()
                     else if (result.goToBill) navigator.openBill(result.orderId, "new")

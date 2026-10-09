@@ -92,7 +92,7 @@ fun OrderDetailScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: I
         Column(
             Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars).verticalScroll(rememberScrollState()),
         ) {
-            TopBar(title = "#${o.id}", onBack = { navigator.back() }, trailing = {
+            TopBar(title = "#${o.no()}", onBack = { navigator.back() }, trailing = {
                 Box(Modifier.size(44.dp).tap { active = ActiveSheet.Menu(o.id) }, contentAlignment = Alignment.Center) {
                     Icon(Icons.Filled.MoreVert, "More", tint = Tokens.Ink, modifier = Modifier.size(22.dp))
                 }

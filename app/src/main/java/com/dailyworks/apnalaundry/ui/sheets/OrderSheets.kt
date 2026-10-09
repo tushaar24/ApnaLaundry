@@ -133,7 +133,7 @@ fun CountClothesSheet(state: LaundryState, orderId: Int, next: OrderStatus, vm: 
     val clothes = rememberClothesState(state.services)
     val total = clothes.total(state.services)
 
-    AppBottomSheet(title = "Count clothes", subtitle = "${c.name} · #${o.id}. The bill is made after this.", onDismiss = onDismiss) {
+    AppBottomSheet(title = "Count clothes", subtitle = "${c.name} · #${o.no()}. The bill is made after this.", onDismiss = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             ClothesEditor(state.services, clothes, editablePrice = false)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -161,7 +161,7 @@ fun RescheduleSheet(state: LaundryState, orderId: Int, kind: String, vm: ShopVie
     val title = if (isPickup) "Reschedule pickup" else if (o.deliveryDate.isNotBlank()) "Reschedule delivery" else "Set delivery date"
     val chips = listOf("Today" to AppDate.TODAY, "Tomorrow" to AppDate.add(AppDate.TODAY, 1), "Day after" to AppDate.add(AppDate.TODAY, 2))
 
-    AppBottomSheet(title = title, subtitle = "${c.name} · #${o.id}", onDismiss = onDismiss) {
+    AppBottomSheet(title = title, subtitle = "${c.name} · #${o.no()}", onDismiss = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 chips.forEach { (label, iso) -> PillChip(label, date == iso) { date = iso } }
@@ -200,7 +200,7 @@ fun DeleteOrderSheet(state: LaundryState, orderId: Int, vm: ShopViewModel, navig
     val c = Selectors.customer(state, o.custId)
     val what = if (o.lines.isNotEmpty()) "bill" else "order"
     val paidAny = state.ledger.any { it.ref == o.id && it.kind == LedgerKind.GOT }
-    AppBottomSheet(title = "Delete $what #${o.id}?", subtitle = "${c.name} · ${Money.rupees(LaundryMath.amtOf(o))}", onDismiss = onDismiss) {
+    AppBottomSheet(title = "Delete $what #${o.no()}?", subtitle = "${c.name} · ${Money.rupees(LaundryMath.amtOf(o))}", onDismiss = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text(
                 "The $what is removed from orders, earnings and ${Selectors.firstName(c.name)}'s khata" +
@@ -230,7 +230,7 @@ fun CancelSheet(state: LaundryState, orderId: Int, vm: ShopViewModel, onDismiss:
     var reason by remember { mutableStateOf("") }
     val reasons = listOf("Customer not home", "Customer cancelled", "Wrong address", "Other")
 
-    AppBottomSheet(title = "Cancel pickup?", subtitle = "${c.name} · #${o.id}", onDismiss = onDismiss) {
+    AppBottomSheet(title = "Cancel pickup?", subtitle = "${c.name} · #${o.no()}", onDismiss = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 reasons.forEach { r -> PillChip(r, reason == r) { reason = if (reason == r) "" else r } }
@@ -253,13 +253,13 @@ fun BillViewSheet(state: LaundryState, orderId: Int, vm: ShopViewModel, onDismis
     LaunchedEffect(orderId) { Analytics.billViewed(orderId) }
     // The exact image customers get, in the shop's chosen design.
     val images by rememberBillImages(vm, listOf(BillReceipt.of(state, o)), equalHeight = false)
-    AppBottomSheet(title = "Bill #${o.id}", subtitle = "${c.name} · this is what the customer sees", onDismiss = onDismiss) {
+    AppBottomSheet(title = "Bill #${o.no()}", subtitle = "${c.name} · this is what the customer sees", onDismiss = onDismiss) {
         val img = images?.firstOrNull()
         if (img == null) {
             Box(Modifier.fillMaxWidth().height(420.dp).rounded(16.dp).background(Tokens.Card))
         } else {
             Image(
-                img, contentDescription = "Bill #${o.id} · total ${Money.rupees(total)}",
+                img, contentDescription = "Bill #${o.no()} · total ${Money.rupees(total)}",
                 modifier = Modifier.fillMaxWidth().rounded(16.dp).border(1.dp, Tokens.CardBorder, RoundedCornerShape(16.dp)),
                 contentScale = ContentScale.FillWidth,
             )

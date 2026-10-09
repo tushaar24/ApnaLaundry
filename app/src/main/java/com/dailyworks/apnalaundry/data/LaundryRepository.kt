@@ -287,7 +287,7 @@ class LaundryRepository(private val db: AppDatabase) {
                 ledgerDao.insert(it.copy(deleted = true, dirty = true, updatedAt = now))
             }
         }
-        return CmdResult("Bill #$orderId deleted · $nm", undo)
+        return CmdResult("Bill #${o.no()} deleted · $nm", undo)
     }
 
     /** kind = "pickup" or "drop". */
@@ -319,7 +319,7 @@ class LaundryRepository(private val db: AppDatabase) {
         val nm = firstName(st.customers.first { it.id == o.custId }.name)
         orderDao.upsert(o.copy(billSent = true).toEntity())
         Analytics.billSent(orderId)
-        return CmdResult("Opening WhatsApp · bill #$orderId to $nm")
+        return CmdResult("Opening WhatsApp · bill #${current().orders.firstOrNull { it.id == orderId }?.no() ?: orderId} to $nm")
     }
 
     // ---------------- khata ----------------
@@ -419,6 +419,7 @@ class LaundryRepository(private val db: AppDatabase) {
         editId: Int?, custId: String, pickup: Route, delivery: Route, pickupDate: String, pickupTime24: String,
         deliveryDate: String, deliveryTime24: String, ddAuto: Boolean, fee: Int, express: Boolean, exAmt: Int,
         discount: Int, lines: List<OrderLine>, quickAmount: Int, quickPieces: Int,
+        serialNo: String = "",
     ): SaveOrderResult {
         val undo = snapshot()
         val st = current()
@@ -439,7 +440,7 @@ class LaundryRepository(private val db: AppDatabase) {
                 custId = fields.custId, pickup = fields.pickup, delivery = fields.delivery, pickupDate = fields.pickupDate,
                 pickupTime = fields.pickupTime, deliveryDate = fields.deliveryDate, deliveryTime = fields.deliveryTime,
                 ddAuto = fields.ddAuto, fee = fields.fee, express = fields.express, exAmt = fields.exAmt,
-                discount = fields.discount, lines = newLines,
+                discount = fields.discount, lines = newLines, serialNo = serialNo.trim(),
             )
             if (updated.status == OrderStatus.CREATED && newLines.isNotEmpty() && pickup == Route.SHOP) {
                 updated = updated.copy(status = OrderStatus.RECEIVED)
@@ -457,7 +458,7 @@ class LaundryRepository(private val db: AppDatabase) {
             val khataPart = if (o.status == OrderStatus.DELIVERED && diff != 0) " · khata ${if (diff > 0) "+" else "−"}${money(kotlin.math.abs(diff))}" else ""
             val totalPart = if (diff != 0) " · new total ${money(after)}" else ""
             trackOrderSaved(updated, isEdit = true)
-            return SaveOrderResult(o.id, goToBill = false, toast = "Order #${o.id} updated$totalPart$khataPart", undo = undo, edited = true)
+            return SaveOrderResult(o.id, goToBill = false, toast = "Order #${updated.no()} updated$totalPart$khataPart", undo = undo, edited = true)
         }
 
         // create
@@ -471,6 +472,7 @@ class LaundryRepository(private val db: AppDatabase) {
             fee = fields.fee, express = fields.express, exAmt = fields.exAmt, discount = fields.discount,
             pre = 0, paid = 0, doneAt = "", doneDate = "", createdOn = AppDate.TODAY, billSent = false,
             pieces = 0, lines = fields.lines,
+            serialNo = serialNo.trim(),
         )
         db.withTransaction {
             orderDao.upsert(order.toEntity())

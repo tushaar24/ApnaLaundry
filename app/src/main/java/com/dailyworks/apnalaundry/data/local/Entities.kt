@@ -94,6 +94,7 @@ data class OrderEntity(
     @ColumnInfo(defaultValue = "0") val deleted: Boolean = false,
     @ColumnInfo(defaultValue = "0") val updatedAt: Long = SyncClock.now(),
     @ColumnInfo(defaultValue = "1") val dirty: Boolean = true,
+    @ColumnInfo(defaultValue = "") val serialNo: String = "", // v5
 )
 
 @Entity(tableName = "ledger")

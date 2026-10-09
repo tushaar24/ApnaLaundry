@@ -82,7 +82,11 @@ data class Order(
     val billSent: Boolean,
     val pieces: Int,                 // optional piece count for quick bills
     val lines: List<OrderLine>,
-)
+    val serialNo: String = "",       // owner-set bill / serial no.; "" = use the order id
+) {
+    /** The number shown as "#…" on the order and its bill: the owner's serial, else the id. */
+    fun no(): String = serialNo.trim().ifEmpty { id.toString() }
+}
 
 data class LedgerEntry(
     val id: String,

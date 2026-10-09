@@ -141,11 +141,12 @@ class ShopViewModel(
         editId: Int?, custId: String, pickup: Route, delivery: Route, pickupDate: String, pickupTime24: String,
         deliveryDate: String, deliveryTime24: String, ddAuto: Boolean, fee: Int, express: Boolean, exAmt: Int,
         discount: Int, lines: List<OrderLine>, quickAmount: Int, quickPieces: Int,
+        serialNo: String = "",
         onDone: (LaundryRepository.SaveOrderResult) -> Unit,
     ) = viewModelScope.launch {
         val res = repo.saveOrder(
             editId, custId, pickup, delivery, pickupDate, pickupTime24, deliveryDate, deliveryTime24, ddAuto,
-            fee, express, exAmt, discount, lines, quickAmount, quickPieces,
+            fee, express, exAmt, discount, lines, quickAmount, quickPieces, serialNo = serialNo,
         )
         res.toast?.let { publish(CmdResult(it, res.undo)) }
         sync.requestSync()
