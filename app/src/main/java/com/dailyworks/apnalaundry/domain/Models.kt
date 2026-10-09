@@ -115,6 +115,7 @@ data class Shop(
     val billPhone: String = "",
     val address: String = "",
     val gstin: String = "", // printed only when valid
+    val email: String = "", // printed only when valid
     val upiId: String = "", // QR printed only when valid
     val logoId: String = "",
     val terms: List<String> = emptyList(), // preset ids

@@ -3,14 +3,14 @@
 import { useRef, useState, type ReactNode } from "react";
 import type { BillDetails } from "@/domain/models";
 import {
-  cleanAddress, cleanGstin, cleanPhone, cleanTermsCustom, cleanUpi, fmtBillPhone, gstinCheck,
-  isGstinValid, isPhoneValid, isUpiValid, TERM_PRESETS, termLines, upiCheck, type Check,
+  cleanAddress, cleanEmail, cleanGstin, cleanPhone, cleanTermsCustom, cleanUpi, emailCheck, fmtBillPhone, gstinCheck,
+  isEmailValid, isGstinValid, isPhoneValid, isUpiValid, TERM_PRESETS, termLines, upiCheck, type Check,
 } from "@/domain/billDetails";
 import { uploadLogo } from "@/data/logoUpload";
 import * as Repo from "@/data/repository";
 import { AppSheet } from "../sheet";
 import { cls, FieldBox, OutlineButton, PrimaryButton } from "../basics";
-import { IcBadge, IcCall, IcCamera, IcCheck, IcChevronRight, IcImage, IcList, IcPin, IcQr } from "../icons";
+import { IcBadge, IcCall, IcCamera, IcCheck, IcChevronRight, IcImage, IcList, IcMail, IcPin, IcQr } from "../icons";
 import { logoUrl } from "@/domain/billDetails";
 
 /**
@@ -21,7 +21,7 @@ import { logoUrl } from "@/domain/billDetails";
  * behind the sheet updates live.
  */
 
-type FieldKey = "upi" | "logo" | "address" | "terms" | "gstin" | "phone";
+type FieldKey = "upi" | "logo" | "address" | "terms" | "gstin" | "phone" | "email";
 
 export function FieldsSheet({
   details, onChange, onClose,
@@ -39,6 +39,7 @@ export function FieldsSheet({
   if (editing === "terms") return <TermsEditor terms={details.terms} custom={details.termsCustom} onSave={(terms, termsCustom) => { onChange({ terms, termsCustom }); back(); }} onBack={back} />;
   if (editing === "gstin") return <GstinEditor value={details.gstin} onSave={(v) => { onChange({ gstin: v }); back(); }} onBack={back} />;
   if (editing === "phone") return <PhoneEditor value={details.billPhone} onSave={(v) => { onChange({ billPhone: v }); back(); }} onBack={back} />;
+  if (editing === "email") return <EmailEditor value={details.email} onSave={(v) => { onChange({ email: v }); back(); }} onBack={back} />;
 
   const terms = termLines(details).length;
   const rows: { key: FieldKey; icon: ReactNode; title: string; empty: string; set: string }[] = [
@@ -48,6 +49,7 @@ export function FieldsSheet({
     { key: "terms", icon: <IcList size={22} />, title: "Terms & conditions", empty: "e.g. not responsible for colour fading", set: terms ? `${terms} line${terms > 1 ? "s" : ""} at the bottom` : "" },
     { key: "gstin", icon: <IcBadge size={22} />, title: "GSTIN", empty: "Only for GST-registered shops", set: isGstinValid(details.gstin) ? details.gstin : "" },
     { key: "phone", icon: <IcCall size={22} />, title: "Phone number", empty: "Customers call or WhatsApp you on this", set: isPhoneValid(details.billPhone) ? fmtBillPhone(details.billPhone) : "" },
+    { key: "email", icon: <IcMail size={22} />, title: "Email address", empty: "For customers who prefer to write to you", set: isEmailValid(details.email) ? details.email : "" },
   ];
 
   return (
@@ -183,6 +185,29 @@ function PhoneEditor({ value, onSave, onBack }: { value: string; onSave: (v: str
         inputProps={{ id: "bill-phone", autoComplete: "tel-national" }}
       />
       <EditorFooter canRemove={value !== ""} onRemove={() => onSave("")} onDone={() => onSave(cleanPhone(v))} />
+    </AppSheet>
+  );
+}
+
+function EmailEditor({ value, onSave, onBack }: { value: string; onSave: (v: string) => void; onBack: () => void }) {
+  const [v, setV] = useState(value);
+  const check = emailCheck(v);
+  return (
+    <AppSheet title="Email on bill" subtitle="Prints under your laundry name, so customers can write to you." onDismiss={onBack}>
+      <label htmlFor="bill-email" className="text-[13px] font-bold text-inksecondary">Email address</label>
+      <FieldBox
+        value={v}
+        onChange={(x) => setV(cleanEmail(x))}
+        placeholder="e.g. sharmalaundry@gmail.com"
+        h={56}
+        className="mt-1.5"
+        type="email"
+        borderColor={check && !check.ok ? "var(--color-orange)" : undefined}
+        autoFocus
+        inputProps={{ id: "bill-email", inputMode: "email", autoComplete: "email", autoCapitalize: "none", autoCorrect: "off", spellCheck: false, maxLength: 80, enterKeyHint: "done" }}
+      />
+      <CheckLine check={check} />
+      <EditorFooter canRemove={value !== ""} onRemove={() => onSave("")} onDone={() => onSave(v)} />
     </AppSheet>
   );
 }

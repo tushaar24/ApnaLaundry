@@ -68,7 +68,7 @@ export function BottomBar({ children, note }: { children: React.ReactNode; note?
 const INTRO_STEPS = [
   { title: "Laundry name", body: "Printed at the top of every bill" },
   { title: "Services & rates", body: "Common prices are already filled in — just check them" },
-  { title: "Your bill", body: "Pick a bill design. Add phone, address and GSTIN if you want" },
+  { title: "Your bill", body: "Pick a bill design. Add phone, email, address and GSTIN if you want" },
 ];
 
 export function IntroStep({ onStart }: { onStart: () => void }) {

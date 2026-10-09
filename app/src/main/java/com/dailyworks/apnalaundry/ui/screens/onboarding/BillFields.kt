@@ -25,6 +25,7 @@ import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Badge
 import androidx.compose.material.icons.outlined.Call
+import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.Place
@@ -74,7 +75,7 @@ import java.io.File
  * to the list (several fields in one go); Done on the list closes the sheet.
  * Every change goes straight to [onChange], so the bill behind updates live.
  */
-private enum class FieldKey { Upi, Logo, Address, Terms, Gstin, Phone }
+private enum class FieldKey { Upi, Logo, Address, Terms, Gstin, Phone, Email }
 
 @Composable
 fun FieldsSheet(shopVm: ShopViewModel, details: BillDetails.Fields, onChange: (BillDetails.Fields) -> Unit, onClose: () -> Unit) {
@@ -87,6 +88,7 @@ fun FieldsSheet(shopVm: ShopViewModel, details: BillDetails.Fields, onChange: (B
         FieldKey.Terms -> return TermsEditor(details.terms, details.termsCustom, onSave = { t, c -> onChange(details.copy(terms = t, termsCustom = c)); back() }, onBack = back)
         FieldKey.Gstin -> return GstinEditor(details.gstin, onSave = { onChange(details.copy(gstin = it)); back() }, onBack = back)
         FieldKey.Phone -> return PhoneEditor(details.billPhone, onSave = { onChange(details.copy(billPhone = it)); back() }, onBack = back)
+        FieldKey.Email -> return EmailEditor(details.email, onSave = { onChange(details.copy(email = it)); back() }, onBack = back)
         null -> Unit
     }
 
@@ -102,6 +104,8 @@ fun FieldsSheet(shopVm: ShopViewModel, details: BillDetails.Fields, onChange: (B
         Row4(FieldKey.Gstin, Icons.Outlined.Badge, "GSTIN", "Only for GST-registered shops", if (BillDetails.isGstinValid(details.gstin)) details.gstin else ""),
         Row4(FieldKey.Phone, Icons.Outlined.Call, "Phone number", "Customers call or WhatsApp you on this",
             if (BillDetails.isPhoneValid(details.billPhone)) BillDetails.fmtBillPhone(details.billPhone) else ""),
+        Row4(FieldKey.Email, Icons.Outlined.Email, "Email address", "For customers who prefer to write to you",
+            if (BillDetails.isEmailValid(details.email)) details.email else ""),
     )
 
     AppBottomSheet(title = "Add fields to your bill", subtitle = "All optional. Your bill already works without these.", onDismiss = onClose) {
@@ -225,6 +229,25 @@ private fun PhoneEditor(value: String, onSave: (String) -> Unit, onBack: () -> U
                 height = 56.dp, keyboardType = KeyboardType.Number, fieldModifier = autoFocus(),
             )
             EditorFooter(value.isNotEmpty(), onRemove = { onSave("") }, onDone = { onSave(BillDetails.cleanPhone(v)) })
+        }
+    }
+}
+
+@Composable
+private fun EmailEditor(value: String, onSave: (String) -> Unit, onBack: () -> Unit) {
+    var v by remember { mutableStateOf(value) }
+    val check = BillDetails.emailCheck(v)
+    AppBottomSheet(title = "Email on bill", subtitle = "Prints under your laundry name, so customers can write to you.", onDismiss = onBack) {
+        Column {
+            Text("Email address", style = fig(13, FontWeight.Bold, Tokens.InkSecondary))
+            FieldBox(
+                v, { v = BillDetails.cleanEmail(it) }, Modifier.padding(top = 6.dp),
+                placeholder = "e.g. sharmalaundry@gmail.com", height = 56.dp, keyboardType = KeyboardType.Email,
+                fieldModifier = autoFocus(),
+                borderColor = if (check?.ok == false) Tokens.Orange else Tokens.FieldBorder,
+            )
+            CheckLine(check)
+            EditorFooter(value.isNotEmpty(), onRemove = { onSave("") }, onDone = { onSave(v) })
         }
     }
 }

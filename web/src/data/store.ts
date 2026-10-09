@@ -99,7 +99,7 @@ let lastDerived: LaundryState | null = null;
 function shopOf(r: NonNullable<Rows["shop"]>): Shop {
   return {
     name: r.name, phone: r.phone, expressPct: r.expressPct, onboardingStep: r.onboardingStep,
-    billPhone: r.billPhone, address: r.address, gstin: r.gstin, upiId: r.upiId, logoId: r.logoId,
+    billPhone: r.billPhone, address: r.address, gstin: r.gstin, email: r.email, upiId: r.upiId, logoId: r.logoId,
     terms: r.terms, termsCustom: r.termsCustom, billTemplate: r.billTemplate,
   };
 }

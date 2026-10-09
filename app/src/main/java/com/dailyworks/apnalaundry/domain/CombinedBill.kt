@@ -173,6 +173,7 @@ object CombinedBill {
             shopPhone = BillDetails.fmtBillPhone(shop.billPhone.ifBlank { shop.phone }),
             address = shop.address,
             gstin = if (BillDetails.isGstinValid(shop.gstin)) shop.gstin else "",
+            email = if (BillDetails.isEmailValid(shop.email)) shop.email else "",
             logoId = shop.logoId,
             billDate = "Bill date ${dayMonthYear(today)}",
             period = period,
@@ -205,6 +206,7 @@ data class CombinedReceipt(
     val shopPhone: String,
     val address: String,
     val gstin: String,
+    val email: String, // only when valid
     val logoId: String,
     val billDate: String, // "Bill date 25 Sep 2026"
     val period: String, // "September 2026" / "19 Sep – 25 Sep 2026" / ""

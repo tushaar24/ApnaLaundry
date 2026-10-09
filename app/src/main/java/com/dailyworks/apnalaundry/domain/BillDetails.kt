@@ -5,7 +5,7 @@ import java.time.LocalDate
 import kotlin.math.roundToInt
 
 /**
- * Optional bill details (phone on bill, address, GSTIN, UPI, logo, terms) and
+ * Optional bill details (phone on bill, email, address, GSTIN, UPI, logo, terms) and
  * the bill designs: defaults, validation, and the sample order the onboarding
  * "Your bill" step previews. Port twin: web/src/domain/billDetails.ts.
  */
@@ -32,6 +32,7 @@ object BillDetails {
         val billPhone: String = "",
         val address: String = "",
         val gstin: String = "",
+        val email: String = "",
         val upiId: String = "",
         val logoId: String = "",
         val terms: List<String> = emptyList(),
@@ -40,12 +41,12 @@ object BillDetails {
     )
 
     fun fieldsOf(s: Shop, loginPhone: String = s.phone) = Fields(
-        billPhone = s.billPhone.ifBlank { loginPhone }, address = s.address, gstin = s.gstin,
+        billPhone = s.billPhone.ifBlank { loginPhone }, address = s.address, gstin = s.gstin, email = s.email,
         upiId = s.upiId, logoId = s.logoId, terms = s.terms, termsCustom = s.termsCustom, billTemplate = s.billTemplate,
     )
 
     fun Shop.withFields(f: Fields) = copy(
-        billPhone = f.billPhone, address = f.address, gstin = f.gstin, upiId = f.upiId, logoId = f.logoId,
+        billPhone = f.billPhone, address = f.address, gstin = f.gstin, email = f.email, upiId = f.upiId, logoId = f.logoId,
         terms = f.terms, termsCustom = f.termsCustom, billTemplate = f.billTemplate,
     )
 
@@ -58,6 +59,7 @@ object BillDetails {
     fun cleanPhone(s: String) = s.filter { it.isDigit() }.takeLast(10)
     fun cleanAddress(s: String) = s.replace(Regex("\\s+"), " ").trim().take(120)
     fun cleanGstin(s: String) = s.uppercase().filter { it in '0'..'9' || it in 'A'..'Z' }.take(15)
+    fun cleanEmail(s: String) = s.trim().replace(Regex("\\s+"), "").lowercase().take(80)
     fun cleanUpi(s: String) = s.trim().replace(Regex("\\s+"), "").take(60)
     fun cleanTermsCustom(s: String) = s.replace(Regex("\\s+"), " ").trim().take(80)
 
@@ -67,9 +69,11 @@ object BillDetails {
 
     private val GSTIN_RE = Regex("^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]Z[0-9A-Z]$")
     private val UPI_RE = Regex("^[A-Za-z0-9._-]{2,}@[A-Za-z]{2,}$")
+    private val EMAIL_RE = Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]{2,}$")
 
     fun isGstinValid(s: String) = GSTIN_RE.matches(s)
     fun isUpiValid(s: String) = UPI_RE.matches(s)
+    fun isEmailValid(s: String) = EMAIL_RE.matches(s)
     fun isPhoneValid(s: String) = s.length == 10 && s.all { it.isDigit() }
 
     data class Check(val ok: Boolean, val message: String)
@@ -79,6 +83,12 @@ object BillDetails {
         s.isEmpty() -> null
         s.length != 15 -> Check(false, "A GSTIN has 15 characters — you typed ${s.length}")
         !isGstinValid(s) -> Check(false, "This does not look like a GSTIN — please check it")
+        else -> Check(true, "Looks right — prints under your laundry name")
+    }
+
+    fun emailCheck(s: String): Check? = when {
+        s.isEmpty() -> null
+        !isEmailValid(s) -> Check(false, "An email looks like name@gmail.com — please check it")
         else -> Check(true, "Looks right — prints under your laundry name")
     }
 
@@ -107,6 +117,7 @@ object BillDetails {
         if (f.address.isNotEmpty()) n++
         if (termLines(f.terms, f.termsCustom).isNotEmpty()) n++
         if (isGstinValid(f.gstin)) n++
+        if (isEmailValid(f.email)) n++
         if (f.billPhone.isNotEmpty() && f.billPhone != loginPhone) n++
         return n
     }
