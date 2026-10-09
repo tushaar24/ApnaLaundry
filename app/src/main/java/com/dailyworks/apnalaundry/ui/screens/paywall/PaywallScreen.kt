@@ -149,11 +149,8 @@ fun PaywallScreen(
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = 20.dp),
                 ) {
-                    Spacer(Modifier.height(4.dp))
-                    PaywallVideo(paused = ui.busy)
-
                     // ₹2 trial hero
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(4.dp))
                     Column(
                         Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Tokens.Blue).padding(20.dp),
                     ) {
@@ -168,6 +165,9 @@ fun PaywallScreen(
                             }
                         }
                     }
+
+                    Spacer(Modifier.height(16.dp))
+                    PaywallVideo(paused = ui.busy)
 
                     Spacer(Modifier.height(20.dp))
                     Text("EVERYTHING IN THE APP", style = fig(12, FontWeight.Bold, Tokens.Muted))
