@@ -303,6 +303,8 @@ object BillRender {
             cy += 10
             rule(cy, dashed = true)
             cy += 2
+            lines(if (receipt) "TERMS AND CONDITIONS" else "Terms and Conditions", 12.5f, 700, false, right - left, left, Paint.Align.LEFT, INK, 18f)
+            cy += 2
             r.terms.forEachIndexed { i, term -> lines("${i + 1}. $term", 11.5f, 400, false, right - left, left, Paint.Align.LEFT, MUTED, 15f) }
         }
 

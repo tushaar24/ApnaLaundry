@@ -359,6 +359,8 @@ function layout(ctx: CanvasRenderingContext2D, r: BillReceipt, draw: boolean, mi
     p.y += 10;
     rule({ dashed: true });
     p.y += 2;
+    lines(receipt ? "TERMS AND CONDITIONS" : "Terms and Conditions", 12.5, 700, BODY, right - left, left, "left", C.ink, 18);
+    p.y += 2;
     r.terms.forEach((term, i) => lines(`${i + 1}. ${term}`, 11.5, 400, BODY, right - left, left, "left", C.muted, 15));
   }
 
