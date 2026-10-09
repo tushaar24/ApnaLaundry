@@ -11,7 +11,7 @@ object Routes {
     const val CUSTOMERS = "customers?filter={filter}"
     const val EARNINGS = "earnings"
     const val SETTINGS = "settings"
-    const val NEW = "new?edit={edit}&cust={cust}&from={from}"
+    const val NEW = "new?edit={edit}&cust={cust}&from={from}&q={q}"
     const val BILL = "bill/{orderId}?from={from}"
     const val ORDER = "order/{orderId}?from={from}"
     const val CUSTOMER = "customer/{custId}?from={from}"
@@ -29,8 +29,9 @@ class AppNavigator(val nav: NavHostController) {
     }
 
     fun openRates(from: String) = nav.navigate("rates/$from")
-    fun openNewOrder(editId: Int? = null, custId: String? = null, from: String = "home") =
-        nav.navigate("new?edit=${editId ?: -1}&cust=${custId ?: ""}&from=$from")
+    // query: the customer search pre-filled (Home "New order for …").
+    fun openNewOrder(editId: Int? = null, custId: String? = null, from: String = "home", query: String = "") =
+        nav.navigate("new?edit=${editId ?: -1}&cust=${custId ?: ""}&from=$from&q=${android.net.Uri.encode(query)}")
     fun openBill(orderId: Int, from: String = "home") = nav.navigate("bill/$orderId?from=$from")
     fun openOrder(orderId: Int, from: String = "home") = nav.navigate("order/$orderId?from=$from")
     fun openCustomer(custId: String, from: String = "customers") = nav.navigate("customer/$custId?from=$from")

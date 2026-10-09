@@ -123,12 +123,14 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
                 navArgument("edit") { type = NavType.StringType; defaultValue = "-1" },
                 navArgument("cust") { type = NavType.StringType; defaultValue = "" },
                 navArgument("from") { type = NavType.StringType; defaultValue = "home" },
+                navArgument("q") { type = NavType.StringType; defaultValue = "" },
             ),
         ) { entry ->
             val edit = entry.arguments?.getString("edit")?.toIntOrNull()?.takeIf { it > 0 }
             val cust = entry.arguments?.getString("cust")?.takeIf { it.isNotBlank() }
             val from = entry.arguments?.getString("from") ?: "home"
-            NewOrderScreen(shopVm, navigator, editId = edit, presetCustId = cust, from = from)
+            val q = entry.arguments?.getString("q") ?: ""
+            NewOrderScreen(shopVm, navigator, editId = edit, presetCustId = cust, from = from, presetQuery = q)
         }
 
         composable(

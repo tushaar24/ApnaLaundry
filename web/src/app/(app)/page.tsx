@@ -10,7 +10,7 @@ import * as Repo from "@/data/repository";
 import { useAppStore, useLaundryState } from "@/data/store";
 import { Analytics } from "@/analytics/events";
 import { useScreenView } from "@/analytics/useScreenView";
-import { cls, FieldBox, PrimaryButton, SectionLabel } from "@/ui/basics";
+import { cls, PrimaryButton, SectionLabel } from "@/ui/basics";
 import { IcAdd, IcArrowDown, IcArrowUp, IcCalendar, IcEye, IcEyeOff, IcSearch, IcShirt } from "@/ui/icons";
 import { OrderCard } from "@/ui/orderCard";
 import { SheetHost } from "@/ui/sheets/host";
@@ -54,8 +54,28 @@ function HomeScreen() {
     return () => { clearInterval(id); document.removeEventListener("visibilitychange", tick); };
   }, []);
   const [filter, setFilter] = useState("all");
-  const [searching, setSearching] = useState(false);
+  // Search (all dates). Kept in the page address so Back from an order lands
+  // on the same results; the bottom nav opens a plain "/" and starts empty.
   const [query, setQuery] = useState("");
+  const searching = query.trim() !== "";
+  const restored = useRef(false);
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    const q = p.get("q") ?? "";
+    if (q) { setQuery(q); setTabPickup(p.get("tab") !== "del"); }
+    restored.current = true;
+  }, []);
+  useEffect(() => {
+    if (!restored.current) return;
+    const p = new URLSearchParams();
+    if (searching) { p.set("q", query); if (!tabPickup) p.set("tab", "del"); }
+    const url = p.size ? `/?${p}` : "/";
+    if (window.location.pathname + window.location.search !== url) window.history.replaceState(window.history.state, "", url);
+  }, [query, tabPickup, searching]);
+  const typeQuery = (v: string) => {
+    if (!searching && v.trim() !== "") Analytics.orderSearchOpened();
+    setQuery(v);
+  };
   const [active, setActive] = useState<ActiveSheet | null>(null);
 
   function act(o: Order) {
@@ -83,6 +103,7 @@ function HomeScreen() {
       order={o}
       pickupTab={tabPickup}
       late={late}
+      showDate={searching}
       onOpen={() => nav.openOrder(o.id)}
       onAct={() => act(o)}
       onMore={() => setActive({ kind: "menu", orderId: o.id })}
@@ -94,81 +115,76 @@ function HomeScreen() {
       ? pendingOf(state, tabPickup).filter((o) => pass(o, tabPickup, filter)).sort(byTodo)
       : [];
   const list = dayOrders(state, selDate, tabPickup).filter((o) => pass(o, tabPickup, filter)).sort(byTodo);
-  const results = searching ? searchResults(state, query) : [];
+  const results = searching ? searchResults(state, query, tabPickup) : [];
 
   return (
     <div className="relative flex min-h-dvh flex-col">
       {/* Header */}
       <div className="flex items-center gap-2 px-4 pb-2 pt-3.5">
-        {!searching ? (
-          <>
-            <h1 className="bric min-w-0 flex-1 truncate text-[22px]">{state.shop.name}</h1>
-            <button
-              type="button"
-              onClick={() => nav.openRates("home")}
-              className="h-11 rounded-full border border-cardborder bg-card px-3.5 text-[14px] font-bold"
-            >
-              ₹ Rates
-            </button>
-            <button
-              type="button"
-              aria-label="Search"
-              onClick={() => { setSearching(true); setQuery(""); Analytics.orderSearchOpened(); }}
-              className="flex size-11 items-center justify-center rounded-full border border-cardborder bg-card text-ink"
-            >
-              <IcSearch size={20} />
-            </button>
-          </>
-        ) : (
-          <>
-            <FieldBox
-              value={query}
-              onChange={setQuery}
-              placeholder="Name, phone or order no."
-              h={50}
-              borderColor="var(--color-blue)"
-              borderWidth={2}
-              className="flex-1"
-              autoFocus
-              leading={<span className="text-muted"><IcSearch size={20} /></span>}
-            />
-            <button type="button" onClick={() => { setSearching(false); setQuery(""); }} className="text-[15px] font-bold text-blue">
-              Close
-            </button>
-          </>
-        )}
+        <h1 className="bric min-w-0 flex-1 truncate text-[22px]">{state.shop.name}</h1>
+        <button
+          type="button"
+          onClick={() => nav.openRates("home")}
+          className="h-11 rounded-full border border-cardborder bg-card px-3.5 text-[14px] font-bold"
+        >
+          ₹ Rates
+        </button>
       </div>
 
-      {!searching && !noOrders ? (
+      {!noOrders ? (
         <>
-          <DashboardStrip
-            state={state}
-            selDate={selDate}
-            hidden={hidden}
-            onEye={toggleHide}
-            onOpen={() => nav.openEarnings()}
-          />
+          {!searching ? (
+            <DashboardStrip
+              state={state}
+              selDate={selDate}
+              hidden={hidden}
+              onEye={toggleHide}
+              onOpen={() => nav.openEarnings()}
+            />
+          ) : null}
           <TabRow state={state} pickup={tabPickup} selDate={selDate} onSelect={(pk) => { setTabPickup(pk); setFilter("all"); }} />
-          <DateStrip state={state} pickup={tabPickup} selDate={selDate} onPick={setSelDate} />
-          <FilterTabs state={state} pickup={tabPickup} selDate={selDate} filter={filter} onSelect={setFilter} />
+          {!searching ? (
+            <>
+              <DateStrip state={state} pickup={tabPickup} selDate={selDate} onPick={setSelDate} />
+              <FilterTabs state={state} pickup={tabPickup} selDate={selDate} filter={filter} onSelect={setFilter} />
+            </>
+          ) : null}
         </>
       ) : null}
 
-      {searching ? (
-        <p className="px-5 py-2.5 text-[14px] text-muted">
-          {query.trim() === ""
-            ? "Type a name, phone number or order number."
-            : `${results.length} result${results.length === 1 ? "" : "s"} from all dates`}
-        </p>
-      ) : null}
-
       <div className="relative flex-1">
-        {noOrders && !searching ? (
+        {noOrders ? (
           <EmptyHome onNewOrder={() => startNewOrder("empty_home")} />
         ) : (
-          <div className="flex flex-col gap-2.5 px-4 pb-[170px] pt-0.5">
+          <div className="flex flex-col gap-2.5 px-4 pb-[170px]">
+            <SearchBar value={query} onChange={typeQuery} />
             {searching ? (
-              <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">{results.map((o) => card(o, false))}</div>
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="min-w-0 flex-1 text-[14px] text-muted">
+                    {results.length} {results.length === 1 ? "order" : "orders"} in {tabPickup ? "Pickups" : "Deliveries"} · all dates
+                  </span>
+                  <button type="button" onClick={() => setQuery("")} className="h-9 shrink-0 text-[14px] font-bold text-blue">
+                    Clear search
+                  </button>
+                </div>
+                {results.length === 0 ? (
+                  <div className="flex w-full flex-col items-center gap-3 px-6 py-10 text-center">
+                    <span className="text-[17px] font-bold">No order found for “{query.trim()}”</span>
+                    <span className="text-[14px] text-muted">Check the spelling, or take a new order for them.</span>
+                    <button
+                      type="button"
+                      onClick={() => nav.openNewOrder({ from: "home", q: query.trim() })}
+                      className="mt-1 flex h-12 max-w-full items-center gap-2 rounded-xl bg-blue px-5 text-[15px] font-bold text-ondark"
+                    >
+                      <IcAdd size={20} />
+                      <span className="truncate">New order for “{query.trim()}”</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">{results.map((o) => card(o, false))}</div>
+                )}
+              </>
             ) : (
               <>
                 {pending.length > 0 ? (
@@ -199,7 +215,7 @@ function HomeScreen() {
         )}
 
         {/* New order FAB */}
-        {!searching && !noOrders ? (
+        {!noOrders ? (
           <button
             type="button"
             onClick={() => startNewOrder("home")}
@@ -254,6 +270,45 @@ function HowStep({ n, title, desc }: { n: number; title: string; desc: string })
         <span className="text-[16px] font-bold">{title}</span>
         <span className="text-[13px] text-muted">{desc}</span>
       </span>
+    </div>
+  );
+}
+
+// ---------- search ----------
+
+/** Search bar above the order cards: sticky, so it stays while scrolling orders. */
+function SearchBar({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const on = value.trim() !== "";
+  return (
+    <div className="sticky top-0 z-20 -mx-4 bg-bg px-4 pb-0.5 pt-1">
+      <div
+        className={cls(
+          "flex h-12 items-center gap-2.5 rounded-[14px] border-[1.5px] bg-card pl-3.5 pr-1.5",
+          on ? "border-blue" : "border-fieldborder",
+        )}
+      >
+        <span className={on ? "text-blue" : "text-muted"}><IcSearch size={20} /></span>
+        <input
+          type="search"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Search name, phone or order no."
+          aria-label="Search orders"
+          enterKeyHint="search"
+          autoComplete="off"
+          className="h-full min-w-0 flex-1 bg-transparent text-[16px] font-semibold outline-none placeholder:font-normal placeholder:text-faint [&::-webkit-search-cancel-button]:hidden"
+        />
+        {value !== "" ? (
+          <button
+            type="button"
+            onClick={() => onChange("")}
+            aria-label="Clear search"
+            className="flex size-9 shrink-0 items-center justify-center"
+          >
+            <span className="flex size-6 items-center justify-center rounded-full bg-neutralfill text-[13px] font-bold text-inksecondary">✕</span>
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -510,18 +565,34 @@ function tabTodo(state: LaundryState, pickup: boolean, selDate: string): number 
   return base + (selDate === AppDate.today() ? pendingOf(state, pickup).length : 0);
 }
 
-function searchResults(state: LaundryState, query: string): Order[] {
+/** Deliveries: ready first, then not ready, not picked up, delivered. */
+const DEL_RANK: Record<OrderStatus, number> = { READY: 0, RECEIVED: 1, CREATED: 2, DELIVERED: 3, CANCELLED: 4 };
+
+/**
+ * Search across all dates: name (any part), phone (3+ digits), order no.
+ * (2+ digits, "#" optional). Pickups: to-do first, then newest pickup.
+ * Deliveries: no cancelled; ready first, then earliest delivery date.
+ */
+function searchResults(state: LaundryState, query: string, pickup: boolean): Order[] {
   const qs = query.trim().toLowerCase();
   if (qs === "") return [];
   const qd = qs.replace(/\D/g, "");
+  const qn = qs.replace(/^#\s*/, "");
   return state.orders
     .filter((o) => {
+      if (!pickup && o.status === "CANCELLED") return false;
       const c = Sel.customer(state, o.custId);
       return (
         c.name.toLowerCase().includes(qs) ||
         (qd.length >= 3 && c.phone.includes(qd)) ||
-        String(o.id).includes(qs)
+        (qd.length >= 2 && (String(o.id).includes(qn) || Sel.orderNo(o).toLowerCase().includes(qn)))
       );
     })
-    .sort(byTodo);
+    .sort((a, b) =>
+      pickup
+        ? RANK[a.status] - RANK[b.status] || b.pickupDate.localeCompare(a.pickupDate) || b.id - a.id
+        : DEL_RANK[a.status] - DEL_RANK[b.status] ||
+          (a.deliveryDate || "9999").localeCompare(b.deliveryDate || "9999") ||
+          a.id - b.id,
+    );
 }

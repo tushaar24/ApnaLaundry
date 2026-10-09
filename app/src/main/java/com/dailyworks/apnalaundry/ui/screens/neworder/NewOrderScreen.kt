@@ -94,6 +94,7 @@ fun NewOrderScreen(
     editId: Int?,
     presetCustId: String?,
     from: String,
+    presetQuery: String = "", // from Home "New order for …"
 ) {
     val state by shopVm.state.collectAsStateWithLifecycle()
     val services = state.services
@@ -101,7 +102,7 @@ fun NewOrderScreen(
     val editingOrder = editId?.let { Selectors.order(state, it) }
 
     var custId by remember { mutableStateOf(presetCustId) }
-    var query by remember { mutableStateOf("") }
+    var query by remember { mutableStateOf(presetQuery) }
     var pickup by remember { mutableStateOf(Route.SHOP) }
     var delivery by remember { mutableStateOf(Route.SHOP) }
     var pickupDate by remember { mutableStateOf(AppDate.TODAY) }
@@ -361,11 +362,11 @@ fun NewOrderScreen(
 
             // ---- clothes ----
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth().padding(end = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     SectionLabel("Clothes")
                     Row(
-                        Modifier.height(32.dp).rounded(999.dp).background(Tokens.BlueLight).tap { editingRates = true }.padding(horizontal = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        Modifier.height(36.dp).rounded(999.dp).background(Tokens.BlueLight).tap { editingRates = true }.padding(horizontal = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         Icon(Icons.Outlined.Edit, null, tint = Tokens.Blue, modifier = Modifier.size(14.dp))
                         Text("Edit services", style = fig(13, FontWeight.Bold, Tokens.Blue))

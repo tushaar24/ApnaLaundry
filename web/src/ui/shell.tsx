@@ -151,8 +151,10 @@ export function useNav() {
     openHome: (opts?: { replace?: boolean }) =>
       (opts?.replace ? router.replace : router.push)("/"),
     openRates: (from: string) => router.push(`/rates?from=${from}`),
-    openNewOrder: (opts?: { editId?: number; custId?: string; from?: string }) => {
+    // q: the customer search pre-filled (Home "New order for …").
+    openNewOrder: (opts?: { editId?: number; custId?: string; from?: string; q?: string }) => {
       const p = new URLSearchParams();
+      if (opts?.q) p.set("q", opts.q);
       if (opts?.editId) p.set("edit", String(opts.editId));
       if (opts?.custId) p.set("cust", opts.custId);
       if (opts?.from) p.set("from", opts.from);

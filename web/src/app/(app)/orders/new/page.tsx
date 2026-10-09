@@ -53,7 +53,7 @@ function NewOrderScreen() {
   const editingOrder = editId != null ? Sel.order(state, editId) : undefined;
 
   const [custId, setCustId] = useState<string | null>(presetCustId);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(params.get("q") ?? ""); // from Home "New order for …"
   const [pickup, setPickup] = useState<Route>("SHOP");
   const [delivery, setDelivery] = useState<Route>("SHOP");
   const [pickupDate, setPickupDate] = useState(AppDate.today());
@@ -392,12 +392,12 @@ function NewOrderScreen() {
 
           {/* ---- clothes ---- */}
           <div className="flex flex-col gap-2.5">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between gap-2 pr-1">
               <SectionLabel text="Clothes" />
               <button
                 type="button"
                 onClick={() => setEditingRates(true)}
-                className="flex h-8 items-center gap-1 rounded-full bg-bluelight px-3 text-[13px] font-bold text-blue"
+                className="flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-bluelight px-3.5 text-[13px] font-bold text-blue"
               >
                 <IcEdit size={14} /> Edit services
               </button>

@@ -10,12 +10,14 @@ import { IcCall, IcHome, IcMore, IcStore } from "./icons";
 
 /** Port of ui/components/OrderCard.kt — the home-list card with next action. */
 export function OrderCard({
-  state, order, pickupTab, late = false, onOpen, onAct, onMore,
+  state, order, pickupTab, late = false, showDate = false, onOpen, onAct, onMore,
 }: {
   state: LaundryState;
   order: Order;
   pickupTab: boolean;
   late?: boolean;
+  /** Search results span all dates: say which day in the meta line. */
+  showDate?: boolean;
   onOpen: () => void;
   onAct: () => void;
   onMore: () => void;
@@ -72,8 +74,16 @@ export function OrderCard({
         ? "Cancelled" + (o.cancelReason ? ` · ${o.cancelReason}` : "")
         : "";
 
+  const when = !showDate
+    ? ""
+    : pickupTab
+      ? `Pickup ${AppDate.plain(o.pickupDate)} · `
+      : o.deliveryDate
+        ? `Delivery ${AppDate.plain(o.deliveryDate)} · `
+        : "No delivery date · ";
   const meta =
     `#${Sel.orderNo(o)} · ` +
+    when +
     (counted
       ? `${Sel.itemsLabel(o)} · ${Sel.svcLabel(o)}`
       : o.pickup === "HOME" && o.status === "CREATED"

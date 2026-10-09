@@ -35,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -78,14 +79,16 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.ui.platform.LocalDensity
 import com.dailyworks.apnalaundry.ui.components.showDatePicker
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
     val state by shopVm.state.collectAsStateWithLifecycle()
     val hidden by shopVm.hideAmounts.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
-    var tabPickup by remember { mutableStateOf(true) }
-    var selDate by remember { mutableStateOf(AppDate.TODAY) }
+    // Saveable: Back from an order (opened from search results) lands on the same view.
+    var tabPickup by rememberSaveable { mutableStateOf(true) }
+    var selDate by rememberSaveable { mutableStateOf(AppDate.TODAY) }
     // Past midnight (app left open overnight): move "Today" to the new day.
     LaunchedEffect(Unit) {
         var today = AppDate.TODAY
@@ -98,9 +101,14 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
             }
         }
     }
-    var filter by remember { mutableStateOf("all") }
-    var searching by remember { mutableStateOf(false) }
-    var query by remember { mutableStateOf("") }
+    var filter by rememberSaveable { mutableStateOf("all") }
+    // Search (all dates). The bottom nav clears it, so coming back starts empty.
+    var query by rememberSaveable { mutableStateOf("") }
+    val searching = query.isNotBlank()
+    val typeQuery: (String) -> Unit = { v ->
+        if (!searching && v.isNotBlank()) Analytics.orderSearchOpened()
+        query = v
+    }
     var active by remember { mutableStateOf<ActiveSheet?>(null) }
 
     val startNewOrder: (String) -> Unit = { from -> navigator.openNewOrder(from = from) }
@@ -119,48 +127,65 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars)) {
         // Header
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (!searching) {
-                Text(state.shop.name, style = bric(22, FontWeight.Bold), modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Box(Modifier.height(44.dp).rounded(999.dp).background(Tokens.Card).border(1.dp, Tokens.CardBorder, RoundedCornerShape(999.dp)).tap { navigator.openRates("home") }.padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
-                    Text("₹ Rates", style = fig(14, FontWeight.Bold))
-                }
-                RoundIcon(Icons.Filled.Search, "Search") { searching = true; query = ""; Analytics.orderSearchOpened() }
-            } else {
-                FieldBox(query, { query = it }, placeholder = "Name, phone or order no.", modifier = Modifier.weight(1f), height = 50.dp, borderColor = Tokens.Blue, borderWidth = 2.dp, leading = { Icon(Icons.Filled.Search, null, tint = Tokens.Muted, modifier = Modifier.size(20.dp)) })
-                Text("Close", style = fig(15, FontWeight.Bold, Tokens.Blue), modifier = Modifier.tap { searching = false; query = "" })
+            Text(state.shop.name, style = bric(22, FontWeight.Bold), modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Box(Modifier.height(44.dp).rounded(999.dp).background(Tokens.Card).border(1.dp, Tokens.CardBorder, RoundedCornerShape(999.dp)).tap { navigator.openRates("home") }.padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+                Text("₹ Rates", style = fig(14, FontWeight.Bold))
             }
         }
 
         val noOrders = state.orders.isEmpty()
 
-        if (searching) {
-            // handled below
-        } else if (noOrders) {
-            // brand-new shop: the empty state below carries the whole screen
-        } else {
-            DashboardStrip(state, selDate, hidden, onEye = shopVm::toggleHideAmounts, onOpen = { navigator.openEarnings() })
+        if (!noOrders) {
+            // While searching only the tabs stay, so switching tab re-runs the search there.
+            if (!searching) DashboardStrip(state, selDate, hidden, onEye = shopVm::toggleHideAmounts, onOpen = { navigator.openEarnings() })
             TabRow(state, tabPickup, selDate) { tabPickup = it; filter = "all" }
-            DateStrip(state, tabPickup, selDate) { selDate = it }
-            FilterTabs(state, tabPickup, selDate, filter) { filter = it }
-        }
-
-        if (searching) {
-            val note = if (query.isBlank()) "Type a name, phone number or order number." else run {
-                val n = searchResults(state, query).size
-                "$n result${if (n == 1) "" else "s"} from all dates"
+            if (!searching) {
+                DateStrip(state, tabPickup, selDate) { selDate = it }
+                FilterTabs(state, tabPickup, selDate, filter) { filter = it }
             }
-            Text(note, style = fig(14, color = Tokens.Muted), modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp))
         }
 
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            if (noOrders && !searching) {
+            if (noOrders) {
                 EmptyHome { startNewOrder("empty_home") }
                 return@Box
             }
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 170.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, bottom = 170.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                // Sticky: stays on screen while scrolling orders.
+                stickyHeader(key = "search") {
+                    Box(Modifier.fillMaxWidth().background(Tokens.Bg).padding(top = 4.dp, bottom = 2.dp)) {
+                        SearchBar(query, typeQuery)
+                    }
+                }
                 if (searching) {
-                    val results = searchResults(state, query)
-                    items(results) { o -> OrderCard(state, o, tabPickup, false, { navigator.openOrder(o.id) }, { act(o) }, { active = ActiveSheet.Menu(o.id) }, { dial(context, o, state) }) }
+                    val results = searchResults(state, query, tabPickup)
+                    item(key = "count") {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                "${results.size} ${if (results.size == 1) "order" else "orders"} in ${if (tabPickup) "Pickups" else "Deliveries"} · all dates",
+                                style = fig(14, color = Tokens.Muted), modifier = Modifier.weight(1f),
+                            )
+                            Text("Clear search", style = fig(14, FontWeight.Bold, Tokens.Blue), modifier = Modifier.tap { query = "" }.padding(vertical = 8.dp))
+                        }
+                    }
+                    if (results.isEmpty()) {
+                        item(key = "none") {
+                            val q = query.trim()
+                            Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 40.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Text("No order found for “$q”", style = fig(17, FontWeight.Bold), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                                Text("Check the spelling, or take a new order for them.", style = fig(14, color = Tokens.Muted), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                                Row(
+                                    Modifier.padding(top = 4.dp).height(48.dp).rounded(12.dp).background(Tokens.Blue)
+                                        .tap { navigator.openNewOrder(from = "home", query = q) }.padding(horizontal = 20.dp),
+                                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    Icon(Icons.Filled.Add, null, tint = Tokens.OnDark, modifier = Modifier.size(20.dp))
+                                    Text("New order for “$q”", style = fig(15, FontWeight.Bold, Tokens.OnDark), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                            }
+                        }
+                    }
+                    items(results) { o -> OrderCard(state, o, tabPickup, false, { navigator.openOrder(o.id) }, { act(o) }, { active = ActiveSheet.Menu(o.id) }, { dial(context, o, state) }, showDate = true) }
                     return@LazyColumn
                 }
 
@@ -192,7 +217,7 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
             }
 
             // New order FAB
-            if (!searching) {
+            run {
                 Row(Modifier.align(Alignment.BottomEnd).padding(16.dp).height(58.dp).rounded(999.dp).background(Tokens.Blue).tap { startNewOrder("home") }.padding(start = 18.dp, end = 22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(Icons.Filled.Add, null, tint = Tokens.OnDark, modifier = Modifier.size(22.dp))
                     Text("New order", style = fig(17, FontWeight.Bold, Tokens.OnDark))
@@ -200,10 +225,44 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
             }
         }
 
-        BottomNav(NavTab.ORDERS, navigator::selectTab)
+        BottomNav(NavTab.ORDERS) { query = ""; navigator.selectTab(it) }
     }
 
     SheetHost(active, state, shopVm, navigator, onOpen = { active = it }, onDismiss = { active = null })
+}
+
+// ---------- search ----------
+/** Search bar above the order cards: 48dp, white, blue border while a search is active. */
+@Composable
+private fun SearchBar(value: String, onChange: (String) -> Unit) {
+    val on = value.isNotBlank()
+    Row(
+        Modifier.fillMaxWidth().height(48.dp).rounded(14.dp).background(Tokens.Card)
+            .border(1.5.dp, if (on) Tokens.Blue else Tokens.FieldBorder, RoundedCornerShape(14.dp))
+            .padding(start = 14.dp, end = 6.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Icon(Icons.Filled.Search, null, tint = if (on) Tokens.Blue else Tokens.Muted, modifier = Modifier.size(20.dp))
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+            if (value.isEmpty()) Text("Search name, phone or order no.", style = fig(16, color = Tokens.Faint), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            androidx.compose.foundation.text.BasicTextField(
+                value = value,
+                onValueChange = onChange,
+                singleLine = true,
+                textStyle = fig(16, FontWeight.SemiBold),
+                cursorBrush = androidx.compose.ui.graphics.SolidColor(Tokens.Blue),
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        if (value.isNotEmpty()) {
+            Box(Modifier.size(36.dp).tap { onChange("") }, contentAlignment = Alignment.Center) {
+                Box(Modifier.size(24.dp).rounded(999.dp).background(Tokens.NeutralFill), contentAlignment = Alignment.Center) {
+                    Text("✕", style = fig(13, FontWeight.Bold, Tokens.InkSecondary))
+                }
+            }
+        }
+    }
 }
 
 // ---------- empty state (brand-new shop) ----------
@@ -419,14 +478,30 @@ private fun tabTodo(state: LaundryState, pickup: Boolean, selDate: String): Int 
     return base + if (selDate == AppDate.TODAY) pendingOf(state, pickup).size else 0
 }
 
-private fun searchResults(state: LaundryState, query: String): List<Order> {
+/** Deliveries: ready first, then not ready, not picked up, delivered. */
+private fun delRank(s: OrderStatus) = when (s) {
+    OrderStatus.READY -> 0; OrderStatus.RECEIVED -> 1; OrderStatus.CREATED -> 2; OrderStatus.DELIVERED -> 3; OrderStatus.CANCELLED -> 4
+}
+
+/**
+ * Search across all dates: name (any part), phone (3+ digits), order no.
+ * (2+ digits, "#" optional). Pickups: to-do first, then newest pickup.
+ * Deliveries: no cancelled; ready first, then earliest delivery date.
+ */
+private fun searchResults(state: LaundryState, query: String, pickup: Boolean): List<Order> {
     val qs = query.trim().lowercase()
     if (qs.isEmpty()) return emptyList()
     val qd = qs.filter { it.isDigit() }
+    val qn = qs.removePrefix("#").trim()
     return state.orders.filter { o ->
+        if (!pickup && o.status == OrderStatus.CANCELLED) return@filter false
         val c = Selectors.customer(state, o.custId)
-        c.name.lowercase().contains(qs) || (qd.length >= 3 && c.phone.contains(qd)) || o.id.toString().contains(qs)
-    }.sortedWith(byTodo())
+        c.name.lowercase().contains(qs) || (qd.length >= 3 && c.phone.contains(qd)) ||
+            (qd.length >= 2 && (o.id.toString().contains(qn) || o.no().lowercase().contains(qn)))
+    }.sortedWith(
+        if (pickup) compareBy<Order> { rank(it.status) }.thenByDescending { it.pickupDate }.thenByDescending { it.id }
+        else compareBy<Order> { delRank(it.status) }.thenBy { it.deliveryDate.ifBlank { "9999" } }.thenBy { it.id },
+    )
 }
 
 private fun dial(context: android.content.Context, o: Order, state: LaundryState) {

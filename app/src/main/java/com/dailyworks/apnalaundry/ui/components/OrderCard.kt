@@ -45,6 +45,8 @@ fun OrderCard(
     onAct: () -> Unit,
     onMore: () -> Unit,
     onCall: () -> Unit,
+    /** Search results span all dates: say which day in the meta line. */
+    showDate: Boolean = false,
 ) {
     val o = order
     val c = Selectors.customer(state, o.custId)
@@ -97,7 +99,13 @@ fun OrderCard(
         else -> ""
     }
 
-    val meta = "#${o.no()} · " + if (counted) "${Selectors.itemsLabel(o)} · ${Selectors.svcLabel(o)}"
+    val whenText = when {
+        !showDate -> ""
+        pickupTab -> "Pickup ${AppDate.plain(o.pickupDate)} · "
+        o.deliveryDate.isNotBlank() -> "Delivery ${AppDate.plain(o.deliveryDate)} · "
+        else -> "No delivery date · "
+    }
+    val meta = "#${o.no()} · " + whenText + if (counted) "${Selectors.itemsLabel(o)} · ${Selectors.svcLabel(o)}"
     else if (o.pickup == Route.HOME && o.status == OrderStatus.CREATED) "Clothes will be counted at pickup"
     else (if (o.pieces > 0) "${o.pieces} pieces · " else "") + "Bill not made yet"
 
