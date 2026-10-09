@@ -1,6 +1,7 @@
 import * as AppDate from "@/core/appdate";
-import { rupees } from "@/core/money";
-import { amtOf, clothesOf } from "@/domain/laundryMath";
+import { rupees, rupeesPaise } from "@/core/money";
+import { clothesOf, gstOf } from "@/domain/laundryMath";
+import { gstBillNote, gstDefaults, halfRate, roundOffValue } from "@/domain/gst";
 import type { BillDetails, BillTemplate, LaundryState, Order, OrderLine, Service, Shop } from "@/domain/models";
 import {
   billDetailsFrom, fmtBillPhone, isGstinValid, isUpiValid, sampleOrder, termLines, upiPayload,
@@ -41,14 +42,16 @@ export interface BillReceipt {
     gstin: string; // only when valid
     logoId: string;
   };
+  taxInvoice: boolean; // "TAX INVOICE" over the bill number: GST on the order + a valid GSTIN
   billNo: string; // "Bill #1001"
   date: string; // "Fri, 9 Oct"
   customer: { name: string; phone: string };
   readyBy: string; // "Ready by Sat, 10 Oct · 6 PM" / "Delivered Sat, 10 Oct" / ""
   lines: ReceiptLine[];
   subtotal: string;
-  extras: ReceiptRow[]; // express, pickup/delivery, discount
+  extras: ReceiptRow[]; // express, pickup/delivery, discount, then exclusive GST (taxable, CGST, SGST, round off)
   total: string;
+  gstNote: string; // inclusive GST: "Price includes GST 18%: …" under the total ("" = none)
   payStatus: string; // real bills: "To pay ₹X" / "Paid ₹Y · to pay ₹Z" / "Paid in full"; "" on the preview
   upi: ReceiptUpi | null;
   terms: string[];
@@ -58,7 +61,7 @@ export interface BillReceipt {
 export type BillOrder = Pick<
   Order,
   "id" | "status" | "createdOn" | "deliveryDate" | "doneDate" | "express" | "exAmt" | "fee" | "discount" | "lines"
-> & Partial<Pick<Order, "paid" | "deliveryTime" | "serialNo">>;
+> & Partial<Pick<Order, "paid" | "deliveryTime" | "serialNo" | "gstOn" | "gstPct" | "gstMode">>;
 
 /** The shop fields a bill shows (older servers send only name + phone). */
 export type BillShop = { name: string; phone: string } & Partial<BillDetails>;
@@ -85,7 +88,7 @@ export function receiptFromSample(d: SampleBillData): BillReceipt {
   }));
   const shop: Shop = {
     name: d.shop.name, phone: d.shop.phone, expressPct: d.shop.expressPct, onboardingStep: "",
-    ...billDetailsFrom(d.shop, d.shop.phone),
+    ...billDetailsFrom(d.shop, d.shop.phone), ...gstDefaults(),
   };
   return sampleReceipt(shop, sampleOrder(services, shop.expressPct, 1001), shop.billTemplate);
 }
@@ -133,7 +136,8 @@ export function sampleReceipt(shop: Shop, order: Order, template: BillTemplate):
 
 export function receiptFrom({ shop, customer: c, order: o }: BillData, opts: ReceiptOptions = {}): BillReceipt {
   const d = billDetailsFrom(shop, shop.phone);
-  const total = amtOf(o);
+  const gst = gstOf(o);
+  const total = gst.total;
   const phone = (c.phone || "").replace(/\D/g, "").slice(-10);
 
   const extras: ReceiptRow[] = [];
@@ -143,6 +147,13 @@ export function receiptFrom({ shop, customer: c, order: o }: BillData, opts: Rec
   }
   if (o.fee > 0) extras.push({ label: "Pickup / delivery", value: `+ ${rupees(o.fee)}` });
   if (o.discount > 0) extras.push({ label: "Discount", value: `− ${rupees(o.discount)}`, discount: true });
+  if (gst.on && gst.mode === "excl") {
+    extras.push({ label: "Taxable value", value: rupeesPaise(gst.taxablePaise) });
+    extras.push({ label: `CGST @${halfRate(gst.pct)}%`, value: `+ ${rupeesPaise(gst.cgstPaise)}` });
+    extras.push({ label: `SGST @${halfRate(gst.pct)}%`, value: `+ ${rupeesPaise(gst.sgstPaise)}` });
+    if (gst.roundOffPaise !== 0) extras.push({ label: "Round off", value: roundOffValue(gst) });
+  }
+  const gstin = isGstinValid(d.gstin) ? d.gstin : "";
 
   return {
     template: opts.template ?? d.billTemplate,
@@ -150,9 +161,10 @@ export function receiptFrom({ shop, customer: c, order: o }: BillData, opts: Rec
       name: shop.name,
       phone: fmtBillPhone(d.billPhone),
       address: d.address,
-      gstin: isGstinValid(d.gstin) ? d.gstin : "",
+      gstin,
       logoId: d.logoId,
     },
+    taxInvoice: gst.on && gstin !== "",
     billNo: `Bill #${Sel.orderNo(o)}`,
     date: AppDate.plain(o.createdOn),
     customer: { name: c.name, phone: phone ? `+91 ${Sel.fmtPhone(phone)}` : "" },
@@ -161,6 +173,7 @@ export function receiptFrom({ shop, customer: c, order: o }: BillData, opts: Rec
     subtotal: rupees(clothesOf(o)),
     extras,
     total: rupees(total),
+    gstNote: gst.on && gst.mode === "incl" ? gstBillNote(gst) : "",
     payStatus: opts.sample || o.paid == null ? "" : payStatusOf(o.paid, total),
     upi: isUpiValid(d.upiId)
       ? { id: d.upiId, payload: upiPayload(d.upiId, shop.name, total, o.id), amount: rupees(total) }

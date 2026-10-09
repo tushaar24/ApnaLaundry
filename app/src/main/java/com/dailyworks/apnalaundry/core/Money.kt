@@ -1,5 +1,6 @@
 package com.dailyworks.apnalaundry.core
 
+import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToLong
 
@@ -21,6 +22,9 @@ object Money {
     fun rupees(value: Int): String = "₹" + grouping(abs(value).toLong())
     fun rupees(value: Long): String = "₹" + grouping(abs(value))
     fun rupees(value: Double): String = "₹" + grouping(abs(value).roundToLong())
+
+    /** ₹ with paise, for GST lines: ₹1,234.56 (absolute value; callers prepend +/−). */
+    fun paise(p: Long): String = "₹" + grouping(abs(p) / 100) + "." + String.format(Locale.US, "%02d", abs(p) % 100)
 
     /** Compact form for charts: 2.3k, 980. */
     fun short(value: Int): String =

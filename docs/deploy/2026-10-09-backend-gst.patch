@@ -1,0 +1,101 @@
+diff -ruN backend-orig/prisma/migrations/20261009180000_laundry_gst/migration.sql backend-live/prisma/migrations/20261009180000_laundry_gst/migration.sql
+--- backend-orig/prisma/migrations/20261009180000_laundry_gst/migration.sql	1970-01-01 05:30:00
++++ backend-live/prisma/migrations/20261009180000_laundry_gst/migration.sql	2026-10-09 23:10:08
+@@ -0,0 +1,11 @@
++-- GST per order (on / rate % / "excl" = added on top, "incl" = already in the
++-- price) and the shop's last-used GST setting (pre-fills every new order).
++-- AlterTable
++ALTER TABLE "laundry_orders" ADD COLUMN     "gst_mode" TEXT NOT NULL DEFAULT 'excl',
++ADD COLUMN     "gst_on" BOOLEAN NOT NULL DEFAULT false,
++ADD COLUMN     "gst_pct" DOUBLE PRECISION NOT NULL DEFAULT 0;
++
++-- AlterTable
++ALTER TABLE "laundry_shops" ADD COLUMN     "gst_mode" TEXT NOT NULL DEFAULT 'excl',
++ADD COLUMN     "gst_on" BOOLEAN NOT NULL DEFAULT false,
++ADD COLUMN     "gst_pct" DOUBLE PRECISION NOT NULL DEFAULT 18;
+diff -ruN backend-orig/prisma/schema.prisma backend-live/prisma/schema.prisma
+--- backend-orig/prisma/schema.prisma	2026-10-09 23:10:08
++++ backend-live/prisma/schema.prisma	2026-10-09 23:10:08
+@@ -262,6 +262,10 @@
+   termsCustom     String      @default("") @map("terms_custom")
+   billTemplate    String      @default("classic") @map("bill_template") // classic | bold | receipt
+   onboardingStep  String      @default("") @map("onboarding_step") // "" = unknown (pre-2026-10-09 shop)
++  // Last-used GST setting (2026-10-09): the app pre-fills every new order with it.
++  gstOn           Boolean     @default(false) @map("gst_on")
++  gstPct          Float       @default(18) @map("gst_pct")
++  gstMode         String      @default("excl") @map("gst_mode")
+   updatedAt       BigInt      @map("updated_at")
+   serverUpdatedAt DateTime    @default(now()) @updatedAt @map("server_updated_at") @db.Timestamptz(6)
+ 
+@@ -351,6 +355,10 @@
+   serialNo        String      @default("") @map("serial_no") // owner-set bill number ("" = the order id)
+   exPct           Int         @default(0) @map("ex_pct") // express as % of clothes (0 = the fixed exAmt)
+   discPct         Int         @default(0) @map("disc_pct") // discount as % of clothes (0 = the fixed discount)
++  // GST on the order (2026-10-09). Older clients omit these; sync/push writes them only when sent.
++  gstOn           Boolean     @default(false) @map("gst_on")
++  gstPct          Float       @default(0) @map("gst_pct") // 18, 5, 12 … may be fractional
++  gstMode         String      @default("excl") @map("gst_mode") // excl = added on top of the price | incl = already in it
+   deleted         Boolean     @default(false)
+   updatedAt       BigInt      @map("updated_at")
+   serverUpdatedAt DateTime    @default(now()) @updatedAt @map("server_updated_at") @db.Timestamptz(6)
+diff -ruN backend-orig/routes/laundry.js backend-live/routes/laundry.js
+--- backend-orig/routes/laundry.js	2026-10-09 23:10:08
++++ backend-live/routes/laundry.js	2026-10-09 23:10:08
+@@ -106,6 +106,10 @@
+       // Same for the % extras (older clients send only the ₹ amounts).
+       ...(r.exPct !== undefined ? { exPct: Math.max(0, Math.min(1000, asInt(r.exPct))) } : {}),
+       ...(r.discPct !== undefined ? { discPct: Math.max(0, Math.min(100, asInt(r.discPct))) } : {}),
++      // GST on the order (clients before the GST release omit it — keep what is stored).
++      ...(r.gstOn !== undefined ? { gstOn: Boolean(r.gstOn) } : {}),
++      ...(r.gstPct !== undefined ? { gstPct: shopDetails.gstPct(r.gstPct) } : {}),
++      ...(r.gstMode !== undefined ? { gstMode: shopDetails.gstMode(r.gstMode) } : {}),
+       deleted: Boolean(r.deleted),
+     }),
+   },
+diff -ruN backend-orig/services/laundry-bill-links.js backend-live/services/laundry-bill-links.js
+--- backend-orig/services/laundry-bill-links.js	2026-10-09 23:10:08
++++ backend-live/services/laundry-bill-links.js	2026-10-09 23:10:08
+@@ -83,6 +83,9 @@
+       exAmt: order.exAmt,
+       fee: order.fee,
+       discount: order.discount,
++      gstOn: order.gstOn,
++      gstPct: order.gstPct,
++      gstMode: order.gstMode,
+       lines: parseLines(order.linesJson),
+     },
+   };
+diff -ruN backend-orig/services/laundry-shop-details.js backend-live/services/laundry-shop-details.js
+--- backend-orig/services/laundry-shop-details.js	2026-10-09 23:10:08
++++ backend-live/services/laundry-shop-details.js	2026-10-09 23:10:08
+@@ -8,6 +8,13 @@
+ 
+ const str = (v, max) => String(v === null || v === undefined ? '' : v).trim().slice(0, max);
+ 
++// GST rate 0–100 (two decimals) and type: 'excl' (added on top) | 'incl' (already in the price).
++const gstPct = (v) => {
++  const n = Number(v);
++  return Number.isFinite(n) && n >= 0 ? Math.min(100, Math.round(n * 100) / 100) : 0;
++};
++const gstMode = (v) => (v === 'incl' ? 'incl' : 'excl');
++
+ // Sanitisers per synced key. A key a client doesn't send is left untouched, so
+ // app builds from before these fields can't wipe them.
+ const FIELDS = {
+@@ -20,6 +27,10 @@
+   termsCustom: (v) => str(v, 80),
+   billTemplate: (v) => (TEMPLATES.includes(String(v)) ? String(v) : 'classic'),
+   onboardingStep: (v) => (STEPS.includes(String(v)) ? String(v) : ''),
++  // Last-used GST setting (the app pre-fills new orders with it).
++  gstOn: (v) => Boolean(v),
++  gstPct,
++  gstMode,
+ };
+ 
+ /** The bill-detail keys present in a pushed shop, sanitised. */
+@@ -48,4 +59,4 @@
+   };
+ }
+ 
+-module.exports = { pickDetails, billShop };
++module.exports = { pickDetails, billShop, gstPct, gstMode };

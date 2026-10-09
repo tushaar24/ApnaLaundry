@@ -1,3 +1,5 @@
+import type { GstMode } from "./gst";
+
 /** Pure domain models. Port of domain/Models.kt — same enums and shapes. */
 
 export type PricingMode = "PIECE" | "WEIGHT";
@@ -78,6 +80,10 @@ export interface Order {
   exPct: number; // express as % of the clothes (0 = exAmt is a fixed ₹ amount)
   discPct: number; // discount as % of the clothes (0 = discount is a fixed ₹ amount)
   pieces: number; // optional piece count for quick bills
+  // GST on this order (see domain/gst). Orders from before GST have gstOn = false.
+  gstOn: boolean;
+  gstPct: number; // 18, 5, 12 … may be fractional
+  gstMode: GstMode; // "excl" = added on top of the price, "incl" = already in the price
   lines: OrderLine[];
 }
 
@@ -120,6 +126,10 @@ export interface Shop extends BillDetails {
   phone: string;
   expressPct: number;
   onboardingStep: OnboardingStep;
+  // The last-used GST setting: pre-fills every new order (every change on a new order saves it back).
+  gstOn: boolean;
+  gstPct: number;
+  gstMode: GstMode;
 }
 
 export interface DayClose {

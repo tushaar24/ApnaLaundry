@@ -4,6 +4,10 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import * as AppDate from "@/core/appdate";
 import { rupees } from "@/core/money";
+import { isGstinValid } from "@/domain/billDetails";
+import {
+  GST_RATE_CHIPS, fmtPct, gstCalc, gstHint, gstInclusiveLine, gstPctFrom, gstRowLabel, gstRowValue, roundOffValue, type GstMode,
+} from "@/domain/gst";
 import { expressAuto } from "@/domain/laundryMath";
 import type { Route } from "@/domain/models";
 import * as Sel from "@/domain/selectors";
@@ -11,7 +15,7 @@ import * as Repo from "@/data/repository";
 import { useAppStore, useLaundryState } from "@/data/store";
 import { Analytics } from "@/analytics/events";
 import {
-  AppCard, Avatar, cls, DateTimeBox, Divider, FieldBox, PrimaryButton, SectionLabel, Toggle, TopBar,
+  AppCard, Avatar, cls, DateTimeBox, Divider, FieldBox, PillChip, PrimaryButton, SectionLabel, Toggle, TopBar,
 } from "@/ui/basics";
 import { ClothesEditor, useClothesState } from "@/ui/clothes";
 import { RatesView } from "@/ui/screens/rates";
@@ -72,6 +76,11 @@ function NewOrderScreen() {
   const [editingRates, setEditingRates] = useState(false); // rate list opened over this form
   const [discMode, setDiscMode] = useState<"pct" | "amt">("amt");
   const [discountText, setDiscountText] = useState("");
+  // GST: pre-filled from the shop's last-used setting; on a NEW order every
+  // change is saved back as the default (an edit changes this order only).
+  const [gstOn, setGstOn] = useState(state.shop.gstOn);
+  const [gstPctText, setGstPctText] = useState(state.shop.gstPct > 0 ? fmtPct(state.shop.gstPct) : "");
+  const [gstMode, setGstMode] = useState<GstMode>(state.shop.gstMode);
   const [serialText, setSerialText] = useState(""); // "" = the order id
   const [serialTouched, setSerialTouched] = useState(false);
   const [quickAmt, setQuickAmt] = useState("");
@@ -107,6 +116,10 @@ function NewOrderScreen() {
     setDiscOn(o.discPct > 0 || o.discount > 0);
     if (o.discPct > 0) { setDiscMode("pct"); setDiscountText(String(o.discPct)); }
     else { setDiscMode("amt"); setDiscountText(o.discount > 0 ? String(o.discount) : ""); }
+    // An order from before GST (or with it off) shows the shop's current rate / type, switched off.
+    setGstOn(o.gstOn);
+    setGstPctText(o.gstPct > 0 ? fmtPct(o.gstPct) : state.shop.gstPct > 0 ? fmtPct(state.shop.gstPct) : "");
+    setGstMode(o.gstOn ? o.gstMode : state.shop.gstMode);
     setSerialText(Sel.orderNo(o)); // the number it shows today (its serial, else the order id)
     // Same base as the live auto amount below: every line, quick amount included.
     const clothesTotalForEx = o.lines.reduce((s, l) => s + l.amt, 0);
@@ -154,8 +167,22 @@ function NewOrderScreen() {
   const exAmt = express ? (exMode === "pct" ? exAuto : parseInt(exAmtText, 10) || 0) : 0;
   const fee = anyHome ? parseInt(feeText, 10) || 0 : 0;
   const discount = !discOn ? 0 : discMode === "pct" ? Math.round((clothesTotal * discPct) / 100) : parseInt(discountText, 10) || 0;
-  const grand = Math.max(0, clothesTotal + exAmt + fee - discount);
+  const gstPct = gstPctFrom(gstPctText);
+  // The live total goes through the same maths as every saved order (gstCalc → amtOf).
+  const gst = gstCalc(Math.max(0, clothesTotal + exAmt + fee - discount), { gstOn, gstPct, gstMode });
+  const grand = gst.total;
   const empty = clothesTotal === 0;
+
+  /** One GST change on the form; on a new order it also becomes the shop's default straight away. */
+  function changeGst(patch: { on?: boolean; pctText?: string; mode?: GstMode }) {
+    const on = patch.on ?? gstOn;
+    const pctText = patch.pctText ?? gstPctText;
+    const mode = patch.mode ?? gstMode;
+    if (patch.on !== undefined) setGstOn(on);
+    if (patch.pctText !== undefined) setGstPctText(pctText);
+    if (patch.mode !== undefined) setGstMode(mode);
+    if (editId == null) Repo.setGstDefaults({ gstOn: on, gstPct: gstPctFrom(pctText), gstMode: mode });
+  }
 
   // delivery date resolution
   const usedWithTat = services.filter(
@@ -213,6 +240,9 @@ function NewOrderScreen() {
       exPct: express && exMode === "pct" ? exPct : 0,
       discount,
       discPct,
+      gstOn,
+      gstPct,
+      gstMode,
       lines: clothes.lines(services),
       quickAmount: showQuickBox ? parseInt(quickAmt, 10) || 0 : 0,
       quickPieces: showQuickBox ? parseInt(quickPcs, 10) || 0 : 0,
@@ -234,11 +264,14 @@ function NewOrderScreen() {
           {exAmt > 0 ? <BillLine label="Express" value={`+ ${rupees(exAmt)}`} /> : null}
           {fee > 0 ? <BillLine label="Pickup / delivery" value={`+ ${rupees(fee)}`} /> : null}
           {discount > 0 ? <BillLine label="Discount" value={`− ${rupees(discount)}`} tone="var(--color-orangetext)" /> : null}
+          {gst.on && gst.mode === "excl" ? <BillLine label={gstRowLabel(gst)} value={gstRowValue(gst)} /> : null}
+          {gst.on && gst.mode === "excl" && gst.roundOffPaise !== 0 ? <BillLine label="Round off" value={roundOffValue(gst)} /> : null}
           <Divider />
           <div className="flex w-full justify-between">
             <span className="text-[16px] font-bold">Total</span>
             <span className="bric text-[22px]">{rupees(grand)}</span>
           </div>
+          {gst.on && gst.mode === "incl" ? <span className="text-[12px] text-muted">{gstInclusiveLine(gst)}</span> : null}
         </div>
       </AppCard>
     ) : null;
@@ -493,6 +526,17 @@ function NewOrderScreen() {
                     : "Type the discount"
               }
             />
+            <GstCard
+              on={gstOn}
+              onToggle={() => changeGst({ on: !gstOn })}
+              mode={gstMode}
+              onMode={(m) => changeGst({ mode: m })}
+              pctText={gstPctText}
+              onPct={(v) => changeGst({ pctText: v })}
+              hint={gstHint(gstOn, gstPct, gstMode)}
+              noGstin={gstOn && !isGstinValid(state.shop.gstin)}
+              footnote={editId != null ? "Changes here apply to this order only." : "Saved for your next orders. You can change it on any order."}
+            />
           </div>
 
           {/* ---- live bill (mobile, inline) ---- */}
@@ -736,6 +780,92 @@ function ExtraCard({
               inputProps={{ "aria-label": `${title} ${mode === "pct" ? "percent" : "amount"}` }}
             />
             <span className="text-[13px] font-semibold" style={{ color: value ? accent : undefined }}>{effect}</span>
+          </div>
+        ) : null}
+      </div>
+    </AppCard>
+  );
+}
+
+const GST_MODES: [GstMode, string, string][] = [
+  ["excl", "Exclusive", "Add GST on top"],
+  ["incl", "Inclusive", "GST is in my price"],
+];
+
+/**
+ * GST on an order: a switch; when on, Exclusive (added on top) or Inclusive
+ * (already in the price), the rate as quick chips or a typed %, a nudge to add
+ * the GSTIN when the bill has none, and where the setting is saved.
+ */
+function GstCard({
+  on, onToggle, mode, onMode, pctText, onPct, hint, noGstin, footnote,
+}: {
+  on: boolean;
+  onToggle: () => void;
+  mode: GstMode;
+  onMode: (m: GstMode) => void;
+  pctText: string;
+  onPct: (v: string) => void;
+  hint: string;
+  noGstin: boolean;
+  footnote: string;
+}) {
+  const pct = gstPctFrom(pctText);
+  return (
+    <AppCard>
+      <div className="flex w-full flex-col">
+        <div className="flex w-full items-center p-3.5">
+          <div className="min-w-0 flex-1">
+            <div className="text-[15px] font-bold">GST</div>
+            <div className="text-[13px] text-muted">{hint}</div>
+          </div>
+          <Toggle on={on} onToggle={onToggle} />
+        </div>
+        {on ? (
+          <div className="flex flex-col gap-3 border-t border-divider p-3.5">
+            <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="GST type">
+              {GST_MODES.map(([m, label, sub]) => {
+                const sel = mode === m;
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    role="radio"
+                    aria-checked={sel}
+                    onClick={() => onMode(m)}
+                    className={cls(
+                      "flex min-h-14 flex-col justify-center gap-0.5 rounded-xl border-2 px-2.5 py-2 text-left",
+                      sel ? "border-blue bg-bluelight" : "border-fieldborder bg-card",
+                    )}
+                  >
+                    <span className={cls("text-[15px] font-bold", sel ? "text-blue" : "text-ink")}>{label}</span>
+                    <span className="text-[12px] font-semibold text-muted">{sub}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="mr-auto text-[14px] font-bold">GST rate</span>
+              {GST_RATE_CHIPS.map((r) => (
+                <PillChip key={r} label={`${r}%`} selected={pct === r} onClick={() => onPct(String(r))} />
+              ))}
+              <FieldBox
+                value={pctText}
+                onChange={(v) => onPct(v.replace(/[^0-9.]/g, "").slice(0, 5))}
+                suffix="%"
+                h={44}
+                className="w-[86px]"
+                inputMode="decimal"
+                textClass="text-[16px] font-bold text-right"
+                inputProps={{ "aria-label": "GST rate in percent" }}
+              />
+            </div>
+            {noGstin ? (
+              <span className="rounded-[10px] bg-orangelight px-2.5 py-2 text-[13px] leading-snug text-orangedeep">
+                Your GSTIN is not on the bill yet. Add it in Settings → Bill design &amp; details.
+              </span>
+            ) : null}
+            <span className="text-[12px] leading-snug text-disabledfg">{footnote}</span>
           </div>
         ) : null}
       </div>

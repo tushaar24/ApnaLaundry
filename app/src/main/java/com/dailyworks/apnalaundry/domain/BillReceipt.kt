@@ -17,6 +17,7 @@ data class BillReceipt(
     val address: String,
     val gstin: String, // only when valid
     val logoId: String,
+    val taxInvoice: Boolean, // "TAX INVOICE" over the bill number: GST on the order + a valid GSTIN
     val billNo: String, // "Bill #1001"
     val date: String, // "Fri, 9 Oct"
     val customerName: String,
@@ -24,8 +25,9 @@ data class BillReceipt(
     val readyBy: String, // "Ready by Sat, 10 Oct · 6 PM" / "Delivered …" / ""
     val lines: List<Line>,
     val subtotal: String,
-    val extras: List<Row>,
+    val extras: List<Row>, // express, pickup/delivery, discount, then exclusive GST (taxable, CGST, SGST, round off)
     val total: String,
+    val gstNote: String, // inclusive GST: "Price includes GST 18%: …" under the total ("" = none)
     val payStatus: String, // real bills only; "" on the preview
     val upi: Upi?,
     val terms: List<String>,
@@ -67,7 +69,8 @@ data class BillReceipt(
             shop: Shop, custName: String, custPhone: String, o: Order,
             sample: Boolean, expressPct: Int?, template: String?,
         ): BillReceipt {
-            val total = LaundryMath.amtOf(o)
+            val gst = LaundryMath.gstOf(o)
+            val total = gst.total
             val phone = custPhone.filter { it.isDigit() }.takeLast(10)
             val extras = buildList {
                 if (o.express && o.exAmt > 0) {
@@ -75,15 +78,23 @@ data class BillReceipt(
                 }
                 if (o.fee > 0) add(Row("Pickup / delivery", "+ ${Money.rupees(o.fee)}"))
                 if (o.discount > 0) add(Row("Discount", "− ${Money.rupees(o.discount)}", discount = true))
+                if (gst.on && gst.mode == Gst.EXCL) {
+                    add(Row("Taxable value", Money.paise(gst.taxablePaise)))
+                    add(Row("CGST @${Gst.halfRate(gst.pct)}%", "+ ${Money.paise(gst.cgstPaise)}"))
+                    add(Row("SGST @${Gst.halfRate(gst.pct)}%", "+ ${Money.paise(gst.sgstPaise)}"))
+                    if (gst.roundOffPaise != 0L) add(Row("Round off", Gst.roundOffValue(gst)))
+                }
             }
+            val gstin = if (BillDetails.isGstinValid(shop.gstin)) shop.gstin else ""
             val billPhone = shop.billPhone.ifBlank { shop.phone }
             return BillReceipt(
                 template = BillDetails.templateOrDefault(template ?: shop.billTemplate),
                 shopName = shop.name,
                 shopPhone = BillDetails.fmtBillPhone(billPhone),
                 address = shop.address,
-                gstin = if (BillDetails.isGstinValid(shop.gstin)) shop.gstin else "",
+                gstin = gstin,
                 logoId = shop.logoId,
+                taxInvoice = gst.on && gstin.isNotEmpty(),
                 billNo = "Bill #${o.no()}",
                 date = AppDate.plain(o.createdOn),
                 customerName = custName,
@@ -93,6 +104,7 @@ data class BillReceipt(
                 subtotal = Money.rupees(LaundryMath.clothesOf(o)),
                 extras = extras,
                 total = Money.rupees(total),
+                gstNote = if (gst.on && gst.mode == Gst.INCL) Gst.billNote(gst) else "",
                 payStatus = if (sample) "" else payStatus(o.paid, total),
                 upi = if (BillDetails.isUpiValid(shop.upiId)) {
                     Upi(shop.upiId, BillDetails.upiPayload(shop.upiId, shop.name, total, o.id), Money.rupees(total))

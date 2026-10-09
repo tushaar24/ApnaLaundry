@@ -3,7 +3,8 @@
 import { use, useState } from "react";
 import * as AppDate from "@/core/appdate";
 import { rupees } from "@/core/money";
-import { amtOf } from "@/domain/laundryMath";
+import { gstInclusiveLine, gstRowLabel, gstRowValue } from "@/domain/gst";
+import { gstOf } from "@/domain/laundryMath";
 import type { Order } from "@/domain/models";
 import * as Sel from "@/domain/selectors";
 import * as Repo from "@/data/repository";
@@ -51,7 +52,8 @@ function OrderDetailScreen({ orderId }: { orderId: number }) {
     return <div className="p-8 text-center text-[14px] text-muted">Order not found.</div>;
   }
   const c = Sel.customer(state, o.custId);
-  const amt = amtOf(o);
+  const gst = gstOf(o);
+  const amt = gst.total;
 
   const cancelled = o.status === "CANCELLED";
   const labels = o.pickup === "HOME" ? ["To pick up", "Received", "Ready", "Delivered"] : ["Received", "Ready", "Delivered"];
@@ -170,8 +172,10 @@ function OrderDetailScreen({ orderId }: { orderId: number }) {
                 {o.express && o.exAmt > 0 ? <DetailRow label="Express" value={`+ ${rupees(o.exAmt)}`} /> : null}
                 {o.fee > 0 ? <DetailRow label="Pickup / delivery" value={`+ ${rupees(o.fee)}`} /> : null}
                 {o.discount > 0 ? <DetailRow label="Discount" value={`− ${rupees(o.discount)}`} tone="var(--color-orangetext)" /> : null}
+                {gst.on && gst.mode === "excl" ? <DetailRow label={gstRowLabel(gst, true)} value={gstRowValue(gst)} /> : null}
                 <Divider className="my-1" />
                 <DetailRow label="Total" value={rupees(amt)} bold />
+                {gst.on && gst.mode === "incl" ? <span className="text-[12px] text-muted">{gstInclusiveLine(gst)}</span> : null}
                 <span
                   className={cls(
                     "text-[13px] font-semibold",

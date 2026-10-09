@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import type { LaundryState, Shop } from "@/domain/models";
 import { emptyBillDetails } from "@/domain/billDetails";
+import { gstDefaults } from "@/domain/gst";
 import { emptyRows, type Rows } from "./rows";
 import { prefs } from "./prefs";
 
@@ -91,7 +92,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
 // ---------------- derived LaundryState ----------------
 
-const FALLBACK_SHOP: Shop = { name: "MyLaundry", phone: "", expressPct: 50, onboardingStep: "", ...emptyBillDetails() };
+const FALLBACK_SHOP: Shop = { name: "MyLaundry", phone: "", expressPct: 50, onboardingStep: "", ...emptyBillDetails(), ...gstDefaults() };
 
 let lastRows: Rows | null = null;
 let lastDerived: LaundryState | null = null;
@@ -101,6 +102,7 @@ function shopOf(r: NonNullable<Rows["shop"]>): Shop {
     name: r.name, phone: r.phone, expressPct: r.expressPct, onboardingStep: r.onboardingStep,
     billPhone: r.billPhone, address: r.address, gstin: r.gstin, upiId: r.upiId, logoId: r.logoId,
     terms: r.terms, termsCustom: r.termsCustom, billTemplate: r.billTemplate,
+    gstOn: r.gstOn, gstPct: r.gstPct, gstMode: r.gstMode,
   };
 }
 

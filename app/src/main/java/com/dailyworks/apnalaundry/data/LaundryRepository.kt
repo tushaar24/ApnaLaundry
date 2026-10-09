@@ -421,6 +421,16 @@ class LaundryRepository(private val db: AppDatabase) {
         if (!name.isNullOrBlank()) Analytics.updateProfile(mapOf("Name" to name))
     }
 
+    /**
+     * The last-used GST setting. Every change on a NEW order saves it straight
+     * away, so the next order opens the same way (edits of an old order don't).
+     */
+    suspend fun setGstDefaults(on: Boolean, pct: Double, mode: String) {
+        val e = shopDao.get() ?: return
+        if (e.gstOn == on && e.gstPct == pct && e.gstMode == mode) return
+        shopDao.upsert(e.copy(gstOn = on, gstPct = pct, gstMode = mode, dirty = true, updatedAt = SyncClock.now()))
+    }
+
     /** Records onboarding progress so a killed app (or another device) resumes there. */
     suspend fun setOnboardingStep(step: String) {
         val e = shopDao.get() ?: return
@@ -440,6 +450,7 @@ class LaundryRepository(private val db: AppDatabase) {
         serialNo: String = "",
         exPct: Int = 0, // 0 = exAmt is a fixed ₹ amount
         discPct: Int = 0, // 0 = discount is a fixed ₹ amount
+        gstOn: Boolean = false, gstPct: Double = 0.0, gstMode: String = Gst.EXCL,
     ): SaveOrderResult {
         val undo = snapshot()
         val st = current()
@@ -462,6 +473,7 @@ class LaundryRepository(private val db: AppDatabase) {
                 ddAuto = fields.ddAuto, fee = fields.fee, express = fields.express, exAmt = fields.exAmt,
                 discount = fields.discount, lines = newLines, serialNo = serialNo.trim(),
                 exPct = if (fields.express) exPct else 0, discPct = discPct,
+                gstOn = gstOn && gstPct > 0, gstPct = gstPct, gstMode = gstMode,
             )
             updated = LaundryMath.withPctExtras(updated, st.shop.expressPct)
             if (updated.status == OrderStatus.CREATED && newLines.isNotEmpty() && pickup == Route.SHOP) {
@@ -495,6 +507,7 @@ class LaundryRepository(private val db: AppDatabase) {
             pre = 0, paid = 0, doneAt = "", doneDate = "", createdOn = AppDate.TODAY, billSent = false,
             pieces = 0, lines = fields.lines,
             serialNo = serialNo.trim(), exPct = if (fields.express) exPct else 0, discPct = discPct,
+            gstOn = gstOn && gstPct > 0, gstPct = gstPct, gstMode = gstMode,
         )
         db.withTransaction {
             orderDao.upsert(order.toEntity())

@@ -41,6 +41,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.core.AppDate
 import com.dailyworks.apnalaundry.core.Money
+import com.dailyworks.apnalaundry.domain.Gst
 import com.dailyworks.apnalaundry.domain.LaundryMath
 import com.dailyworks.apnalaundry.domain.OrderStatus
 import com.dailyworks.apnalaundry.domain.Route
@@ -65,7 +66,8 @@ fun OrderDetailScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: I
     val context = LocalContext.current
     val o = Selectors.order(state, orderId) ?: return
     val c = Selectors.customer(state, o.custId)
-    val amt = LaundryMath.amtOf(o)
+    val gst = LaundryMath.gstOf(o)
+    val amt = gst.total
     var active by remember { mutableStateOf<ActiveSheet?>(null) }
 
     LaunchedEffect(Unit) { Analytics.screen("order_detail") }
@@ -158,8 +160,10 @@ fun OrderDetailScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: I
                             if (o.express && o.exAmt > 0) DetailRow("Express", "+ ${Money.rupees(o.exAmt)}")
                             if (o.fee > 0) DetailRow("Pickup / delivery", "+ ${Money.rupees(o.fee)}")
                             if (o.discount > 0) DetailRow("Discount", "− ${Money.rupees(o.discount)}", Tokens.OrangeText)
+                            if (gst.on && gst.mode == Gst.EXCL) DetailRow(Gst.rowLabel(gst, markRounded = true), Gst.rowValue(gst))
                             Box(Modifier.fillMaxWidth().padding(vertical = 4.dp).height(1.dp).background(Tokens.Divider))
                             DetailRow("Total", Money.rupees(amt), bold = true)
+                            if (gst.on && gst.mode == Gst.INCL) Text(Gst.inclusiveLine(gst), style = fig(12, color = Tokens.Muted))
                             Text(paymentText(o, amt), style = fig(13, FontWeight.SemiBold, if (o.status == OrderStatus.DELIVERED && o.paid < amt) Tokens.OrangeText else Tokens.BlueText))
                         }
                     }

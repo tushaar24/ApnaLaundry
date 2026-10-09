@@ -61,8 +61,16 @@ a clear allocation rule, and a per-customer khata ledger that always reconciles.
 - **Modules:** `ui/screens/bill/BillScreen`, `ui/sheets/CollectPaymentSheet`, `BillViewSheet`,
   `ReceivePaymentSheet`, `AddOldBaakiSheet`, `ui/screens/customers/CustomersScreen`,
   `ui/screens/customer/CustomerScreen`. Maths in `domain/LaundryMath`.
-- **Bill maths (fixed order):** `clothes + express(if on) + fee − discount = total`;
+- **Bill maths (fixed order):** `clothes + express(if on) + fee − discount = base`;
   `express = round(clothes × pct / 100)`. Total is computed, never stored.
+- **GST per order** (`domain/Gst`, one `calc` behind `LaundryMath.amtOf`; web twin `domain/gst.ts`):
+  each order stores `gstOn / gstPct / gstMode` (`excl` = added on top, `incl` = already in the price);
+  the shop keeps the last-used setting and every change on a *new* order saves it back (an edit changes
+  that order only). Exclusive: `tax = round2(base × pct/100)`, `total = round(base + tax)`, the
+  difference printed as "Round off"; inclusive: `total = base`, `taxable = round2(base × 100/(100+pct))`.
+  CGST = half the tax rounded down to the paisa, SGST = the rest. `amtOf = total`, so khata, payments,
+  earnings and the combined bill are GST-inclusive. Bills print Taxable value / CGST / SGST / Round off
+  (or a "Price includes GST…" line) and "TAX INVOICE" only when the shop has a valid GSTIN.
 - **Delivery allocation** (`deliverAllocation`): `billDue = max(0, total − prepaid)`;
   `cover = min(received, billDue)`; `toOld = min(rest, max(0, oldBaaki))`; `toAdv = rest − toOld`;
   `newBalance = oldBaaki + total − prepaid − received`. Writes a `bill` and (if paid) a `got` ledger entry.
@@ -97,7 +105,8 @@ a clear allocation rule, and a per-customer khata ledger that always reconciles.
 
 ## Out of scope
 
-Real WhatsApp Business API, PDF generation, UPI QR rendering, GST invoices.
+Real WhatsApp Business API. GST: IGST (out-of-state), SAC codes, per-line taxable values and a
+composition-scheme bill of supply are still open (check with a CA — see `docs/deploy/2026-10-09-gst.md`).
 
 ## Further notes
 

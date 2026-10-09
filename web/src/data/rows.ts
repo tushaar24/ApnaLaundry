@@ -3,6 +3,7 @@ import type {
 } from "@/domain/models";
 import { syncNow } from "@/core/syncclock";
 import { billDetailsFrom, onboardingStepFrom } from "@/domain/billDetails";
+import { DEFAULT_GST_PCT, gstModeFrom, gstPctFrom } from "@/domain/gst";
 
 /**
  * In-memory rows = domain shape + sync metadata, mirroring the app's Room
@@ -55,6 +56,8 @@ export interface ShopDto {
   // Bill details + onboarding — absent from servers before 2026-10-09.
   billPhone?: string; address?: string; gstin?: string; upiId?: string; logoId?: string;
   terms?: string[]; termsCustom?: string; billTemplate?: string; onboardingStep?: string;
+  // Last-used GST setting — absent from servers before the GST release.
+  gstOn?: boolean; gstPct?: number; gstMode?: string;
 }
 export interface ServiceDto {
   id: string; name: string; mode: string; ratePerKg: number | null;
@@ -72,7 +75,10 @@ export interface OrderDto {
   ddAuto: boolean; status: string; cancelReason: string; fee: number;
   express: boolean; exAmt: number; discount: number; pre: number; paid: number;
   doneAt: string; doneDate: string; createdOn: string; billSent: boolean;
-  pieces: number; linesJson: string; serialNo?: string; exPct?: number; discPct?: number; deleted: boolean; updatedAt: number;
+  pieces: number; linesJson: string; serialNo?: string; exPct?: number; discPct?: number;
+  // GST on the order — absent from servers / clients before the GST release.
+  gstOn?: boolean; gstPct?: number; gstMode?: string;
+  deleted: boolean; updatedAt: number;
 }
 export interface LedgerDto {
   id: string; custId: string; date: string; time: string; ts: number;
@@ -100,10 +106,12 @@ export function shopToDto(r: ShopRow): ShopDto {
   const {
     name, phone, expressPct, nextOrder, nextCust, updatedAt,
     billPhone, address, gstin, upiId, logoId, terms, termsCustom, billTemplate, onboardingStep,
+    gstOn, gstPct, gstMode,
   } = r;
   return {
     name, phone, expressPct, nextOrder, nextCust, updatedAt,
     billPhone, address, gstin, upiId, logoId, terms, termsCustom, billTemplate, onboardingStep,
+    gstOn, gstPct, gstMode,
   };
 }
 export function shopFromDto(d: ShopDto): ShopRow {
@@ -111,6 +119,7 @@ export function shopFromDto(d: ShopDto): ShopRow {
     name: d.name, phone: d.phone, expressPct: d.expressPct,
     ...billDetailsFrom(d, d.phone),
     onboardingStep: onboardingStepFrom(d.onboardingStep),
+    gstOn: !!d.gstOn, gstPct: gstPctFrom(d.gstPct, DEFAULT_GST_PCT), gstMode: gstModeFrom(d.gstMode),
     nextOrder: d.nextOrder, nextCust: d.nextCust, updatedAt: d.updatedAt, dirty: false,
   };
 }
@@ -156,6 +165,7 @@ export function orderToDto(r: OrderRow): OrderDto {
     discount: r.discount, pre: r.pre, paid: r.paid, doneAt: r.doneAt, doneDate: r.doneDate,
     createdOn: r.createdOn, billSent: r.billSent, pieces: r.pieces,
     linesJson: JSON.stringify(r.lines), serialNo: r.serialNo, exPct: r.exPct, discPct: r.discPct,
+    gstOn: r.gstOn, gstPct: r.gstPct, gstMode: r.gstMode,
     deleted: r.deleted, updatedAt: r.updatedAt,
   };
 }
@@ -175,6 +185,7 @@ export function orderFromDto(d: OrderDto): OrderRow {
     pre: d.pre ?? 0, paid: d.paid ?? 0, doneAt: d.doneAt ?? "", doneDate: d.doneDate ?? "",
     createdOn: d.createdOn ?? "", billSent: !!d.billSent, pieces: d.pieces ?? 0, lines,
     serialNo: d.serialNo ?? "", exPct: d.exPct ?? 0, discPct: d.discPct ?? 0,
+    gstOn: !!d.gstOn, gstPct: gstPctFrom(d.gstPct), gstMode: gstModeFrom(d.gstMode),
     updatedAt: d.updatedAt, deleted: !!d.deleted, dirty: false,
   };
 }

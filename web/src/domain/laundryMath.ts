@@ -1,4 +1,5 @@
 import type { LedgerEntry, Order, Service } from "./models";
+import { gstCalc, type GstBreakdown } from "./gst";
 
 /**
  * Pure money maths. Port of domain/LaundryMath.kt (PRODUCT_SPEC §4, §8).
@@ -9,9 +10,27 @@ export function clothesOf(o: Pick<Order, "lines">): number {
   return o.lines.reduce((s, l) => s + l.amt, 0);
 }
 
-/** Order total = clothes + express + fee − discount. Never stored separately. */
-export function amtOf(o: Pick<Order, "lines" | "express" | "exAmt" | "fee" | "discount">): number {
+/** The amount GST applies to: clothes + express + fee − discount. */
+export function baseOf(o: Pick<Order, "lines" | "express" | "exAmt" | "fee" | "discount">): number {
   return clothesOf(o) + (o.express ? o.exAmt : 0) + o.fee - o.discount;
+}
+
+/** What `gstOf` / `amtOf` need — the GST fields are optional so a bill payload from an older server still works. */
+export type Billable = Pick<Order, "lines" | "express" | "exAmt" | "fee" | "discount">
+  & Partial<Pick<Order, "gstOn" | "gstPct" | "gstMode">>;
+
+/** The order's GST breakdown (none for orders from before GST, or with GST off). */
+export function gstOf(o: Billable): GstBreakdown {
+  return gstCalc(baseOf(o), { gstOn: !!o.gstOn, gstPct: o.gstPct ?? 0, gstMode: o.gstMode ?? "excl" });
+}
+
+/**
+ * Order total = what the customer pays: clothes + express + fee − discount,
+ * plus exclusive GST rounded to the rupee (inclusive GST is already inside).
+ * Never stored separately — bills, khata, payments and earnings all call this.
+ */
+export function amtOf(o: Billable): number {
+  return gstOf(o).total;
 }
 
 /** Express amount = round(clothes × pct / 100). */

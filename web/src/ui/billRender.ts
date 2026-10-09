@@ -22,6 +22,7 @@ export const BILL_SCALE = 3; // pixels per point
 const C = {
   ink: "#16191D",
   muted: "#5B6168",
+  heading: "#3F444A",
   border: "#E2DED6",
   blue: "#1D4ED8",
   tint: "#E6ECFB",
@@ -244,6 +245,17 @@ function layout(ctx: CanvasRenderingContext2D, r: BillReceipt, draw: boolean, mi
     rule();
   }
 
+  // 1b. "TAX INVOICE" — GST on the order and a GSTIN on the bill
+  if (r.taxInvoice) {
+    p.y += 20;
+    font(12, 800);
+    const spaced = ctx as CanvasRenderingContext2D & { letterSpacing?: string };
+    if ("letterSpacing" in ctx) spaced.letterSpacing = "2px";
+    text("TAX INVOICE", mid, p.y, "center", C.heading);
+    if ("letterSpacing" in ctx) spaced.letterSpacing = "0px";
+    p.y -= 4;
+  }
+
   // 2. bill number + date
   p.y += 22;
   font(14, 700);
@@ -317,6 +329,12 @@ function layout(ctx: CanvasRenderingContext2D, r: BillReceipt, draw: boolean, mi
     font(receipt ? 19 : 22, 700, DISPLAY);
     text(r.total, right, p.y, "right");
     p.y += 8;
+  }
+
+  // 5b. inclusive GST: what the total already includes
+  if (r.gstNote) {
+    p.y += 4;
+    lines(r.gstNote, 11.5, 400, BODY, right - left, left, "left", C.muted, 15);
   }
 
   // 6. payment status (real bills)

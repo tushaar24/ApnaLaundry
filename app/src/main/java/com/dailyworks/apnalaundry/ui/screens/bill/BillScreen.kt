@@ -32,6 +32,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.core.AppDate
 import com.dailyworks.apnalaundry.core.Money
+import com.dailyworks.apnalaundry.domain.Gst
 import com.dailyworks.apnalaundry.domain.LaundryMath
 import com.dailyworks.apnalaundry.domain.PayMethod
 import com.dailyworks.apnalaundry.domain.Route
@@ -56,7 +57,8 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
     val context = LocalContext.current
     val o = Selectors.order(state, orderId) ?: return
     val c = Selectors.customer(state, o.custId)
-    val amt = LaundryMath.amtOf(o)
+    val gst = LaundryMath.gstOf(o)
+    val amt = gst.total
     val fullyPaid = o.pre >= amt && amt > 0
     val due = amt - o.pre // still to collect before delivery
     val open = LaundryMath.isOpen(o)
@@ -99,8 +101,10 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
                         if (o.express && o.exAmt > 0) BillRow("Express", "+ ${Money.rupees(o.exAmt)}")
                         if (o.fee > 0) BillRow("Pickup / delivery", "+ ${Money.rupees(o.fee)}")
                         if (o.discount > 0) BillRow("Discount", "− ${Money.rupees(o.discount)}", Tokens.OrangeText)
+                        if (gst.on && gst.mode == Gst.EXCL) BillRow(Gst.rowLabel(gst, markRounded = true), Gst.rowValue(gst))
                         Divider()
                         BillRow("Total", Money.rupees(amt), bold = true)
+                        if (gst.on && gst.mode == Gst.INCL) Text(Gst.inclusiveLine(gst), style = fig(12, color = Tokens.Muted))
                         Text(
                             if (o.deliveryDate.isNotBlank())
                                 (if (o.delivery == Route.HOME) "Delivery " else "Ready by ") + AppDate.short(o.deliveryDate) + (if (o.deliveryTime.isNotBlank()) " · ${o.deliveryTime}" else "")

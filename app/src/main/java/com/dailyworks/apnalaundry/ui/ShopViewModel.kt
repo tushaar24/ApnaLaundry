@@ -130,6 +130,10 @@ class ShopViewModel(
     fun setOnboardingStep(step: String) =
         viewModelScope.launch { repo.setOnboardingStep(step); sync.requestSync() }
 
+    /** The last-used GST setting (every change on a new order). */
+    fun setGstDefaults(on: Boolean, pct: Double, mode: String) =
+        viewModelScope.launch { repo.setGstDefaults(on, pct, mode); sync.requestSync() }
+
     /** Resizes + uploads a picked logo; the id, or the failure for a toast. */
     suspend fun uploadLogo(uri: Uri): Result<String> =
         runCatching { logos.upload(uri) }.onSuccess { _logoTick.value++ }
@@ -162,13 +166,14 @@ class ShopViewModel(
         serialNo: String = "",
         exPct: Int = 0,
         discPct: Int = 0,
+        gstOn: Boolean = false, gstPct: Double = 0.0, gstMode: String = "excl",
         onDone: (LaundryRepository.SaveOrderResult) -> Unit,
     ) = viewModelScope.launch {
         invalidateUndo()
         val res = repo.saveOrder(
             editId, custId, pickup, delivery, pickupDate, pickupTime24, deliveryDate, deliveryTime24, ddAuto,
             fee, express, exAmt, discount, lines, quickAmount, quickPieces, serialNo = serialNo,
-            exPct = exPct, discPct = discPct,
+            exPct = exPct, discPct = discPct, gstOn = gstOn, gstPct = gstPct, gstMode = gstMode,
         )
         res.toast?.let { publish(CmdResult(it, res.undo)) }
         sync.requestSync()

@@ -17,6 +17,7 @@ import { stamp } from "./rows";
 import { Analytics } from "@/analytics/events";
 import { DEFAULT_SHOP_NAME, isDefaultShopName } from "@/domain/seed";
 import { emptyBillDetails } from "@/domain/billDetails";
+import { gstDefaults, type GstFields } from "@/domain/gst";
 import { orderNo } from "@/domain/selectors";
 
 /**
@@ -168,7 +169,7 @@ export async function ensureSeeded(shopPhone: string | null) {
     ...r,
     shop: {
       name: DEFAULT_SHOP_NAME, phone: shopPhone ?? "", expressPct: DEFAULT_EXPRESS_PCT,
-      ...emptyBillDetails(shopPhone ?? ""), onboardingStep: "intro",
+      ...emptyBillDetails(shopPhone ?? ""), ...gstDefaults(), onboardingStep: "intro",
       nextOrder: 1001, nextCust: 1, ...stamp(),
     },
     services: seedServices.map((s) => ({ ...s, ...stamp(), deleted: false })),
@@ -470,6 +471,20 @@ export function updateShopDetails(patch: Partial<BillDetails> & { name?: string 
   requestSync();
 }
 
+/**
+ * The last-used GST setting. Every change on a NEW order saves it straight
+ * away, so the next order opens the same way (edits of an old order don't).
+ */
+export function setGstDefaults(g: GstFields) {
+  const cur = rows().shop;
+  if (!cur || (cur.gstOn === g.gstOn && cur.gstPct === g.gstPct && cur.gstMode === g.gstMode)) return;
+  setRows((r) => ({
+    ...r,
+    shop: r.shop ? { ...r.shop, gstOn: g.gstOn, gstPct: g.gstPct, gstMode: g.gstMode, ...stamp() } : r.shop,
+  }));
+  requestSync();
+}
+
 /** Records onboarding progress so a reload or another device resumes there. */
 export function setOnboardingStep(step: OnboardingStep) {
   const cur = rows().shop;
@@ -514,6 +529,9 @@ export interface SaveOrderArgs {
   exPct: number; // 0 = exAmt is a fixed ₹ amount
   discount: number;
   discPct: number; // 0 = discount is a fixed ₹ amount
+  gstOn: boolean;
+  gstPct: number;
+  gstMode: GstFields["gstMode"];
   lines: OrderLine[];
   quickAmount: number;
   quickPieces: number;
@@ -544,6 +562,7 @@ export function saveOrder(a: SaveOrderArgs): SaveOrderResult {
     deliveryTime: AppDate.to12h(a.deliveryTime24), ddAuto: a.ddAuto,
     fee: anyHome ? a.fee : 0, express: a.express, exAmt: a.express ? a.exAmt : 0,
     exPct: a.express ? a.exPct : 0, discount: a.discount, discPct: a.discPct,
+    gstOn: a.gstOn && a.gstPct > 0, gstPct: a.gstPct, gstMode: a.gstMode,
     lines: a.lines, serialNo: a.serialNo.trim(),
   };
   const nm = custName(a.custId);
@@ -561,6 +580,7 @@ export function saveOrder(a: SaveOrderArgs): SaveOrderResult {
       deliveryDate: fields.deliveryDate, deliveryTime: fields.deliveryTime,
       ddAuto: fields.ddAuto, fee: fields.fee, express: fields.express, exAmt: fields.exAmt,
       exPct: fields.exPct, discount: fields.discount, discPct: fields.discPct,
+      gstOn: fields.gstOn, gstPct: fields.gstPct, gstMode: fields.gstMode,
       lines: newLines, serialNo: fields.serialNo,
     };
     updated = withPctExtras(updated, st.shop.expressPct);
@@ -604,6 +624,7 @@ export function saveOrder(a: SaveOrderArgs): SaveOrderResult {
     ddAuto: fields.ddAuto, status, cancelReason: "", fee: fields.fee,
     express: fields.express, exAmt: fields.exAmt, exPct: fields.exPct,
     discount: fields.discount, discPct: fields.discPct,
+    gstOn: fields.gstOn, gstPct: fields.gstPct, gstMode: fields.gstMode,
     pre: 0, paid: 0, doneAt: "", doneDate: "", createdOn: AppDate.today(),
     billSent: false, pieces: 0, lines: fields.lines, serialNo: fields.serialNo,
   };

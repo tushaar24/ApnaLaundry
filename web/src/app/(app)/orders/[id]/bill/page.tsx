@@ -4,7 +4,8 @@ import { Suspense, use, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import * as AppDate from "@/core/appdate";
 import { rupees } from "@/core/money";
-import { amtOf, isOpen } from "@/domain/laundryMath";
+import { gstInclusiveLine, gstRowLabel, gstRowValue } from "@/domain/gst";
+import { gstOf, isOpen } from "@/domain/laundryMath";
 import type { Route } from "@/domain/models";
 import * as Sel from "@/domain/selectors";
 import * as Repo from "@/data/repository";
@@ -50,7 +51,8 @@ function BillScreen({ orderId }: { orderId: number }) {
     return <div className="p-8 text-center text-[14px] text-muted">Order not found.</div>;
   }
   const c = Sel.customer(state, o.custId);
-  const amt = amtOf(o);
+  const gst = gstOf(o);
+  const amt = gst.total;
   const fullyPaid = o.pre >= amt && amt > 0;
   const due = amt - o.pre; // still to collect before delivery
 
@@ -88,8 +90,10 @@ function BillScreen({ orderId }: { orderId: number }) {
             {o.express && o.exAmt > 0 ? <BillRow label="Express" value={`+ ${rupees(o.exAmt)}`} /> : null}
             {o.fee > 0 ? <BillRow label="Pickup / delivery" value={`+ ${rupees(o.fee)}`} /> : null}
             {o.discount > 0 ? <BillRow label="Discount" value={`− ${rupees(o.discount)}`} tone="var(--color-orangetext)" /> : null}
+            {gst.on && gst.mode === "excl" ? <BillRow label={gstRowLabel(gst, true)} value={gstRowValue(gst)} /> : null}
             <Divider className="my-1" />
             <BillRow label="Total" value={rupees(amt)} bold />
+            {gst.on && gst.mode === "incl" ? <span className="text-[12px] text-muted">{gstInclusiveLine(gst)}</span> : null}
             <span className="text-[13px] text-muted">
               {o.deliveryDate !== ""
                 ? (o.delivery === "HOME" ? "Delivery " : "Ready by ") +

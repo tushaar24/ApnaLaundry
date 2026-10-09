@@ -85,6 +85,10 @@ data class Order(
     val serialNo: String = "",       // owner-set bill / serial no.; "" = use the order id
     val exPct: Int = 0,              // express as % of the clothes (0 = exAmt is a fixed ₹ amount)
     val discPct: Int = 0,            // discount as % of the clothes (0 = discount is a fixed ₹ amount)
+    // GST on this order (see domain/Gst). Orders from before GST have gstOn = false.
+    val gstOn: Boolean = false,
+    val gstPct: Double = 0.0,        // 18, 5, 12 … may be fractional
+    val gstMode: String = Gst.EXCL,  // Gst.EXCL = added on top of the price, Gst.INCL = already in the price
 ) {
     /** The number shown as "#…" on the order and its bill: the owner's serial, else the id. */
     fun no(): String = serialNo.trim().ifEmpty { id.toString() }
@@ -124,6 +128,10 @@ data class Shop(
     val onboardingStep: String = "",
     /** The id the next new order gets. */
     val nextOrder: Int = 1001,
+    // The last-used GST setting: pre-fills every new order (every change on a new order saves it back).
+    val gstOn: Boolean = false,
+    val gstPct: Double = Gst.DEFAULT_PCT,
+    val gstMode: String = Gst.EXCL,
 )
 
 data class DayClose(

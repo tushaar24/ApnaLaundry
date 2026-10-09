@@ -13,9 +13,18 @@ object LaundryMath {
 
     fun clothesOf(o: Order): Int = o.lines.sumOf { it.amt }
 
-    /** Order total = clothes + express + fee − discount. Never stored separately. */
-    fun amtOf(o: Order): Int =
-        clothesOf(o) + (if (o.express) o.exAmt else 0) + o.fee - o.discount
+    /** The amount GST applies to: clothes + express + fee − discount. */
+    fun baseOf(o: Order): Int = clothesOf(o) + (if (o.express) o.exAmt else 0) + o.fee - o.discount
+
+    /** The order's GST breakdown (none for orders from before GST, or with GST off). */
+    fun gstOf(o: Order): Gst.Breakdown = Gst.calc(baseOf(o), o.gstOn, o.gstPct, o.gstMode)
+
+    /**
+     * Order total = what the customer pays: clothes + express + fee − discount,
+     * plus exclusive GST rounded to the rupee (inclusive GST is already inside).
+     * Never stored separately — bills, khata, payments and earnings all call this.
+     */
+    fun amtOf(o: Order): Int = gstOf(o).total
 
     /** Express amount = round(clothes × pct / 100). */
     fun expressAuto(clothesTotal: Int, pct: Int): Int =

@@ -40,6 +40,7 @@ object BillRender {
 
     private val INK = Color.parseColor("#16191D")
     private val MUTED = Color.parseColor("#5B6168")
+    private val HEADING = Color.parseColor("#3F444A")
     private val BORDER = Color.parseColor("#E2DED6")
     private val BLUE = Color.parseColor("#1D4ED8")
     private val TINT = Color.parseColor("#E6ECFB")
@@ -330,6 +331,16 @@ object BillRender {
             // 1. shop block
             shopBlock(r.shopName, r.shopPhone, r.address, r.gstin)
 
+            // 1b. "TAX INVOICE" — GST on the order and a GSTIN on the bill
+            if (r.taxInvoice) {
+                cy += 20
+                font(12f, 800)
+                p.letterSpacing = 0.14f
+                text("TAX INVOICE", mid, cy, Paint.Align.CENTER, HEADING)
+                p.letterSpacing = 0f
+                cy -= 4
+            }
+
             // 2. bill number + date
             cy += 22
             font(14f, 700); text(r.billNo, left, cy, Paint.Align.LEFT)
@@ -372,6 +383,12 @@ object BillRender {
             r.extras.forEach { totalRow(it.label, it.value, if (it.discount) GREEN else INK) }
             cy += 12
             totalBand(if (receipt) "TOTAL" else "Total", r.total)
+
+            // 5b. inclusive GST: what the total already includes
+            if (r.gstNote.isNotEmpty()) {
+                cy += 4
+                lines(r.gstNote, 11.5f, 400, false, right - left, left, Paint.Align.LEFT, MUTED, 15f)
+            }
 
             // 6. payment status (real bills)
             if (r.payStatus.isNotEmpty()) {

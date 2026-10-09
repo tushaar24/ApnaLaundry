@@ -21,6 +21,12 @@ export function rupees(value: number): string {
   return "₹" + grouping(Math.abs(Math.round(value)));
 }
 
+/** ₹ with paise, for GST lines: ₹1,234.56 (absolute value; callers prepend +/−). */
+export function rupeesPaise(paise: number): string {
+  const p = Math.abs(Math.round(paise));
+  return "₹" + grouping(Math.floor(p / 100)) + "." + String(p % 100).padStart(2, "0");
+}
+
 /** Compact form for charts: 2.3k, 980. */
 export function short(value: number): string {
   if (value >= 1000) {

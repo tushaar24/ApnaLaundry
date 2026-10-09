@@ -34,6 +34,10 @@ data class ShopEntity(
     @ColumnInfo(defaultValue = "") val termsCustom: String = "",
     @ColumnInfo(defaultValue = "classic") val billTemplate: String = "classic",
     @ColumnInfo(defaultValue = "") val onboardingStep: String = "",
+    // Last-used GST setting (v7): pre-fills every new order.
+    @ColumnInfo(defaultValue = "0") val gstOn: Boolean = false,
+    @ColumnInfo(defaultValue = "18") val gstPct: Double = 18.0,
+    @ColumnInfo(defaultValue = "excl") val gstMode: String = "excl",
 )
 
 @Entity(tableName = "services")
@@ -97,6 +101,10 @@ data class OrderEntity(
     @ColumnInfo(defaultValue = "") val serialNo: String = "", // v5
     @ColumnInfo(defaultValue = "0") val exPct: Int = 0, // v6
     @ColumnInfo(defaultValue = "0") val discPct: Int = 0, // v6
+    // GST on the order (v7): on / rate % / "excl" (added on top) or "incl" (already in the price).
+    @ColumnInfo(defaultValue = "0") val gstOn: Boolean = false,
+    @ColumnInfo(defaultValue = "0") val gstPct: Double = 0.0,
+    @ColumnInfo(defaultValue = "excl") val gstMode: String = "excl",
 )
 
 @Entity(tableName = "ledger")

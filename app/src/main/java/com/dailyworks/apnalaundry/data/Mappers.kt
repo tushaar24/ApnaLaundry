@@ -34,12 +34,14 @@ fun OrderEntity.toDomain() = Order(
     id, custId, Route.valueOf(pickup), Route.valueOf(delivery), pickupDate, pickupTime, deliveryDate,
     deliveryTime, ddAuto, OrderStatus.valueOf(status), cancelReason, fee, express, exAmt, discount,
     pre, paid, doneAt, doneDate, createdOn, billSent, pieces, decodeLines(linesJson), serialNo, exPct, discPct,
+    gstOn = gstOn, gstPct = gstPct, gstMode = Gst.modeOrDefault(gstMode),
 )
 
 fun Order.toEntity() = OrderEntity(
     id, custId, pickup.name, delivery.name, pickupDate, pickupTime, deliveryDate, deliveryTime, ddAuto,
     status.name, cancelReason, fee, express, exAmt, discount, pre, paid, doneAt, doneDate, createdOn,
     billSent, pieces, encodeLines(lines), serialNo = serialNo, exPct = exPct, discPct = discPct,
+    gstOn = gstOn, gstPct = gstPct, gstMode = gstMode,
 )
 
 fun LedgerEntity.toDomain() = LedgerEntry(
@@ -60,4 +62,5 @@ fun ShopEntity.toDomain() = Shop(
     billPhone = billPhone, address = address, gstin = gstin, upiId = upiId, logoId = logoId,
     terms = decodeTerms(termsJson), termsCustom = termsCustom, billTemplate = billTemplate, onboardingStep = onboardingStep,
     nextOrder = nextOrder,
+    gstOn = gstOn, gstPct = gstPct, gstMode = Gst.modeOrDefault(gstMode),
 )

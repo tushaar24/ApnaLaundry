@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -43,6 +44,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import android.app.DatePickerDialog
@@ -55,6 +57,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.core.AppDate
 import com.dailyworks.apnalaundry.core.Money
+import com.dailyworks.apnalaundry.domain.BillDetails
+import com.dailyworks.apnalaundry.domain.Gst
 import com.dailyworks.apnalaundry.domain.LaundryMath
 import com.dailyworks.apnalaundry.domain.PricingMode
 import com.dailyworks.apnalaundry.domain.Route
@@ -120,6 +124,11 @@ fun NewOrderScreen(
     var discOn by remember { mutableStateOf(false) }
     var discIsPct by remember { mutableStateOf(false) }
     var discountText by remember { mutableStateOf("") }
+    // GST: pre-filled from the shop's last-used setting; on a NEW order every
+    // change is saved back as the default (an edit changes this order only).
+    var gstOn by remember { mutableStateOf(state.shop.gstOn) }
+    var gstPctText by remember { mutableStateOf(if (state.shop.gstPct > 0) Gst.fmtPct(state.shop.gstPct) else "") }
+    var gstMode by remember { mutableStateOf(state.shop.gstMode) }
     var serialText by remember { mutableStateOf("") } // "" = the order id
     var serialTouched by remember { mutableStateOf(false) } // owner typed in it
     var quickAmt by remember { mutableStateOf("") }
@@ -152,6 +161,10 @@ fun NewOrderScreen(
         discOn = o.discPct > 0 || o.discount > 0
         if (o.discPct > 0) { discIsPct = true; discountText = o.discPct.toString() }
         else { discIsPct = false; discountText = if (o.discount > 0) o.discount.toString() else "" }
+        // An order from before GST (or with it off) shows the shop's current rate / type, switched off.
+        gstOn = o.gstOn
+        gstPctText = if (o.gstPct > 0) Gst.fmtPct(o.gstPct) else if (state.shop.gstPct > 0) Gst.fmtPct(state.shop.gstPct) else ""
+        gstMode = if (o.gstOn) o.gstMode else state.shop.gstMode
         serialText = o.no() // the number it shows today (its serial, else the order id)
         when {
             o.express && o.exPct > 0 -> { exIsPct = true; exPctText = o.exPct.toString() }
@@ -197,8 +210,17 @@ fun NewOrderScreen(
         discIsPct -> (clothesTotal * discPct / 100.0).roundToInt()
         else -> discountText.toIntOrNull() ?: 0
     }
-    val grand = max(0, clothesTotal + exAmt + fee - discount)
+    val gstPct = Gst.pctFrom(gstPctText)
+    // The live total goes through the same maths as every saved order (Gst.calc → amtOf).
+    val gst = Gst.calc(max(0, clothesTotal + exAmt + fee - discount), gstOn, gstPct, gstMode)
+    val grand = gst.total
     val empty = clothesTotal == 0
+
+    /** One GST change on the form; on a new order it also becomes the shop's default straight away. */
+    fun changeGst(on: Boolean = gstOn, pctText: String = gstPctText, mode: String = gstMode) {
+        gstOn = on; gstPctText = pctText; gstMode = mode
+        if (editId == null) shopVm.setGstDefaults(on, Gst.pctFrom(pctText), mode)
+    }
 
     // delivery date resolution
     val usedWithTat = services.filter { s ->
@@ -423,6 +445,14 @@ fun NewOrderScreen(
                         else -> "Type the discount"
                     },
                 )
+                GstCard(
+                    on = gstOn, onToggle = { changeGst(on = !gstOn) },
+                    mode = gstMode, onMode = { changeGst(mode = it) },
+                    pctText = gstPctText, onPct = { changeGst(pctText = it) },
+                    hint = Gst.hint(gstOn, gstPct, gstMode),
+                    noGstin = gstOn && !BillDetails.isGstinValid(state.shop.gstin),
+                    footnote = if (editId != null) "Changes here apply to this order only." else "Saved for your next orders. You can change it on any order.",
+                )
             }
 
             // ---- live bill ----
@@ -433,11 +463,16 @@ fun NewOrderScreen(
                         if (exAmt > 0) BillLine("Express", "+ ${Money.rupees(exAmt)}")
                         if (fee > 0) BillLine("Pickup / delivery", "+ ${Money.rupees(fee)}")
                         if (discount > 0) BillLine("Discount", "− ${Money.rupees(discount)}", Tokens.OrangeText)
+                        if (gst.on && gst.mode == Gst.EXCL) {
+                            BillLine(Gst.rowLabel(gst), Gst.rowValue(gst))
+                            if (gst.roundOffPaise != 0L) BillLine("Round off", Gst.roundOffValue(gst))
+                        }
                         Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Divider))
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("Total", style = fig(16, FontWeight.Bold))
                             Text(Money.rupees(grand), style = bric(22, FontWeight.Bold))
                         }
+                        if (gst.on && gst.mode == Gst.INCL) Text(Gst.inclusiveLine(gst), style = fig(12, color = Tokens.Muted))
                     }
                 }
             }
@@ -453,6 +488,7 @@ fun NewOrderScreen(
                     pickupDate = pickupDate, pickupTime24 = pickupTime, deliveryDate = dropIso, deliveryTime24 = deliveryTime,
                     ddAuto = ddAuto, fee = fee, express = express, exAmt = exAmt, discount = discount,
                     exPct = if (express && exIsPct) exPct else 0, discPct = discPct,
+                    gstOn = gstOn, gstPct = gstPct, gstMode = gstMode,
                     lines = clothes.lines(services), quickAmount = if (showQuickBox) quickAmt.toIntOrNull() ?: 0 else 0,
                     quickPieces = if (showQuickBox) quickPcs.toIntOrNull() ?: 0 else 0,
                     serialNo = serialText,
@@ -631,6 +667,75 @@ private fun ExtraCard(
                         height = 48.dp, keyboardType = KeyboardType.Number,
                     )
                     Text(effect, style = fig(13, FontWeight.SemiBold, if (value.isNotEmpty()) accent else Tokens.Muted))
+                }
+            }
+        }
+    }
+}
+
+/**
+ * GST on an order: a switch; when on, Exclusive (added on top) or Inclusive
+ * (already in the price), the rate as quick chips or a typed %, a nudge to add
+ * the GSTIN when the bill has none, and where the setting is saved.
+ */
+@Composable
+private fun GstCard(
+    on: Boolean, onToggle: () -> Unit,
+    mode: String, onMode: (String) -> Unit,
+    pctText: String, onPct: (String) -> Unit,
+    hint: String, noGstin: Boolean, footnote: String,
+) {
+    val pct = Gst.pctFrom(pctText)
+    AppCard {
+        Column(Modifier.fillMaxWidth()) {
+            Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("GST", style = fig(15, FontWeight.Bold))
+                    Text(hint, style = fig(13, color = Tokens.Muted))
+                }
+                Toggle(on) { onToggle() }
+            }
+            if (on) {
+                Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Divider))
+                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // Exclusive / Inclusive
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(
+                            Triple(Gst.EXCL, "Exclusive", "Add GST on top"),
+                            Triple(Gst.INCL, "Inclusive", "GST is in my price"),
+                        ).forEach { (m, label, sub) ->
+                            val sel = mode == m
+                            Column(
+                                Modifier.weight(1f).heightIn(min = 56.dp).rounded(12.dp)
+                                    .background(if (sel) Tokens.BlueLight else Tokens.Card)
+                                    .border(2.dp, if (sel) Tokens.Blue else Tokens.FieldBorder, RoundedCornerShape(12.dp))
+                                    .tap { onMode(m) }
+                                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                                verticalArrangement = Arrangement.Center,
+                            ) {
+                                Text(label, style = fig(15, FontWeight.Bold, if (sel) Tokens.Blue else Tokens.Ink))
+                                Text(sub, style = fig(12, FontWeight.SemiBold, Tokens.Muted))
+                            }
+                        }
+                    }
+                    // Rate: quick chips or a typed %
+                    FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("GST rate", style = fig(14, FontWeight.Bold), modifier = Modifier.align(Alignment.CenterVertically).padding(end = 4.dp))
+                        Gst.RATE_CHIPS.forEach { r -> PillChip("${Gst.fmtPct(r)}%", selected = pct == r) { onPct(Gst.fmtPct(r)) } }
+                        FieldBox(
+                            pctText, { onPct(it.filter { c -> c.isDigit() || c == '.' }.take(5)) },
+                            modifier = Modifier.width(86.dp), suffix = "%", keyboardType = KeyboardType.Decimal,
+                            height = 44.dp, textStyle = fig(16, FontWeight.Bold), textAlign = TextAlign.End,
+                        )
+                    }
+                    if (noGstin) {
+                        Text(
+                            "Your GSTIN is not on the bill yet. Add it in Settings → Bill design & details.",
+                            style = fig(13, color = Tokens.OrangeDeep),
+                            modifier = Modifier.fillMaxWidth().rounded(10.dp).background(Tokens.OrangeLight).padding(horizontal = 10.dp, vertical = 8.dp),
+                        )
+                    }
+                    Text(footnote, style = fig(12, color = Tokens.DisabledFg))
                 }
             }
         }

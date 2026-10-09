@@ -9,6 +9,7 @@ import com.dailyworks.apnalaundry.data.local.ShopEntity
 import com.dailyworks.apnalaundry.data.decodeTerms
 import com.dailyworks.apnalaundry.data.encodeTerms
 import com.dailyworks.apnalaundry.domain.BillDetails
+import com.dailyworks.apnalaundry.domain.Gst
 import kotlinx.serialization.Serializable
 
 // Wire DTOs for /api/laundry/sync — field-for-field mirrors of the Room
@@ -24,6 +25,8 @@ data class ShopDto(
     val billPhone: String = "", val address: String = "", val gstin: String = "",
     val upiId: String = "", val logoId: String = "", val terms: List<String> = emptyList(),
     val termsCustom: String = "", val billTemplate: String = "classic", val onboardingStep: String = "",
+    // Last-used GST setting — absent from servers before the GST release.
+    val gstOn: Boolean = false, val gstPct: Double = Gst.DEFAULT_PCT, val gstMode: String = Gst.EXCL,
 )
 
 @Serializable
@@ -55,6 +58,8 @@ data class OrderDto(
     val serialNo: String? = null,
     // % extras (0 = fixed ₹); older servers / clients omit them.
     val exPct: Int? = null, val discPct: Int? = null,
+    // GST on the order; older servers / clients omit it (the server writes it only when present).
+    val gstOn: Boolean? = null, val gstPct: Double? = null, val gstMode: String? = null,
 )
 
 @Serializable
@@ -95,12 +100,14 @@ data class SyncChanges(
 fun ShopEntity.toDto() = ShopDto(
     name, phone, expressPct, nextOrder, nextCust, updatedAt,
     billPhone, address, gstin, upiId, logoId, decodeTerms(termsJson), termsCustom, billTemplate, onboardingStep,
+    gstOn = gstOn, gstPct = gstPct, gstMode = gstMode,
 )
 fun ShopDto.toEntity() = ShopEntity(
     1, name, phone, expressPct, nextOrder, nextCust, updatedAt, dirty = false,
     billPhone = billPhone.ifBlank { phone }, address = address, gstin = gstin, upiId = upiId, logoId = logoId,
     termsJson = encodeTerms(terms), termsCustom = termsCustom,
     billTemplate = BillDetails.templateOrDefault(billTemplate), onboardingStep = BillDetails.stepOrBlank(onboardingStep),
+    gstOn = gstOn, gstPct = Gst.pctFrom(gstPct, Gst.DEFAULT_PCT), gstMode = Gst.modeOrDefault(gstMode),
 )
 
 fun ServiceEntity.toDto() = ServiceDto(id, name, mode, ratePerKg, minKg, readyInDays, lockedToPiece, sortOrder, deleted, itemsJson, updatedAt)
@@ -112,13 +119,14 @@ fun CustomerDto.toEntity() = CustomerEntity(id, name, phone, address, pastOrders
 fun OrderEntity.toDto() = OrderDto(
     id, custId, pickup, delivery, pickupDate, pickupTime, deliveryDate, deliveryTime, ddAuto, status,
     cancelReason, fee, express, exAmt, discount, pre, paid, doneAt, doneDate, createdOn, billSent,
-    pieces, linesJson, deleted, updatedAt, serialNo, exPct, discPct,
+    pieces, linesJson, deleted, updatedAt, serialNo, exPct, discPct, gstOn, gstPct, gstMode,
 )
 fun OrderDto.toEntity() = OrderEntity(
     id, custId, pickup, delivery, pickupDate, pickupTime, deliveryDate, deliveryTime, ddAuto, status,
     cancelReason, fee, express, exAmt, discount, pre, paid, doneAt, doneDate, createdOn, billSent,
     pieces, linesJson, deleted, updatedAt, dirty = false, serialNo = serialNo ?: "",
     exPct = exPct ?: 0, discPct = discPct ?: 0,
+    gstOn = gstOn ?: false, gstPct = Gst.pctFrom(gstPct), gstMode = Gst.modeOrDefault(gstMode),
 )
 
 fun LedgerEntity.toDto() = LedgerDto(id, custId, date, time, ts, kind, amt, method, tag, cover, toOld, toAdv, ref, note, deleted, updatedAt)
