@@ -33,7 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import com.dailyworks.apnalaundry.ui.screens.bill.sendBillOnWhatsApp
-import com.dailyworks.apnalaundry.ui.screens.bill.shareBillImage
+import com.dailyworks.apnalaundry.ui.screens.bill.shareBillPdf
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.LaunchedEffect
@@ -166,7 +166,7 @@ fun OrderDetailScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: I
                     // bill actions
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlineButton("View bill", Modifier.weight(1f), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { active = ActiveSheet.BillView(o.id) }
-                        OutlineButton("Download", Modifier.weight(1f), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { shareBillImage(context, state, o) }
+                        OutlineButton("Download", Modifier.weight(1f), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { shareBillPdf(context, state, o) }
                         if (o.billSent) OutlineButton("Sent ✓", Modifier.weight(1f), height = 48.dp, border = Tokens.BlueBorder, fg = Tokens.BlueText) { sendBillOnWhatsApp(context, state, o); shopVm.sendBill(o.id) }
                         else PrimaryButton("WhatsApp", Modifier.weight(1f), height = 48.dp) { sendBillOnWhatsApp(context, state, o); shopVm.sendBill(o.id) }
                     }

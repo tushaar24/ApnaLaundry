@@ -74,6 +74,12 @@ object BillRender {
         return bmp
     }
 
+    /** Draws the bill 1:1 onto a canvas of [W] × [height] points — a PDF page (vector text). */
+    fun drawPage(context: Context, canvas: Canvas, r: BillReceipt, logo: Bitmap?) {
+        canvas.drawColor(if (r.template == BillDetails.RECEIPT) SLIP else Color.WHITE)
+        layout(context, canvas, r, logo, draw = true, minH = 0f)
+    }
+
     private fun wrap(p: Paint, text: String, maxW: Float): List<String> {
         val out = mutableListOf<String>()
         var cur = ""

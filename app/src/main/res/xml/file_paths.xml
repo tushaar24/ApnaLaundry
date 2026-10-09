@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
-    <!-- Bill PNGs rendered for the share sheet live in cacheDir/bills. -->
+    <!-- Bill PDFs rendered for the share sheet / WhatsApp live in cacheDir/bills. -->
     <cache-path name="bills" path="bills/" />
     <!-- Logo photos taken with the camera (onboarding "Your bill" → Shop logo). -->
     <cache-path name="camera" path="camera/" />
