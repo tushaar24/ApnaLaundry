@@ -1,0 +1,265 @@
+diff -ruN backend-orig/prisma/migrations/20261009120000_laundry_shop_bill_details/migration.sql backend-live/prisma/migrations/20261009120000_laundry_shop_bill_details/migration.sql
+--- backend-orig/prisma/migrations/20261009120000_laundry_shop_bill_details/migration.sql	1970-01-01 05:30:00
++++ backend-live/prisma/migrations/20261009120000_laundry_shop_bill_details/migration.sql	2026-10-09 11:23:41
+@@ -0,0 +1,29 @@
++-- Bill details (phone on bill, address, GSTIN, UPI, logo, terms, design) and
++-- onboarding progress on the shop row, plus a table for uploaded logos.
++-- AlterTable
++ALTER TABLE "laundry_shops" ADD COLUMN     "address" TEXT NOT NULL DEFAULT '',
++ADD COLUMN     "bill_phone" TEXT NOT NULL DEFAULT '',
++ADD COLUMN     "bill_template" TEXT NOT NULL DEFAULT 'classic',
++ADD COLUMN     "gstin" TEXT NOT NULL DEFAULT '',
++ADD COLUMN     "logo_id" TEXT NOT NULL DEFAULT '',
++ADD COLUMN     "onboarding_step" TEXT NOT NULL DEFAULT '',
++ADD COLUMN     "terms" TEXT[] DEFAULT ARRAY[]::TEXT[],
++ADD COLUMN     "terms_custom" TEXT NOT NULL DEFAULT '',
++ADD COLUMN     "upi_id" TEXT NOT NULL DEFAULT '';
++
++-- CreateTable
++CREATE TABLE "laundry_shop_logos" (
++    "id" TEXT NOT NULL,
++    "user_id" TEXT NOT NULL,
++    "content_type" TEXT NOT NULL,
++    "data" BYTEA NOT NULL,
++    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
++
++    CONSTRAINT "laundry_shop_logos_pkey" PRIMARY KEY ("id")
++);
++
++-- CreateIndex
++CREATE INDEX "laundry_shop_logos_user_id_idx" ON "laundry_shop_logos"("user_id");
++
++-- AddForeignKey
++ALTER TABLE "laundry_shop_logos" ADD CONSTRAINT "laundry_shop_logos_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "laundry_users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+diff -ruN backend-orig/prisma/schema.prisma backend-live/prisma/schema.prisma
+--- backend-orig/prisma/schema.prisma	2026-10-08 16:46:21
++++ backend-live/prisma/schema.prisma	2026-10-09 11:23:41
+@@ -170,6 +170,7 @@
+   metaSignalsAt DateTime? @map("meta_signals_at") @db.Timestamptz(6)
+ 
+   shop          LaundryShop?
++  shopLogos     LaundryShopLogo[]
+   services      LaundryService[]
+   customers     LaundryCustomer[]
+   orders        LaundryOrder[]
+@@ -250,10 +251,35 @@
+   expressPct      Int         @map("express_pct")
+   nextOrder       Int         @map("next_order")
+   nextCust        Int         @map("next_cust")
++  // Bill details + onboarding (2026-10-09). All optional: older app builds
++  // never send them, and sync/push only writes the ones a client sends.
++  billPhone       String      @default("") @map("bill_phone")
++  address         String      @default("")
++  gstin           String      @default("")
++  upiId           String      @default("") @map("upi_id")
++  logoId          String      @default("") @map("logo_id") // laundry_shop_logos.id
++  terms           String[]    @default([]) // preset ids: check | fade | pocket | days
++  termsCustom     String      @default("") @map("terms_custom")
++  billTemplate    String      @default("classic") @map("bill_template") // classic | bold | receipt
++  onboardingStep  String      @default("") @map("onboarding_step") // "" = unknown (pre-2026-10-09 shop)
+   updatedAt       BigInt      @map("updated_at")
+   serverUpdatedAt DateTime    @default(now()) @updatedAt @map("server_updated_at") @db.Timestamptz(6)
+ 
+   @@map("laundry_shops")
++}
++
++// Shop logos printed on bills. Small (client resizes to ~512px JPEG), so they
++// live in Postgres; each upload is a new immutable row served publicly by id.
++model LaundryShopLogo {
++  id          String      @id
++  userId      String      @map("user_id")
++  user        LaundryUser @relation(fields: [userId], references: [id])
++  contentType String      @map("content_type")
++  data        Bytes
++  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
++
++  @@index([userId])
++  @@map("laundry_shop_logos")
+ }
+ 
+ model LaundryService {
+diff -ruN backend-orig/routes/laundry-public.js backend-live/routes/laundry-public.js
+--- backend-orig/routes/laundry-public.js	2026-10-06 11:57:57
++++ backend-live/routes/laundry-public.js	2026-10-09 11:23:41
+@@ -1,11 +1,13 @@
+ const express = require('express');
+ 
++const prisma = require('../db');
+ const billLinks = require('../services/laundry-bill-links');
+ 
+ // Unauthenticated ApnaLaundry endpoints — mounted before the token-gated
+ // /api/laundry router.
+ //
+ //   GET /api/laundry/public/bills/:token   bill for the customer-facing page
++//   GET /api/laundry/public/logos/:id      a shop logo printed on bills
+ //
+ // No rate limit: the token is 72 random bits, so enumeration is hopeless, and
+ // every request arrives via the website's server-side proxy (one source IP).
+@@ -18,6 +20,19 @@
+     res.set('Cache-Control', 'no-store'); // the bill is live — edits must show
+     if (!bill) return res.status(404).json({ success: false, message: 'Bill not found' });
+     return res.json({ success: true, bill });
++  } catch (error) {
++    return next(error);
++  }
++});
++
++// Logos are immutable per id (a new upload gets a new id), so cache hard.
++router.get('/logos/:id', async (req, res, next) => {
++  try {
++    const logo = await prisma.laundryShopLogo.findUnique({ where: { id: String(req.params.id) } });
++    if (!logo) return res.status(404).json({ success: false, message: 'Logo not found' });
++    res.set('Content-Type', logo.contentType);
++    res.set('Cache-Control', 'public, max-age=31536000, immutable');
++    return res.send(Buffer.from(logo.data));
+   } catch (error) {
+     return next(error);
+   }
+diff -ruN backend-orig/routes/laundry.js backend-live/routes/laundry.js
+--- backend-orig/routes/laundry.js	2026-10-06 11:57:57
++++ backend-live/routes/laundry.js	2026-10-09 11:23:41
+@@ -1,8 +1,10 @@
++const crypto = require('crypto');
+ const express = require('express');
+ 
+ const prisma = require('../db');
+ const { requireLaundryAuth } = require('../middleware/laundry-auth');
+ const billLinks = require('../services/laundry-bill-links');
++const shopDetails = require('../services/laundry-shop-details');
+ 
+ // Sync API for the ApnaLaundry Android app (offline-first Room DB).
+ //
+@@ -146,6 +148,41 @@
+   return rest;
+ }
+ 
++// POST /api/laundry/shop/logo  { contentType, dataBase64 } -> { logoId }
++// The app resizes the logo (~512px JPEG) before sending. Each upload is a new
++// immutable row; the app then sets shop.logoId and syncs. Older uploads beyond
++// the latest few are pruned.
++const LOGO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
++const LOGO_MAX_BYTES = 400 * 1024;
++const LOGOS_KEPT = 3;
++
++router.post('/shop/logo', async (req, res, next) => {
++  try {
++    const userId = req.laundryUserId;
++    const contentType = String((req.body && req.body.contentType) || '');
++    const b64 = String((req.body && req.body.dataBase64) || '');
++    if (!LOGO_TYPES.includes(contentType)) {
++      return res.status(400).json({ success: false, message: 'Logo must be a JPEG, PNG or WebP image' });
++    }
++    const data = Buffer.from(b64, 'base64');
++    if (data.length === 0 || data.length > LOGO_MAX_BYTES) {
++      return res.status(400).json({ success: false, message: 'Logo image is empty or too large' });
++    }
++    const id = crypto.randomBytes(12).toString('base64url');
++    await prisma.laundryShopLogo.create({ data: { id, userId, contentType, data } });
++    const old = await prisma.laundryShopLogo.findMany({
++      where: { userId },
++      orderBy: { createdAt: 'desc' },
++      skip: LOGOS_KEPT,
++      select: { id: true },
++    });
++    if (old.length) await prisma.laundryShopLogo.deleteMany({ where: { id: { in: old.map((o) => o.id) } } });
++    return res.json({ success: true, logoId: id });
++  } catch (error) {
++    return next(error);
++  }
++});
++
+ router.post('/sync/push', async (req, res, next) => {
+   try {
+     const userId = req.laundryUserId;
+@@ -172,6 +209,7 @@
+             expressPct: asInt(shop.expressPct),
+             nextOrder: asInt(shop.nextOrder, 1),
+             nextCust: asInt(shop.nextCust, 1),
++            ...shopDetails.pickDetails(shop),
+             updatedAt,
+           };
+           await tx.laundryShop.upsert({
+diff -ruN backend-orig/services/laundry-bill-links.js backend-live/services/laundry-bill-links.js
+--- backend-orig/services/laundry-bill-links.js	2026-10-06 11:57:57
++++ backend-live/services/laundry-bill-links.js	2026-10-09 11:27:44
+@@ -1,6 +1,7 @@
+ const crypto = require('crypto');
+ 
+ const prisma = require('../db');
++const { billShop } = require('./laundry-shop-details');
+ 
+ // Public "view your bill" links for ApnaLaundry (mylaundry.work/b/<token>).
+ // The shop owner sends the link on WhatsApp; the customer opens it without
+@@ -62,14 +63,16 @@
+   ]);
+ 
+   return {
+-    shop: { name: shop ? shop.name : '', phone: shop ? shop.phone : '' },
++    shop: billShop(shop),
+     customer: { name: customer ? customer.name : '', phone: customer ? customer.phone : '' },
+     order: {
+       id: order.id,
+       status: order.status,
+       createdOn: order.createdOn,
+       deliveryDate: order.deliveryDate,
++      deliveryTime: order.deliveryTime,
+       doneDate: order.doneDate,
++      paid: order.paid,
+       express: order.express,
+       exAmt: order.exAmt,
+       fee: order.fee,
+diff -ruN backend-orig/services/laundry-shop-details.js backend-live/services/laundry-shop-details.js
+--- backend-orig/services/laundry-shop-details.js	1970-01-01 05:30:00
++++ backend-live/services/laundry-shop-details.js	2026-10-09 11:23:46
+@@ -0,0 +1,51 @@
++// Bill details on the laundry shop row (phone on bill, address, GSTIN, UPI,
++// logo, terms, bill design) and onboarding progress. Shared by sync/push and
++// the public bill so both apply the same limits.
++
++const TEMPLATES = ['classic', 'bold', 'receipt'];
++const TERM_IDS = ['check', 'fade', 'pocket', 'days'];
++const STEPS = ['intro', 'name', 'services', 'bill', 'done'];
++
++const str = (v, max) => String(v === null || v === undefined ? '' : v).trim().slice(0, max);
++
++// Sanitisers per synced key. A key a client doesn't send is left untouched, so
++// app builds from before these fields can't wipe them.
++const FIELDS = {
++  billPhone: (v) => str(v, 20).replace(/\D/g, '').slice(-10),
++  address: (v) => str(v, 120).replace(/\s+/g, ' '),
++  gstin: (v) => str(v, 15).toUpperCase().replace(/[^0-9A-Z]/g, ''),
++  upiId: (v) => str(v, 60),
++  logoId: (v) => str(v, 40).replace(/[^A-Za-z0-9_-]/g, ''),
++  terms: (v) => (Array.isArray(v) ? [...new Set(v.map(String))].filter((t) => TERM_IDS.includes(t)) : []),
++  termsCustom: (v) => str(v, 80),
++  billTemplate: (v) => (TEMPLATES.includes(String(v)) ? String(v) : 'classic'),
++  onboardingStep: (v) => (STEPS.includes(String(v)) ? String(v) : ''),
++};
++
++/** The bill-detail keys present in a pushed shop, sanitised. */
++function pickDetails(shop) {
++  const out = {};
++  for (const [key, clean] of Object.entries(FIELDS)) {
++    if (Object.prototype.hasOwnProperty.call(shop, key)) out[key] = clean(shop[key]);
++  }
++  return out;
++}
++
++/** What a printed bill needs from the shop row (null-safe). */
++function billShop(shop) {
++  if (!shop) return { name: '', phone: '' };
++  return {
++    name: shop.name,
++    phone: shop.phone,
++    billPhone: shop.billPhone || '',
++    address: shop.address || '',
++    gstin: shop.gstin || '',
++    upiId: shop.upiId || '',
++    logoId: shop.logoId || '',
++    terms: shop.terms || [],
++    termsCustom: shop.termsCustom || '',
++    billTemplate: shop.billTemplate || 'classic',
++  };
++}
++
++module.exports = { pickDetails, billShop };

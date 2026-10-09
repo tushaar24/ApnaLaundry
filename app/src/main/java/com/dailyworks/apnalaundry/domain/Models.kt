@@ -105,6 +105,17 @@ data class Shop(
     val name: String,
     val phone: String,
     val expressPct: Int,
+    // Optional bill details + the chosen design (see domain/BillDetails.kt).
+    val billPhone: String = "",
+    val address: String = "",
+    val gstin: String = "", // printed only when valid
+    val upiId: String = "", // QR printed only when valid
+    val logoId: String = "",
+    val terms: List<String> = emptyList(), // preset ids
+    val termsCustom: String = "",
+    val billTemplate: String = BillDetails.CLASSIC,
+    /** "" = a shop from before onboarding was tracked; else intro|name|services|bill|done. */
+    val onboardingStep: String = "",
 )
 
 data class DayClose(

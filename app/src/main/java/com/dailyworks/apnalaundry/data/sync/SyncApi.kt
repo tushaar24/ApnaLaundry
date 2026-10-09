@@ -48,6 +48,28 @@ class SyncApi(private val client: HttpClient, private val tokens: TokenManager) 
         return res.body()
     }
 
+    /** Uploads a (pre-resized) JPEG shop logo; returns its id for shop.logoId. */
+    suspend fun uploadLogo(jpegBase64: String): String {
+        val res = authed { token ->
+            client.post("$base/shop/logo") {
+                contentType(ContentType.Application.Json)
+                bearerAuth(token)
+                setBody(LogoUpload("image/jpeg", jpegBase64))
+            }
+        }
+        val body: LogoUploadResponse = runCatching { res.body<LogoUploadResponse>() }.getOrDefault(LogoUploadResponse(false))
+        if (res.status.value !in 200..299 || !body.success || body.logoId.isNullOrBlank()) {
+            throw SyncHttpException(res.status.value)
+        }
+        return body.logoId
+    }
+
+    /** A shop logo's bytes (public, immutable per id). */
+    suspend fun fetchLogo(logoId: String): ByteArray? {
+        val res = client.get("$base/public/logos/$logoId")
+        return if (res.status.value in 200..299) res.body<ByteArray>() else null
+    }
+
     private suspend fun authed(block: suspend (String) -> HttpResponse): HttpResponse {
         val token = tokens.validAccessToken() ?: throw NotLoggedInException()
         val first = block(token)

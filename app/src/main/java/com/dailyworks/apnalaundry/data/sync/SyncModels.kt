@@ -6,6 +6,9 @@ import com.dailyworks.apnalaundry.data.local.LedgerEntity
 import com.dailyworks.apnalaundry.data.local.OrderEntity
 import com.dailyworks.apnalaundry.data.local.ServiceEntity
 import com.dailyworks.apnalaundry.data.local.ShopEntity
+import com.dailyworks.apnalaundry.data.decodeTerms
+import com.dailyworks.apnalaundry.data.encodeTerms
+import com.dailyworks.apnalaundry.domain.BillDetails
 import kotlinx.serialization.Serializable
 
 // Wire DTOs for /api/laundry/sync — field-for-field mirrors of the Room
@@ -17,6 +20,10 @@ import kotlinx.serialization.Serializable
 data class ShopDto(
     val name: String, val phone: String, val expressPct: Int,
     val nextOrder: Int, val nextCust: Int, val updatedAt: Long,
+    // Bill details + onboarding — absent from servers before 2026-10-09.
+    val billPhone: String = "", val address: String = "", val gstin: String = "",
+    val upiId: String = "", val logoId: String = "", val terms: List<String> = emptyList(),
+    val termsCustom: String = "", val billTemplate: String = "classic", val onboardingStep: String = "",
 )
 
 @Serializable
@@ -81,8 +88,16 @@ data class SyncChanges(
 
 // ---- entity <-> DTO ----
 
-fun ShopEntity.toDto() = ShopDto(name, phone, expressPct, nextOrder, nextCust, updatedAt)
-fun ShopDto.toEntity() = ShopEntity(1, name, phone, expressPct, nextOrder, nextCust, updatedAt, dirty = false)
+fun ShopEntity.toDto() = ShopDto(
+    name, phone, expressPct, nextOrder, nextCust, updatedAt,
+    billPhone, address, gstin, upiId, logoId, decodeTerms(termsJson), termsCustom, billTemplate, onboardingStep,
+)
+fun ShopDto.toEntity() = ShopEntity(
+    1, name, phone, expressPct, nextOrder, nextCust, updatedAt, dirty = false,
+    billPhone = billPhone.ifBlank { phone }, address = address, gstin = gstin, upiId = upiId, logoId = logoId,
+    termsJson = encodeTerms(terms), termsCustom = termsCustom,
+    billTemplate = BillDetails.templateOrDefault(billTemplate), onboardingStep = BillDetails.stepOrBlank(onboardingStep),
+)
 
 fun ServiceEntity.toDto() = ServiceDto(id, name, mode, ratePerKg, minKg, readyInDays, lockedToPiece, sortOrder, deleted, itemsJson, updatedAt)
 fun ServiceDto.toEntity() = ServiceEntity(id, name, mode, ratePerKg, minKg, readyInDays, lockedToPiece, sortOrder, deleted, itemsJson, updatedAt, dirty = false)
@@ -106,3 +121,6 @@ fun LedgerDto.toEntity() = LedgerEntity(id, custId, date, time, ts, kind, amt, m
 
 fun DayCloseEntity.toDto() = DayCloseDto(date, closedAt, cashCounted, deleted, updatedAt)
 fun DayCloseDto.toEntity() = DayCloseEntity(date, closedAt, cashCounted, deleted, updatedAt, dirty = false)
+
+@Serializable data class LogoUpload(val contentType: String, val dataBase64: String)
+@Serializable data class LogoUploadResponse(val success: Boolean, val logoId: String? = null, val message: String? = null)

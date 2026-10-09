@@ -22,6 +22,7 @@ import com.dailyworks.apnalaundry.ui.screens.home.HomeScreen
 import com.dailyworks.apnalaundry.ui.screens.login.LoginScreen
 import com.dailyworks.apnalaundry.ui.screens.neworder.NewOrderScreen
 import com.dailyworks.apnalaundry.ui.screens.order.OrderDetailScreen
+import com.dailyworks.apnalaundry.ui.screens.onboarding.BillDesignScreen
 import com.dailyworks.apnalaundry.ui.screens.paywall.BillingGate
 import com.dailyworks.apnalaundry.ui.screens.paywall.PaywallScreen
 import com.dailyworks.apnalaundry.ui.screens.rates.RatesScreen
@@ -161,6 +162,11 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
         }
 
         // Settings → Subscription: manage/cancel the active plan.
+        // Settings → Bill design & details: onboarding "Your bill" in edit mode.
+        composable(Routes.BILL_DESIGN) {
+            BillDesignScreen(shopVm, editing = true, onBack = { navigator.back() }, onDone = { navigator.back() })
+        }
+
         composable(Routes.SUBSCRIPTION) {
             PaywallScreen(
                 onClose = { navigator.back() },

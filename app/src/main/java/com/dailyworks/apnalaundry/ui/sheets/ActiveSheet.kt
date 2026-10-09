@@ -45,7 +45,7 @@ fun SheetHost(
         is ActiveSheet.CustomerForm -> CustomerFormSheet(state, active, vm, onDismiss)
         is ActiveSheet.Receive -> ReceivePaymentSheet(state, active.custId, vm, onDismiss)
         is ActiveSheet.AddOld -> AddOldBaakiSheet(state, active.custId, vm, onDismiss)
-        is ActiveSheet.BillView -> BillViewSheet(state, active.orderId, onDismiss)
+        is ActiveSheet.BillView -> BillViewSheet(state, active.orderId, vm, onDismiss)
         is ActiveSheet.Share -> ShareSummarySheet(active.text, vm, onDismiss)
     }
 }

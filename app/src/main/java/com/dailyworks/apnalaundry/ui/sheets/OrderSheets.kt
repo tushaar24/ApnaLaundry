@@ -1,6 +1,8 @@
 package com.dailyworks.apnalaundry.ui.sheets
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,12 +26,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.core.AppDate
 import com.dailyworks.apnalaundry.core.Money
+import com.dailyworks.apnalaundry.domain.BillReceipt
 import com.dailyworks.apnalaundry.domain.LaundryMath
 import com.dailyworks.apnalaundry.domain.LaundryState
 import com.dailyworks.apnalaundry.domain.OrderStatus
@@ -47,6 +51,7 @@ import com.dailyworks.apnalaundry.ui.components.rememberClothesState
 import com.dailyworks.apnalaundry.ui.components.rounded
 import com.dailyworks.apnalaundry.ui.components.tap
 import com.dailyworks.apnalaundry.ui.nav.AppNavigator
+import com.dailyworks.apnalaundry.ui.screens.bill.rememberBillImages
 import com.dailyworks.apnalaundry.ui.theme.Tokens
 import kotlin.math.max
 
@@ -192,31 +197,23 @@ fun CancelSheet(state: LaundryState, orderId: Int, vm: ShopViewModel, onDismiss:
 }
 
 @Composable
-fun BillViewSheet(state: LaundryState, orderId: Int, onDismiss: () -> Unit) {
+fun BillViewSheet(state: LaundryState, orderId: Int, vm: ShopViewModel, onDismiss: () -> Unit) {
     val o = Selectors.order(state, orderId) ?: return onDismiss()
     val c = Selectors.customer(state, o.custId)
     val total = LaundryMath.amtOf(o)
     LaunchedEffect(orderId) { Analytics.billViewed(orderId) }
+    // The exact image customers get, in the shop's chosen design.
+    val images by rememberBillImages(vm, listOf(BillReceipt.of(state, o)), equalHeight = false)
     AppBottomSheet(title = "Bill #${o.id}", subtitle = "${c.name} · this is what the customer sees", onDismiss = onDismiss) {
-        Column(Modifier.fillMaxWidth().rounded(16.dp).background(Tokens.Card).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(state.shop.name, style = bric(22, FontWeight.Bold))
-            Text("+91 ${Selectors.fmtPhone(state.shop.phone)}", style = fig(13, color = Tokens.Muted))
-            Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Divider).padding(vertical = 4.dp))
-            Text("Bill #${o.id} · ${AppDate.plain(o.createdOn)}", style = fig(13, FontWeight.SemiBold, Tokens.Muted))
-            Text("To: ${c.name}", style = fig(15, FontWeight.SemiBold))
-            o.lines.forEach { l ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(if (l.kg > 0) "${l.serviceName} · ${Selectors.trimKg(l.kg)} kg" else "${l.itemName} × ${l.qty}", style = fig(15))
-                    Text(Money.rupees(l.amt), style = fig(15, FontWeight.SemiBold))
-                }
-            }
-            if (o.express && o.exAmt > 0) MoneyRow("Express", "+ ${Money.rupees(o.exAmt)}")
-            if (o.fee > 0) MoneyRow("Pickup / delivery", "+ ${Money.rupees(o.fee)}")
-            if (o.discount > 0) MoneyRow("Discount", "− ${Money.rupees(o.discount)}", Tokens.OrangeText)
-            Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Divider).padding(vertical = 4.dp))
-            MoneyRow("Total", Money.rupees(total), bold = true)
-            Spacer(Modifier.height(4.dp))
-            Text("Thank you!", style = fig(15, FontWeight.Bold, Tokens.Blue))
+        val img = images?.firstOrNull()
+        if (img == null) {
+            Box(Modifier.fillMaxWidth().height(420.dp).rounded(16.dp).background(Tokens.Card))
+        } else {
+            Image(
+                img, contentDescription = "Bill #${o.id} · total ${Money.rupees(total)}",
+                modifier = Modifier.fillMaxWidth().rounded(16.dp).border(1.dp, Tokens.CardBorder, RoundedCornerShape(16.dp)),
+                contentScale = ContentScale.FillWidth,
+            )
         }
     }
 }

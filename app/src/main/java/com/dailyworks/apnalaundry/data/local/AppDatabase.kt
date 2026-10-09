@@ -14,7 +14,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         LedgerEntity::class,
         DayCloseEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -84,6 +84,17 @@ abstract class AppDatabase : RoomDatabase() {
                 )
                 db.execSQL("DROP TABLE shop")
                 db.execSQL("ALTER TABLE shop_new RENAME TO shop")
+            }
+        }
+
+        /** v3 -> v4: bill details (phone on bill, address, GSTIN, UPI, logo, terms, design) + onboarding step. */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                for (col in listOf("billPhone", "address", "gstin", "upiId", "logoId", "termsCustom", "onboardingStep")) {
+                    db.execSQL("ALTER TABLE shop ADD COLUMN $col TEXT NOT NULL DEFAULT ''")
+                }
+                db.execSQL("ALTER TABLE shop ADD COLUMN termsJson TEXT NOT NULL DEFAULT '[]'")
+                db.execSQL("ALTER TABLE shop ADD COLUMN billTemplate TEXT NOT NULL DEFAULT 'classic'")
             }
         }
     }

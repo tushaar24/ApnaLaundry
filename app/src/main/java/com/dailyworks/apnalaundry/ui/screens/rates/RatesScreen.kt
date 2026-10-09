@@ -66,11 +66,9 @@ import com.dailyworks.apnalaundry.ui.components.bric
 import com.dailyworks.apnalaundry.ui.components.fig
 import com.dailyworks.apnalaundry.ui.components.rounded
 import com.dailyworks.apnalaundry.ui.components.tap
+import com.dailyworks.apnalaundry.ui.screens.onboarding.OnboardingFlow
 import com.dailyworks.apnalaundry.ui.theme.Tokens
 import org.koin.compose.koinInject
-
-/** Onboarding step when opened as setup (after login + paywall). */
-private enum class SetupStep { Name, Rates }
 
 /** Which sub-screen of the rate list is open. */
 private sealed interface RatePage {
@@ -93,43 +91,36 @@ private fun summaryLine(s: Service): String = if (s.mode == PricingMode.WEIGHT) 
 
 @Composable
 fun RatesScreen(shopVm: ShopViewModel, from: String, onDone: () -> Unit, onBack: () -> Unit) {
-    val state by shopVm.state.collectAsStateWithLifecycle()
     val setup = from == "setup"
-    var page by remember { mutableStateOf<RatePage>(RatePage.List) }
-
     LaunchedEffect(Unit) {
         Analytics.screen("rates")
         if (!setup) Analytics.ratesOpened(from)
     }
-
-    // Onboarding: 1) the shop name — skipped when it's already named — then
-    // 2) this rate list, then Home. Decided from the DB, not the VM's
-    // not-yet-loaded initial state.
-    val repo: LaundryRepository = koinInject()
-    var step by remember { mutableStateOf<SetupStep?>(null) }
-    var askedName by remember { mutableStateOf(false) }
+    // First-run setup is the whole onboarding flow (intro → name → this rate
+    // list → "Your bill"); it reuses [RatesEditor] for its services step.
     if (setup) {
-        LaunchedEffect(Unit) {
-            askedName = SeedData.isDefaultShopName(repo.currentShopName())
-            step = if (askedName) SetupStep.Name else SetupStep.Rates
-        }
-        when (step) {
-            null -> { Box(Modifier.fillMaxSize().background(Tokens.Bg)); return }
-            SetupStep.Name -> {
-                ShopNameSetupPage(shopVm, onNext = { step = SetupStep.Rates })
-                return
-            }
-            SetupStep.Rates -> Unit
-        }
+        OnboardingFlow(shopVm, onFinished = onDone)
+        return
     }
+    RatesEditor(shopVm, setupHeader = null, onDone = onDone, onBack = onBack)
+}
 
+/**
+ * The rate list with its edit / add sub-pages. With [setupHeader] it is
+ * onboarding step 2: the step bar replaces the top bar and it ends in
+ * "Next: Your bill".
+ */
+@Composable
+fun RatesEditor(shopVm: ShopViewModel, setupHeader: (@Composable () -> Unit)?, onDone: () -> Unit, onBack: () -> Unit) {
+    val state by shopVm.state.collectAsStateWithLifecycle()
+    var page by remember { mutableStateOf<RatePage>(RatePage.List) }
     when (val p = page) {
         is RatePage.List -> RateListPage(
-            shopVm = shopVm, setup = setup,
+            shopVm = shopVm, setupHeader = setupHeader,
             onEdit = { page = RatePage.Edit(it) },
             onAdd = { page = RatePage.Add },
             onDone = onDone,
-            onBack = if (setup) { if (askedName) ({ step = SetupStep.Name }) else null } else onBack,
+            onBack = onBack,
         )
         is RatePage.Edit -> {
             val svc = state.services.firstOrNull { it.id == p.serviceId }
@@ -150,62 +141,14 @@ fun RatesScreen(shopVm: ShopViewModel, from: String, onDone: () -> Unit, onBack:
     }
 }
 
-// ───────────────────────── setup ─────────────────────────
-
-@Composable
-private fun ShopNameSetupPage(shopVm: ShopViewModel, onNext: () -> Unit) {
-    val state by shopVm.state.collectAsStateWithLifecycle()
-    var shopName by remember { mutableStateOf(state.shop.name.takeUnless { SeedData.isDefaultShopName(it) } ?: "") }
-    val named = shopName.isNotBlank()
-    val focus = remember { FocusRequester() }
-    val keyboard = LocalSoftwareKeyboardController.current
-
-    // Open the keyboard straight away on the name field.
-    LaunchedEffect(Unit) {
-        focus.requestFocus()
-        keyboard?.show()
-    }
-
-    fun done() {
-        if (!named) return
-        shopVm.updateShop(shopName.trim(), state.shop.expressPct)
-        onNext()
-    }
-
-    Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars).imePadding()) {
-        Column(
-            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Icon(Icons.Outlined.Check, null, tint = Tokens.Blue, modifier = Modifier.size(18.dp))
-                Text("Trial started · Step 1 of 2", style = fig(13, FontWeight.SemiBold, Tokens.Muted))
-            }
-            Text("What is your laundry called?", style = bric(28, FontWeight.Bold))
-            Text("This name goes on every bill you send to customers.", style = fig(14, color = Tokens.Muted))
-            FieldBox(
-                shopName, { shopName = it },
-                placeholder = "e.g. Sharma Laundry",
-                height = 56.dp, borderColor = Tokens.Blue, borderWidth = 2.dp,
-                fieldModifier = Modifier.focusRequester(focus),
-                capitalization = KeyboardCapitalization.Words,
-                imeAction = ImeAction.Next,
-                onImeAction = { done() },
-            )
-        }
-        Box(Modifier.fillMaxWidth().background(Tokens.Card).padding(16.dp)) {
-            PrimaryButton("Next", height = 56.dp, enabled = named) { done() }
-        }
-    }
-}
-
 // ───────────────────────── list ─────────────────────────
 
 @Composable
 private fun RateListPage(
-    shopVm: ShopViewModel, setup: Boolean,
-    onEdit: (String) -> Unit, onAdd: () -> Unit, onDone: () -> Unit, onBack: (() -> Unit)?,
+    shopVm: ShopViewModel, setupHeader: (@Composable () -> Unit)?,
+    onEdit: (String) -> Unit, onAdd: () -> Unit, onDone: () -> Unit, onBack: () -> Unit,
 ) {
+    val setup = setupHeader != null
     val state by shopVm.state.collectAsStateWithLifecycle()
     val services = state.services
 
@@ -214,30 +157,22 @@ private fun RateListPage(
     fun commitAndDone() {
         val pct = expressPct.toIntOrNull() ?: 50
         shopVm.updateShop(state.shop.name, pct)
-        if (setup) Analytics.setupCompleted(services.size, pct)
         onDone()
     }
 
     Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars)) {
-        if (!setup) TopBar("Rate list", onBack = onBack ?: {})
+        if (!setup) TopBar("Rate list", onBack = onBack)
 
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            if (setup) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (onBack != null) {
-                        Box(Modifier.size(40.dp).rounded(999.dp).tap(onClick = onBack), contentAlignment = Alignment.Center) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Tokens.Ink, modifier = Modifier.size(22.dp))
-                        }
-                    }
-                    Text("Last step · Your services", style = fig(13, FontWeight.SemiBold, Tokens.Muted))
-                }
+            if (setupHeader != null) {
+                setupHeader()
                 Text("Set up your rate list", style = bric(28, FontWeight.Bold))
-                InfoBox(
-                    "We filled in common prices",
-                    "Tap Edit to change a price, delete what you don't do, or add your own service. You can change this anytime from ₹ Rates.",
+                Text(
+                    "These services and prices go on your bills. Check them once — change only what is different.",
+                    style = fig(14, color = Tokens.Muted),
                 )
             } else {
                 InfoBox(
@@ -278,7 +213,7 @@ private fun RateListPage(
                 modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp),
             )
             Box(Modifier.padding(16.dp)) {
-                PrimaryButton(if (setup) "Start taking orders" else "Done", height = 56.dp) { commitAndDone() }
+                PrimaryButton(if (setup) "Next: Your bill" else "Done", height = 56.dp) { commitAndDone() }
             }
         }
     }

@@ -67,7 +67,10 @@ class LaundryRepository(private val db: AppDatabase) {
         if (shopDao.get() != null) { refreshTsCounter(); return }
         db.withTransaction {
             shopDao.upsert(
-                ShopEntity(1, SeedData.DEFAULT_SHOP_NAME, shopPhone ?: "", SeedData.shop.expressPct, 1001, 1)
+                ShopEntity(
+                    1, SeedData.DEFAULT_SHOP_NAME, shopPhone ?: "", SeedData.shop.expressPct, 1001, 1,
+                    billPhone = shopPhone ?: "", onboardingStep = "intro",
+                )
             )
             serviceDao.upsertAll(SeedData.services.map { it.toEntity() })
         }
@@ -84,6 +87,8 @@ class LaundryRepository(private val db: AppDatabase) {
      */
     suspend fun isOnboarded(): Boolean {
         val shop = shopDao.get() ?: return false
+        // Shops created since onboarding was tracked carry their step.
+        if (shop.onboardingStep.isNotEmpty()) return shop.onboardingStep == "done"
         return !SeedData.isDefaultShopName(shop.name) ||
             customerDao.observeOnce().isNotEmpty() || orderDao.observeOnce().isNotEmpty()
     }
@@ -363,6 +368,29 @@ class LaundryRepository(private val db: AppDatabase) {
         shopDao.upsert(e.copy(name = name, expressPct = expressPct, dirty = true, updatedAt = SyncClock.now()))
         if (name.isNotBlank()) Analytics.updateProfile(mapOf("Name" to name))
     }
+
+    /** Saves the shop name and/or bill details (onboarding "Your bill", Settings). */
+    suspend fun updateShopDetails(name: String? = null, details: BillDetails.Fields? = null) {
+        val e = shopDao.get() ?: return
+        var n = e.copy(dirty = true, updatedAt = SyncClock.now())
+        if (name != null) n = n.copy(name = name)
+        if (details != null) n = n.copy(
+            billPhone = details.billPhone, address = details.address, gstin = details.gstin,
+            upiId = details.upiId, logoId = details.logoId, termsJson = encodeTerms(details.terms),
+            termsCustom = details.termsCustom, billTemplate = details.billTemplate,
+        )
+        shopDao.upsert(n)
+        if (!name.isNullOrBlank()) Analytics.updateProfile(mapOf("Name" to name))
+    }
+
+    /** Records onboarding progress so a killed app (or another device) resumes there. */
+    suspend fun setOnboardingStep(step: String) {
+        val e = shopDao.get() ?: return
+        if (e.onboardingStep == step) return
+        shopDao.upsert(e.copy(onboardingStep = step, dirty = true, updatedAt = SyncClock.now()))
+    }
+
+    suspend fun onboardingStep(): String = shopDao.get()?.onboardingStep ?: ""
 
     // ---------------- new / edit order ----------------
     data class SaveOrderResult(val orderId: Int, val goToBill: Boolean, val toast: String?, val undo: Snapshot?, val edited: Boolean)

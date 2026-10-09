@@ -12,12 +12,16 @@ import android.net.Uri
 import androidx.core.content.FileProvider
 import com.dailyworks.apnalaundry.core.AppDate
 import com.dailyworks.apnalaundry.core.Money
+import com.dailyworks.apnalaundry.data.LogoStore
+import com.dailyworks.apnalaundry.domain.BillDetails
+import com.dailyworks.apnalaundry.domain.BillReceipt
 import com.dailyworks.apnalaundry.domain.LaundryMath
 import com.dailyworks.apnalaundry.domain.LaundryState
 import com.dailyworks.apnalaundry.domain.Order
 import com.dailyworks.apnalaundry.ui.Selectors
 import java.io.File
 import java.io.FileOutputStream
+import org.koin.core.context.GlobalContext
 
 /**
  * Real "Download" and "Send on WhatsApp" for a bill (mirror of the web
@@ -52,7 +56,7 @@ private fun billText(state: LaundryState, o: Order): String {
     val body = rows.joinToString("\n") { "${it.label}  —  ${it.value}" }
     return buildString {
         appendLine("*${state.shop.name}*")
-        appendLine("+91 ${Selectors.fmtPhone(state.shop.phone)}")
+        appendLine(BillDetails.fmtBillPhone(state.shop.billPhone.ifBlank { state.shop.phone }))
         appendLine()
         appendLine("Bill #${o.id} · ${AppDate.plain(o.createdOn)}")
         appendLine("To: ${c.name}")
@@ -60,6 +64,7 @@ private fun billText(state: LaundryState, o: Order): String {
         appendLine(body)
         appendLine("————————")
         appendLine("*Total: $total*")
+        if (BillDetails.isUpiValid(state.shop.upiId)) appendLine("Pay by UPI: ${state.shop.upiId}")
         appendLine()
         append("Thank you!")
     }
@@ -102,62 +107,11 @@ private fun openWhatsApp(context: Context, url: String) {
     }
 }
 
-private fun renderBillBitmap(state: LaundryState, o: Order): Bitmap {
-    val c = Selectors.customer(state, o.custId)
-    val (rows, total) = billRows(o)
-    val scale = 2
-    val w = 620
-    val pad = 36
-    val lineH = 34
-    val h = 150 + rows.size * lineH + 120
-    val bmp = Bitmap.createBitmap(w * scale, h * scale, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(bmp)
-    canvas.scale(scale.toFloat(), scale.toFloat())
-    canvas.drawColor(Color.WHITE)
-
-    val left = pad.toFloat()
-    val right = (w - pad).toFloat()
-    var y = (pad + 24).toFloat()
-
-    val ink = Color.parseColor("#16181F")
-    val muted = Color.parseColor("#5B6168")
-    val blue = Color.parseColor("#1D4ED8")
-    val ruleColor = Color.parseColor("#E7E3DA")
-    val p = Paint(Paint.ANTI_ALIAS_FLAG)
-
-    fun text(s: String, x: Float, yy: Float, size: Float, bold: Boolean, color: Int, alignRight: Boolean = false) {
-        p.color = color
-        p.textSize = size
-        p.typeface = Typeface.create(Typeface.SANS_SERIF, if (bold) Typeface.BOLD else Typeface.NORMAL)
-        p.textAlign = if (alignRight) Paint.Align.RIGHT else Paint.Align.LEFT
-        canvas.drawText(s, x, yy, p)
-    }
-    fun rule(yy: Float) {
-        p.color = ruleColor
-        p.strokeWidth = 1f
-        canvas.drawLine(left, yy, right, yy, p)
-    }
-
-    text(state.shop.name, left, y, 30f, true, ink); y += 26
-    text("+91 ${Selectors.fmtPhone(state.shop.phone)}", left, y, 15f, false, muted); y += 20
-    rule(y); y += 26
-    text("Bill #${o.id} · ${AppDate.plain(o.createdOn)}", left, y, 14f, true, muted); y += 24
-    text("To: ${c.name}", left, y, 16f, true, ink); y += 30
-    rows.forEach { r ->
-        text(r.label, left, y, 16f, false, ink)
-        text(r.value, right, y, 16f, true, ink, alignRight = true)
-        y += lineH
-    }
-    y += 2; rule(y); y += 30
-    text("Total", left, y, 20f, true, ink)
-    text(total, right, y, 20f, true, ink, alignRight = true); y += 38
-    text("Thank you!", left, y, 16f, true, blue)
-    return bmp
-}
-
 /** Renders the bill to a PNG and opens the share sheet (save or send). */
 fun shareBillImage(context: Context, state: LaundryState, o: Order) {
-    val bmp = renderBillBitmap(state, o)
+    val logos = GlobalContext.get().get<LogoStore>()
+    val receipt = BillReceipt.of(state, o)
+    val bmp = BillRender.render(context, receipt, logos.cached(receipt.logoId))
     val dir = File(context.cacheDir, "bills").apply { mkdirs() }
     val file = File(dir, "Bill-${o.id}.png")
     FileOutputStream(file).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
@@ -168,4 +122,23 @@ fun shareBillImage(context: Context, state: LaundryState, o: Order) {
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
     context.startActivity(Intent.createChooser(share, "Bill #${o.id}").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+}
+
+/**
+ * Onboarding "Test on WhatsApp": the same wa.me text bill real bills use,
+ * opened to the owner's own number with the sample order.
+ */
+fun sendTestBillOnWhatsApp(context: Context, r: BillReceipt, ownDigits: String) {
+    val text = buildString {
+        appendLine("*${r.shopName}* — test bill")
+        appendLine("${r.billNo} · ${r.date}")
+        r.lines.forEach { appendLine("${it.item}  ${it.amount}") }
+        r.extras.forEach { appendLine("${it.label}  ${it.value}") }
+        appendLine("*Total ${r.total}*")
+        r.upi?.let { appendLine("Pay by UPI: ${it.id}") }
+        append("Thank you!")
+    }
+    val digits = ownDigits.filter { it.isDigit() }.takeLast(10)
+    val enc = Uri.encode(text)
+    openWhatsApp(context, if (digits.length == 10) "https://wa.me/91$digits?text=$enc" else "https://wa.me/?text=$enc")
 }

@@ -20,6 +20,7 @@ workManager = "2.10.0"
 clevertap = "7.1.1"
 playBilling = "7.1.1"
 razorpayCheckout = "1.6.40"
+zxing = "3.5.3"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -46,6 +47,7 @@ androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx"
 clevertap-android-sdk = { group = "com.clevertap.android", name = "clevertap-android-sdk", version.ref = "clevertap" }
 play-billing = { group = "com.android.billingclient", name = "billing-ktx", version.ref = "playBilling" }
 razorpay-checkout = { group = "com.razorpay", name = "checkout", version.ref = "razorpayCheckout" }
+zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
 
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }

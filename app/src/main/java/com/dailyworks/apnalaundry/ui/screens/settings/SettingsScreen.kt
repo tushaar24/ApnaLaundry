@@ -82,6 +82,21 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: () 
                 }
             }
 
+            // Bill design & details (same screen as onboarding step 3)
+            AppCard {
+                Row(
+                    Modifier.fillMaxWidth().tap { navigator.openBillDesign() }.padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Bill design & details", style = fig(16, FontWeight.Bold))
+                        Text("Design, logo, UPI QR, address, GSTIN, terms", style = fig(13, color = Tokens.Muted))
+                    }
+                    Text("Edit", style = fig(15, FontWeight.Bold, Tokens.Blue))
+                }
+            }
+
             // Subscription / plan
             AppCard {
                 Row(
@@ -109,7 +124,7 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: () 
             AppCard(bg = Tokens.NeutralFill, borderColor = Tokens.NeutralFill) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("Coming later", style = fig(13, FontWeight.Bold, Tokens.Muted))
-                    Text("GST on bills · shop logo · staff logins · Hindi", style = fig(14, color = Tokens.InkSecondary))
+                    Text("Staff logins · Hindi", style = fig(14, color = Tokens.InkSecondary))
                 }
             }
 

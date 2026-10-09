@@ -3,6 +3,7 @@ package com.dailyworks.apnalaundry.di
 import androidx.room.Room
 import com.dailyworks.apnalaundry.data.AuthRepository
 import com.dailyworks.apnalaundry.data.LaundryRepository
+import com.dailyworks.apnalaundry.data.LogoStore
 import com.dailyworks.apnalaundry.data.Prefs
 import com.dailyworks.apnalaundry.data.local.AppDatabase
 import com.dailyworks.apnalaundry.data.remote.AuthApi
@@ -24,7 +25,7 @@ import org.koin.dsl.module
 val appModule = module {
     single {
         Room.databaseBuilder(androidContext(), AppDatabase::class.java, AppDatabase.NAME)
-            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3)
+            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4)
             .build()
     }
     single { Prefs(androidContext()) }
@@ -39,11 +40,12 @@ val appModule = module {
     single { CheckoutBridge() }
 
     single { LaundryRepository(get()) }
+    single { LogoStore(androidContext(), get()) }
     single { SyncManager(get(), get(), get(), get()) }
     single { SyncScheduler(get()) }
     single { AuthRepository(get(), get(), get(), get()) }
 
-    viewModel { ShopViewModel(get(), get(), get()) }
+    viewModel { ShopViewModel(get(), get(), get(), get()) }
     viewModel { AuthViewModel(get()) }
     viewModel { PaywallViewModel(get(), get(), get()) }
 }

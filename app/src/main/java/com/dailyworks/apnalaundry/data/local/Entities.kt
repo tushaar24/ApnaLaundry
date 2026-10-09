@@ -24,6 +24,16 @@ data class ShopEntity(
     val nextCust: Int,
     @ColumnInfo(defaultValue = "0") val updatedAt: Long = SyncClock.now(),
     @ColumnInfo(defaultValue = "1") val dirty: Boolean = true,
+    // Bill details + onboarding (v4).
+    @ColumnInfo(defaultValue = "") val billPhone: String = "",
+    @ColumnInfo(defaultValue = "") val address: String = "",
+    @ColumnInfo(defaultValue = "") val gstin: String = "",
+    @ColumnInfo(defaultValue = "") val upiId: String = "",
+    @ColumnInfo(defaultValue = "") val logoId: String = "",
+    @ColumnInfo(defaultValue = "[]") val termsJson: String = "[]",
+    @ColumnInfo(defaultValue = "") val termsCustom: String = "",
+    @ColumnInfo(defaultValue = "classic") val billTemplate: String = "classic",
+    @ColumnInfo(defaultValue = "") val onboardingStep: String = "",
 )
 
 @Entity(tableName = "services")

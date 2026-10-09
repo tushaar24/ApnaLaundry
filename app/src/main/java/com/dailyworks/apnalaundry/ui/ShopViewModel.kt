@@ -3,7 +3,9 @@ package com.dailyworks.apnalaundry.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dailyworks.apnalaundry.data.CmdResult
+import android.net.Uri
 import com.dailyworks.apnalaundry.data.LaundryRepository
+import com.dailyworks.apnalaundry.data.LogoStore
 import com.dailyworks.apnalaundry.data.Prefs
 import com.dailyworks.apnalaundry.data.Snapshot
 import com.dailyworks.apnalaundry.data.sync.SyncScheduler
@@ -13,6 +15,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -27,6 +32,7 @@ class ShopViewModel(
     private val repo: LaundryRepository,
     private val prefs: Prefs,
     private val sync: SyncScheduler,
+    val logos: LogoStore,
 ) : ViewModel() {
 
     private val empty = LaundryState(
@@ -38,6 +44,19 @@ class ShopViewModel(
 
     val hideAmounts: StateFlow<Boolean> =
         prefs.hideAmounts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    /** Bumps when the shop logo finishes loading, so bills redraw with it. */
+    private val _logoTick = MutableStateFlow(0)
+    val logoTick: StateFlow<Int> = _logoTick
+
+    init {
+        // Bills draw synchronously when shared, so keep the shop logo loaded.
+        viewModelScope.launch {
+            repo.state.map { it.shop.logoId }.distinctUntilChanged().collect { id ->
+                if (id.isNotEmpty() && logos.load(id) != null) _logoTick.value++
+            }
+        }
+    }
 
     private val _toast = MutableStateFlow<ToastState?>(null)
     val toast: StateFlow<ToastState?> = _toast
@@ -83,6 +102,19 @@ class ShopViewModel(
     fun upsertService(service: Service) = viewModelScope.launch { repo.upsertService(service); sync.requestSync() }
     fun updateShop(name: String, expressPct: Int) =
         viewModelScope.launch { repo.updateShop(name, expressPct); sync.requestSync() }
+
+    fun updateShopDetails(name: String? = null, details: BillDetails.Fields? = null) =
+        viewModelScope.launch { repo.updateShopDetails(name, details); sync.requestSync() }
+
+    fun setOnboardingStep(step: String) =
+        viewModelScope.launch { repo.setOnboardingStep(step); sync.requestSync() }
+
+    /** Resizes + uploads a picked logo; the id, or the failure for a toast. */
+    suspend fun uploadLogo(uri: Uri): Result<String> =
+        runCatching { logos.upload(uri) }.onSuccess { _logoTick.value++ }
+
+    /** The login number (bill phone default, "Test on WhatsApp" target). */
+    suspend fun loginPhone(): String = prefs.userPhone.first() ?: state.value.shop.phone
 
     // ---- commands whose result the caller needs ----
     fun saveCustomer(

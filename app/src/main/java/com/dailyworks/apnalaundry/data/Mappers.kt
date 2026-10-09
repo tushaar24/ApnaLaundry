@@ -7,6 +7,7 @@ import com.dailyworks.apnalaundry.data.local.ServiceEntity
 import com.dailyworks.apnalaundry.data.local.ShopEntity
 import com.dailyworks.apnalaundry.domain.*
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 
 private val json = Json { ignoreUnknownKeys = true }
@@ -50,4 +51,12 @@ fun LedgerEntry.toEntity() = LedgerEntity(
     id, custId, date, time, ts, kind.name, amt, method.name, tag.name, cover, toOld, toAdv, ref, note,
 )
 
-fun ShopEntity.toDomain() = Shop(name, phone, expressPct)
+private val termsSer = ListSerializer(String.serializer())
+fun encodeTerms(v: List<String>): String = json.encodeToString(termsSer, v)
+fun decodeTerms(v: String): List<String> = runCatching { json.decodeFromString(termsSer, v) }.getOrDefault(emptyList())
+
+fun ShopEntity.toDomain() = Shop(
+    name, phone, expressPct,
+    billPhone = billPhone, address = address, gstin = gstin, upiId = upiId, logoId = logoId,
+    terms = decodeTerms(termsJson), termsCustom = termsCustom, billTemplate = billTemplate, onboardingStep = onboardingStep,
+)

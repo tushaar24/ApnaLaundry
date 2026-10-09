@@ -92,6 +92,9 @@ dependencies {
     // Razorpay Standard Checkout — UPI AutoPay subscription authorization.
     implementation(libs.razorpay.checkout)
 
+    // UPI pay QR on bills (QR matrix only — drawn on our own canvas)
+    implementation(libs.zxing.core)
+
     // Room
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
