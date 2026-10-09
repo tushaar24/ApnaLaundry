@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { PricingMode, Service, ServiceItem } from "@/domain/models";
 import { useLaundryState } from "@/data/store";
 import * as Repo from "@/data/repository";
@@ -8,12 +8,13 @@ import { Analytics } from "@/analytics/events";
 import {
   cls, FieldBox, OutlineButton, PillChip, PrimaryButton, Segmented, TopBar,
 } from "../basics";
-import { IcAdd, IcBack, IcDelete, IcEdit, IcInfo, IcLock } from "../icons";
+import { IcAdd, IcDelete, IcEdit, IcInfo, IcLock } from "../icons";
 
 /**
  * Rate card editor — port of ui/screens/rates/RatesScreen.kt. Opened from
- * Home/Settings, and as the last onboarding step (from="setup", after the
- * shop name — see app/setup) where it ends in "Start taking orders".
+ * Home/Settings, and as onboarding step 2 (from="setup", see app/setup):
+ * there the caller's step bar replaces the top bar and it ends in
+ * "Next: Your bill".
  */
 
 type RatePage = { kind: "list" } | { kind: "edit"; serviceId: string } | { kind: "add" };
@@ -36,7 +37,13 @@ function summaryLine(s: Service): string {
   );
 }
 
-export function RatesView({ from, onDone, onBack }: { from: string; onDone: () => void; onBack?: () => void }) {
+export function RatesView({ from, onDone, onBack, header }: {
+  from: string;
+  onDone: () => void;
+  onBack?: () => void;
+  /** Setup only: the onboarding step bar shown above the title. */
+  header?: ReactNode;
+}) {
   const state = useLaundryState();
   const setup = from === "setup";
   const [page, setPage] = useState<RatePage>({ kind: "list" });
@@ -69,6 +76,7 @@ export function RatesView({ from, onDone, onBack }: { from: string; onDone: () =
   return (
     <RateListPage
       setup={setup}
+      header={header}
       onEdit={(id) => setPage({ kind: "edit", serviceId: id })}
       onAdd={() => setPage({ kind: "add" })}
       onDone={onDone}
@@ -80,9 +88,10 @@ export function RatesView({ from, onDone, onBack }: { from: string; onDone: () =
 // ───────────────────────── list ─────────────────────────
 
 function RateListPage({
-  setup, onEdit, onAdd, onDone, onBack,
+  setup, header, onEdit, onAdd, onDone, onBack,
 }: {
   setup: boolean;
+  header?: ReactNode;
   onEdit: (id: string) => void;
   onAdd: () => void;
   onDone: () => void;
@@ -92,8 +101,7 @@ function RateListPage({
   const services = state.services;
 
   function commitAndDone() {
-    if (setup) Analytics.setupCompleted(services.length, state.shop.expressPct);
-    else Repo.updateShop(state.shop.name, state.shop.expressPct);
+    if (!setup) Repo.updateShop(state.shop.name, state.shop.expressPct);
     onDone();
   }
 
@@ -103,19 +111,11 @@ function RateListPage({
       <div className="flex flex-1 flex-col gap-4 px-4 py-4">
         {setup ? (
           <>
-            <div className="flex items-center gap-2">
-              {onBack ? (
-                <button type="button" onClick={onBack} aria-label="Back" className="-ml-2 flex size-10 items-center justify-center rounded-full text-ink">
-                  <IcBack size={22} />
-                </button>
-              ) : null}
-              <span className="text-[13px] font-semibold text-muted">Last step · Your services</span>
-            </div>
+            {header}
             <h1 className="bric text-[28px]">Set up your rate list</h1>
-            <InfoBox
-              title="We filled in common prices"
-              body="Tap Edit to change a price, delete what you don't do, or add your own service. You can change this anytime from ₹ Rates."
-            />
+            <p className="-mt-2 text-[14px] text-muted">
+              These services and prices go on your bills. Check them once — change only what is different.
+            </p>
           </>
         ) : (
           <InfoBox title="Change prices anytime" body="Tap Edit on a service to change its prices. New prices apply to new orders only." />
@@ -146,7 +146,7 @@ function RateListPage({
       <div className="sticky bottom-0 w-full border-t border-divider bg-card">
         <p className="px-4 pt-3 text-[13px] text-muted">Nothing else is needed. You can change prices anytime.</p>
         <div className="p-4">
-          <PrimaryButton onClick={commitAndDone}>{setup ? "Start taking orders" : "Done"}</PrimaryButton>
+          <PrimaryButton onClick={commitAndDone}>{setup ? "Next: Your bill" : "Done"}</PrimaryButton>
         </div>
       </div>
     </div>

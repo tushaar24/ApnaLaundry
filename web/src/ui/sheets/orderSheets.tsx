@@ -11,6 +11,7 @@ import * as Repo from "@/data/repository";
 import { Analytics } from "@/analytics/events";
 import { cls, Divider, FieldBox, PillChip, PrimaryButton, Toggle } from "../basics";
 import { billPreviewUrl } from "../billPdf";
+import { prepareBillAssets } from "../billRender";
 import { AppSheet } from "../sheet";
 import { ClothesEditor, useClothesState } from "../clothes";
 
@@ -269,11 +270,18 @@ export function BillViewSheet({
 function ReceiptPreview({ state, order }: { state: LaundryState; order: Order }) {
   const [src, setSrc] = useState("");
   useEffect(() => {
-    try {
-      setSrc(billPreviewUrl(billReceipt(state, order)));
-    } catch {
-      setSrc("");
-    }
+    let live = true;
+    const r = billReceipt(state, order);
+    prepareBillAssets(r)
+      .then(() => {
+        if (live) setSrc(billPreviewUrl(r));
+      })
+      .catch(() => {
+        if (live) setSrc("");
+      });
+    return () => {
+      live = false;
+    };
   }, [state, order]);
   if (!src) return <div className="h-[420px] w-full rounded-2xl bg-white" />;
   return (

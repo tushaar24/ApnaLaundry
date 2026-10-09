@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { receiptFrom, type BillData } from "@/domain/billReceipt";
 import { PrimaryButton } from "@/ui/basics";
 import { billPdfFile, billPreviewUrl, shareOrSaveFile } from "@/ui/billPdf";
+import { prepareBillAssets } from "@/ui/billRender";
 
 /** The /b/<token> page body: the receipt image + "Download PDF". */
 
@@ -24,7 +25,9 @@ export function PublicBill({ token }: { token: string }) {
         if (r.status === 404) return { kind: "missing" } as const;
         const body = (await r.json()) as { success?: boolean; bill?: BillData };
         if (!r.ok || !body.success || !body.bill) return { kind: "error" } as const;
-        return { kind: "ok", bill: body.bill, src: billPreviewUrl(receiptFrom(body.bill)) } as const;
+        const receipt = receiptFrom(body.bill);
+        await prepareBillAssets(receipt); // fonts + logo, so the PDF below can draw synchronously
+        return { kind: "ok", bill: body.bill, src: billPreviewUrl(receipt) } as const;
       })
       .catch(() => ({ kind: "error" }) as const)
       .then((v) => {

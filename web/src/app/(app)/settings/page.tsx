@@ -74,6 +74,17 @@ function SettingsScreen() {
         </div>
       </AppCard>
 
+      {/* Bill design & details (same screen as onboarding step 3) */}
+      <AppCard onClick={nav.openBillDesign}>
+        <div className="flex w-full items-center justify-between p-4">
+          <span className="flex flex-col">
+            <span className="text-[16px] font-bold">Bill design & details</span>
+            <span className="text-[13px] text-muted">Design, logo, UPI QR, address, GSTIN, terms</span>
+          </span>
+          <span className="text-[15px] font-bold text-blue">Edit</span>
+        </div>
+      </AppCard>
+
       {/* Subscription row (manage / cancel the plan) */}
       {pay.hasActive ? (
         <AppCard onClick={nav.openSubscription}>
@@ -101,7 +112,7 @@ function SettingsScreen() {
       <AppCard bg="var(--color-neutralfill)" borderColor="var(--color-neutralfill)">
         <div className="flex flex-col gap-1 p-4">
           <span className="text-[13px] font-bold text-muted">Coming later</span>
-          <span className="text-[14px] text-inksecondary">GST on bills · shop logo · staff logins · Hindi</span>
+          <span className="text-[14px] text-inksecondary">staff logins · Hindi</span>
         </div>
       </AppCard>
 

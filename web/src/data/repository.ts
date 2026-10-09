@@ -7,7 +7,7 @@ import {
   amtOf, balance, deliverAllocation, expressAuto, receiveAllocation,
 } from "@/domain/laundryMath";
 import type {
-  LedgerEntry, LedgerKind, Order, OrderLine, OrderStatus, PayMethod, PayTag, Route, Service,
+  BillDetails, LedgerEntry, LedgerKind, OnboardingStep, Order, OrderLine, OrderStatus, PayMethod, PayTag, Route, Service,
 } from "@/domain/models";
 import { nextTs } from "./ids";
 import { deriveState, useAppStore, type Snapshot } from "./store";
@@ -16,6 +16,7 @@ import type { LedgerRow, OrderRow, Rows } from "./rows";
 import { stamp } from "./rows";
 import { Analytics } from "@/analytics/events";
 import { DEFAULT_SHOP_NAME, isDefaultShopName } from "@/domain/seed";
+import { emptyBillDetails } from "@/domain/billDetails";
 
 /**
  * Commands over the in-memory rows — a 1:1 port of data/LaundryRepository.kt
@@ -154,6 +155,7 @@ export async function ensureSeeded(shopPhone: string | null) {
     ...r,
     shop: {
       name: DEFAULT_SHOP_NAME, phone: shopPhone ?? "", expressPct: DEFAULT_EXPRESS_PCT,
+      ...emptyBillDetails(shopPhone ?? ""), onboardingStep: "intro",
       nextOrder: 1001, nextCust: 1, ...stamp(),
     },
     services: seedServices.map((s) => ({ ...s, ...stamp(), deleted: false })),
@@ -177,7 +179,22 @@ export function hasShopActivity(): boolean {
  */
 export function isOnboarded(): boolean {
   const shop = rows().shop;
-  return shop != null && (!isDefaultShopName(shop.name) || hasShopActivity());
+  if (shop == null) return false;
+  // Shops created since onboarding was tracked carry their step.
+  if (shop.onboardingStep !== "") return shop.onboardingStep === "done";
+  return !isDefaultShopName(shop.name) || hasShopActivity();
+}
+
+/**
+ * Whether a freshly pulled shop says onboarding is finished: true/false when
+ * it carries a step (so a step finished on another device counts), else only
+ * activity proves it (null = no opinion, keep the local flag).
+ */
+export function pulledSetupDone(): boolean | null {
+  const shop = rows().shop;
+  if (shop == null) return null;
+  if (shop.onboardingStep !== "") return shop.onboardingStep === "done";
+  return hasShopActivity() ? true : null;
 }
 
 /** Wipe everything (logout). The next login pulls or reseeds. */
@@ -395,6 +412,24 @@ export function updateShop(name: string, expressPct: number) {
   }));
   // Keep the CleverTap profile's Name current with the shop name.
   if (name.trim() !== "") Analytics.updateProfile({ Name: name.trim() });
+  requestSync();
+}
+
+/** Saves bill details and/or the shop name (Settings / onboarding "Your bill"). */
+export function updateShopDetails(patch: Partial<BillDetails> & { name?: string }) {
+  setRows((r) => ({
+    ...r,
+    shop: r.shop ? { ...r.shop, ...patch, ...stamp() } : r.shop,
+  }));
+  if (patch.name && patch.name.trim() !== "") Analytics.updateProfile({ Name: patch.name.trim() });
+  requestSync();
+}
+
+/** Records onboarding progress so a reload or another device resumes there. */
+export function setOnboardingStep(step: OnboardingStep) {
+  const cur = rows().shop;
+  if (!cur || cur.onboardingStep === step) return;
+  setRows((r) => ({ ...r, shop: r.shop ? { ...r.shop, onboardingStep: step, ...stamp() } : r.shop }));
   requestSync();
 }
 

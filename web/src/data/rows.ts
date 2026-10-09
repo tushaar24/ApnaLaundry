@@ -2,6 +2,7 @@ import type {
   Customer, DayClose, LedgerEntry, Order, OrderLine, Service, ServiceItem, Shop,
 } from "@/domain/models";
 import { syncNow } from "@/core/syncclock";
+import { billDetailsFrom, onboardingStepFrom } from "@/domain/billDetails";
 
 /**
  * In-memory rows = domain shape + sync metadata, mirroring the app's Room
@@ -51,6 +52,9 @@ export function stamp(): Pick<SyncMeta, "updatedAt" | "dirty"> {
 export interface ShopDto {
   name: string; phone: string; expressPct: number;
   nextOrder: number; nextCust: number; updatedAt: number;
+  // Bill details + onboarding — absent from servers before 2026-10-09.
+  billPhone?: string; address?: string; gstin?: string; upiId?: string; logoId?: string;
+  terms?: string[]; termsCustom?: string; billTemplate?: string; onboardingStep?: string;
 }
 export interface ServiceDto {
   id: string; name: string; mode: string; ratePerKg: number | null;
@@ -93,12 +97,20 @@ export interface SyncChanges {
 // ---- row <-> DTO ----
 
 export function shopToDto(r: ShopRow): ShopDto {
-  const { name, phone, expressPct, nextOrder, nextCust, updatedAt } = r;
-  return { name, phone, expressPct, nextOrder, nextCust, updatedAt };
+  const {
+    name, phone, expressPct, nextOrder, nextCust, updatedAt,
+    billPhone, address, gstin, upiId, logoId, terms, termsCustom, billTemplate, onboardingStep,
+  } = r;
+  return {
+    name, phone, expressPct, nextOrder, nextCust, updatedAt,
+    billPhone, address, gstin, upiId, logoId, terms, termsCustom, billTemplate, onboardingStep,
+  };
 }
 export function shopFromDto(d: ShopDto): ShopRow {
   return {
     name: d.name, phone: d.phone, expressPct: d.expressPct,
+    ...billDetailsFrom(d, d.phone),
+    onboardingStep: onboardingStepFrom(d.onboardingStep),
     nextOrder: d.nextOrder, nextCust: d.nextCust, updatedAt: d.updatedAt, dirty: false,
   };
 }

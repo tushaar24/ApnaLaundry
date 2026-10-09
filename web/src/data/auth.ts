@@ -3,7 +3,7 @@
 import { authApi, parseIsoMs } from "./authApi";
 import { prefs } from "./prefs";
 import { useAppStore } from "./store";
-import { clearAll, ensureSeeded, hasShop, hasShopActivity, isOnboarded } from "./repository";
+import { clearAll, ensureSeeded, hasShop, isOnboarded, pulledSetupDone } from "./repository";
 import { hasPendingChanges, pushNow, resetCheckpoint, startAutoSync, syncNow } from "./sync";
 import { setSessionDeadListener } from "./tokenManager";
 import { Analytics } from "@/analytics/events";
@@ -191,9 +191,10 @@ export async function bootstrap(): Promise<void> {
       useAppStore.getState().setBootError(result.message);
     }
   } else {
-    // An account already in use (set up elsewhere) never re-runs setup. Only
-    // activity counts here, so a reload mid-onboarding resumes it.
-    if (hasShopActivity()) useAppStore.getState().setSetupDone(true);
+    // The shop's onboarding step decides (so finishing on another device
+    // counts); older shops count as set up only once they have activity.
+    const done = pulledSetupDone();
+    if (done != null) useAppStore.getState().setSetupDone(done);
   }
   useAppStore.getState().setHydrated(true);
   startAutoSync();
@@ -209,8 +210,9 @@ export async function retryBoot(): Promise<void> {
     useAppStore.getState().setBootError(result.message);
   } else if (result.kind === "error" && result.authDead) {
     useAppStore.getState().setAuthed(false);
-  } else if (hasShopActivity()) {
-    useAppStore.getState().setSetupDone(true);
+  } else {
+    const done = pulledSetupDone();
+    if (done != null) useAppStore.getState().setSetupDone(done);
   }
   useAppStore.getState().setHydrated(true);
   startAutoSync();

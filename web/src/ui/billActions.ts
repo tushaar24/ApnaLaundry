@@ -4,7 +4,7 @@ import { useEffect } from "react";
 
 import { rupees } from "@/core/money";
 import { amtOf } from "@/domain/laundryMath";
-import { billReceipt } from "@/domain/billReceipt";
+import { billReceipt, type BillReceipt } from "@/domain/billReceipt";
 import type { LaundryState, Order } from "@/domain/models";
 import * as Sel from "@/domain/selectors";
 import * as Repo from "@/data/repository";
@@ -112,4 +112,22 @@ export function downloadBill(state: LaundryState, o: Order): void {
   void shareOrSaveFile(file, `Bill #${o.id}`).then((r) => {
     if (r === "saved") Repo.showInfo(`${file.name} downloaded`);
   });
+}
+
+/**
+ * Onboarding "Test on WhatsApp": the same wa.me path real bills take, to the
+ * owner's own number. The sample order has no /b/ page, so the message
+ * carries a text version of the bill instead of the link.
+ */
+export function sendTestBill(r: BillReceipt, ownDigits: string): void {
+  const text = [
+    `*${r.shop.name}* — test bill`,
+    `${r.billNo} · ${r.date}`,
+    ...r.lines.map((l) => `${l.item}  ${l.amount}`),
+    ...r.extras.map((e) => `${e.label}  ${e.value}`),
+    `*Total ${r.total}*`,
+    r.upi ? `Pay by UPI: ${r.upi.id}` : "",
+    "Thank you!",
+  ].filter(Boolean).join("\n");
+  window.open(waUrl(ownDigits, text), "_blank", "noopener,noreferrer");
 }

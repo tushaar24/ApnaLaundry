@@ -165,6 +165,7 @@ export function useNav() {
     openCustomers: (filter = "all") => router.push(filter === "all" ? "/customers" : `/customers?filter=${filter}`),
     openEarnings: () => router.push("/earnings"),
     openSubscription: () => router.push("/subscription"),
+    openBillDesign: () => router.push("/settings/bill"),
     pathname,
   };
 }

@@ -1,7 +1,8 @@
 "use client";
 
 import { create } from "zustand";
-import type { LaundryState } from "@/domain/models";
+import type { LaundryState, Shop } from "@/domain/models";
+import { emptyBillDetails } from "@/domain/billDetails";
 import { emptyRows, type Rows } from "./rows";
 import { prefs } from "./prefs";
 
@@ -89,17 +90,25 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
 // ---------------- derived LaundryState ----------------
 
-const FALLBACK_SHOP = { name: "MyLaundry", phone: "", expressPct: 50 };
+const FALLBACK_SHOP: Shop = { name: "MyLaundry", phone: "", expressPct: 50, onboardingStep: "", ...emptyBillDetails() };
 
 let lastRows: Rows | null = null;
 let lastDerived: LaundryState | null = null;
+
+function shopOf(r: NonNullable<Rows["shop"]>): Shop {
+  return {
+    name: r.name, phone: r.phone, expressPct: r.expressPct, onboardingStep: r.onboardingStep,
+    billPhone: r.billPhone, address: r.address, gstin: r.gstin, upiId: r.upiId, logoId: r.logoId,
+    terms: r.terms, termsCustom: r.termsCustom, billTemplate: r.billTemplate,
+  };
+}
 
 /** Rows -> domain LaundryState (tombstones dropped, services sorted). Memoized on rows identity. */
 export function deriveState(rows: Rows): LaundryState {
   if (rows === lastRows && lastDerived) return lastDerived;
   const state: LaundryState = {
     shop: rows.shop
-      ? { name: rows.shop.name, phone: rows.shop.phone, expressPct: rows.shop.expressPct }
+      ? shopOf(rows.shop)
       : FALLBACK_SHOP,
     services: rows.services.filter((s) => !s.deleted).slice().sort((a, b) => a.sortOrder - b.sortOrder),
     customers: rows.customers.filter((c) => !c.deleted),

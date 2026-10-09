@@ -60,7 +60,8 @@ async function proxy(req: NextRequest, pathParts: string[]): Promise<Response> {
     status: upstream.status,
     headers: {
       "content-type": upstream.headers.get("content-type") ?? "application/json",
-      "cache-control": "no-store",
+      // Immutable assets (shop logos) send their own caching; everything else stays live.
+      "cache-control": upstream.headers.get("cache-control") ?? "no-store",
     },
   });
 }

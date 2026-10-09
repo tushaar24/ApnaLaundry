@@ -95,10 +95,28 @@ export interface LedgerEntry {
   note: string;
 }
 
-export interface Shop {
+export type BillTemplate = "classic" | "bold" | "receipt";
+
+/** Onboarding progress ("" = a shop from before onboarding was tracked). */
+export type OnboardingStep = "" | "intro" | "name" | "services" | "bill" | "done";
+
+/** Optional details printed on bills, plus the chosen bill design. */
+export interface BillDetails {
+  billPhone: string; // 10 digits ("" = none)
+  address: string;
+  gstin: string; // printed only when valid
+  upiId: string; // QR printed only when valid
+  logoId: string; // uploaded logo ("" = none)
+  terms: string[]; // preset ids, see domain/billDetails TERM_PRESETS
+  termsCustom: string;
+  billTemplate: BillTemplate;
+}
+
+export interface Shop extends BillDetails {
   name: string;
   phone: string;
   expressPct: number;
+  onboardingStep: OnboardingStep;
 }
 
 export interface DayClose {

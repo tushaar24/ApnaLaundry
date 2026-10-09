@@ -10,7 +10,7 @@ import { identify, rawCharged, rawTrack, updateProfile } from "./clevertap";
 
 export type ScreenName =
   | "login" | "setup" | "home" | "customers" | "earnings" | "settings"
-  | "new_order" | "order_detail" | "customer_khata" | "bill" | "rates";
+  | "new_order" | "order_detail" | "customer_khata" | "bill" | "rates" | "bill_design";
 
 export type PayMethodProp = "cash" | "upi" | "none";
 
