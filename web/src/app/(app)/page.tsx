@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as AppDate from "@/core/appdate";
 import { rupees } from "@/core/money";
 import { collectedOn } from "@/domain/earningsMath";
@@ -11,7 +11,7 @@ import { useAppStore, useLaundryState } from "@/data/store";
 import { Analytics } from "@/analytics/events";
 import { useScreenView } from "@/analytics/useScreenView";
 import { cls, FieldBox, PrimaryButton, SectionLabel } from "@/ui/basics";
-import { IcAdd, IcArrowDown, IcArrowUp, IcEye, IcEyeOff, IcSearch, IcShirt } from "@/ui/icons";
+import { IcAdd, IcArrowDown, IcArrowUp, IcCalendar, IcEye, IcEyeOff, IcSearch, IcShirt } from "@/ui/icons";
 import { OrderCard } from "@/ui/orderCard";
 import { SheetHost } from "@/ui/sheets/host";
 import type { ActiveSheet } from "@/ui/sheets/types";
@@ -317,6 +317,10 @@ function TabRow({
   );
 }
 
+/** Days the strip shows around today (orders can be dated in the past). */
+const STRIP_BACK = 60;
+const STRIP_AHEAD = 30;
+
 function DateStrip({
   state, pickup, selDate, onPick,
 }: {
@@ -325,31 +329,86 @@ function DateStrip({
   selDate: string;
   onPick: (iso: string) => void;
 }) {
-  const days = [-1, 0, 1, 2, 3, 4, 5];
+  const today = AppDate.today();
+  // Stretch the range when the date picker jumps outside it.
+  const back = Math.max(STRIP_BACK, -AppDate.daysBetween(today, selDate));
+  const ahead = Math.max(STRIP_AHEAD, AppDate.daysBetween(today, selDate));
+  const days: number[] = [];
+  for (let i = -back; i <= ahead; i++) days.push(i);
+
+  const scroller = useRef<HTMLDivElement>(null);
+  const selRef = useRef<HTMLButtonElement>(null);
+  const first = useRef(true);
+  // Keep the selected day in view: centred on open, smoothly after a pick.
+  useEffect(() => {
+    const box = scroller.current;
+    const btn = selRef.current;
+    if (!box || !btn) return;
+    const left = btn.offsetLeft - box.clientWidth / 2 + btn.clientWidth / 2;
+    box.scrollTo({ left, behavior: first.current ? "auto" : "smooth" });
+    first.current = false;
+  }, [selDate]);
+  // A mouse wheel scrolls vertically; turn it sideways so desktop can browse days.
+  useEffect(() => {
+    const box = scroller.current;
+    if (!box) return;
+    const onWheel = (e: WheelEvent) => {
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+      const max = box.scrollWidth - box.clientWidth;
+      if ((e.deltaY < 0 && box.scrollLeft <= 0) || (e.deltaY > 0 && box.scrollLeft >= max)) return;
+      e.preventDefault();
+      box.scrollLeft += e.deltaY;
+    };
+    box.addEventListener("wheel", onWheel, { passive: false });
+    return () => box.removeEventListener("wheel", onWheel);
+  }, []);
+
   return (
-    <div className="no-scrollbar flex gap-0.5 overflow-x-auto px-3 pb-1">
-      {days.map((i) => {
-        const iso = AppDate.add(AppDate.today(), i);
-        const on = selDate === iso;
-        const n = state.orders.filter((o) => onDate(o, iso, pickup) && o.status !== "CANCELLED").length;
-        return (
-          <button
-            key={iso}
-            type="button"
-            onClick={() => onPick(iso)}
-            className={cls(
-              "flex h-[58px] w-[50px] shrink-0 flex-col items-center justify-center rounded-xl border-[1.5px]",
-              on ? "border-ink bg-ink" : "border-transparent",
-            )}
-          >
-            <span className={cls("text-[11px] font-bold", on ? "text-ondarkmuted" : i === 0 ? "text-blue" : "text-muted")}>
-              {i === 0 ? "Today" : AppDate.dayName(iso)}
-            </span>
-            <span className={cls("text-[17px] font-bold", on ? "text-ondark" : "text-ink")}>{AppDate.dayOfMonth(iso)}</span>
-            <span className={cls("h-4 text-[11px] font-bold", on ? "text-bluebar" : "text-blue")}>{n > 0 ? n : ""}</span>
-          </button>
-        );
-      })}
+    <div className="flex items-center pb-1">
+      <div ref={scroller} className="no-scrollbar relative flex min-w-0 flex-1 gap-0.5 overflow-x-auto px-3">
+        {days.map((i) => {
+          const iso = AppDate.add(today, i);
+          const on = selDate === iso;
+          const n = state.orders.filter((o) => onDate(o, iso, pickup) && o.status !== "CANCELLED").length;
+          const dom = AppDate.dayOfMonth(iso);
+          return (
+            <button
+              key={iso}
+              ref={on ? selRef : undefined}
+              type="button"
+              onClick={() => onPick(iso)}
+              className={cls(
+                "flex h-[58px] w-[50px] shrink-0 flex-col items-center justify-center rounded-xl border-[1.5px]",
+                on ? "border-ink bg-ink" : "border-transparent",
+              )}
+            >
+              <span className={cls("text-[11px] font-bold", on ? "text-ondarkmuted" : i === 0 ? "text-blue" : "text-muted")}>
+                {i === 0 ? "Today" : dom === 1 ? AppDate.plain(iso).split(" ")[2] : AppDate.dayName(iso)}
+              </span>
+              <span className={cls("text-[17px] font-bold", on ? "text-ondark" : "text-ink")}>{dom}</span>
+              <span className={cls("h-4 text-[11px] font-bold", on ? "text-bluebar" : "text-blue")}>{n > 0 ? n : ""}</span>
+            </button>
+          );
+        })}
+      </div>
+      {/* Jump to any date — the native picker sits invisibly over the button. */}
+      <label className="relative mr-3 flex h-[58px] w-11 shrink-0 cursor-pointer items-center justify-center rounded-xl text-blue">
+        <IcCalendar size={22} />
+        <input
+          type="date"
+          value={selDate}
+          aria-label="Pick a date"
+          onClick={(e) => {
+            const el = e.currentTarget;
+            if ("showPicker" in el) {
+              try { el.showPicker(); } catch { /* focus alone opens it on iOS */ }
+            }
+          }}
+          onChange={(e) => { if (e.target.value) onPick(e.target.value); }}
+          className="absolute inset-0 size-full cursor-pointer text-[16px] opacity-0"
+          style={{ transform: "translateZ(0)" }}
+        />
+      </label>
     </div>
   );
 }
