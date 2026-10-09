@@ -3,7 +3,7 @@ import { rupees } from "@/core/money";
 import { amtOf, clothesOf } from "@/domain/laundryMath";
 import type { BillDetails, BillTemplate, LaundryState, Order, OrderLine, Service, Shop } from "@/domain/models";
 import {
-  billDetailsFrom, fmtBillPhone, isGstinValid, isUpiValid, sampleOrder, termLines, upiPayload,
+  billDetailsFrom, fmtBillPhone, isEmailValid, isGstinValid, isUpiValid, sampleOrder, termLines, upiPayload,
 } from "@/domain/billDetails";
 import * as Sel from "@/domain/selectors";
 
@@ -39,6 +39,7 @@ export interface BillReceipt {
     phone: string; // "+91 98765 43210" or ""
     address: string;
     gstin: string; // only when valid
+    email: string; // only when valid
     logoId: string;
   };
   billNo: string; // "Bill #1001"
@@ -151,6 +152,7 @@ export function receiptFrom({ shop, customer: c, order: o }: BillData, opts: Rec
       phone: fmtBillPhone(d.billPhone),
       address: d.address,
       gstin: isGstinValid(d.gstin) ? d.gstin : "",
+      email: isEmailValid(d.email) ? d.email : "",
       logoId: d.logoId,
     },
     billNo: `Bill #${Sel.orderNo(o)}`,

@@ -53,6 +53,9 @@ export const IcEyeOff = (p: P) => (
 export const IcCall = (p: P) => (
   <Base {...p}><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2Z" /></Base>
 );
+export const IcMail = (p: P) => (
+  <Base {...p}><rect x={3} y={5} width={18} height={14} rx={2} /><path d="M3 7l9 6 9-6" /></Base>
+);
 export const IcMore = (p: P) => (
   <Base {...p} strokeWidth={0} fill="currentColor">
     <circle cx={12} cy={5} r={1.8} /><circle cx={12} cy={12} r={1.8} /><circle cx={12} cy={19} r={1.8} />

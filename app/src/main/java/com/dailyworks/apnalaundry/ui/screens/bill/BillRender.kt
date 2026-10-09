@@ -144,7 +144,7 @@ object BillRender {
 
         val hasLogo = logo != null && r.logoId.isNotEmpty()
         val shopName = if (receipt) r.shopName.uppercase() else r.shopName
-        val details = listOf(r.shopPhone, r.address, if (r.gstin.isNotEmpty()) "GSTIN ${r.gstin}" else "").filter { it.isNotEmpty() }
+        val details = listOf(r.shopPhone, r.email, r.address, if (r.gstin.isNotEmpty()) "GSTIN ${r.gstin}" else "").filter { it.isNotEmpty() }
 
         // Mutable cursor helpers.
         var cy = 0f

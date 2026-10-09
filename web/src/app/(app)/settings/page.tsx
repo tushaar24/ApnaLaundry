@@ -79,7 +79,7 @@ function SettingsScreen() {
         <div className="flex w-full items-center justify-between p-4">
           <span className="flex flex-col">
             <span className="text-[16px] font-bold">Bill design & details</span>
-            <span className="text-[13px] text-muted">Design, logo, UPI QR, address, GSTIN, terms</span>
+            <span className="text-[13px] text-muted">Design, logo, UPI QR, address, email, GSTIN, terms</span>
           </span>
           <span className="text-[15px] font-bold text-blue">Edit</span>
         </div>

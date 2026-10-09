@@ -34,6 +34,8 @@ data class ShopEntity(
     @ColumnInfo(defaultValue = "") val termsCustom: String = "",
     @ColumnInfo(defaultValue = "classic") val billTemplate: String = "classic",
     @ColumnInfo(defaultValue = "") val onboardingStep: String = "",
+    // Email on the bill (v7).
+    @ColumnInfo(defaultValue = "") val email: String = "",
 )
 
 @Entity(tableName = "services")

@@ -16,6 +16,7 @@ data class BillReceipt(
     val shopPhone: String, // "+91 98765 43210" or ""
     val address: String,
     val gstin: String, // only when valid
+    val email: String, // only when valid
     val logoId: String,
     val billNo: String, // "Bill #1001"
     val date: String, // "Fri, 9 Oct"
@@ -83,6 +84,7 @@ data class BillReceipt(
                 shopPhone = BillDetails.fmtBillPhone(billPhone),
                 address = shop.address,
                 gstin = if (BillDetails.isGstinValid(shop.gstin)) shop.gstin else "",
+                email = if (BillDetails.isEmailValid(shop.email)) shop.email else "",
                 logoId = shop.logoId,
                 billNo = "Bill #${o.no()}",
                 date = AppDate.plain(o.createdOn),
