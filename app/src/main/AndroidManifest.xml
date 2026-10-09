@@ -6,6 +6,10 @@
     <!-- Add a customer from the phone's contacts (asked only when the owner taps
          "Choose from contacts"; manual entry works without it). -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <!-- Advertising ID (Android 13+): used by the Meta SDK for Meta ads install /
+         subscription attribution. The SDK also merges this in; declared here so
+         the Play Console "uses advertising ID" declaration always matches. -->
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID" />
 
     <!-- Android 11+ package visibility: let the app (and the Razorpay SDK)
          enumerate installed UPI apps so UPI Intent / AutoPay shows in Checkout. -->
