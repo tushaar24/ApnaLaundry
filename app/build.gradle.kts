@@ -35,6 +35,7 @@ android {
             // deobfuscates crash traces.
             isMinifyEnabled = true
             isShrinkResources = true
+            isDebuggable = false
             buildConfigField("String", "API_BASE_URL", "\"https://shwetamakeover.online/api/laundry\"")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
