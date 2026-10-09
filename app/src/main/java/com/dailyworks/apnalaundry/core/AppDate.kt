@@ -1,19 +1,20 @@
 package com.dailyworks.apnalaundry.core
 
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.temporal.ChronoUnit
 
 /**
  * Date helpers ported from the prototype's `dates()`.
- * ISO dates are "yyyy-MM-dd" strings. "Today" is pinned to the seed date so the
- * bundled demo data (pending / late / delivered orders) stays coherent.
+ * ISO dates are "yyyy-MM-dd" strings. "Today" and "now" read the device clock
+ * (mirror of web/src/core/appdate.ts, which pins only when told to).
  */
 object AppDate {
-    /** Pinned "today" matching the prototype seed (Fri 25 Sep 2026). */
-    const val TODAY = "2026-09-25"
+    /** Today's ISO date on the device clock. */
+    val TODAY: String get() = LocalDate.now().toString()
 
-    /** Pinned "now" = 9:10 PM, so the Close-today banner and late-night rules demo correctly. */
-    const val NOW_MINUTES = 21 * 60 + 10
+    /** Minutes since midnight now (drives the Close-today banner and late-night rules). */
+    val NOW_MINUTES: Int get() = LocalTime.now().let { it.hour * 60 + it.minute }
 
     fun nowText(): String {
         val hh = NOW_MINUTES / 60

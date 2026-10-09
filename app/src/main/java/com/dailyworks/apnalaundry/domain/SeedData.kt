@@ -19,7 +19,7 @@ object SeedData {
 
     fun isDefaultShopName(name: String?): Boolean = (name ?: "").trim().lowercase() in UNNAMED_SHOP_NAMES
 
-    private const val T = AppDate.TODAY // 2026-09-25
+    private val T get() = AppDate.TODAY
 
     private fun items(vararg pairs: Pair<String, Int>) =
         pairs.map { ServiceItem(it.first, it.second) }
