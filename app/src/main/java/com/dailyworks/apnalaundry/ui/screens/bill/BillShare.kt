@@ -70,11 +70,14 @@ private fun combinedBillPdfUri(context: Context, r: CombinedReceipt): Uri {
 
 private val WHATSAPP_PACKAGES = listOf("com.whatsapp", "com.whatsapp.w4b")
 
-/** Short message that travels with the PDF. */
+/**
+ * Message that travels with the PDF — the web's billMessage (asterisks render
+ * bold) minus the bill-page link, since the PDF itself is attached.
+ */
 private fun billCaption(state: LaundryState, o: Order): String {
     val c = Selectors.customer(state, o.custId)
-    return "Hi ${Selectors.firstName(c.name)}, here is your bill for order #${o.no()} from ${state.shop.name} — " +
-        "Total ${Money.rupees(LaundryMath.amtOf(o))}. Thank you!"
+    return "Hi ${Selectors.firstName(c.name)}, here is your bill for order #${o.no()} from *${state.shop.name}* — " +
+        "Total *${Money.rupees(LaundryMath.amtOf(o))}*.\n\nThank you!"
 }
 
 private fun combinedBillCaption(shopName: String, r: CombinedReceipt): String {
