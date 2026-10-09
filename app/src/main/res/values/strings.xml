@@ -11,6 +11,6 @@
     <!-- Meta (Facebook) SDK — App ID (App settings → Basic) and Client Token
          (App settings → Advanced) from developers.facebook.com. Leave either
          blank to disable Meta app events. -->
-    <string name="facebook_app_id" translatable="false"></string>
-    <string name="facebook_client_token" translatable="false"></string>
+    <string name="facebook_app_id" translatable="false">2859927381503991</string>
+    <string name="facebook_client_token" translatable="false">522fd647bd45ee1a10b7c912857da8ed</string>
 </resources>
