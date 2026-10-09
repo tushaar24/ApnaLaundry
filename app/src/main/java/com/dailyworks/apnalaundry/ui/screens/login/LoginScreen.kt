@@ -55,6 +55,8 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
@@ -120,43 +122,76 @@ private fun ColumnScope.FullHeightScroll(content: @Composable ColumnScope.() -> 
 
 @Composable
 private fun ColumnScope.PhoneStep(ui: AuthUiState, vm: AuthViewModel) {
-    FullHeightScroll {
-        Hero(bottom = 24) {
-            BrandPill()
-            Image(
-                painterResource(R.drawable.login_hero),
-                contentDescription = "Ironed shirts on a rail, a stack of folded clothes and a phone showing a sent bill",
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.widthIn(max = 342.dp).fillMaxWidth().height(200.dp),
-            )
-            Text("Laundry Business Made Easy!", style = bric(34, FontWeight.Bold, Tokens.OnDark).copy(lineHeight = 36.sp))
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Perk("Bills on WhatsApp")
-                Perk("Pickup & delivery tracking")
-                Perk("All your accounts in one place")
-            }
-        }
-        Spacer(Modifier.weight(1f))
-        Sheet(Modifier.windowInsetsPadding(WindowInsets.navigationBars)) {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Mobile number", style = fig(14, FontWeight.SemiBold))
-                PhoneField(ui.phone, vm::onPhone, onDone = vm::requestOtp)
-                if (ui.error != null) {
-                    Text(ui.error!!, style = fig(14, FontWeight.SemiBold, Tokens.ErrorRed))
-                } else {
-                    Text("The OTP will arrive on your WhatsApp / SMS", style = fig(14, color = Tokens.Muted))
+    // The field and CTA must be on screen without scrolling on every phone, and
+    // above the keyboard when it's up. So nothing scrolls: the sheet keeps its
+    // size and the hero gets what's left — the art shrinks into that space
+    // (hidden when it would be a sliver), and on short heights the ticks, then
+    // the headline, then the whole hero drop out.
+    BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+        val h = maxHeight
+        val compact = h < 720.dp
+        Column(Modifier.fillMaxSize()) {
+            if (h >= 420.dp) {
+                Hero(bottom = if (compact) 16 else 24, compact = compact, modifier = Modifier.weight(1f).clipToBounds()) {
+                    BrandPill()
+                    BoxWithConstraints(
+                        Modifier.weight(1f, fill = false).heightIn(max = 200.dp).fillMaxWidth(),
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
+                        if (maxHeight >= 72.dp) {
+                            Image(
+                                painterResource(R.drawable.login_hero),
+                                contentDescription = "Ironed shirts on a rail, a stack of folded clothes and a phone showing a sent bill",
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier.widthIn(max = 342.dp).fillMaxSize(),
+                            )
+                        }
+                    }
+                    if (h >= 500.dp) {
+                        Text("Laundry Business Made Easy!", style = bric(34, FontWeight.Bold, Tokens.OnDark).copy(lineHeight = 36.sp))
+                    }
+                    if (h >= 680.dp) {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Perk("Bills on WhatsApp")
+                            Perk("Pickup & delivery tracking")
+                            Perk("All your accounts in one place")
+                        }
+                    }
                 }
+            } else {
+                Spacer(Modifier.weight(1f).windowInsetsPadding(WindowInsets.statusBars))
             }
-            CtaButton(if (ui.loading) "Sending OTP…" else "Get started", enabled = ui.phoneValid && !ui.loading, onClick = vm::requestOtp)
-            TermsLine()
+            PhoneSheet(ui, vm)
         }
     }
 }
 
 @Composable
+private fun PhoneSheet(ui: AuthUiState, vm: AuthViewModel) {
+    Sheet(Modifier.windowInsetsPadding(WindowInsets.navigationBars)) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Mobile number", style = fig(14, FontWeight.SemiBold))
+            // Focus (and so the keyboard) only when coming back via "Change number";
+            // on first open the keyboard would collapse the hero straight away.
+            PhoneField(ui.phone, vm::onPhone, onDone = vm::requestOtp, autoFocus = ui.phone.isNotEmpty())
+            if (ui.error != null) {
+                Text(ui.error!!, style = fig(14, FontWeight.SemiBold, Tokens.ErrorRed))
+            } else {
+                Text("The OTP will arrive on your WhatsApp / SMS", style = fig(14, color = Tokens.Muted))
+            }
+        }
+        CtaButton(if (ui.loading) "Sending OTP…" else "Get started", enabled = ui.phoneValid && !ui.loading, onClick = vm::requestOtp)
+        TermsLine()
+    }
+}
+
+@Composable
 private fun ColumnScope.OtpStep(ui: AuthUiState, vm: AuthViewModel) {
+    // Short screens drop the art and tighten the hero so the boxes stay in view
+    // (Continue is pinned above the keyboard either way).
+    val compact = LocalConfiguration.current.screenHeightDp < 720
     FullHeightScroll {
-        Hero(bottom = 28) {
+        Hero(bottom = if (compact) 20 else 28, compact = compact) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Box(
                     Modifier
@@ -169,11 +204,13 @@ private fun ColumnScope.OtpStep(ui: AuthUiState, vm: AuthViewModel) {
                 }
                 BrandPill(small = true)
             }
-            Image(
-                painterResource(R.drawable.login_otp),
-                contentDescription = "An OTP arriving on a phone by WhatsApp or SMS",
-                modifier = Modifier.size(200.dp, 140.dp),
-            )
+            if (!compact) {
+                Image(
+                    painterResource(R.drawable.login_otp),
+                    contentDescription = "An OTP arriving on a phone by WhatsApp or SMS",
+                    modifier = Modifier.size(200.dp, 140.dp),
+                )
+            }
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Enter OTP", style = bric(34, FontWeight.Bold, Tokens.OnDark).copy(lineHeight = 36.sp))
                 Text(
@@ -228,13 +265,18 @@ private fun ColumnScope.OtpStep(ui: AuthUiState, vm: AuthViewModel) {
 }
 
 @Composable
-private fun Hero(bottom: Int, content: @Composable ColumnScope.() -> Unit) {
+private fun Hero(
+    bottom: Int,
+    compact: Boolean = false,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     Column(
-        Modifier
+        modifier
             .fillMaxWidth()
             .windowInsetsPadding(WindowInsets.statusBars)
-            .padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = bottom.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
+            .padding(start = 24.dp, end = 24.dp, top = if (compact) 12.dp else 24.dp, bottom = bottom.dp),
+        verticalArrangement = Arrangement.spacedBy(if (compact) 12.dp else 18.dp),
         content = content,
     )
 }
@@ -286,10 +328,10 @@ private fun ResendButton(text: String, onClick: () -> Unit) {
 
 /** +91 field that shows the number as XXXXX XXXXX; focused on entry (incl. "Change number"). */
 @Composable
-private fun PhoneField(value: String, onChange: (String) -> Unit, onDone: () -> Unit) {
+private fun PhoneField(value: String, onChange: (String) -> Unit, onDone: () -> Unit, autoFocus: Boolean) {
     val focus = remember { FocusRequester() }
     var focused by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { focus.requestFocus() }
+    LaunchedEffect(Unit) { if (autoFocus) focus.requestFocus() }
     val textStyle = fig(19, FontWeight.SemiBold).copy(letterSpacing = 0.02.em)
     Row(
         Modifier
