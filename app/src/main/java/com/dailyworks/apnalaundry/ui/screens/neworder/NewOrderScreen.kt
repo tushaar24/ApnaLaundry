@@ -213,6 +213,12 @@ fun NewOrderScreen(
             verticalArrangement = Arrangement.spacedBy(22.dp),
         ) {
             Spacer(Modifier.height(2.dp))
+            // ---- bill / serial no. ----
+            FieldBox(
+                serialText, { serialTouched = true; serialText = it.filter { c -> c.isLetterOrDigit() && c.code < 128 || c in "_/-" }.take(12) },
+                prefix = "#", placeholder = editId?.toString() ?: "Same as order number",
+                suffix = "bill / serial no.", height = 48.dp,
+            )
             // ---- customer ----
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SectionLabel("Customer")
@@ -368,11 +374,6 @@ fun NewOrderScreen(
                     FieldBox(exOverride ?: exAuto.toString(), { exOverride = it.filter { c -> c.isDigit() }.take(5) }, prefix = "₹", suffix = "express", height = 48.dp, keyboardType = KeyboardType.Number)
                 }
                 FieldBox(discountText, { discountText = it.filter { c -> c.isDigit() }.take(5) }, prefix = "₹", suffix = "discount (optional)", height = 48.dp, keyboardType = KeyboardType.Number)
-                FieldBox(
-                    serialText, { serialTouched = true; serialText = it.filter { c -> c.isLetterOrDigit() && c.code < 128 || c in "_/-" }.take(12) },
-                    prefix = "#", placeholder = editId?.toString() ?: "Same as order number",
-                    suffix = "bill / serial no.", height = 48.dp,
-                )
             }
 
             // ---- live bill ----

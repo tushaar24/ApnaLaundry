@@ -238,6 +238,16 @@ function NewOrderScreen() {
       />
       <div className="flex-1 lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-6">
         <div className="flex flex-col gap-[22px] px-4 pb-6 pt-0.5">
+          {/* ---- bill / serial no. ---- */}
+          <FieldBox
+            value={serialText}
+            onChange={(v) => { setSerialTouched(true); setSerialText(v.replace(/[^\w/-]/g, "").slice(0, 12)); }}
+            prefix="#"
+            placeholder={editId != null ? String(editId) : "Same as order number"}
+            suffix="bill / serial no."
+            h={48}
+          />
+
           {/* ---- customer ---- */}
           <div className="flex flex-col gap-2">
             <SectionLabel text="Customer" />
@@ -438,14 +448,6 @@ function NewOrderScreen() {
               suffix="discount (optional)"
               h={48}
               inputMode="numeric"
-            />
-            <FieldBox
-              value={serialText}
-              onChange={(v) => { setSerialTouched(true); setSerialText(v.replace(/[^\w/-]/g, "").slice(0, 12)); }}
-              prefix="#"
-              placeholder={editId != null ? String(editId) : "Same as order number"}
-              suffix="bill / serial no."
-              h={48}
             />
           </div>
 
