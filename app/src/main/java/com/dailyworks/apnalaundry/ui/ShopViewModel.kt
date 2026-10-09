@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -42,8 +43,16 @@ class ShopViewModel(
         Shop("Shine Laundry", "9876543210", 50), emptyList(), emptyList(), emptyList(), emptyList(), emptySet(),
     )
 
+    /**
+     * True once the database has answered. Until then [state] is the [empty]
+     * placeholder, whose zero orders must not be mistaken for a brand-new shop.
+     */
+    private val _loaded = MutableStateFlow(false)
+    val loaded: StateFlow<Boolean> = _loaded
+
     val state: StateFlow<LaundryState> =
-        repo.state.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), empty)
+        repo.state.onEach { _loaded.value = true }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), empty)
 
     val hideAmounts: StateFlow<Boolean> =
         prefs.hideAmounts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)

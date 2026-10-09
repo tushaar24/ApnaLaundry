@@ -70,7 +70,7 @@ private fun GatedContent(content: @Composable () -> Unit) {
     }
 
     when {
-        !ui.loaded || !decided -> Loader()
+        !ui.loaded || !decided -> ShopLoader()
         gated -> PaywallScreen(
             hardGate = true,
             onClose = {},
@@ -81,9 +81,9 @@ private fun GatedContent(content: @Composable () -> Unit) {
     }
 }
 
+/** The "Loading your shop…" splash (same as the web's); Home keeps it up until the database answers. */
 @Composable
-private fun Loader() {
-    // Same as the web's splash: brand tile + "Loading your shop…".
+fun ShopLoader() {
     Column(
         Modifier.fillMaxSize().background(Tokens.Bg),
         verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally,

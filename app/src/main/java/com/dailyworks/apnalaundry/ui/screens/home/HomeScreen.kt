@@ -67,6 +67,7 @@ import com.dailyworks.apnalaundry.ui.components.fig
 import com.dailyworks.apnalaundry.ui.components.rounded
 import com.dailyworks.apnalaundry.ui.components.tap
 import com.dailyworks.apnalaundry.ui.nav.AppNavigator
+import com.dailyworks.apnalaundry.ui.screens.paywall.ShopLoader
 import com.dailyworks.apnalaundry.ui.sheets.ActiveSheet
 import com.dailyworks.apnalaundry.ui.sheets.SheetHost
 import com.dailyworks.apnalaundry.ui.theme.Tokens
@@ -84,7 +85,12 @@ import com.dailyworks.apnalaundry.ui.components.showDatePicker
 fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
     val state by shopVm.state.collectAsStateWithLifecycle()
     val hidden by shopVm.hideAmounts.collectAsStateWithLifecycle()
+    val loaded by shopVm.loaded.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
+    // The database hasn't answered yet: the state is a placeholder, and its zero
+    // orders would flash "Your shop is ready!" for a second. Keep the gate's loader.
+    if (!loaded) { ShopLoader(); return }
 
     // Saveable: Back from an order (opened from search results) lands on the same view.
     var tabPickup by rememberSaveable { mutableStateOf(true) }
