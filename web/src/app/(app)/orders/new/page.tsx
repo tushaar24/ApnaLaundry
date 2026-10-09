@@ -65,6 +65,7 @@ function NewOrderScreen() {
   // typed their own, which may be "" mid-edit (must NOT snap back to auto).
   const [exOverride, setExOverride] = useState<string | null>(null);
   const [discountText, setDiscountText] = useState("");
+  const [serialText, setSerialText] = useState(""); // "" = the order id
   const [quickAmt, setQuickAmt] = useState("");
   const [quickPcs, setQuickPcs] = useState("");
   const [showQuickBox, setShowQuickBox] = useState(false);
@@ -96,6 +97,7 @@ function NewOrderScreen() {
     setFeeText(o.fee > 0 ? String(o.fee) : "");
     setExpress(o.express);
     setDiscountText(o.discount > 0 ? String(o.discount) : "");
+    setSerialText(o.serialNo);
     // Same base as the live auto amount below: every line, quick amount included.
     const clothesTotalForEx = o.lines.reduce((s, l) => s + l.amt, 0);
     setExOverride(
@@ -192,6 +194,7 @@ function NewOrderScreen() {
       lines: clothes.lines(services),
       quickAmount: showQuickBox ? parseInt(quickAmt, 10) || 0 : 0,
       quickPieces: showQuickBox ? parseInt(quickPcs, 10) || 0 : 0,
+      serialNo: serialText,
     });
     // The saved form must not stay in history (the app's nav graph pops it) —
     // otherwise browser Back lands on a blank "New order" after saving.
@@ -223,7 +226,7 @@ function NewOrderScreen() {
       <TopBar
         title={editId != null ? "Edit order" : "New order"}
         onBack={nav.back}
-        trailing={editId != null ? <span className="text-[14px] text-muted">#{editId}</span> : undefined}
+        trailing={editId != null && editingOrder ? <span className="text-[14px] text-muted">#{Sel.orderNo(editingOrder)}</span> : undefined}
       />
       <div className="flex-1 lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-6">
         <div className="flex flex-col gap-[22px] px-4 pb-6 pt-0.5">
@@ -427,6 +430,14 @@ function NewOrderScreen() {
               suffix="discount (optional)"
               h={48}
               inputMode="numeric"
+            />
+            <FieldBox
+              value={serialText}
+              onChange={(v) => setSerialText(v.replace(/[^\w/-]/g, "").slice(0, 12))}
+              prefix="#"
+              placeholder={editId != null ? String(editId) : "Same as order number"}
+              suffix="bill / serial no."
+              h={48}
             />
           </div>
 

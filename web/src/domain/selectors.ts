@@ -36,6 +36,11 @@ export function initials(name: string): string {
     .join("");
 }
 
+/** The number shown as "#…" on an order and its bill: the owner's serial, else the order id. */
+export function orderNo(o: { id: number; serialNo?: string }): string {
+  return o.serialNo?.trim() || String(o.id);
+}
+
 /** "3 items", "2 kg", "2 kg (12 clothes)", "3 items + 2 kg", "Not itemised". */
 export function itemsLabel(o: Order): string {
   if (o.lines.length === 0) return o.pieces > 0 ? `${o.pieces} pieces` : "";

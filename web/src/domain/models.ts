@@ -74,6 +74,7 @@ export interface Order {
   doneDate: string; // iso date delivered
   createdOn: string;
   billSent: boolean;
+  serialNo: string; // owner-set bill / serial number ("" = use the order id)
   pieces: number; // optional piece count for quick bills
   lines: OrderLine[];
 }

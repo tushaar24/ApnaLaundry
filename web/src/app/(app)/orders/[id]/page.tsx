@@ -86,7 +86,7 @@ function OrderDetailScreen({ orderId }: { orderId: number }) {
   return (
     <div className="flex min-h-dvh flex-col">
       <TopBar
-        title={`#${o.id}`}
+        title={`#${Sel.orderNo(o)}`}
         onBack={nav.back}
         trailing={
           <button

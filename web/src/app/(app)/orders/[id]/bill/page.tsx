@@ -63,7 +63,7 @@ function BillScreen({ orderId }: { orderId: number }) {
         {/* banner */}
         <div className="w-full rounded-2xl bg-ink p-4">
           <div className="bric text-[20px] text-ondark">
-            {from === "new" ? `Order #${o.id} saved` : `Bill for order #${o.id}`}
+            {from === "new" ? `Order #${Sel.orderNo(o)} saved` : `Bill for order #${Sel.orderNo(o)}`}
           </div>
           <div className="text-[13px] font-semibold text-ondarkfaint">
             {(o.lines.length > 0 ? `${Sel.itemsLabel(o)} · ` : "") + `Total ${rupees(amt)}`}

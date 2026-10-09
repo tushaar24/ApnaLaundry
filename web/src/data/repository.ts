@@ -17,6 +17,7 @@ import { stamp } from "./rows";
 import { Analytics } from "@/analytics/events";
 import { DEFAULT_SHOP_NAME, isDefaultShopName } from "@/domain/seed";
 import { emptyBillDetails } from "@/domain/billDetails";
+import { orderNo } from "@/domain/selectors";
 
 /**
  * Commands over the in-memory rows — a 1:1 port of data/LaundryRepository.kt
@@ -300,7 +301,7 @@ export function deleteOrder(orderId: number) {
     orders: r.orders.map((x) => (x.id === orderId ? { ...x, deleted: true, ...stamp() } : x)),
     ledger: r.ledger.map((e) => (e.ref === orderId && !e.deleted ? { ...e, deleted: true, ...stamp() } : e)),
   }));
-  publish({ toast: `Bill #${o.id} deleted · ${custName(o.custId)}`, undo: undoSnap });
+  publish({ toast: `Bill #${orderNo(o)} deleted · ${custName(o.custId)}`, undo: undoSnap });
 }
 
 /** kind = "pickup" or "drop". */
@@ -486,6 +487,7 @@ export interface SaveOrderArgs {
   lines: OrderLine[];
   quickAmount: number;
   quickPieces: number;
+  serialNo: string; // "" = the order id
 }
 
 function quickLine(amount: number, pieces: number): OrderLine {
@@ -511,7 +513,7 @@ export function saveOrder(a: SaveOrderArgs): SaveOrderResult {
     pickupTime: AppDate.to12h(a.pickupTime24), deliveryDate: a.deliveryDate,
     deliveryTime: AppDate.to12h(a.deliveryTime24), ddAuto: a.ddAuto,
     fee: anyHome ? a.fee : 0, express: a.express, exAmt: a.express ? a.exAmt : 0,
-    discount: a.discount, lines: a.lines,
+    discount: a.discount, lines: a.lines, serialNo: a.serialNo.trim(),
   };
   const nm = custName(a.custId);
 
@@ -527,7 +529,7 @@ export function saveOrder(a: SaveOrderArgs): SaveOrderResult {
       pickupDate: fields.pickupDate, pickupTime: fields.pickupTime,
       deliveryDate: fields.deliveryDate, deliveryTime: fields.deliveryTime,
       ddAuto: fields.ddAuto, fee: fields.fee, express: fields.express, exAmt: fields.exAmt,
-      discount: fields.discount, lines: newLines,
+      discount: fields.discount, lines: newLines, serialNo: fields.serialNo,
     };
     if (updated.status === "CREATED" && newLines.length > 0 && a.pickup === "SHOP") {
       updated = { ...updated, status: "RECEIVED" };
@@ -553,7 +555,7 @@ export function saveOrder(a: SaveOrderArgs): SaveOrderResult {
         total: after, quickBill: newLines.some((l) => l.isQuick),
       });
     }
-    publish({ toast: `Order #${o.id} updated${totalPart}${khataPart}`, undo: undoSnap });
+    publish({ toast: `Order #${orderNo(updated)} updated${totalPart}${khataPart}`, undo: undoSnap });
     return { orderId: o.id, goToBill: false, edited: true };
   }
 
@@ -569,7 +571,7 @@ export function saveOrder(a: SaveOrderArgs): SaveOrderResult {
     ddAuto: fields.ddAuto, status, cancelReason: "", fee: fields.fee,
     express: fields.express, exAmt: fields.exAmt, discount: fields.discount,
     pre: 0, paid: 0, doneAt: "", doneDate: "", createdOn: AppDate.today(),
-    billSent: false, pieces: 0, lines: fields.lines,
+    billSent: false, pieces: 0, lines: fields.lines, serialNo: fields.serialNo,
   };
   setRows((r) => ({
     ...r,
@@ -591,7 +593,7 @@ export function saveOrder(a: SaveOrderArgs): SaveOrderResult {
   if (fields.lines.length === 0) {
     const toast = a.pickup === "HOME"
       ? `Pickup scheduled for ${nm}` + (order.pickupTime ? ` · ${order.pickupTime}` : "")
-      : `Order #${id} saved for ${nm} · add clothes when ready`;
+      : `Order #${orderNo(order)} saved for ${nm} · add clothes when ready`;
     publish({ toast, undo: undoSnap });
     return { orderId: id, goToBill: false, edited: false };
   }

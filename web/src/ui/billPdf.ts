@@ -98,9 +98,9 @@ export function billPreviewUrl(r: BillReceipt, minH = 0): string {
 }
 
 /** The receipt as a PDF file named `Bill-<order>.pdf`. Synchronous. */
-export function billPdfFile(r: BillReceipt, orderId: number): File {
+export function billPdfFile(r: BillReceipt, orderNo: number | string): File {
   const canvas = renderBill(r);
   const jpeg = dataUrlBytes(canvas.toDataURL("image/jpeg", 0.92));
   const blob = jpegPdf(jpeg, canvas.width, canvas.height, BILL_W, canvas.height / BILL_SCALE);
-  return new File([blob], `Bill-${orderId}.pdf`, { type: "application/pdf" });
+  return new File([blob], `Bill-${String(orderNo).replace(/[^\w-]/g, "_")}.pdf`, { type: "application/pdf" });
 }

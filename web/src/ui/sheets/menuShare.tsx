@@ -46,7 +46,7 @@ export function OrderMenuSheet({
   if (!o) { onDismiss(); return null; }
 
   return (
-    <AppSheet title={c.name} subtitle={`#${o.id} · +91 ${Sel.fmtPhone(c.phone)}`} onDismiss={onDismiss}>
+    <AppSheet title={c.name} subtitle={`#${Sel.orderNo(o)} · +91 ${Sel.fmtPhone(c.phone)}`} onDismiss={onDismiss}>
       <div className="flex flex-col">
         <MenuRow icon={<IcEye size={22} />} label="View order details" onClick={() => { onDismiss(); nav.openOrder(o.id); }} />
         {o.lines.length > 0 ? (

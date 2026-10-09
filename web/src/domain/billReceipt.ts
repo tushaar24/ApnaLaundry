@@ -58,7 +58,7 @@ export interface BillReceipt {
 export type BillOrder = Pick<
   Order,
   "id" | "status" | "createdOn" | "deliveryDate" | "doneDate" | "express" | "exAmt" | "fee" | "discount" | "lines"
-> & Partial<Pick<Order, "paid" | "deliveryTime">>;
+> & Partial<Pick<Order, "paid" | "deliveryTime" | "serialNo">>;
 
 /** The shop fields a bill shows (older servers send only name + phone). */
 export type BillShop = { name: string; phone: string } & Partial<BillDetails>;
@@ -153,7 +153,7 @@ export function receiptFrom({ shop, customer: c, order: o }: BillData, opts: Rec
       gstin: isGstinValid(d.gstin) ? d.gstin : "",
       logoId: d.logoId,
     },
-    billNo: `Bill #${o.id}`,
+    billNo: `Bill #${Sel.orderNo(o)}`,
     date: AppDate.plain(o.createdOn),
     customer: { name: c.name, phone: phone ? `+91 ${Sel.fmtPhone(phone)}` : "" },
     readyBy: readyByOf(o),

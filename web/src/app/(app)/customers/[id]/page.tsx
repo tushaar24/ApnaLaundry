@@ -109,7 +109,7 @@ function khataRows(state: LaundryState, custId: string): KhataRow[] {
     const desc = o.lines.length > 0 ? `${Sel.itemsLabel(o)} · ${Sel.svcLabel(o)}` : "clothes not counted yet";
     out.push({
       key: `open-${o.id}`,
-      title: `Order #${o.id} · in progress`,
+      title: `Order #${Sel.orderNo(o)} · in progress`,
       sub: `${AppDate.plain(o.createdOn || o.pickupDate).split(", ")[1]} · ${desc}`,
       amount: "+ " + rupees(amt),
       amtColor: "var(--color-orangetext)",
@@ -274,7 +274,7 @@ function OrderMiniRow({ o, onClick }: { o: Order; onClick: () => void }) {
       <div className="flex w-full items-center gap-2.5 p-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="text-[15px] font-bold">#{o.id}</span>
+            <span className="text-[15px] font-bold">#{Sel.orderNo(o)}</span>
             <span className={cls("text-[14px] font-semibold text-inksecondary")}>
               {o.lines.length > 0 ? rupees(amtOf(o)) : "Not counted"}
             </span>

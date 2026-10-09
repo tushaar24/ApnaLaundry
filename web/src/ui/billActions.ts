@@ -37,7 +37,7 @@ function waUrl(digits: string, text: string): string {
 function billMessage(state: LaundryState, o: Order, link: string | null): string {
   const c = Sel.customer(state, o.custId);
   return [
-    `Hi ${Sel.firstName(c.name)}, here is your bill for order #${o.id} from *${state.shop.name}* — Total *${rupees(amtOf(o))}*.`,
+    `Hi ${Sel.firstName(c.name)}, here is your bill for order #${Sel.orderNo(o)} from *${state.shop.name}* — Total *${rupees(amtOf(o))}*.`,
     link ? `View / download your bill:\n${link}` : "",
     "Thank you!",
   ].filter(Boolean).join("\n\n");
@@ -45,7 +45,7 @@ function billMessage(state: LaundryState, o: Order, link: string | null): string
 
 function makePdf(state: LaundryState, o: Order): File | null {
   try {
-    return billPdfFile(billReceipt(state, o), o.id);
+    return billPdfFile(billReceipt(state, o), Sel.orderNo(o));
   } catch {
     Repo.showInfo("Couldn't make the bill PDF — try again");
     return null;
@@ -109,7 +109,7 @@ export function sendReminderOnWhatsApp(state: LaundryState, custId: string, bal:
 export function downloadBill(state: LaundryState, o: Order): void {
   const file = makePdf(state, o);
   if (!file) return;
-  void shareOrSaveFile(file, `Bill #${o.id}`).then((r) => {
+  void shareOrSaveFile(file, `Bill #${Sel.orderNo(o)}`).then((r) => {
     if (r === "saved") Repo.showInfo(`${file.name} downloaded`);
   });
 }

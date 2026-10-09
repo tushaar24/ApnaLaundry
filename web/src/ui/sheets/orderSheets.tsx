@@ -138,7 +138,7 @@ export function CountClothesSheet({
   const total = clothes.total(state.services);
 
   return (
-    <AppSheet title="Count clothes" subtitle={`${c.name} · #${o.id}. The bill is made after this.`} onDismiss={onDismiss}>
+    <AppSheet title="Count clothes" subtitle={`${c.name} · #${Sel.orderNo(o)}. The bill is made after this.`} onDismiss={onDismiss}>
       <div className="flex flex-col gap-4">
         <ClothesEditor services={state.services} api={clothes} editablePrice={false} />
         <div className="flex w-full items-center justify-between">
@@ -179,7 +179,7 @@ export function RescheduleSheet({
   ];
 
   return (
-    <AppSheet title={title} subtitle={`${c.name} · #${o.id}`} onDismiss={onDismiss}>
+    <AppSheet title={title} subtitle={`${c.name} · #${Sel.orderNo(o)}`} onDismiss={onDismiss}>
       <div className="flex flex-col gap-3.5">
         <div className="flex flex-wrap gap-1.5">
           {chips.map(([label, iso]) => (
@@ -229,7 +229,7 @@ export function CancelSheet({
   const reasons = ["Customer not home", "Customer cancelled", "Wrong address", "Other"];
 
   return (
-    <AppSheet title="Cancel pickup?" subtitle={`${c.name} · #${o.id}`} onDismiss={onDismiss}>
+    <AppSheet title="Cancel pickup?" subtitle={`${c.name} · #${Sel.orderNo(o)}`} onDismiss={onDismiss}>
       <div className="flex flex-col gap-3.5">
         <div className="flex flex-wrap gap-1.5">
           {reasons.map((r) => (
@@ -271,7 +271,7 @@ export function DeleteOrderSheet({
   const paidAny = state.ledger.some((e) => e.ref === o.id && e.kind === "GOT");
 
   return (
-    <AppSheet title={`Delete ${what} #${o.id}?`} subtitle={`${c.name} · ${rupees(amtOf(o))}`} onDismiss={onDismiss}>
+    <AppSheet title={`Delete ${what} #${Sel.orderNo(o)}?`} subtitle={`${c.name} · ${rupees(amtOf(o))}`} onDismiss={onDismiss}>
       <div className="flex flex-col gap-3.5">
         <div className="rounded-xl bg-orangelight p-3.5">
           <span className="text-[14px] font-semibold text-orangedeep">
@@ -317,7 +317,7 @@ export function BillViewSheet({
   if (!o) { onDismiss(); return null; }
 
   return (
-    <AppSheet title={`Bill #${o.id}`} subtitle={`${c.name} · this is what the customer sees`} onDismiss={onDismiss}>
+    <AppSheet title={`Bill #${Sel.orderNo(o)}`} subtitle={`${c.name} · this is what the customer sees`} onDismiss={onDismiss}>
       <ReceiptPreview state={state} order={o} />
     </AppSheet>
   );
@@ -343,6 +343,6 @@ function ReceiptPreview({ state, order }: { state: LaundryState; order: Order })
   if (!src) return <div className="h-[420px] w-full rounded-2xl bg-white" />;
   return (
     // eslint-disable-next-line @next/next/no-img-element -- a data: URL, nothing to optimise
-    <img src={src} alt={`Bill #${order.id}`} className="w-full rounded-2xl border border-cardborder bg-white" />
+    <img src={src} alt={`Bill #${Sel.orderNo(order)}`} className="w-full rounded-2xl border border-cardborder bg-white" />
   );
 }

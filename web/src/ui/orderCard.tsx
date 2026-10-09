@@ -73,7 +73,7 @@ export function OrderCard({
         : "";
 
   const meta =
-    `#${o.id} · ` +
+    `#${Sel.orderNo(o)} · ` +
     (counted
       ? `${Sel.itemsLabel(o)} · ${Sel.svcLabel(o)}`
       : o.pickup === "HOME" && o.status === "CREATED"

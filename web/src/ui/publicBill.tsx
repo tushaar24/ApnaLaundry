@@ -12,7 +12,7 @@ type View =
   | { kind: "loading" }
   | { kind: "missing" }
   | { kind: "error" }
-  | { kind: "ok"; receipt: BillReceipt; no: number; shopName: string; src: string };
+  | { kind: "ok"; receipt: BillReceipt; no: number | string; shopName: string; src: string };
 
 export function PublicBill({ token }: { token: string }) {
   const [view, setView] = useState<View>({ kind: "loading" });
@@ -28,7 +28,7 @@ export function PublicBill({ token }: { token: string }) {
         const bill = body.bill;
         const receipt = "sample" in bill ? receiptFromSample(bill) : receiptFrom(bill);
         await prepareBillAssets(receipt); // fonts + logo, so the PDF below can draw synchronously
-        const no = "sample" in bill ? 1001 : bill.order.id;
+        const no = "sample" in bill ? 1001 : bill.order.serialNo?.trim() || bill.order.id;
         return { kind: "ok", receipt, no, shopName: bill.shop.name, src: billPreviewUrl(receipt) } as const;
       })
       .catch(() => ({ kind: "error" }) as const)
