@@ -66,6 +66,7 @@ function NewOrderScreen() {
   const [exOverride, setExOverride] = useState<string | null>(null);
   const [discountText, setDiscountText] = useState("");
   const [serialText, setSerialText] = useState(""); // "" = the order id
+  const [serialTouched, setSerialTouched] = useState(false);
   const [quickAmt, setQuickAmt] = useState("");
   const [quickPcs, setQuickPcs] = useState("");
   const [showQuickBox, setShowQuickBox] = useState(false);
@@ -123,6 +124,13 @@ function NewOrderScreen() {
     setLoaded(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingOrder?.id, services.length, loaded]);
+
+  // New order: start from the last serial + 1 (orders may still be loading,
+  // so follow them until the owner types their own).
+  const suggestedSerial = editId == null ? Sel.nextSerial(state) : "";
+  useEffect(() => {
+    if (editId == null && !serialTouched) setSerialText(suggestedSerial);
+  }, [editId, serialTouched, suggestedSerial]);
 
   const cust = custId != null ? Sel.customer(state, custId) : null;
   const anyHome = pickup === "HOME" || delivery === "HOME";
@@ -433,7 +441,7 @@ function NewOrderScreen() {
             />
             <FieldBox
               value={serialText}
-              onChange={(v) => setSerialText(v.replace(/[^\w/-]/g, "").slice(0, 12))}
+              onChange={(v) => { setSerialTouched(true); setSerialText(v.replace(/[^\w/-]/g, "").slice(0, 12)); }}
               prefix="#"
               placeholder={editId != null ? String(editId) : "Same as order number"}
               suffix="bill / serial no."

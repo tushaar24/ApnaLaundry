@@ -41,6 +41,22 @@ export function orderNo(o: { id: number; serialNo?: string }): string {
   return o.serialNo?.trim() || String(o.id);
 }
 
+/**
+ * The serial a new order starts with: the latest order's serial + 1, keeping
+ * any prefix ("A-102" → "A-103", "0099" → "0100"). "" until the owner has
+ * given some order a serial, or when the last one has no number to bump.
+ */
+export function nextSerial(state: LaundryState): string {
+  let last: Order | undefined;
+  for (const o of state.orders) {
+    if (o.serialNo.trim() !== "" && (!last || o.id > last.id)) last = o;
+  }
+  const m = last?.serialNo.trim().match(/^(.*?)(\d+)$/);
+  if (!m) return "";
+  const n = String(parseInt(m[2], 10) + 1).padStart(m[2].length, "0");
+  return (m[1] + n).slice(0, 12);
+}
+
 /** "3 items", "2 kg", "2 kg (12 clothes)", "3 items + 2 kg", "Not itemised". */
 export function itemsLabel(o: Order): string {
   if (o.lines.length === 0) return o.pieces > 0 ? `${o.pieces} pieces` : "";
