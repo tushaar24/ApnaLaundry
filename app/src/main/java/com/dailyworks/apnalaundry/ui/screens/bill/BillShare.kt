@@ -9,6 +9,8 @@ import androidx.core.content.FileProvider
 import com.dailyworks.apnalaundry.core.Money
 import com.dailyworks.apnalaundry.data.LogoStore
 import com.dailyworks.apnalaundry.domain.BillReceipt
+import com.dailyworks.apnalaundry.domain.CombinedBill
+import com.dailyworks.apnalaundry.domain.CombinedReceipt
 import com.dailyworks.apnalaundry.domain.LaundryMath
 import com.dailyworks.apnalaundry.domain.LaundryState
 import com.dailyworks.apnalaundry.domain.Order
@@ -29,22 +31,39 @@ import org.koin.core.context.GlobalContext
 /** Public bill pages: mylaundry.work/b/<token>. */
 const val BILL_PAGE_URL = "https://mylaundry.work/b/"
 
-/** Writes cacheDir/bills/Bill-<id>.pdf in the shop's design and returns a content:// uri. */
-private fun billPdfUri(context: Context, state: LaundryState, o: Order): Uri {
-    val receipt = BillReceipt.of(state, o)
-    val logo = GlobalContext.get().get<LogoStore>().cached(receipt.logoId)
-    val file = File(File(context.cacheDir, "bills").apply { mkdirs() }, "Bill-${o.no().replace('/', '-')}.pdf")
+/** Writes a one-page PDF of [heightPt] points at cacheDir/bills/[fileName] and returns a content:// uri. */
+private fun pdfUri(context: Context, fileName: String, heightPt: Float, draw: (android.graphics.Canvas) -> Unit): Uri {
+    val file = File(File(context.cacheDir, "bills").apply { mkdirs() }, fileName)
     val doc = PdfDocument()
     try {
-        val h = kotlin.math.ceil(BillRender.height(context, receipt, logo)).toInt()
+        val h = kotlin.math.ceil(heightPt).toInt()
         val page = doc.startPage(PdfDocument.PageInfo.Builder(BillRender.W.toInt(), h, 1).create())
-        BillRender.drawPage(context, page.canvas, receipt, logo)
+        draw(page.canvas)
         doc.finishPage(page)
         FileOutputStream(file).use { doc.writeTo(it) }
     } finally {
         doc.close()
     }
     return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+}
+
+private fun cachedLogo(logoId: String) = GlobalContext.get().get<LogoStore>().cached(logoId)
+
+/** Bill-<id>.pdf in the shop's design. */
+private fun billPdfUri(context: Context, state: LaundryState, o: Order): Uri {
+    val receipt = BillReceipt.of(state, o)
+    val logo = cachedLogo(receipt.logoId)
+    return pdfUri(context, "Bill-${o.no().replace('/', '-')}.pdf", BillRender.height(context, receipt, logo)) {
+        BillRender.drawPage(context, it, receipt, logo)
+    }
+}
+
+/** Combined-bill-<FirstName>-<period>.pdf in the shop's design. */
+private fun combinedBillPdfUri(context: Context, r: CombinedReceipt): Uri {
+    val logo = cachedLogo(r.logoId)
+    return pdfUri(context, CombinedBill.fileName(r.customerName, r.period), BillRender.height(context, r, logo)) {
+        BillRender.drawPage(context, it, r, logo)
+    }
 }
 
 // ---------------- sending ----------------
@@ -58,22 +77,29 @@ private fun billCaption(state: LaundryState, o: Order): String {
         "Total ${Money.rupees(LaundryMath.amtOf(o))}. Thank you!"
 }
 
-/** Sends the bill PDF to the customer on WhatsApp (their chat opens directly). Caller marks it sent. */
-fun sendBillOnWhatsApp(context: Context, state: LaundryState, o: Order) {
-    val uri = billPdfUri(context, state, o)
-    val digits = Selectors.customer(state, o.custId).phone.filter { it.isDigit() }.takeLast(10)
+private fun combinedBillCaption(shopName: String, r: CombinedReceipt): String {
+    val period = if (r.period.isNotEmpty()) " for ${r.period}" else ""
+    val pay = if (r.fullyPaid) "All paid" else "To pay ${r.due}"
+    return "Hi ${Selectors.firstName(r.customerName)}, here is your combined bill from $shopName$period — " +
+        "${Selectors.countNoun(r.orders, "order")}, total ${r.total}. $pay. Thank you!"
+}
+
+/**
+ * Hands a PDF to WhatsApp with the customer's chat preselected (the "jid"
+ * extra) instead of the contact picker. Exactly one WhatsApp → go straight
+ * in; both (personal + Business) or none → the owner picks from the share
+ * sheet.
+ */
+private fun sendPdfOnWhatsApp(context: Context, uri: Uri, phoneDigits: String, caption: String, chooserTitle: String) {
     val send = Intent(Intent.ACTION_SEND).apply {
         type = "application/pdf"
         putExtra(Intent.EXTRA_STREAM, uri)
-        putExtra(Intent.EXTRA_TEXT, billCaption(state, o))
-        // Opens the customer's chat directly instead of WhatsApp's contact picker.
-        if (digits.length == 10) putExtra("jid", "91$digits@s.whatsapp.net")
+        putExtra(Intent.EXTRA_TEXT, caption)
+        if (phoneDigits.length == 10) putExtra("jid", "91$phoneDigits@s.whatsapp.net")
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
-    // Exactly one WhatsApp → go straight in; both (personal + Business) or
-    // none → let the owner pick from the share sheet.
     val installed = WHATSAPP_PACKAGES.filter { context.packageManager.getLaunchIntentForPackage(it) != null }
-    val chooser = Intent.createChooser(send, "Send bill #${o.no()}").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    val chooser = Intent.createChooser(send, chooserTitle).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     try {
         if (installed.size == 1) {
             context.startActivity(Intent(send).setPackage(installed[0]).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -85,15 +111,43 @@ fun sendBillOnWhatsApp(context: Context, state: LaundryState, o: Order) {
     }
 }
 
-/** Renders the bill to a PDF and opens the share sheet (save or send). */
-fun shareBillPdf(context: Context, state: LaundryState, o: Order) {
-    val uri = billPdfUri(context, state, o)
+/** The system share sheet with a PDF (save to Files, or send anywhere). */
+private fun sharePdf(context: Context, uri: Uri, title: String) {
     val share = Intent(Intent.ACTION_SEND).apply {
         type = "application/pdf"
         putExtra(Intent.EXTRA_STREAM, uri)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
-    context.startActivity(Intent.createChooser(share, "Bill #${o.no()}").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    context.startActivity(Intent.createChooser(share, title).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+}
+
+private fun phoneDigits(state: LaundryState, custId: String): String =
+    Selectors.customer(state, custId).phone.filter { it.isDigit() }.takeLast(10)
+
+/** Sends the bill PDF to the customer on WhatsApp (their chat opens directly). Caller marks it sent. */
+fun sendBillOnWhatsApp(context: Context, state: LaundryState, o: Order) {
+    sendPdfOnWhatsApp(context, billPdfUri(context, state, o), phoneDigits(state, o.custId), billCaption(state, o), "Send bill #${o.no()}")
+}
+
+/** Renders the bill to a PDF and opens the share sheet (save or send). */
+fun shareBillPdf(context: Context, state: LaundryState, o: Order) {
+    sharePdf(context, billPdfUri(context, state, o), "Bill #${o.no()}")
+}
+
+/**
+ * Sends a combined bill (many orders, one PDF) to the customer on WhatsApp.
+ * A document only — nothing is written to the khata.
+ */
+fun sendCombinedBillOnWhatsApp(context: Context, state: LaundryState, custId: String, r: CombinedReceipt) {
+    sendPdfOnWhatsApp(
+        context, combinedBillPdfUri(context, r), phoneDigits(state, custId),
+        combinedBillCaption(state.shop.name, r), "Send combined bill",
+    )
+}
+
+/** The combined bill as a PDF in the share sheet (save or send). */
+fun shareCombinedBillPdf(context: Context, r: CombinedReceipt) {
+    sharePdf(context, combinedBillPdfUri(context, r), "Combined bill")
 }
 
 /**

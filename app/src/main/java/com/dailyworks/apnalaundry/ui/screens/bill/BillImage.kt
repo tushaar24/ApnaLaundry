@@ -12,6 +12,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dailyworks.apnalaundry.data.LogoStore
 import com.dailyworks.apnalaundry.domain.BillReceipt
+import com.dailyworks.apnalaundry.domain.CombinedReceipt
 import com.dailyworks.apnalaundry.ui.ShopViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -25,6 +26,18 @@ fun rememberBillImages(shopVm: ShopViewModel, receipts: List<BillReceipt>, equal
     return produceState<List<ImageBitmap>?>(initialValue = null, receipts, tick) {
         if (debounceMs > 0) delay(debounceMs)
         value = withContext(Dispatchers.Default) { renderAll(context, shopVm.logos, receipts, equalHeight).map { it.asImageBitmap() } }
+    }
+}
+
+/** The combined bill drawn off the main thread (null while drawing). */
+@Composable
+fun rememberCombinedBillImage(shopVm: ShopViewModel, receipt: CombinedReceipt): State<ImageBitmap?> {
+    val context = LocalContext.current
+    val tick by shopVm.logoTick.collectAsStateWithLifecycle()
+    return produceState<ImageBitmap?>(initialValue = null, receipt, tick) {
+        value = withContext(Dispatchers.Default) {
+            BillRender.render(context, receipt, shopVm.logos.cached(receipt.logoId)).asImageBitmap()
+        }
     }
 }
 

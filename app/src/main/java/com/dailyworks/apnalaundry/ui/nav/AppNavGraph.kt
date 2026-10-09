@@ -15,6 +15,7 @@ import com.dailyworks.apnalaundry.data.AuthRepository
 import com.dailyworks.apnalaundry.data.Prefs
 import com.dailyworks.apnalaundry.ui.ShopViewModel
 import com.dailyworks.apnalaundry.ui.screens.bill.BillScreen
+import com.dailyworks.apnalaundry.ui.screens.customer.CombinedBillScreen
 import com.dailyworks.apnalaundry.ui.screens.customer.CustomerScreen
 import com.dailyworks.apnalaundry.ui.screens.customers.CustomersScreen
 import com.dailyworks.apnalaundry.ui.screens.earnings.EarningsScreen
@@ -161,6 +162,14 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
             ),
         ) { entry ->
             CustomerScreen(shopVm, navigator, custId = entry.arguments?.getString("custId") ?: "", from = entry.arguments?.getString("from") ?: "customers")
+        }
+
+        // Customer → Combined bill: many orders of one customer on one bill.
+        composable(
+            Routes.COMBINED_BILL,
+            arguments = listOf(navArgument("custId") { type = NavType.StringType }),
+        ) { entry ->
+            CombinedBillScreen(shopVm, navigator, custId = entry.arguments?.getString("custId") ?: "")
         }
 
         // Settings → Subscription: manage/cancel the active plan.

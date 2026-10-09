@@ -45,6 +45,17 @@ a clear allocation rule, and a per-customer khata ledger that always reconciles.
 23. As an owner, I want "Orders in progress · not in khata yet" listed separately, so that I don't double-count.
 24. As an owner, I want a manual "Send reminder on WhatsApp", so that nudging is my choice, not automatic.
 
+### Combined bill (many orders of one customer, one bill)
+25. As an owner, I want a "Combined bill" row on a customer's khata (shown once they have a counted,
+    non-cancelled order), so that monthly-paying customers get one bill instead of many.
+26. As an owner, I want chips — Custom dates, Last 7 days, Last 30 days, This month (default), Last
+    month — that tick the orders whose **pickup date** falls in the range, plus Select all / Clear all
+    and ticking by hand (which turns the chip off), so that picking is one tap in the common case.
+27. As an owner, I want a preview of the one bill in my chosen design (logo, GSTIN, UPI, terms), with
+    a "Show every item" switch, and Download / Send on WhatsApp (PDF), so that it looks like my bills.
+28. As an owner, I want the combined bill to be a document only — it never adds to the khata or changes
+    the balance — so that customers are never charged twice.
+
 ## Implementation decisions
 
 - **Modules:** `ui/screens/bill/BillScreen`, `ui/sheets/CollectPaymentSheet`, `BillViewSheet`,
@@ -62,6 +73,18 @@ a clear allocation rule, and a per-customer khata ledger that always reconciles.
   and the bill is marked not-sent.
 - **WhatsApp / Download / UPI-QR:** stubbed as toasts ("Opening WhatsApp…", "Bill-N.pdf saved").
   The real integrations are pending.
+- **Combined bill** (`domain/CombinedBill`, `ui/screens/customer/CombinedBillScreen`, drawn by
+  `BillRender.layoutCombined`, sent by `BillShare.sendCombinedBillOnWhatsApp`):
+  - Eligible orders = not cancelled and with lines; the pickup date decides the month.
+  - Per order: amount = the usual bill total; paid = `min(total, delivered ? paid : pre)`; the row tag is
+    Paid / "₹X due" / "In progress · Ready · Paid — not delivered".
+  - Totals: `Total of N orders → Already paid → To pay`. The UPI QR prints only when to-pay > 0 and the
+    UPI id is valid (`upi://pay?…&am=<to pay>&tn=Combined bill <period>`); otherwise a "Fully paid —
+    thank you!" strip. No "previous balance" line: the bill covers the ticked orders only.
+  - Period: the month for This / Last month; the date range for the other chips; for hand-picked
+    orders the first–last pickup date. PDF name `Combined-bill-<FirstName>-<period>.pdf`.
+  - Sending writes nothing to the khata (no ledger entry, no "sent" flag); it fires
+    `Combined Bill Sent` in analytics.
 
 ## Testing decisions
 

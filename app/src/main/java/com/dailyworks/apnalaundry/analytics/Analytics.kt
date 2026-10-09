@@ -190,6 +190,9 @@ object Analytics {
 
     fun billViewed(orderId: Int) = track("Bill Viewed", mapOf("order_id" to orderId))
 
+    fun combinedBillSent(customerId: String, orders: Int, total: Int, toPay: Int) =
+        track("Combined Bill Sent", mapOf("customer_id" to customerId, "orders" to orders, "total" to total, "to_pay" to toPay, "channel" to "whatsapp"))
+
     fun summaryShared(period: String) = track("Summary Shared", mapOf("period" to period))
 
     fun ratesOpened(from: String) = track("Rates Opened", mapOf("from" to from))

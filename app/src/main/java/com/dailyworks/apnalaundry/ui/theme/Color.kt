@@ -44,6 +44,7 @@ object Tokens {
     // Login (blue hero) states
     val Green = Color(0xFF16A34A)
     val GreenText = Color(0xFF15803D)
+    val GreenLight = Color(0xFFE3F4E8)   // paid tags, "fully paid" strips
     val ErrorRed = Color(0xFFB42318)
     val OnBlueMuted = Color(0xFFDCE5FB)
     val Placeholder = Color(0xFF8A847A)

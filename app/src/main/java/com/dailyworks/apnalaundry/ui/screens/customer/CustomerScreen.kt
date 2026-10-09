@@ -17,6 +17,10 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.FileCopy
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -34,6 +38,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.core.AppDate
 import com.dailyworks.apnalaundry.core.Money
+import com.dailyworks.apnalaundry.domain.CombinedBill
 import com.dailyworks.apnalaundry.domain.LaundryMath
 import com.dailyworks.apnalaundry.domain.LedgerKind
 import com.dailyworks.apnalaundry.domain.Order
@@ -124,6 +129,25 @@ fun CustomerScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: Strin
                             sendReminderOnWhatsApp(context, state, custId, bal)
                             shopVm.showInfo("Opening WhatsApp · reminder to $nm for ${Money.rupees(bal)}")
                         }
+                    }
+                }
+            }
+            // Combined bill — only once there is a counted, non-cancelled order to put on it.
+            if (CombinedBill.ordersOf(state, custId).isNotEmpty()) {
+                AppCard {
+                    Row(
+                        Modifier.fillMaxWidth().tap { navigator.openCombinedBill(custId) }.padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Box(Modifier.size(42.dp).rounded(12.dp).background(Tokens.BlueLight), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Outlined.FileCopy, null, tint = Tokens.Blue, modifier = Modifier.size(22.dp))
+                        }
+                        Column(Modifier.weight(1f)) {
+                            Text("Combined bill", style = fig(15, FontWeight.Bold))
+                            Text("Many orders in one bill · pick a month or tick orders", style = fig(13, color = Tokens.Muted))
+                        }
+                        Icon(Icons.Outlined.ChevronRight, null, tint = Tokens.Faint, modifier = Modifier.size(22.dp))
                     }
                 }
             }

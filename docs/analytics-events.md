@@ -80,12 +80,13 @@ Custom property keys are `snake_case`. `Charged` uses CleverTap's reserved
 | `Reminder Sent` | `customer_id`, `amount` | WhatsApp baaki reminder |
 | `Bill Sent` | `order_id`, `channel` (`whatsapp`) | send bill |
 | `Bill Viewed` | `order_id` | customer-facing bill preview opened |
+| `Combined Bill Sent` | `customer_id`, `orders`, `total`, `to_pay`, `channel` (`whatsapp`) | many orders of one customer sent as one bill |
 | `Summary Shared` | `period` | earnings day/week/month summary shared |
 | `Rates Opened` | `from` (`home`\|`settings`) | rate card opened |
 | `Service Added` | `mode` (`PIECE`\|`WEIGHT`) | new service saved |
 | `Service Edited` | `service_id` | service edited |
 | `Service Deleted` | `service_id` | service deleted |
-| `Screen Viewed` | `screen` | each main screen is shown (`login`, `setup`, `home`, `customers`, `earnings`, `settings`, `new_order`, `order_detail`, `customer_khata`, `bill`, `rates`) |
+| `Screen Viewed` | `screen` | each main screen is shown (`login`, `setup`, `home`, `customers`, `earnings`, `settings`, `new_order`, `order_detail`, `customer_khata`, `combined_bill`, `bill`, `rates`) |
 | `Earnings Period Changed` | `period` (`today`\|`week`\|`month`) | period toggle on Earnings |
 | `Order Search Opened` | — | search opened on Home |
 

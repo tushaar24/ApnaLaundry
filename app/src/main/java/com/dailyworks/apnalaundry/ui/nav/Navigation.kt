@@ -15,6 +15,7 @@ object Routes {
     const val BILL = "bill/{orderId}?from={from}"
     const val ORDER = "order/{orderId}?from={from}"
     const val CUSTOMER = "customer/{custId}?from={from}"
+    const val COMBINED_BILL = "combined-bill/{custId}"
     const val SUBSCRIPTION = "subscription"
     const val BILL_DESIGN = "bill-design"
 }
@@ -35,6 +36,7 @@ class AppNavigator(val nav: NavHostController) {
     fun openBill(orderId: Int, from: String = "home") = nav.navigate("bill/$orderId?from=$from")
     fun openOrder(orderId: Int, from: String = "home") = nav.navigate("order/$orderId?from=$from")
     fun openCustomer(custId: String, from: String = "customers") = nav.navigate("customer/$custId?from=$from")
+    fun openCombinedBill(custId: String) = nav.navigate("combined-bill/$custId")
     fun openCustomers(filter: String = "all") = navigateTab("customers?filter=$filter")
     fun openEarnings() = navigateTab(Routes.EARNINGS)
     fun openSettings() = navigateTab(Routes.SETTINGS)
