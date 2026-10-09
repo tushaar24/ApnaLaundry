@@ -46,6 +46,8 @@ object Tokens {
     val GreenText = Color(0xFF15803D)
     val ErrorRed = Color(0xFFB42318)
     val OnBlueMuted = Color(0xFFDCE5FB)
+    val Placeholder = Color(0xFF8A847A)
+    val DisabledFg = Color(0xFF6B655C)
 
     // On-dark
     val OnDark = Color(0xFFFFFFFF)
