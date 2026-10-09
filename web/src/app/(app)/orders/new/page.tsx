@@ -67,6 +67,7 @@ function NewOrderScreen() {
   const [exMode, setExMode] = useState<"pct" | "amt">("pct");
   const [exPctText, setExPctText] = useState(String(state.shop.expressPct));
   const [exAmtText, setExAmtText] = useState("");
+  const [discOn, setDiscOn] = useState(false);
   const [discMode, setDiscMode] = useState<"pct" | "amt">("amt");
   const [discountText, setDiscountText] = useState("");
   const [serialText, setSerialText] = useState(""); // "" = the order id
@@ -101,6 +102,7 @@ function NewOrderScreen() {
     setNDD(o.deliveryDate === "" ? "none" : o.ddAuto ? "" : o.deliveryDate);
     setFeeText(o.fee > 0 ? String(o.fee) : "");
     setExpress(o.express);
+    setDiscOn(o.discPct > 0 || o.discount > 0);
     if (o.discPct > 0) { setDiscMode("pct"); setDiscountText(String(o.discPct)); }
     else { setDiscMode("amt"); setDiscountText(o.discount > 0 ? String(o.discount) : ""); }
     setSerialText(Sel.orderNo(o)); // the number it shows today (its serial, else the order id)
@@ -142,14 +144,14 @@ function NewOrderScreen() {
   const cust = custId != null ? Sel.customer(state, custId) : null;
   const anyHome = pickup === "HOME" || delivery === "HOME";
   const exPct = parseInt(exPctText, 10) || 0;
-  const discPct = discMode === "pct" ? Math.min(100, parseInt(discountText, 10) || 0) : 0;
+  const discPct = discOn && discMode === "pct" ? Math.min(100, parseInt(discountText, 10) || 0) : 0;
 
   const quickAmount = showQuickBox ? parseInt(quickAmt, 10) || 0 : 0;
   const clothesTotal = clothes.total(services) + quickAmount;
   const exAuto = expressAuto(clothesTotal, exPct);
   const exAmt = express ? (exMode === "pct" ? exAuto : parseInt(exAmtText, 10) || 0) : 0;
   const fee = anyHome ? parseInt(feeText, 10) || 0 : 0;
-  const discount = discMode === "pct" ? Math.round((clothesTotal * discPct) / 100) : parseInt(discountText, 10) || 0;
+  const discount = !discOn ? 0 : discMode === "pct" ? Math.round((clothesTotal * discPct) / 100) : parseInt(discountText, 10) || 0;
   const grand = Math.max(0, clothesTotal + exAmt + fee - discount);
   const empty = clothesTotal === 0;
 
@@ -430,34 +432,41 @@ function NewOrderScreen() {
           {/* ---- extras ---- */}
           <div className="flex flex-col gap-3">
             <SectionLabel text="Extras" />
-            <AppCard>
-              <div className="flex w-full items-center p-3.5">
-                <div className="min-w-0 flex-1">
-                  <div className="text-[15px] font-bold text-orangetext">Express order</div>
-                  <div className="text-[13px] text-muted">
-                    {express && exAmt > 0 ? `+ ${rupees(exAmt)}` : "Extra charge"} · washed first
-                  </div>
-                </div>
-                <Toggle on={express} onColor="var(--color-orange)" onToggle={() => setExpress((v) => !v)} />
-              </div>
-            </AppCard>
-            {express ? (
-              <PctOrAmount
-                mode={exMode}
-                onMode={setExMode}
-                value={exMode === "pct" ? exPctText : exAmtText}
-                onChange={(v) => (exMode === "pct" ? setExPctText(v) : setExAmtText(v))}
-                label="express"
-                hint={exMode === "pct" && clothesTotal > 0 ? `= ${rupees(exAuto)}` : undefined}
-              />
-            ) : null}
-            <PctOrAmount
+            <ExtraCard
+              title="Express order"
+              sub="Washed first · charge extra"
+              tone="orange"
+              on={express}
+              onToggle={() => setExpress((v) => !v)}
+              mode={exMode}
+              onMode={setExMode}
+              value={exMode === "pct" ? exPctText : exAmtText}
+              onChange={(v) => (exMode === "pct" ? setExPctText(v) : setExAmtText(v))}
+              effect={
+                exAmt > 0
+                  ? `Adds ${rupees(exAmt)} to the bill`
+                  : exMode === "pct" && clothesTotal === 0
+                    ? "Worked out from the clothes once they're counted"
+                    : "Type the express charge"
+              }
+            />
+            <ExtraCard
+              title="Discount"
+              sub="Take money off this bill"
+              tone="green"
+              on={discOn}
+              onToggle={() => { setDiscOn((v) => !v); setDiscountText(""); }}
               mode={discMode}
               onMode={(m) => { setDiscMode(m); setDiscountText(""); }}
               value={discountText}
               onChange={setDiscountText}
-              label="discount (optional)"
-              hint={discMode === "pct" && discount > 0 ? `= − ${rupees(discount)}` : undefined}
+              effect={
+                discount > 0
+                  ? `Takes ${rupees(discount)} off the bill`
+                  : discMode === "pct" && clothesTotal === 0
+                    ? "Worked out from the clothes once they're counted"
+                    : "Type the discount"
+              }
             />
           </div>
 
@@ -637,42 +646,66 @@ function BillLine({ label, value, tone }: { label: string; value: string; tone?:
   );
 }
 
-/** An extra charge / discount entered as a % of the clothes or a fixed ₹ amount. */
-function PctOrAmount({
-  mode, onMode, value, onChange, label, hint,
+/**
+ * Express charge / discount on an order: a card with an on/off switch; when on,
+ * pick "% of clothes" or "Fixed ₹", type the number, and see what it does to
+ * the bill in plain words.
+ */
+function ExtraCard({
+  title, sub, tone, on, onToggle, mode, onMode, value, onChange, effect,
 }: {
+  title: string;
+  sub: string;
+  tone: "orange" | "green";
+  on: boolean;
+  onToggle: () => void;
   mode: "pct" | "amt";
   onMode: (m: "pct" | "amt") => void;
   value: string;
   onChange: (v: string) => void;
-  label: string;
-  hint?: string;
+  effect: string;
 }) {
+  const accent = tone === "orange" ? "var(--color-orange)" : "var(--color-greentext)";
   return (
-    <div className="flex w-full items-center gap-2">
-      <div className="flex shrink-0 gap-1 rounded-xl bg-segtrack p-1" role="radiogroup" aria-label={`${label} as`}>
-        {(["pct", "amt"] as const).map((m) => (
-          <button
-            key={m}
-            type="button"
-            role="radio"
-            aria-checked={mode === m}
-            onClick={() => onMode(m)}
-            className={cls("h-10 w-11 rounded-[9px] text-[15px] font-bold", mode === m ? "bg-card text-ink" : "text-inksecondary")}
-          >
-            {m === "pct" ? "%" : "₹"}
-          </button>
-        ))}
+    <AppCard>
+      <div className="flex w-full flex-col">
+        <div className="flex w-full items-center p-3.5">
+          <div className="min-w-0 flex-1">
+            <div className={cls("text-[15px] font-bold", tone === "orange" ? "text-orangetext" : "text-greentext")}>{title}</div>
+            <div className="text-[13px] text-muted">{sub}</div>
+          </div>
+          <Toggle on={on} onColor={accent} onToggle={onToggle} />
+        </div>
+        {on ? (
+          <div className="flex flex-col gap-2.5 border-t border-divider p-3.5">
+            <div className="flex w-full gap-1 rounded-xl bg-segtrack p-1" role="radiogroup" aria-label={`${title} as`}>
+              {([["pct", "% of clothes"], ["amt", "Fixed ₹"]] as const).map(([m, label]) => (
+                <button
+                  key={m}
+                  type="button"
+                  role="radio"
+                  aria-checked={mode === m}
+                  onClick={() => onMode(m)}
+                  className={cls("h-10 flex-1 rounded-[9px] text-[14px] font-bold", mode === m ? "bg-card text-ink shadow-sm" : "text-inksecondary")}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <FieldBox
+              value={value}
+              onChange={(v) => onChange(v.replace(/\D/g, "").slice(0, mode === "pct" ? 3 : 5))}
+              prefix={mode === "amt" ? "₹" : undefined}
+              suffix={mode === "pct" ? "%" : undefined}
+              placeholder={mode === "pct" ? "e.g. 50" : "e.g. 100"}
+              h={48}
+              inputMode="numeric"
+              inputProps={{ "aria-label": `${title} ${mode === "pct" ? "percent" : "amount"}` }}
+            />
+            <span className="text-[13px] font-semibold" style={{ color: value ? accent : undefined }}>{effect}</span>
+          </div>
+        ) : null}
       </div>
-      <FieldBox
-        value={value}
-        onChange={(v) => onChange(v.replace(/\D/g, "").slice(0, mode === "pct" ? 3 : 5))}
-        prefix={mode === "amt" ? "₹" : undefined}
-        suffix={mode === "pct" ? `% ${label}${hint ? ` ${hint}` : ""}` : label}
-        h={48}
-        inputMode="numeric"
-        className="min-w-0 flex-1"
-      />
-    </div>
+    </AppCard>
   );
 }

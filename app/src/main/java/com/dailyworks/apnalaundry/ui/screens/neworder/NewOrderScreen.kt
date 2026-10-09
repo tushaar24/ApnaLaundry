@@ -111,6 +111,7 @@ fun NewOrderScreen(
     var exIsPct by remember { mutableStateOf(true) }
     var exPctText by remember { mutableStateOf(state.shop.expressPct.toString()) }
     var exAmtText by remember { mutableStateOf("") }
+    var discOn by remember { mutableStateOf(false) }
     var discIsPct by remember { mutableStateOf(false) }
     var discountText by remember { mutableStateOf("") }
     var serialText by remember { mutableStateOf("") } // "" = the order id
@@ -141,6 +142,7 @@ fun NewOrderScreen(
         }
         feeText = if (o.fee > 0) o.fee.toString() else ""
         express = o.express
+        discOn = o.discPct > 0 || o.discount > 0
         if (o.discPct > 0) { discIsPct = true; discountText = o.discPct.toString() }
         else { discIsPct = false; discountText = if (o.discount > 0) o.discount.toString() else "" }
         serialText = o.no() // the number it shows today (its serial, else the order id)
@@ -170,7 +172,7 @@ fun NewOrderScreen(
     val cust = custId?.let { Selectors.customer(state, it) }
     val anyHome = pickup == Route.HOME || delivery == Route.HOME
     val exPct = exPctText.toIntOrNull() ?: 0
-    val discPct = if (discIsPct) minOf(100, discountText.toIntOrNull() ?: 0) else 0
+    val discPct = if (discOn && discIsPct) minOf(100, discountText.toIntOrNull() ?: 0) else 0
 
     val quickAmount = if (showQuickBox) quickAmt.toIntOrNull() ?: 0 else 0
     val clothesTotal = clothes.total(services) + quickAmount
@@ -183,7 +185,11 @@ fun NewOrderScreen(
     LaunchedEffect(nextSerial) {
         if (editId == null && !serialTouched) serialText = nextSerial
     }
-    val discount = if (discIsPct) (clothesTotal * discPct / 100.0).roundToInt() else discountText.toIntOrNull() ?: 0
+    val discount = when {
+        !discOn -> 0
+        discIsPct -> (clothesTotal * discPct / 100.0).roundToInt()
+        else -> discountText.toIntOrNull() ?: 0
+    }
     val grand = max(0, clothesTotal + exAmt + fee - discount)
     val empty = clothesTotal == 0
 
@@ -370,27 +376,28 @@ fun NewOrderScreen(
             // ---- extras ----
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 SectionLabel("Extras")
-                AppCard {
-                    Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text("Express order", style = fig(15, FontWeight.Bold, Tokens.OrangeText))
-                            Text((if (express && exAmt > 0) "+ ${Money.rupees(exAmt)}" else "Extra charge") + " · washed first", style = fig(13, color = Tokens.Muted))
-                        }
-                        Toggle(express, onColor = Tokens.Orange) { express = !express }
-                    }
-                }
-                if (express) {
-                    PctOrAmount(
-                        isPct = exIsPct, onMode = { exIsPct = it },
-                        value = if (exIsPct) exPctText else exAmtText,
-                        onChange = { if (exIsPct) exPctText = it else exAmtText = it },
-                        label = "express", hint = if (exIsPct && clothesTotal > 0) "= ${Money.rupees(exAuto)}" else null,
-                    )
-                }
-                PctOrAmount(
+                ExtraCard(
+                    title = "Express order", sub = "Washed first · charge extra", accent = Tokens.Orange, titleColor = Tokens.OrangeText,
+                    on = express, onToggle = { express = !express },
+                    isPct = exIsPct, onMode = { exIsPct = it },
+                    value = if (exIsPct) exPctText else exAmtText,
+                    onChange = { if (exIsPct) exPctText = it else exAmtText = it },
+                    effect = when {
+                        exAmt > 0 -> "Adds ${Money.rupees(exAmt)} to the bill"
+                        exIsPct && clothesTotal == 0 -> "Worked out from the clothes once they're counted"
+                        else -> "Type the express charge"
+                    },
+                )
+                ExtraCard(
+                    title = "Discount", sub = "Take money off this bill", accent = Green, titleColor = Green,
+                    on = discOn, onToggle = { discOn = !discOn; discountText = "" },
                     isPct = discIsPct, onMode = { discIsPct = it; discountText = "" },
                     value = discountText, onChange = { discountText = it },
-                    label = "discount (optional)", hint = if (discIsPct && discount > 0) "= − ${Money.rupees(discount)}" else null,
+                    effect = when {
+                        discount > 0 -> "Takes ${Money.rupees(discount)} off the bill"
+                        discIsPct && clothesTotal == 0 -> "Worked out from the clothes once they're counted"
+                        else -> "Type the discount"
+                    },
                 )
             }
 
@@ -547,27 +554,50 @@ private fun BillLine(label: String, value: String, color: Color = Tokens.Ink) {
     }
 }
 
-/** An extra charge / discount entered as a % of the clothes or a fixed ₹ amount. */
+private val Green = Color(0xFF15803D)
+
+/**
+ * Express charge / discount on an order: a card with an on/off switch; when on,
+ * pick "% of clothes" or "Fixed ₹", type the number, and see what it does to
+ * the bill in plain words.
+ */
 @Composable
-private fun PctOrAmount(
-    isPct: Boolean, onMode: (Boolean) -> Unit, value: String, onChange: (String) -> Unit, label: String, hint: String?,
+private fun ExtraCard(
+    title: String, sub: String, accent: Color, titleColor: Color,
+    on: Boolean, onToggle: () -> Unit,
+    isPct: Boolean, onMode: (Boolean) -> Unit,
+    value: String, onChange: (String) -> Unit, effect: String,
 ) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(Modifier.rounded(12.dp).background(Tokens.SegTrack).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            listOf(true to "%", false to "₹").forEach { (pct, sym) ->
-                val on = isPct == pct
-                Box(
-                    Modifier.width(44.dp).height(40.dp).rounded(9.dp).background(if (on) Tokens.Card else Color.Transparent).tap { onMode(pct) },
-                    contentAlignment = Alignment.Center,
-                ) { Text(sym, style = fig(15, FontWeight.Bold, if (on) Tokens.Ink else Tokens.InkSecondary)) }
+    AppCard {
+        Column(Modifier.fillMaxWidth()) {
+            Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(title, style = fig(15, FontWeight.Bold, titleColor))
+                    Text(sub, style = fig(13, color = Tokens.Muted))
+                }
+                Toggle(on, onColor = accent) { onToggle() }
+            }
+            if (on) {
+                Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Divider))
+                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(Modifier.fillMaxWidth().rounded(12.dp).background(Tokens.SegTrack).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        listOf(true to "% of clothes", false to "Fixed ₹").forEach { (pct, label) ->
+                            val sel = isPct == pct
+                            Box(
+                                Modifier.weight(1f).height(40.dp).rounded(9.dp).background(if (sel) Tokens.Card else Color.Transparent).tap { onMode(pct) },
+                                contentAlignment = Alignment.Center,
+                            ) { Text(label, style = fig(14, FontWeight.Bold, if (sel) Tokens.Ink else Tokens.InkSecondary)) }
+                        }
+                    }
+                    FieldBox(
+                        value, { onChange(it.filter { c -> c.isDigit() }.take(if (isPct) 3 else 5)) },
+                        prefix = if (isPct) null else "₹", suffix = if (isPct) "%" else null,
+                        placeholder = if (isPct) "e.g. 50" else "e.g. 100",
+                        height = 48.dp, keyboardType = KeyboardType.Number,
+                    )
+                    Text(effect, style = fig(13, FontWeight.SemiBold, if (value.isNotEmpty()) accent else Tokens.Muted))
+                }
             }
         }
-        FieldBox(
-            value, { onChange(it.filter { c -> c.isDigit() }.take(if (isPct) 3 else 5)) },
-            Modifier.weight(1f),
-            prefix = if (isPct) null else "₹",
-            suffix = if (isPct) "% $label" + (hint?.let { " $it" } ?: "") else label,
-            height = 48.dp, keyboardType = KeyboardType.Number,
-        )
     }
 }
