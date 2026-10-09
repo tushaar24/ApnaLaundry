@@ -128,14 +128,77 @@ export function CollectPaymentSheet({
   );
 }
 
+/**
+ * "When will it be delivered?" — Today / Tomorrow / Day after or any date (not
+ * before pickup). Asked when an order is marked ready, the way the payment is
+ * asked when it's delivered.
+ */
+function DeliveryDateQuestion({ o, date, onDate }: { o: Order; date: string; onDate: (d: string) => void }) {
+  const today = AppDate.today();
+  const chips: [string, string][] = [
+    ["Today", today],
+    ["Tomorrow", AppDate.add(today, 1)],
+    ["Day after", AppDate.add(today, 2)],
+  ];
+  return (
+    <div className="flex flex-col gap-2.5">
+      <span className="text-[15px] font-bold">When will it be delivered?</span>
+      <div className="flex flex-wrap gap-1.5">
+        {chips.map(([label, iso]) => (
+          <PillChip key={label} label={label} selected={date === iso} onClick={() => onDate(iso)} />
+        ))}
+      </div>
+      <DateTimeBox
+        icon={<IcCalendar size={20} />}
+        iconTint="var(--color-blue)"
+        text={date ? `Delivery: ${AppDate.short(date)}` : "Pick a delivery date"}
+        isSet={date !== ""}
+        type="date"
+        value={date || today}
+        min={o.pickupDate}
+        onPick={onDate}
+      />
+    </div>
+  );
+}
+
+/** Mark ready: asks when it'll be delivered (starts on the order's date, if any). */
+export function ReadySheet({
+  state, orderId, onDismiss,
+}: { state: LaundryState; orderId: number; onDismiss: () => void }) {
+  const o = Sel.order(state, orderId);
+  const c = Sel.customer(state, o?.custId ?? "");
+  const [date, setDate] = useState(o?.deliveryDate ?? "");
+  if (!o) { onDismiss(); return null; }
+  return (
+    <AppSheet title="Mark ready" subtitle={`${c.name} · #${Sel.orderNo(o)}`} onDismiss={onDismiss}>
+      <div className="flex flex-col gap-4">
+        <DeliveryDateQuestion o={o} date={date} onDate={setDate} />
+        <PrimaryButton
+          disabled={date === ""}
+          onClick={() => {
+            if (date === "") return;
+            Repo.markReady(orderId, date);
+            onDismiss();
+          }}
+        >
+          {date === "" ? "Pick a delivery date" : "Mark ready"}
+        </PrimaryButton>
+      </div>
+    </AppSheet>
+  );
+}
+
 export function CountClothesSheet({
   state, orderId, next, onDismiss,
 }: { state: LaundryState; orderId: number; next: OrderStatus; onDismiss: () => void }) {
   const o = Sel.order(state, orderId);
   const c = Sel.customer(state, o?.custId ?? "");
   const clothes = useClothesState(state.services);
+  const [date, setDate] = useState(o?.deliveryDate ?? "");
   if (!o) { onDismiss(); return null; }
   const total = clothes.total(state.services);
+  const askDate = next === "READY";
 
   return (
     <AppSheet title="Count clothes" subtitle={`${c.name} · #${Sel.orderNo(o)}. The bill is made after this.`} onDismiss={onDismiss}>
@@ -145,14 +208,15 @@ export function CountClothesSheet({
           <span className="text-[15px] font-semibold text-muted">Total</span>
           <span className="bric text-[26px]">{rupees(total)}</span>
         </div>
+        {askDate ? <DeliveryDateQuestion o={o} date={date} onDate={setDate} /> : null}
         <PrimaryButton
-          disabled={total <= 0}
+          disabled={total <= 0 || (askDate && date === "")}
           onClick={() => {
-            Repo.saveCount(orderId, next, clothes.lines(state.services));
+            Repo.saveCount(orderId, next, clothes.lines(state.services), askDate ? date : "");
             onDismiss();
           }}
         >
-          {next === "READY" ? "Mark ready · make bill" : "Picked up · make bill"}
+          {askDate && date === "" ? "Pick a delivery date" : next === "READY" ? "Mark ready · make bill" : "Picked up · make bill"}
         </PrimaryButton>
       </div>
     </AppSheet>

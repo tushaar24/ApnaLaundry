@@ -82,7 +82,7 @@ fun OrderDetailScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: I
     fun onAct() {
         when (o.status) {
             OrderStatus.CREATED -> if (o.lines.isEmpty()) active = ActiveSheet.Count(o.id, OrderStatus.RECEIVED) else shopVm.markPickedUp(o.id)
-            OrderStatus.RECEIVED -> if (o.lines.isEmpty()) active = ActiveSheet.Count(o.id, OrderStatus.READY) else shopVm.markReady(o.id)
+            OrderStatus.RECEIVED -> if (o.lines.isEmpty()) active = ActiveSheet.Count(o.id, OrderStatus.READY) else active = ActiveSheet.Ready(o.id) // asks the delivery date
             OrderStatus.READY -> active = ActiveSheet.Pay(o.id)
             else -> Unit
         }

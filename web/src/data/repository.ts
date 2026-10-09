@@ -226,16 +226,17 @@ export function markPickedUp(orderId: number) {
   publish({ toast: `Picked up · ${custName(o.custId)}`, undo: undoSnap });
 }
 
-export function markReady(orderId: number) {
+/** Ready: the owner also says when it'll be delivered (like payment on delivery). */
+export function markReady(orderId: number, deliveryDate: string) {
   const undoSnap = snapshot();
   const o = orderOf(orderId);
-  updateOrder(orderId, { status: "READY" });
+  updateOrder(orderId, deliveryDate ? { status: "READY", deliveryDate, ddAuto: false } : { status: "READY" });
   Analytics.orderMarkedReady(orderId);
   publish({ toast: `Marked ready · ${waReady(custName(o.custId))}`, undo: undoSnap });
 }
 
 /** Count-clothes sheet: attach lines and advance to `next` (received or ready). */
-export function saveCount(orderId: number, next: OrderStatus, lines: OrderLine[]) {
+export function saveCount(orderId: number, next: OrderStatus, lines: OrderLine[], deliveryDate = "") {
   const undoSnap = snapshot();
   const o = orderOf(orderId);
   const nm = custName(o.custId);
@@ -243,7 +244,11 @@ export function saveCount(orderId: number, next: OrderStatus, lines: OrderLine[]
   const total = lines.reduce((s, l) => s + l.amt, 0);
   // A % express / discount set when the pickup was booked applies now the clothes are counted.
   const { exAmt, discount } = withPctExtras({ ...o, lines }, st.shop.expressPct);
-  updateOrder(orderId, { status: next, lines, exAmt, discount, billSent: false });
+  updateOrder(orderId, {
+    status: next, lines, exAmt, discount, billSent: false,
+    // Counted straight to ready: the delivery date asked in the sheet.
+    ...(next === "READY" && deliveryDate ? { deliveryDate, ddAuto: false } : {}),
+  });
   Analytics.clothesCounted(orderId, next, total);
   const head = next === "READY" ? `Marked ready · ${waReady(nm)}` : "Picked up";
   publish({ toast: `${head} · bill of ${rupees(total)} made — send it from the order`, undo: undoSnap });

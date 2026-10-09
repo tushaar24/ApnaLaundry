@@ -189,18 +189,20 @@ class LaundryRepository(private val db: AppDatabase) {
         return CmdResult("Picked up · $nm", undo)
     }
 
-    suspend fun markReady(orderId: Int): CmdResult {
+    /** Ready: the owner also says when it'll be delivered (like payment on delivery). */
+    suspend fun markReady(orderId: Int, deliveryDate: String): CmdResult {
         val undo = snapshot()
         val st = current()
         val o = st.orders.first { it.id == orderId }
         val nm = firstName(st.customers.first { it.id == o.custId }.name)
-        orderDao.upsert(o.copy(status = OrderStatus.READY).toEntity())
+        val ready = o.copy(status = OrderStatus.READY)
+        orderDao.upsert((if (deliveryDate.isNotBlank()) ready.copy(deliveryDate = deliveryDate, ddAuto = false) else ready).toEntity())
         Analytics.orderMarkedReady(orderId)
         return CmdResult("Marked ready · ${waReady(nm)}", undo)
     }
 
     /** Count-clothes sheet: attach lines and advance to [next] (received or ready). */
-    suspend fun saveCount(orderId: Int, next: OrderStatus, lines: List<OrderLine>): CmdResult {
+    suspend fun saveCount(orderId: Int, next: OrderStatus, lines: List<OrderLine>, deliveryDate: String = ""): CmdResult {
         val undo = snapshot()
         val st = current()
         val o = st.orders.first { it.id == orderId }
@@ -208,7 +210,10 @@ class LaundryRepository(private val db: AppDatabase) {
         val total = lines.sumOf { it.amt }
         // A % express / discount set when the pickup was booked applies now the clothes are counted.
         val priced = LaundryMath.withPctExtras(o.copy(lines = lines), st.shop.expressPct)
-        orderDao.upsert(o.copy(status = next, lines = lines, exAmt = priced.exAmt, discount = priced.discount, billSent = false).toEntity())
+        var counted = o.copy(status = next, lines = lines, exAmt = priced.exAmt, discount = priced.discount, billSent = false)
+        // Counted straight to ready: the delivery date asked in the sheet.
+        if (next == OrderStatus.READY && deliveryDate.isNotBlank()) counted = counted.copy(deliveryDate = deliveryDate, ddAuto = false)
+        orderDao.upsert(counted.toEntity())
         Analytics.clothesCounted(orderId, next.name, total)
         val head = if (next == OrderStatus.READY) "Marked ready · ${waReady(nm)}" else "Picked up"
         return CmdResult("$head · bill of ${money(total)} made — send it from the order", undo)

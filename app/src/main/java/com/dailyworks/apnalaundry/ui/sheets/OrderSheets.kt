@@ -36,6 +36,7 @@ import com.dailyworks.apnalaundry.core.Money
 import com.dailyworks.apnalaundry.domain.BillReceipt
 import com.dailyworks.apnalaundry.domain.LaundryMath
 import com.dailyworks.apnalaundry.domain.LaundryState
+import com.dailyworks.apnalaundry.domain.Order
 import com.dailyworks.apnalaundry.domain.OrderStatus
 import com.dailyworks.apnalaundry.domain.PayMethod
 import com.dailyworks.apnalaundry.ui.Selectors
@@ -126,12 +127,65 @@ fun CollectPaymentSheet(state: LaundryState, orderId: Int, vm: ShopViewModel, on
     }
 }
 
+/**
+ * "When will it be delivered?" — Today / Tomorrow / Day after or any date (not
+ * before pickup). Asked when an order is marked ready, the way the payment is
+ * asked when it's delivered.
+ */
+@Composable
+private fun DeliveryDateQuestion(o: Order, date: String, onDate: (String) -> Unit) {
+    val context = LocalContext.current
+    val today = AppDate.TODAY
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("When will it be delivered?", style = fig(15, FontWeight.Bold))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            listOf("Today" to today, "Tomorrow" to AppDate.add(today, 1), "Day after" to AppDate.add(today, 2)).forEach { (label, iso) ->
+                PillChip(label, date == iso) { onDate(iso) }
+            }
+        }
+        Row(
+            Modifier.fillMaxWidth().height(52.dp).rounded(12.dp).background(Tokens.Card)
+                .border(1.5.dp, Tokens.FieldBorder, RoundedCornerShape(12.dp))
+                .tap { showDatePicker(context, date.ifBlank { today }, o.pickupDate, onDate) }
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(Icons.Outlined.CalendarMonth, null, tint = Tokens.Blue, modifier = Modifier.size(20.dp))
+            Text(
+                if (date.isNotBlank()) "Delivery: ${AppDate.short(date)}" else "Pick a delivery date",
+                style = fig(15, FontWeight.SemiBold, if (date.isNotBlank()) Tokens.Ink else Tokens.Muted),
+                modifier = Modifier.weight(1f),
+            )
+            Text("Change", style = fig(14, FontWeight.Bold, Tokens.Blue))
+        }
+    }
+}
+
+/** Mark ready: asks when it'll be delivered (starts on the order's date, if any). */
+@Composable
+fun ReadySheet(state: LaundryState, orderId: Int, vm: ShopViewModel, onDismiss: () -> Unit) {
+    val o = Selectors.order(state, orderId) ?: return onDismiss()
+    val c = Selectors.customer(state, o.custId)
+    var date by remember { mutableStateOf(o.deliveryDate) }
+    AppBottomSheet(title = "Mark ready", subtitle = "${c.name} · #${o.no()}", onDismiss = onDismiss) {
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            DeliveryDateQuestion(o, date) { date = it }
+            PrimaryButton(if (date.isBlank()) "Pick a delivery date" else "Mark ready", enabled = date.isNotBlank(), height = 56.dp) {
+                if (date.isNotBlank()) { vm.markReady(orderId, date); onDismiss() }
+            }
+        }
+    }
+}
+
 @Composable
 fun CountClothesSheet(state: LaundryState, orderId: Int, next: OrderStatus, vm: ShopViewModel, onDismiss: () -> Unit) {
     val o = Selectors.order(state, orderId) ?: return onDismiss()
     val c = Selectors.customer(state, o.custId)
     val clothes = rememberClothesState(state.services)
     val total = clothes.total(state.services)
+    val askDate = next == OrderStatus.READY
+    var date by remember { mutableStateOf(o.deliveryDate) }
 
     AppBottomSheet(title = "Count clothes", subtitle = "${c.name} · #${o.no()}. The bill is made after this.", onDismiss = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -140,10 +194,15 @@ fun CountClothesSheet(state: LaundryState, orderId: Int, next: OrderStatus, vm: 
                 Text("Total", style = fig(15, FontWeight.SemiBold, Tokens.Muted))
                 Text(Money.rupees(total), style = bric(26, FontWeight.Bold))
             }
+            if (askDate) DeliveryDateQuestion(o, date) { date = it }
             PrimaryButton(
-                if (next == OrderStatus.READY) "Mark ready · make bill" else "Picked up · make bill",
-                enabled = total > 0, height = 56.dp,
-            ) { vm.saveCount(orderId, next, clothes.lines(state.services)); onDismiss() }
+                when {
+                    askDate && date.isBlank() -> "Pick a delivery date"
+                    next == OrderStatus.READY -> "Mark ready · make bill"
+                    else -> "Picked up · make bill"
+                },
+                enabled = total > 0 && (!askDate || date.isNotBlank()), height = 56.dp,
+            ) { vm.saveCount(orderId, next, clothes.lines(state.services), if (askDate) date else ""); onDismiss() }
         }
     }
 }

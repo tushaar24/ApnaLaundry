@@ -80,7 +80,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   showToast: (text, hasUndo) => {
     if (toastTimer) clearTimeout(toastTimer);
     set({ toast: { text, hasUndo } });
-    toastTimer = setTimeout(() => set({ toast: null }), 7000);
+    // Undo toasts stay long enough to act on; plain notices are brief.
+    toastTimer = setTimeout(() => set({ toast: null }), hasUndo ? 7000 : 2500);
   },
   dismissToast: () => {
     if (toastTimer) clearTimeout(toastTimer);

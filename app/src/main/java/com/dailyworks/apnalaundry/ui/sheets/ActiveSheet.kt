@@ -10,6 +10,7 @@ import com.dailyworks.apnalaundry.ui.nav.AppNavigator
 sealed interface ActiveSheet {
     data class Menu(val orderId: Int) : ActiveSheet
     data class Pay(val orderId: Int) : ActiveSheet
+    data class Ready(val orderId: Int) : ActiveSheet
     data class Count(val orderId: Int, val next: OrderStatus) : ActiveSheet
     data class Reschedule(val orderId: Int, val kind: String) : ActiveSheet
     data class Cancel(val orderId: Int) : ActiveSheet
@@ -41,6 +42,7 @@ fun SheetHost(
         is ActiveSheet.Menu -> OrderMenuSheet(state, active.orderId, navigator, onOpen, onDismiss)
         is ActiveSheet.Pay -> CollectPaymentSheet(state, active.orderId, vm, onDismiss)
         is ActiveSheet.Count -> CountClothesSheet(state, active.orderId, active.next, vm, onDismiss)
+        is ActiveSheet.Ready -> ReadySheet(state, active.orderId, vm, onDismiss)
         is ActiveSheet.Reschedule -> RescheduleSheet(state, active.orderId, active.kind, vm, onDismiss)
         is ActiveSheet.Cancel -> CancelSheet(state, active.orderId, vm, onDismiss)
         is ActiveSheet.DeleteOrder -> DeleteOrderSheet(state, active.orderId, vm, navigator, onDismiss)

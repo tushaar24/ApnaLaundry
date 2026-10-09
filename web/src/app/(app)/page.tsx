@@ -66,7 +66,7 @@ function HomeScreen() {
         break;
       case "RECEIVED":
         if (o.lines.length === 0) setActive({ kind: "count", orderId: o.id, next: "READY" });
-        else Repo.markReady(o.id);
+        else setActive({ kind: "ready", orderId: o.id }); // asks the delivery date
         break;
       case "READY":
         setActive({ kind: "pay", orderId: o.id });

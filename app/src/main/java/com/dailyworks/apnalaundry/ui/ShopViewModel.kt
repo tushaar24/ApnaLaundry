@@ -72,7 +72,8 @@ class ShopViewModel(
         undoSnapshot = r.undo
         _toast.value = ToastState(r.toast, r.undo != null)
         toastJob?.cancel()
-        toastJob = viewModelScope.launch { delay(7000); _toast.value = null }
+        // Undo toasts stay long enough to act on; plain notices are brief.
+        toastJob = viewModelScope.launch { delay(if (r.undo != null) 7000 else 2500); _toast.value = null }
     }
 
     fun showInfo(text: String) = publish(CmdResult(text, null))
@@ -105,9 +106,10 @@ class ShopViewModel(
 
     // ---- fire-and-forget commands ----
     fun markPickedUp(id: Int) = launchCmd { repo.markPickedUp(id) }
-    fun markReady(id: Int) = launchCmd { repo.markReady(id) }
+    fun markReady(id: Int, deliveryDate: String) = launchCmd { repo.markReady(id, deliveryDate) }
     fun deliver(id: Int, amount: Int, method: PayMethod) = launchCmd { repo.deliver(id, amount, method) }
-    fun saveCount(id: Int, next: OrderStatus, lines: List<OrderLine>) = launchCmd { repo.saveCount(id, next, lines) }
+    fun saveCount(id: Int, next: OrderStatus, lines: List<OrderLine>, deliveryDate: String = "") =
+        launchCmd { repo.saveCount(id, next, lines, deliveryDate) }
     fun prepay(id: Int, method: PayMethod) = launchCmd { repo.prepay(id, method) }
     fun cancelOrder(id: Int, reason: String) = launchCmd { repo.cancelOrder(id, reason) }
     fun deleteOrder(id: Int) = launchCmd { repo.deleteOrder(id) }

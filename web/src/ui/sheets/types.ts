@@ -4,6 +4,7 @@ import type { OrderStatus } from "@/domain/models";
 export type ActiveSheet =
   | { kind: "menu"; orderId: number }
   | { kind: "pay"; orderId: number }
+  | { kind: "ready"; orderId: number }
   | { kind: "count"; orderId: number; next: OrderStatus }
   | { kind: "reschedule"; orderId: number; which: string } // "pickup" | "drop"
   | { kind: "cancel"; orderId: number }
