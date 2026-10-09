@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import com.dailyworks.apnalaundry.ui.screens.bill.openWhatsApp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.dailyworks.apnalaundry.domain.LaundryState
@@ -88,13 +89,17 @@ fun OrderMenuSheet(
 
 @Composable
 fun ShareSummarySheet(text: String, vm: ShopViewModel, onDismiss: () -> Unit) {
+    val context = LocalContext.current
     AppBottomSheet(title = "Share summary", onDismiss = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Box(Modifier.fillMaxWidth().rounded(14.dp).background(Tokens.Card).padding(14.dp)) {
                 Text(text, style = fig(14, FontWeight.SemiBold, Tokens.InkSecondary))
             }
             PrimaryButton("Send on WhatsApp", height = 54.dp) {
-                vm.showInfo("Opening WhatsApp with this message…"); onDismiss()
+                vm.showInfo("Opening WhatsApp with this message…")
+                // No number: WhatsApp asks which chat to send the summary to.
+                openWhatsApp(context, "https://wa.me/?text=${Uri.encode(text)}")
+                onDismiss()
             }
         }
     }
