@@ -14,7 +14,8 @@ import {
   AppCard, Avatar, cls, DateTimeBox, Divider, FieldBox, PrimaryButton, SectionLabel, Toggle, TopBar,
 } from "@/ui/basics";
 import { ClothesEditor, useClothesState } from "@/ui/clothes";
-import { IcCalendar, IcClock } from "@/ui/icons";
+import { RatesView } from "@/ui/screens/rates";
+import { IcCalendar, IcClock, IcEdit } from "@/ui/icons";
 import { SheetHost } from "@/ui/sheets/host";
 import type { ActiveSheet } from "@/ui/sheets/types";
 import { Shell, useNav } from "@/ui/shell";
@@ -68,6 +69,7 @@ function NewOrderScreen() {
   const [exPctText, setExPctText] = useState(String(state.shop.expressPct));
   const [exAmtText, setExAmtText] = useState("");
   const [discOn, setDiscOn] = useState(false);
+  const [editingRates, setEditingRates] = useState(false); // rate list opened over this form
   const [discMode, setDiscMode] = useState<"pct" | "amt">("amt");
   const [discountText, setDiscountText] = useState("");
   const [serialText, setSerialText] = useState(""); // "" = the order id
@@ -390,8 +392,31 @@ function NewOrderScreen() {
 
           {/* ---- clothes ---- */}
           <div className="flex flex-col gap-2.5">
-            <SectionLabel text="Clothes" />
-            <ClothesEditor services={services} api={clothes} editablePrice />
+            <div className="flex items-center gap-2">
+              <SectionLabel text="Clothes" />
+              <button
+                type="button"
+                onClick={() => setEditingRates(true)}
+                className="flex h-8 items-center gap-1 rounded-full bg-bluelight px-3 text-[13px] font-bold text-blue"
+              >
+                <IcEdit size={14} /> Edit services
+              </button>
+            </div>
+            <ClothesEditor
+              services={services}
+              api={clothes}
+              editablePrice
+              onAddItem={(svc, name, price) => {
+                // Save to the rate list (or price an item it didn't offer), then put 1 in this order.
+                const has = svc.items.some((it) => it.name === name);
+                const items = has
+                  ? svc.items.map((it) => (it.name === name ? { ...it, price: it.price && it.price > 0 ? it.price : price } : it))
+                  : [...svc.items, { name, price }];
+                Repo.upsertService({ ...svc, items });
+                clothes.bump(svc.id, name, 1);
+                Repo.showInfo(`${name} · ₹${price} added to ${svc.name}`);
+              }}
+            />
             {showQuickBox ? (
               <AppCard>
                 <div className="flex flex-col gap-2 p-3.5">
@@ -496,6 +521,14 @@ function NewOrderScreen() {
         </PrimaryButton>
       </div>
 
+      {editingRates ? (
+        // The rate list over this form, so nothing typed here is lost.
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-bg lg:pl-[240px]">
+          <div className="mx-auto w-full max-w-[640px]">
+            <RatesView from="edit" onDone={() => setEditingRates(false)} onBack={() => setEditingRates(false)} />
+          </div>
+        </div>
+      ) : null}
       <SheetHost active={active} state={state} nav={nav} onOpen={setActive} onDismiss={() => setActive(null)} />
     </div>
   );

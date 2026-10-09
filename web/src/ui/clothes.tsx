@@ -129,8 +129,14 @@ function serviceStat(api: ClothesApi, s: Service): { n: number; kg: number; amt:
 }
 
 export function ClothesEditor({
-  services, api, editablePrice,
-}: { services: Service[]; api: ClothesApi; editablePrice: boolean }) {
+  services, api, editablePrice, onAddItem,
+}: {
+  services: Service[];
+  api: ClothesApi;
+  editablePrice: boolean;
+  /** Per-piece services: add a cloth + price right here (saved to the rate list). */
+  onAddItem?: (svc: Service, name: string, price: number) => void;
+}) {
   const cur = services.find((s) => s.id === api.state.selected);
 
   return (
@@ -209,11 +215,65 @@ export function ClothesEditor({
                   </div>
                 );
               })}
+            {onAddItem ? <AddItemRow svc={cur} onAdd={(name, price) => onAddItem(cur, name, price)} /> : null}
           </div>
         ) : (
           <WeightEditor cur={cur} api={api} />
         )
       ) : null}
+    </div>
+  );
+}
+
+/** "Add a cloth" under a per-piece service: name + price, saved to the rate list. */
+function AddItemRow({ svc, onAdd }: { svc: Service; onAdd: (name: string, price: number) => void }) {
+  const [name, setName] = useState("");
+  const [price, setPrice] = useState("");
+  const clean = name.trim().replace(/\s+/g, " ");
+  const p = parseInt(price, 10) || 0;
+  const existing = svc.items.find((it) => it.name.toLowerCase() === clean.toLowerCase());
+  const priced = existing != null && (existing.price ?? 0) > 0;
+  const ok = clean !== "" && (priced || p > 0);
+  const add = () => {
+    if (!ok) return;
+    onAdd(existing?.name ?? clean, priced ? existing!.price ?? 0 : p);
+    setName("");
+    setPrice("");
+  };
+  return (
+    <div className="mt-2 flex flex-col gap-2 rounded-[14px] border-[1.5px] border-dashed border-blueborder bg-bluelight/50 p-3">
+      <span className="text-[13px] font-bold text-bluetext">Add a cloth to {svc.name}</span>
+      <div className="flex w-full items-center gap-2">
+        <FieldBox
+          value={name}
+          onChange={(v) => setName(v.slice(0, 30))}
+          placeholder="e.g. Blazer"
+          h={44}
+          className="min-w-0 flex-1"
+          inputProps={{ "aria-label": "Cloth name", onKeyDown: (e) => { if (e.key === "Enter") add(); } }}
+        />
+        <FieldBox
+          value={priced ? String(existing!.price) : price}
+          onChange={(v) => setPrice(v.replace(/\D/g, "").slice(0, 5))}
+          prefix="₹"
+          placeholder="Price"
+          h={44}
+          className="w-[96px]"
+          inputMode="numeric"
+          inputProps={{ "aria-label": "Price", readOnly: priced, onKeyDown: (e) => { if (e.key === "Enter") add(); } }}
+        />
+        <button
+          type="button"
+          onClick={add}
+          disabled={!ok}
+          className={cls("h-11 shrink-0 rounded-[10px] px-3.5 text-[14px] font-bold", ok ? "bg-blue text-ondark" : "bg-neutralfill text-muted")}
+        >
+          Add
+        </button>
+      </div>
+      <span className="text-[12px] text-bluetext/80">
+        {priced ? "Already on your rate list — Add puts 1 in this order." : "Saved to your rate list and added to this order."}
+      </span>
     </div>
   );
 }

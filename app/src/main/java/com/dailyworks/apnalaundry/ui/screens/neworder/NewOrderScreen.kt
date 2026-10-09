@@ -79,6 +79,11 @@ import com.dailyworks.apnalaundry.ui.sheets.Toggle
 import com.dailyworks.apnalaundry.ui.components.showDatePicker
 import com.dailyworks.apnalaundry.ui.components.dashedBorder
 import com.dailyworks.apnalaundry.ui.theme.Tokens
+import androidx.compose.material.icons.outlined.Edit
+import com.dailyworks.apnalaundry.domain.ServiceItem
+import com.dailyworks.apnalaundry.ui.screens.rates.RatesEditor
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.Dialog
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -120,6 +125,7 @@ fun NewOrderScreen(
     var quickPcs by remember { mutableStateOf("") }
     var showQuickBox by remember { mutableStateOf(false) }
     var active by remember { mutableStateOf<ActiveSheet?>(null) }
+    var editingRates by remember { mutableStateOf(false) } // rate list opened over this form
     var loaded by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
@@ -355,8 +361,25 @@ fun NewOrderScreen(
 
             // ---- clothes ----
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                SectionLabel("Clothes")
-                ClothesEditor(services, clothes, editablePrice = true)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SectionLabel("Clothes")
+                    Row(
+                        Modifier.height(32.dp).rounded(999.dp).background(Tokens.BlueLight).tap { editingRates = true }.padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Icon(Icons.Outlined.Edit, null, tint = Tokens.Blue, modifier = Modifier.size(14.dp))
+                        Text("Edit services", style = fig(13, FontWeight.Bold, Tokens.Blue))
+                    }
+                }
+                ClothesEditor(services, clothes, editablePrice = true, onAddItem = { svc, name, price ->
+                    // Save to the rate list (or price an item it didn't offer), then put 1 in this order.
+                    val has = svc.items.any { it.name == name }
+                    val items = if (has) svc.items.map { if (it.name == name && (it.price ?: 0) <= 0) it.copy(price = price) else it }
+                    else svc.items + ServiceItem(name, price)
+                    shopVm.upsertService(svc.copy(items = items))
+                    clothes.bump(svc.id, name, 1)
+                    shopVm.showInfo("$name · ₹$price added to ${svc.name}")
+                })
                 if (showQuickBox) {
                     AppCard {
                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -442,6 +465,17 @@ fun NewOrderScreen(
     }
 
     SheetHost(active, state, shopVm, navigator, onOpen = { active = it }, onDismiss = { active = null })
+    if (editingRates) {
+        // The rate list over this form, so nothing typed here is lost.
+        Dialog(
+            onDismissRequest = { editingRates = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+        ) {
+            Box(Modifier.fillMaxSize().background(Tokens.Bg)) {
+                RatesEditor(shopVm, setupHeader = null, onDone = { editingRates = false }, onBack = { editingRates = false })
+            }
+        }
+    }
 }
 
 private fun tatText(n: Int): String = when (n) { 0 -> "same day"; 1 -> "in 1 day"; else -> "in $n days" }

@@ -122,6 +122,8 @@ fun ClothesEditor(
     state: ClothesState,
     editablePrice: Boolean,
     modifier: Modifier = Modifier,
+    /** Per-piece services: add a cloth + price right here (saved to the rate list). */
+    onAddItem: ((Service, String, Int) -> Unit)? = null,
 ) {
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // tiles (2 columns)
@@ -162,6 +164,7 @@ fun ClothesEditor(
                         onInc = { state.bump(cur.id, item.name, 1) },
                     )
                 }
+                if (onAddItem != null) AddItemRow(cur) { name, price -> onAddItem(cur, name, price) }
             }
         } else {
             val rate = cur.ratePerKg ?: 0
@@ -244,3 +247,45 @@ private fun ItemRow(
 }
 
 private fun trimK(v: Double): String = if (v % 1.0 == 0.0) v.toInt().toString() else v.toString()
+
+/** "Add a cloth" under a per-piece service: name + price, saved to the rate list. */
+@Composable
+private fun AddItemRow(svc: Service, onAdd: (String, Int) -> Unit) {
+    var name by remember(svc.id) { mutableStateOf("") }
+    var price by remember(svc.id) { mutableStateOf("") }
+    val clean = name.trim().replace(Regex("\\s+"), " ")
+    val existing = svc.items.firstOrNull { it.name.equals(clean, ignoreCase = true) }
+    val priced = existing != null && (existing.price ?: 0) > 0
+    val p = price.toIntOrNull() ?: 0
+    val ok = clean.isNotEmpty() && (priced || p > 0)
+    fun add() {
+        if (!ok) return
+        onAdd(existing?.name ?: clean, if (priced) existing!!.price ?: 0 else p)
+        name = ""; price = ""
+    }
+    Column(
+        Modifier.fillMaxWidth().padding(top = 8.dp).rounded(14.dp).background(Tokens.BlueLight)
+            .border(1.5.dp, Tokens.BlueBorder, RoundedCornerShape(14.dp)).padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text("Add a cloth to ${svc.name}", style = fig(13, FontWeight.Bold, Tokens.BlueText))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FieldBox(name, { name = it.take(30) }, Modifier.weight(1f), placeholder = "e.g. Blazer", height = 44.dp)
+            FieldBox(
+                if (priced) (existing!!.price ?: 0).toString() else price,
+                { if (!priced) price = it.filter { c -> c.isDigit() }.take(5) },
+                Modifier.width(96.dp), prefix = "₹", placeholder = "Price", height = 44.dp, keyboardType = KeyboardType.Number,
+                imeAction = androidx.compose.ui.text.input.ImeAction.Done, onImeAction = { add() },
+            )
+            Box(
+                Modifier.height(44.dp).rounded(10.dp).background(if (ok) Tokens.Blue else Tokens.NeutralFill).tap(enabled = ok) { add() }
+                    .padding(horizontal = 14.dp),
+                contentAlignment = Alignment.Center,
+            ) { Text("Add", style = fig(14, FontWeight.Bold, if (ok) Tokens.OnDark else Tokens.Muted)) }
+        }
+        Text(
+            if (priced) "Already on your rate list — Add puts 1 in this order." else "Saved to your rate list and added to this order.",
+            style = fig(12, color = Tokens.BlueText),
+        )
+    }
+}
