@@ -15,6 +15,7 @@ import { requestSync } from "./sync";
 import type { LedgerRow, OrderRow, Rows } from "./rows";
 import { stamp } from "./rows";
 import { Analytics } from "@/analytics/events";
+import { DEFAULT_SHOP_NAME, isDefaultShopName } from "@/domain/seed";
 
 /**
  * Commands over the in-memory rows — a 1:1 port of data/LaundryRepository.kt
@@ -152,7 +153,7 @@ export async function ensureSeeded(shopPhone: string | null) {
   setRows((r) => ({
     ...r,
     shop: {
-      name: "MyLaundry", phone: shopPhone ?? "", expressPct: DEFAULT_EXPRESS_PCT,
+      name: DEFAULT_SHOP_NAME, phone: shopPhone ?? "", expressPct: DEFAULT_EXPRESS_PCT,
       nextOrder: 1001, nextCust: 1, ...stamp(),
     },
     services: seedServices.map((s) => ({ ...s, ...stamp(), deleted: false })),
@@ -161,6 +162,22 @@ export async function ensureSeeded(shopPhone: string | null) {
 
 export function hasShop(): boolean {
   return rows().shop != null;
+}
+
+/** The shop has real activity (a customer or an order). */
+export function hasShopActivity(): boolean {
+  const r = rows();
+  return r.customers.some((c) => !c.deleted) || r.orders.some((o) => !o.deleted);
+}
+
+/**
+ * Onboarding (shop name + rate list) is behind this account. The server keeps
+ * no flag and the seed is pushed at first login, so "has a shop" isn't enough:
+ * a shop still on a placeholder name with no activity hasn't onboarded.
+ */
+export function isOnboarded(): boolean {
+  const shop = rows().shop;
+  return shop != null && (!isDefaultShopName(shop.name) || hasShopActivity());
 }
 
 /** Wipe everything (logout). The next login pulls or reseeds. */

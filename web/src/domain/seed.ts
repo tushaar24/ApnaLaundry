@@ -12,6 +12,17 @@ function items(pairs: [string, number][]) {
 
 export const DEFAULT_EXPRESS_PCT = 50;
 
+/** Name a freshly seeded shop starts with. */
+export const DEFAULT_SHOP_NAME = "MyLaundry";
+
+// Placeholder names this and older builds have seeded — a shop still carrying
+// one of these hasn't been named by its owner yet.
+const UNNAMED_SHOP_NAMES = new Set(["", "mylaundry", "apna laundry", "apnalaundry", "my shop"]);
+
+export function isDefaultShopName(name: string): boolean {
+  return UNNAMED_SHOP_NAMES.has(name.trim().toLowerCase());
+}
+
 export const seedServices: Service[] = [
   {
     id: "wf", name: "Wash & Fold", mode: "WEIGHT",

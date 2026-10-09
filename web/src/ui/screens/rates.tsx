@@ -8,11 +8,12 @@ import { Analytics } from "@/analytics/events";
 import {
   cls, FieldBox, OutlineButton, PillChip, PrimaryButton, Segmented, TopBar,
 } from "../basics";
-import { IcAdd, IcDelete, IcEdit, IcInfo, IcLock } from "../icons";
+import { IcAdd, IcBack, IcDelete, IcEdit, IcInfo, IcLock } from "../icons";
 
 /**
  * Rate card editor — port of ui/screens/rates/RatesScreen.kt. Opened from
- * Home/Settings; first-run setup only asks the shop name (app/setup).
+ * Home/Settings, and as the last onboarding step (from="setup", after the
+ * shop name — see app/setup) where it ends in "Start taking orders".
  */
 
 type RatePage = { kind: "list" } | { kind: "edit"; serviceId: string } | { kind: "add" };
@@ -35,8 +36,9 @@ function summaryLine(s: Service): string {
   );
 }
 
-export function RatesView({ onDone, onBack }: { from: string; onDone: () => void; onBack: () => void }) {
+export function RatesView({ from, onDone, onBack }: { from: string; onDone: () => void; onBack?: () => void }) {
   const state = useLaundryState();
+  const setup = from === "setup";
   const [page, setPage] = useState<RatePage>({ kind: "list" });
 
   if (page.kind === "edit") {
@@ -66,6 +68,7 @@ export function RatesView({ onDone, onBack }: { from: string; onDone: () => void
   }
   return (
     <RateListPage
+      setup={setup}
       onEdit={(id) => setPage({ kind: "edit", serviceId: id })}
       onAdd={() => setPage({ kind: "add" })}
       onDone={onDone}
@@ -77,26 +80,46 @@ export function RatesView({ onDone, onBack }: { from: string; onDone: () => void
 // ───────────────────────── list ─────────────────────────
 
 function RateListPage({
-  onEdit, onAdd, onDone, onBack,
+  setup, onEdit, onAdd, onDone, onBack,
 }: {
+  setup: boolean;
   onEdit: (id: string) => void;
   onAdd: () => void;
   onDone: () => void;
-  onBack: () => void;
+  onBack?: () => void;
 }) {
   const state = useLaundryState();
   const services = state.services;
 
   function commitAndDone() {
-    Repo.updateShop(state.shop.name, state.shop.expressPct);
+    if (setup) Analytics.setupCompleted(services.length, state.shop.expressPct);
+    else Repo.updateShop(state.shop.name, state.shop.expressPct);
     onDone();
   }
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <TopBar title="Rate list" onBack={onBack} />
+      {!setup ? <TopBar title="Rate list" onBack={onBack} /> : null}
       <div className="flex flex-1 flex-col gap-4 px-4 py-4">
-        <InfoBox title="Change prices anytime" body="Tap Edit on a service to change its prices. New prices apply to new orders only." />
+        {setup ? (
+          <>
+            <div className="flex items-center gap-2">
+              {onBack ? (
+                <button type="button" onClick={onBack} aria-label="Back" className="-ml-2 flex size-10 items-center justify-center rounded-full text-ink">
+                  <IcBack size={22} />
+                </button>
+              ) : null}
+              <span className="text-[13px] font-semibold text-muted">Last step · Your services</span>
+            </div>
+            <h1 className="bric text-[28px]">Set up your rate list</h1>
+            <InfoBox
+              title="We filled in common prices"
+              body="Tap Edit to change a price, delete what you don't do, or add your own service. You can change this anytime from ₹ Rates."
+            />
+          </>
+        ) : (
+          <InfoBox title="Change prices anytime" body="Tap Edit on a service to change its prices. New prices apply to new orders only." />
+        )}
 
         <span className="text-[13px] font-bold text-inksecondary">YOUR SERVICES ({services.length})</span>
 
@@ -123,7 +146,7 @@ function RateListPage({
       <div className="sticky bottom-0 w-full border-t border-divider bg-card">
         <p className="px-4 pt-3 text-[13px] text-muted">Nothing else is needed. You can change prices anytime.</p>
         <div className="p-4">
-          <PrimaryButton onClick={commitAndDone}>Done</PrimaryButton>
+          <PrimaryButton onClick={commitAndDone}>{setup ? "Start taking orders" : "Done"}</PrimaryButton>
         </div>
       </div>
     </div>

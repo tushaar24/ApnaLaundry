@@ -3,7 +3,7 @@
 import { authApi, parseIsoMs } from "./authApi";
 import { prefs } from "./prefs";
 import { useAppStore } from "./store";
-import { clearAll, ensureSeeded, hasShop } from "./repository";
+import { clearAll, ensureSeeded, hasShop, hasShopActivity, isOnboarded } from "./repository";
 import { hasPendingChanges, pushNow, resetCheckpoint, startAutoSync, syncNow } from "./sync";
 import { setSessionDeadListener } from "./tokenManager";
 import { Analytics } from "@/analytics/events";
@@ -106,24 +106,24 @@ export async function verifyOtp(challenge: Challenge, otp: string): Promise<void
   // nothing to pull, so it skips straight to seeding (saves a round trip).
   if (!body.isNewUser) await syncNow();
   const existingAccount = hasShop();
-  if (existingAccount) {
-    // Existing account restored from the server — skip the setup flow.
-    store.setSetupDone(true);
-  } else {
-    store.setSetupDone(false);
+  if (!existingAccount) {
     await ensureSeeded(user.phone);
     // Just pulled (or nothing to pull) — only the seed needs to go up.
     await pushNow();
   }
+  // An existing shop isn't proof of setup (the seed went up at first login):
+  // an account that never onboarded still gets name → rate list after paying.
+  const onboarded = isOnboarded();
+  store.setSetupDone(onboarded);
   // Setup status is now known — reveal the authed app in a single transition.
   store.setAuthed(true);
 
   // Identify the owner so every event attributes to this shop, then the
   // funnel event. is_new_user = the server just created this account;
-  // needs_setup = no shop yet (also true for an old account that never set up).
+  // needs_setup = not onboarded yet (also true for an old account that never set up).
   const shopName = deriveState(useAppStore.getState().rows).shop.name;
   Analytics.identify({ identity: user.id, phone: user.phone, name: shopName });
-  Analytics.loggedIn(body.isNewUser === true, !existingAccount);
+  Analytics.loggedIn(body.isNewUser === true, !onboarded);
   MetaPixel.loginSuccess(!existingAccount);
 }
 
@@ -191,8 +191,9 @@ export async function bootstrap(): Promise<void> {
       useAppStore.getState().setBootError(result.message);
     }
   } else {
-    // An account whose shop exists server-side never re-runs setup.
-    if (hasShop()) useAppStore.getState().setSetupDone(true);
+    // An account already in use (set up elsewhere) never re-runs setup. Only
+    // activity counts here, so a reload mid-onboarding resumes it.
+    if (hasShopActivity()) useAppStore.getState().setSetupDone(true);
   }
   useAppStore.getState().setHydrated(true);
   startAutoSync();
@@ -208,7 +209,7 @@ export async function retryBoot(): Promise<void> {
     useAppStore.getState().setBootError(result.message);
   } else if (result.kind === "error" && result.authDead) {
     useAppStore.getState().setAuthed(false);
-  } else if (hasShop()) {
+  } else if (hasShopActivity()) {
     useAppStore.getState().setSetupDone(true);
   }
   useAppStore.getState().setHydrated(true);

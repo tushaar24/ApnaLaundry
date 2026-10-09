@@ -85,19 +85,21 @@ class AuthRepository(
         // account has nothing to pull, so it skips straight to seeding.
         if (!body.isNewUser) syncManager.syncNow()
         val existingAccount = repo.hasShop()
-        if (existingAccount) {
-            // Existing account restored from the server — skip the setup flow.
-            prefs.setSetupDone(true)
-        } else {
+        if (!existingAccount) {
             repo.ensureSeeded(shopPhone = user.phone)
             // Just pulled (or nothing to pull) — only the seed needs to go up.
             syncManager.pushNow()
         }
+        // An existing shop isn't proof of setup (the seed went up at first
+        // login): an account that never onboarded still gets name -> rate list
+        // after paying.
+        val onboarded = repo.isOnboarded()
+        prefs.setSetupDone(onboarded)
 
         // Identify the owner so every event attributes to this shop, then the
         // funnel event. is_new_user / needs_setup = this account had no shop yet.
         Analytics.identify(user.id, user.phone, repo.currentShopName())
-        Analytics.loggedIn(isNewUser = !existingAccount, needsSetup = !existingAccount)
+        Analytics.loggedIn(isNewUser = !existingAccount, needsSetup = !onboarded)
     }
 
     /**

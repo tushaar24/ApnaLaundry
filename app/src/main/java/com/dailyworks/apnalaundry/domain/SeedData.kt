@@ -10,6 +10,15 @@ import kotlin.math.roundToInt
  * numbers without re-checking the acceptance scenarios (PRODUCT_SPEC.md §14).
  */
 object SeedData {
+    /** Name a freshly seeded shop starts with. */
+    const val DEFAULT_SHOP_NAME = "MyLaundry"
+
+    // Placeholder names this and older builds have seeded — a shop still
+    // carrying one of these hasn't been named by its owner yet.
+    private val UNNAMED_SHOP_NAMES = setOf("", "mylaundry", "apna laundry", "apnalaundry", "my shop")
+
+    fun isDefaultShopName(name: String?): Boolean = (name ?: "").trim().lowercase() in UNNAMED_SHOP_NAMES
+
     private const val T = AppDate.TODAY // 2026-09-25
 
     private fun items(vararg pairs: Pair<String, Int>) =

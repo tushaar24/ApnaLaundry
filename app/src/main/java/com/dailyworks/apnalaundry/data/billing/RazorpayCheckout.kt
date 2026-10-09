@@ -22,7 +22,7 @@ object RazorpayCheckout {
         val checkout = Checkout()
         checkout.setKeyID(key)
         val options = JSONObject().apply {
-            put("name", "ApnaLaundry")
+            put("name", "MyLaundry")
             put(
                 "description",
                 when {

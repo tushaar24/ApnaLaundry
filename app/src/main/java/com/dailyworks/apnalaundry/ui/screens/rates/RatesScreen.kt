@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
@@ -22,6 +23,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.DeleteOutline
@@ -37,12 +39,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dailyworks.apnalaundry.analytics.Analytics
+import com.dailyworks.apnalaundry.data.LaundryRepository
+import com.dailyworks.apnalaundry.domain.SeedData
 import com.dailyworks.apnalaundry.domain.PricingMode
 import com.dailyworks.apnalaundry.domain.Service
 import com.dailyworks.apnalaundry.domain.ServiceItem
@@ -58,6 +67,10 @@ import com.dailyworks.apnalaundry.ui.components.fig
 import com.dailyworks.apnalaundry.ui.components.rounded
 import com.dailyworks.apnalaundry.ui.components.tap
 import com.dailyworks.apnalaundry.ui.theme.Tokens
+import org.koin.compose.koinInject
+
+/** Onboarding step when opened as setup (after login + paywall). */
+private enum class SetupStep { Name, Rates }
 
 /** Which sub-screen of the rate list is open. */
 private sealed interface RatePage {
@@ -89,12 +102,34 @@ fun RatesScreen(shopVm: ShopViewModel, from: String, onDone: () -> Unit, onBack:
         if (!setup) Analytics.ratesOpened(from)
     }
 
+    // Onboarding: 1) the shop name — skipped when it's already named — then
+    // 2) this rate list, then Home. Decided from the DB, not the VM's
+    // not-yet-loaded initial state.
+    val repo: LaundryRepository = koinInject()
+    var step by remember { mutableStateOf<SetupStep?>(null) }
+    var askedName by remember { mutableStateOf(false) }
+    if (setup) {
+        LaunchedEffect(Unit) {
+            askedName = SeedData.isDefaultShopName(repo.currentShopName())
+            step = if (askedName) SetupStep.Name else SetupStep.Rates
+        }
+        when (step) {
+            null -> { Box(Modifier.fillMaxSize().background(Tokens.Bg)); return }
+            SetupStep.Name -> {
+                ShopNameSetupPage(shopVm, onNext = { step = SetupStep.Rates })
+                return
+            }
+            SetupStep.Rates -> Unit
+        }
+    }
+
     when (val p = page) {
         is RatePage.List -> RateListPage(
             shopVm = shopVm, setup = setup,
             onEdit = { page = RatePage.Edit(it) },
             onAdd = { page = RatePage.Add },
-            onDone = onDone, onBack = onBack,
+            onDone = onDone,
+            onBack = if (setup) { if (askedName) ({ step = SetupStep.Name }) else null } else onBack,
         )
         is RatePage.Edit -> {
             val svc = state.services.firstOrNull { it.id == p.serviceId }
@@ -115,28 +150,76 @@ fun RatesScreen(shopVm: ShopViewModel, from: String, onDone: () -> Unit, onBack:
     }
 }
 
+// ───────────────────────── setup ─────────────────────────
+
+@Composable
+private fun ShopNameSetupPage(shopVm: ShopViewModel, onNext: () -> Unit) {
+    val state by shopVm.state.collectAsStateWithLifecycle()
+    var shopName by remember { mutableStateOf(state.shop.name.takeUnless { SeedData.isDefaultShopName(it) } ?: "") }
+    val named = shopName.isNotBlank()
+    val focus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+
+    // Open the keyboard straight away on the name field.
+    LaunchedEffect(Unit) {
+        focus.requestFocus()
+        keyboard?.show()
+    }
+
+    fun done() {
+        if (!named) return
+        shopVm.updateShop(shopName.trim(), state.shop.expressPct)
+        onNext()
+    }
+
+    Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars).imePadding()) {
+        Column(
+            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(Icons.Outlined.Check, null, tint = Tokens.Blue, modifier = Modifier.size(18.dp))
+                Text("Trial started · Step 1 of 2", style = fig(13, FontWeight.SemiBold, Tokens.Muted))
+            }
+            Text("What is your laundry called?", style = bric(28, FontWeight.Bold))
+            Text("This name goes on every bill you send to customers.", style = fig(14, color = Tokens.Muted))
+            FieldBox(
+                shopName, { shopName = it },
+                placeholder = "e.g. Sharma Laundry",
+                height = 56.dp, borderColor = Tokens.Blue, borderWidth = 2.dp,
+                fieldModifier = Modifier.focusRequester(focus),
+                capitalization = KeyboardCapitalization.Words,
+                imeAction = ImeAction.Next,
+                onImeAction = { done() },
+            )
+        }
+        Box(Modifier.fillMaxWidth().background(Tokens.Card).padding(16.dp)) {
+            PrimaryButton("Next", height = 56.dp, enabled = named) { done() }
+        }
+    }
+}
+
 // ───────────────────────── list ─────────────────────────
 
 @Composable
 private fun RateListPage(
     shopVm: ShopViewModel, setup: Boolean,
-    onEdit: (String) -> Unit, onAdd: () -> Unit, onDone: () -> Unit, onBack: () -> Unit,
+    onEdit: (String) -> Unit, onAdd: () -> Unit, onDone: () -> Unit, onBack: (() -> Unit)?,
 ) {
     val state by shopVm.state.collectAsStateWithLifecycle()
     val services = state.services
 
-    var shopName by remember { mutableStateOf(state.shop.name) }
     var expressPct by remember { mutableStateOf(state.shop.expressPct.toString()) }
 
     fun commitAndDone() {
         val pct = expressPct.toIntOrNull() ?: 50
-        shopVm.updateShop(if (setup) shopName.trim().ifBlank { "My Shop" } else state.shop.name, pct)
+        shopVm.updateShop(state.shop.name, pct)
         if (setup) Analytics.setupCompleted(services.size, pct)
         onDone()
     }
 
     Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars)) {
-        if (!setup) TopBar("Rate list", onBack = onBack)
+        if (!setup) TopBar("Rate list", onBack = onBack ?: {})
 
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 16.dp),
@@ -144,17 +227,17 @@ private fun RateListPage(
         ) {
             if (setup) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Icon(Icons.Outlined.Check, null, tint = Tokens.Blue, modifier = Modifier.size(18.dp))
-                    Text("Number verified · Last step", style = fig(13, FontWeight.SemiBold, Tokens.Muted))
+                    if (onBack != null) {
+                        Box(Modifier.size(40.dp).rounded(999.dp).tap(onClick = onBack), contentAlignment = Alignment.Center) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Tokens.Ink, modifier = Modifier.size(22.dp))
+                        }
+                    }
+                    Text("Last step · Your services", style = fig(13, FontWeight.SemiBold, Tokens.Muted))
                 }
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("SHOP NAME", style = fig(13, FontWeight.Bold, Tokens.InkSecondary))
-                    FieldBox(shopName, { shopName = it }, height = 56.dp, borderColor = Tokens.Blue, borderWidth = 2.dp)
-                }
-                Text("Your rate list", style = bric(28, FontWeight.Bold))
+                Text("Set up your rate list", style = bric(28, FontWeight.Bold))
                 InfoBox(
-                    "Already filled for you",
-                    "We added ${services.size} common services with usual prices. You can start taking orders now and change anything later from ₹ Rates on the home screen.",
+                    "We filled in common prices",
+                    "Tap Edit to change a price, delete what you don't do, or add your own service. You can change this anytime from ₹ Rates.",
                 )
             } else {
                 InfoBox(

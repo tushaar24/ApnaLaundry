@@ -67,7 +67,7 @@ class LaundryRepository(private val db: AppDatabase) {
         if (shopDao.get() != null) { refreshTsCounter(); return }
         db.withTransaction {
             shopDao.upsert(
-                ShopEntity(1, "Apna Laundry", shopPhone ?: "", SeedData.shop.expressPct, 1001, 1)
+                ShopEntity(1, SeedData.DEFAULT_SHOP_NAME, shopPhone ?: "", SeedData.shop.expressPct, 1001, 1)
             )
             serviceDao.upsertAll(SeedData.services.map { it.toEntity() })
         }
@@ -75,6 +75,18 @@ class LaundryRepository(private val db: AppDatabase) {
     }
 
     suspend fun hasShop(): Boolean = shopDao.get() != null
+
+    /**
+     * Onboarding (shop name + rate list) is behind this account. The server
+     * keeps no flag and the seed is pushed at first login, so "has a shop"
+     * isn't enough: a shop still on a placeholder name with no customers or
+     * orders hasn't onboarded.
+     */
+    suspend fun isOnboarded(): Boolean {
+        val shop = shopDao.get() ?: return false
+        return !SeedData.isDefaultShopName(shop.name) ||
+            customerDao.observeOnce().isNotEmpty() || orderDao.observeOnce().isNotEmpty()
+    }
 
     suspend fun currentShopName(): String? = shopDao.get()?.name
 
