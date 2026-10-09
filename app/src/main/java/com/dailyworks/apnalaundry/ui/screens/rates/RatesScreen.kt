@@ -251,15 +251,19 @@ private fun ServiceCard(s: Service, onEdit: () -> Unit, onDelete: () -> Unit) {
 @Composable
 private fun AddServiceCard(onAdd: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().rounded(16.dp).dashedBorder(Tokens.DashBorder, 1.5.dp, 16.dp).tap(onClick = onAdd).padding(16.dp),
+        Modifier.fillMaxWidth().rounded(16.dp).background(Tokens.BlueLight)
+            .border(1.5.dp, Tokens.Blue, RoundedCornerShape(16.dp)).tap(onClick = onAdd).padding(16.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Box(Modifier.size(40.dp).rounded(999.dp).background(Tokens.BlueLight), contentAlignment = Alignment.Center) {
-            Icon(Icons.Filled.Add, null, tint = Tokens.Blue, modifier = Modifier.size(22.dp))
+        Box(Modifier.size(44.dp).rounded(999.dp).background(Tokens.Blue), contentAlignment = Alignment.Center) {
+            Icon(Icons.Filled.Add, null, tint = Tokens.OnDark, modifier = Modifier.size(24.dp))
         }
         Column(Modifier.weight(1f)) {
-            Text("Add new service", style = fig(16, FontWeight.Bold, Tokens.Blue))
-            Text("Only if you do something extra, like Steam Press", style = fig(13, color = Tokens.Muted))
+            Text("Add a new service", style = fig(17, FontWeight.Bold, Tokens.BlueText))
+            Text("Steam press, curtains, shoes… anything else you do", style = fig(13, color = Tokens.BlueText))
+        }
+        Box(Modifier.rounded(10.dp).background(Tokens.Blue).padding(horizontal = 14.dp, vertical = 8.dp)) {
+            Text("Add", style = fig(14, FontWeight.Bold, Tokens.OnDark))
         }
     }
 }

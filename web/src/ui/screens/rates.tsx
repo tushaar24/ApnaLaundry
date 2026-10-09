@@ -126,15 +126,16 @@ function RateListPage({
         <button
           type="button"
           onClick={onAdd}
-          className="dash-border flex w-full items-center gap-3 rounded-2xl p-4 text-left"
+          className="flex w-full items-center gap-3 rounded-2xl border-[1.5px] border-blue bg-bluelight p-4 text-left transition-colors hover:bg-blue/10"
         >
-          <span className="flex size-10 items-center justify-center rounded-full bg-bluelight text-blue">
-            <IcAdd size={22} />
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-blue text-ondark">
+            <IcAdd size={24} />
           </span>
-          <span className="flex min-w-0 flex-col">
-            <span className="text-[16px] font-bold text-blue">Add new service</span>
-            <span className="text-[13px] text-muted">Only if you do something extra, like Steam Press</span>
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="text-[17px] font-bold text-bluetext">Add a new service</span>
+            <span className="text-[13px] text-bluetext/80">Steam press, curtains, shoes… anything else you do</span>
           </span>
+          <span className="shrink-0 rounded-[10px] bg-blue px-3.5 py-2 text-[14px] font-bold text-ondark">Add</span>
         </button>
 
         {services.map((s) => (
