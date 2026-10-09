@@ -95,6 +95,9 @@ dependencies {
     // UPI pay QR on bills (QR matrix only — drawn on our own canvas)
     implementation(libs.zxing.core)
 
+    // Meta (Facebook) SDK — app events only (no Login/Share), for Meta ads.
+    implementation(libs.facebook.core)
+
     // Room
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)

@@ -2,6 +2,7 @@ package com.dailyworks.apnalaundry
 
 import android.app.Application
 import com.dailyworks.apnalaundry.analytics.Analytics
+import com.dailyworks.apnalaundry.analytics.MetaEvents
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
@@ -27,6 +28,7 @@ class ApnaLaundryApp : Application() {
         Analytics.registerLifecycle(this)
         super.onCreate()
         Analytics.init(this)
+        MetaEvents.init(this)
 
         startKoin {
             androidContext(this@ApnaLaundryApp)
