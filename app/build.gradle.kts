@@ -30,7 +30,11 @@ android {
             buildConfigField("String", "API_BASE_URL", "\"https://shwetamakeover.online/api/laundry\"")
         }
         release {
-            isMinifyEnabled = false
+            // R8 shrink + obfuscate; keep rules in proguard-rules.pro. Upload
+            // build/outputs/mapping/release/mapping.txt with each bundle so Play
+            // deobfuscates crash traces.
+            isMinifyEnabled = true
+            isShrinkResources = true
             buildConfigField("String", "API_BASE_URL", "\"https://shwetamakeover.online/api/laundry\"")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
