@@ -42,17 +42,18 @@ export function orderNo(o: { id: number; serialNo?: string }): string {
 }
 
 /**
- * The serial a new order starts with: the latest order's serial + 1, keeping
- * any prefix ("A-102" → "A-103", "0099" → "0100"). "" until the owner has
- * given some order a serial, or when the last one has no number to bump.
+ * The serial a new order starts with: the latest order's number (its serial,
+ * else its id) + 1, keeping any prefix ("A-102" → "A-103", "0099" → "0100").
+ * The first order — or a last number with no digits to bump — starts at the
+ * order number it will get.
  */
-export function nextSerial(state: LaundryState): string {
+export function nextSerial(state: LaundryState, nextOrderId: number): string {
   let last: Order | undefined;
   for (const o of state.orders) {
-    if (o.serialNo.trim() !== "" && (!last || o.id > last.id)) last = o;
+    if (!last || o.id > last.id) last = o;
   }
-  const m = last?.serialNo.trim().match(/^(.*?)(\d+)$/);
-  if (!m) return "";
+  const m = last ? orderNo(last).match(/^(.*?)(\d+)$/) : null;
+  if (!m) return String(nextOrderId);
   const n = String(parseInt(m[2], 10) + 1).padStart(m[2].length, "0");
   return (m[1] + n).slice(0, 12);
 }

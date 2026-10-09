@@ -46,14 +46,16 @@ object Selectors {
         "${l.serviceName} · ${trimKg(l.kg)} kg" + if (l.qty > 0) " · ${l.qty} ${if (l.qty == 1) "cloth" else "clothes"}" else ""
 
     /**
-     * The serial a new order starts with: the latest order's serial + 1, keeping
-     * any prefix and zero-padding ("A-102" → "A-103", "0099" → "0100"). "" until
-     * the owner has given some order a serial, or when the last one has no
-     * number to bump. Port twin: web Sel.nextSerial.
+     * The serial a new order starts with: the latest order's number (its
+     * serial, else its id) + 1, keeping any prefix and zero-padding ("A-102" →
+     * "A-103", "0099" → "0100"). The first order — or a last number with no
+     * digits to bump — starts at the order number it will get.
+     * Port twin: web Sel.nextSerial.
      */
     fun nextSerial(state: LaundryState): String {
-        val last = state.orders.filter { it.serialNo.isNotBlank() }.maxByOrNull { it.id } ?: return ""
-        val m = Regex("^(.*?)(\\d+)$").find(last.serialNo.trim()) ?: return ""
+        val first = state.shop.nextOrder.toString()
+        val last = state.orders.maxByOrNull { it.id } ?: return first
+        val m = Regex("^(.*?)(\\d+)$").find(last.no()) ?: return first
         val (prefix, digits) = m.destructured
         val next = (digits.toBigInteger() + java.math.BigInteger.ONE).toString().padStart(digits.length, '0')
         return (prefix + next).take(12)

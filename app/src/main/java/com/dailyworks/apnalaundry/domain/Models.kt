@@ -120,6 +120,8 @@ data class Shop(
     val billTemplate: String = BillDetails.CLASSIC,
     /** "" = a shop from before onboarding was tracked; else intro|name|services|bill|done. */
     val onboardingStep: String = "",
+    /** The id the next new order gets. */
+    val nextOrder: Int = 1001,
 )
 
 data class DayClose(

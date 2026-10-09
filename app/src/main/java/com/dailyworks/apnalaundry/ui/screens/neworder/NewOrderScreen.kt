@@ -214,11 +214,11 @@ fun NewOrderScreen(
             verticalArrangement = Arrangement.spacedBy(22.dp),
         ) {
             Spacer(Modifier.height(2.dp))
-            // ---- bill / serial no. ----
+            // ---- serial no. ----
             FieldBox(
                 serialText, { serialTouched = true; serialText = it.filter { c -> c.isLetterOrDigit() && c.code < 128 || c in "_/-" }.take(12) },
-                prefix = "#", placeholder = editId?.toString() ?: "Same as order number",
-                suffix = "bill / serial no.", height = 48.dp,
+                prefix = "#", placeholder = "Serial no.",
+                suffix = "Serial no.", height = 48.dp,
             )
             // ---- customer ----
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

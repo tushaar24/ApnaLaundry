@@ -8,7 +8,7 @@ import { expressAuto } from "@/domain/laundryMath";
 import type { Route } from "@/domain/models";
 import * as Sel from "@/domain/selectors";
 import * as Repo from "@/data/repository";
-import { useLaundryState } from "@/data/store";
+import { useAppStore, useLaundryState } from "@/data/store";
 import { Analytics } from "@/analytics/events";
 import {
   AppCard, Avatar, cls, DateTimeBox, Divider, FieldBox, PrimaryButton, SectionLabel, Toggle, TopBar,
@@ -125,9 +125,11 @@ function NewOrderScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingOrder?.id, services.length, loaded]);
 
-  // New order: start from the last serial + 1 (orders may still be loading,
-  // so follow them until the owner types their own).
-  const suggestedSerial = editId == null ? Sel.nextSerial(state) : "";
+  // New order: start from the last order's number + 1 — or, for the first
+  // order, the number it will get (orders may still be loading, so follow
+  // them until the owner types their own).
+  const nextOrderId = useAppStore((s) => s.rows.shop?.nextOrder ?? 1001);
+  const suggestedSerial = editId == null ? Sel.nextSerial(state, nextOrderId) : "";
   useEffect(() => {
     if (editId == null && !serialTouched) setSerialText(suggestedSerial);
   }, [editId, serialTouched, suggestedSerial]);
@@ -238,13 +240,13 @@ function NewOrderScreen() {
       />
       <div className="flex-1 lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-6">
         <div className="flex flex-col gap-[22px] px-4 pb-6 pt-0.5">
-          {/* ---- bill / serial no. ---- */}
+          {/* ---- serial no. ---- */}
           <FieldBox
             value={serialText}
             onChange={(v) => { setSerialTouched(true); setSerialText(v.replace(/[^\w/-]/g, "").slice(0, 12)); }}
             prefix="#"
-            placeholder={editId != null ? String(editId) : "Same as order number"}
-            suffix="bill / serial no."
+            placeholder="Serial no."
+            suffix="Serial no."
             h={48}
           />
 
