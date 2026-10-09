@@ -60,8 +60,10 @@ object Analytics {
     private fun track(name: String, props: Map<String, Any?> = emptyMap()) {
         if (!enabled) return
         val clean = HashMap<String, Any>()
-        clean["platform"] = "android"
         for ((k, v) in props) if (v != null) clean[k] = v
+        // Stamped last so no event prop can override them.
+        clean["platform"] = "android"
+        clean["source"] = "android"
         ct?.pushEvent(name, clean)
     }
 
@@ -96,8 +98,8 @@ object Analytics {
 
     // ---- order creation & lifecycle ----
 
-    fun newOrderStarted(source: String, isEdit: Boolean) =
-        track("New Order Started", mapOf("source" to source, "is_edit" to isEdit))
+    fun newOrderStarted(entryPoint: String, isEdit: Boolean) =
+        track("New Order Started", mapOf("entry_point" to entryPoint, "is_edit" to isEdit))
 
     fun orderSaved(
         orderId: Int, isEdit: Boolean, hasBill: Boolean, pickup: String, delivery: String,
@@ -159,6 +161,7 @@ object Analytics {
         if (!enabled) return
         val details = hashMapOf<String, Any>(
             "platform" to "android",
+            "source" to "android",
             "Amount" to amount,
             "payment_method" to paymentMethod,
             "order_id" to orderId,
@@ -176,8 +179,8 @@ object Analytics {
 
     // ---- customers, bills, rates, engagement ----
 
-    fun customerAdded(source: String, withOldBaaki: Boolean) =
-        track("Customer Added", mapOf("source" to source, "with_old_baaki" to withOldBaaki))
+    fun customerAdded(entryPoint: String, withOldBaaki: Boolean) =
+        track("Customer Added", mapOf("entry_point" to entryPoint, "with_old_baaki" to withOldBaaki))
 
     fun reminderSent(customerId: String, amount: Int) =
         track("Reminder Sent", mapOf("customer_id" to customerId, "amount" to amount))
