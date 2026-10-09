@@ -104,7 +104,7 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
         composable(Routes.EARNINGS) { EarningsScreen(shopVm, navigator) }
 
         composable(Routes.SETTINGS) {
-            SettingsScreen(shopVm, navigator, onLogout = {
+            SettingsScreen(shopVm, navigator, onLogout = { onFailed ->
                 scope.launch {
                     // Pushes unsynced work first; refuses to log out (data
                     // would be lost) if that fails.
@@ -112,7 +112,7 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
                         .onSuccess {
                             navigator.nav.navigate(Routes.LOGIN) { popUpTo(0) { inclusive = true } }
                         }
-                        .onFailure { shopVm.showInfo(it.message ?: "Couldn't log out — try again") }
+                        .onFailure { shopVm.showInfo(it.message ?: "Couldn't log out — try again"); onFailed() }
                 }
             })
         }

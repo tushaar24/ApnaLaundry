@@ -85,7 +85,9 @@ private fun AppRoot() {
                 Modifier
                     .fillMaxSize()
                     .windowInsetsPadding(WindowInsets.navigationBars)
-                    .padding(16.dp),
+                    // Clears the New-order button and the bottom bar — a toast on
+                    // the button turns a late "Undo" tap into a new order (web: 156px).
+                    .padding(start = 16.dp, end = 16.dp, bottom = 156.dp),
                 contentAlignment = Alignment.BottomCenter,
             ) {
                 ToastBar(text = t.text, hasUndo = t.hasUndo, onUndo = shopVm::undo)

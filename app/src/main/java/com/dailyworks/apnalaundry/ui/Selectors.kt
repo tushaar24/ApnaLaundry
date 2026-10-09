@@ -59,6 +59,9 @@ object Selectors {
         return (prefix + next).take(12)
     }
 
+    /** "1 order" / "3 orders" — counted label with the right plural. */
+    fun countNoun(n: Int, noun: String): String = "$n $noun${if (n == 1) "" else "s"}"
+
     fun trimKg(kg: Double): String = if (kg % 1.0 == 0.0) kg.toInt().toString() else kg.toString()
 
     /** Orders for a customer that are not yet in khata (in progress). */

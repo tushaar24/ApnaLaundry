@@ -68,6 +68,7 @@ import com.dailyworks.apnalaundry.ui.components.rounded
 import com.dailyworks.apnalaundry.ui.components.tap
 import com.dailyworks.apnalaundry.ui.screens.onboarding.OnboardingFlow
 import com.dailyworks.apnalaundry.ui.theme.Tokens
+import com.dailyworks.apnalaundry.ui.components.dashedBorder
 import org.koin.compose.koinInject
 
 /** Which sub-screen of the rate list is open. */
@@ -250,7 +251,7 @@ private fun ServiceCard(s: Service, onEdit: () -> Unit, onDelete: () -> Unit) {
 @Composable
 private fun AddServiceCard(onAdd: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().rounded(16.dp).border(1.5.dp, Tokens.DashBorder, RoundedCornerShape(16.dp)).tap(onClick = onAdd).padding(16.dp),
+        Modifier.fillMaxWidth().rounded(16.dp).dashedBorder(Tokens.DashBorder, 1.5.dp, 16.dp).tap(onClick = onAdd).padding(16.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Box(Modifier.size(40.dp).rounded(999.dp).background(Tokens.BlueLight), contentAlignment = Alignment.Center) {
@@ -433,7 +434,11 @@ private fun PerPieceCard(draft: Service, emptyHint: Boolean = false, onChange: (
         val canAdd = name.isNotEmpty() && !exists
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FieldBox(newName, { newName = it }, placeholder = "Add a cloth, e.g. Blazer", height = 48.dp, modifier = Modifier.weight(1f))
+            FieldBox(
+                newName, { newName = it }, placeholder = "Add a cloth, e.g. Blazer", height = 48.dp, modifier = Modifier.weight(1f),
+                imeAction = ImeAction.Done,
+                onImeAction = { if (canAdd) { onChange(draft.copy(items = draft.items + ServiceItem(name, null))); newName = "" } },
+            )
             Row(
                 Modifier.height(48.dp).rounded(10.dp).background(if (canAdd) Tokens.BlueLight else Tokens.NeutralFill)
                     .tap(enabled = canAdd) {

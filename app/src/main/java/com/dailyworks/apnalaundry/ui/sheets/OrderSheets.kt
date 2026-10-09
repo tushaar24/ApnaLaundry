@@ -216,7 +216,8 @@ fun DeleteOrderSheet(state: LaundryState, orderId: Int, vm: ShopViewModel, navig
                     onDismiss()
                     vm.deleteOrder(orderId)
                     // The order's own screens would show "not found" — leave them.
-                    navigator.openHome()
+                    val route = navigator.nav.currentDestination?.route.orEmpty()
+                    if (route.startsWith("order/") || route.startsWith("bill/")) navigator.openHome()
                 }
             }
         }

@@ -14,6 +14,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dailyworks.apnalaundry.ui.theme.Tokens
+import androidx.compose.ui.unit.dp
+import com.dailyworks.apnalaundry.ui.components.fig
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material3.Text
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.outlined.LocalLaundryService
+import androidx.compose.material.icons.Icons
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
 import org.koin.androidx.compose.koinViewModel
 
 /**
@@ -69,7 +83,15 @@ private fun GatedContent(content: @Composable () -> Unit) {
 
 @Composable
 private fun Loader() {
-    Box(Modifier.fillMaxSize().background(Tokens.Bg), contentAlignment = Alignment.Center) {
-        CircularProgressIndicator(color = Tokens.Blue)
+    // Same as the web's splash: brand tile + "Loading your shop…".
+    Column(
+        Modifier.fillMaxSize().background(Tokens.Bg),
+        verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(Modifier.size(56.dp).clip(RoundedCornerShape(16.dp)).background(Tokens.Blue), contentAlignment = Alignment.Center) {
+            Icon(Icons.Outlined.LocalLaundryService, null, tint = Tokens.OnDark, modifier = Modifier.size(30.dp))
+        }
+        Spacer(Modifier.height(16.dp))
+        Text("Loading your shop…", style = fig(14, FontWeight.SemiBold, Tokens.Muted))
     }
 }

@@ -61,6 +61,7 @@ import com.dailyworks.apnalaundry.ui.nav.AppNavigator
 import com.dailyworks.apnalaundry.ui.sheets.ActiveSheet
 import com.dailyworks.apnalaundry.ui.sheets.SheetHost
 import com.dailyworks.apnalaundry.ui.theme.Tokens
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import kotlin.math.max
 
 @Composable
@@ -74,17 +75,20 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
     LaunchedEffect(Unit) { Analytics.screen("earnings") }
 
     val today = AppDate.TODAY
+    // Monday-start week and the 1st of this month, from today (like the web).
+    val weekStart = java.time.LocalDate.parse(today).let { it.minusDays((it.dayOfWeek.value - 1).toLong()) }.toString()
+    val monthStart = today.substring(0, 8) + "01"
     val inRange: (String) -> Boolean = when (period) {
-        "week" -> { iso -> iso in "2026-09-21"..today }
-        "month" -> { iso -> iso in "2026-09-01"..today }
+        "week" -> { iso -> iso in weekStart..today }
+        "month" -> { iso -> iso in monthStart..today }
         else -> { iso -> iso == today }
     }
     val e = EarningsMath.compute(state, inRange)
     fun m(n: Int): String = if (hidden) "₹ ••••" else Money.rupees(n)
 
     val periodLabel = when (period) {
-        "week" -> "Mon 21 – Fri 25 Sep"
-        "month" -> "1 – 25 Sep"
+        "week" -> "${AppDate.plain(weekStart)} – ${AppDate.plain(today)}"
+        "month" -> "1 – ${AppDate.dayOfMonth(today)} ${AppDate.plain(today).split(" ").last()}"
         else -> AppDate.plain(today)
     }
     val periodTitle = when (period) { "week" -> "This week"; "month" -> "This month"; else -> "Today" }
@@ -210,7 +214,7 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                         Text("Baaki in market ${m(e.baakiMarket)}", style = fig(16, FontWeight.Bold, Tokens.OrangeDeep))
                         Text("${e.baakiCustomers} ${if (e.baakiCustomers == 1) "customer still has to pay" else "customers still have to pay"}", style = fig(13, color = Tokens.OrangeText))
                     }
-                    Text("›", style = bric(22, FontWeight.Bold, Tokens.OrangeText))
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Tokens.OrangeText, modifier = Modifier.size(24.dp))
                 }
             }
 

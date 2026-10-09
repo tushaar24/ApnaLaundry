@@ -180,10 +180,12 @@ fun StepBar(step: Int, onBack: () -> Unit) {
 @Composable
 internal fun StepScaffold(
     bottomNote: String? = null,
+    top: (@Composable () -> Unit)? = null, // fixed above the scrolling body (e.g. a TopBar)
     bottom: @Composable () -> Unit,
     body: @Composable ColumnScope.() -> Unit,
 ) {
     Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars).imePadding()) {
+        top?.invoke()
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),

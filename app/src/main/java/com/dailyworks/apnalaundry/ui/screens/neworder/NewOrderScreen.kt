@@ -77,6 +77,7 @@ import com.dailyworks.apnalaundry.ui.sheets.ActiveSheet
 import com.dailyworks.apnalaundry.ui.sheets.SheetHost
 import com.dailyworks.apnalaundry.ui.sheets.Toggle
 import com.dailyworks.apnalaundry.ui.components.showDatePicker
+import com.dailyworks.apnalaundry.ui.components.dashedBorder
 import com.dailyworks.apnalaundry.ui.theme.Tokens
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -118,7 +119,7 @@ fun NewOrderScreen(
 
     LaunchedEffect(Unit) {
         Analytics.screen("new_order")
-        Analytics.newOrderStarted(if (presetCustId != null) "customer" else "home", editId != null)
+        Analytics.newOrderStarted(if (presetCustId != null) "customer" else if (from == "empty_home") "empty_home" else "home", editId != null)
     }
 
     // Prefill for edit mode.
@@ -234,7 +235,7 @@ fun NewOrderScreen(
                             Text(cust.name, style = fig(16, FontWeight.Bold))
                             val bal = Selectors.balance(state, cust.id)
                             val meta = Selectors.fmtPhone(cust.phone) +
-                                " · ${if (Selectors.orderCount(state, cust) > 0) "${Selectors.orderCount(state, cust)} orders" else "New customer"}" +
+                                " · ${if (Selectors.orderCount(state, cust) > 0) Selectors.countNoun(Selectors.orderCount(state, cust), "order") else "New customer"}" +
                                 (if (bal > 0) " · ${Money.rupees(bal)} baaki" else "")
                             Text(meta, style = fig(13, color = Tokens.InkSecondary))
                         }
@@ -255,7 +256,7 @@ fun NewOrderScreen(
                                     Text(r.name, style = fig(15, FontWeight.Bold))
                                     Text(Selectors.fmtPhone(r.phone), style = fig(13, color = Tokens.Muted))
                                 }
-                                Text(if (Selectors.orderCount(state, r) > 0) "${Selectors.orderCount(state, r)} orders" else "New", style = fig(12, color = Tokens.Muted))
+                                Text(if (Selectors.orderCount(state, r) > 0) Selectors.countNoun(Selectors.orderCount(state, r), "order") else "New", style = fig(12, color = Tokens.Muted))
                             }
                         }
                         Box(Modifier.padding(10.dp)) {
@@ -512,10 +513,6 @@ private fun DateTimeBox(
     }
 }
 
-private fun Modifier.dashedBorder(color: Color, width: Dp, radius: Dp): Modifier = drawBehind {
-    val stroke = Stroke(width = width.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(11f, 8f)))
-    drawRoundRect(color = color, style = stroke, cornerRadius = CornerRadius(radius.toPx()))
-}
 
 private fun showTimePicker(context: Context, time24: String, onSet: (String) -> Unit) {
     val parts = time24.split(":")

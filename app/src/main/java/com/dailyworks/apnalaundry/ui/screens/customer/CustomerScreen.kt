@@ -92,7 +92,7 @@ fun CustomerScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: Strin
                 }
                 Column(Modifier.weight(1f)) {
                     Text(c.name, style = bric(24, FontWeight.Bold))
-                    Text("+91 ${Selectors.fmtPhone(c.phone)} · ${Selectors.orderCount(state, c)} orders", style = fig(13, color = Tokens.Muted))
+                    Text("+91 ${Selectors.fmtPhone(c.phone)} · ${Selectors.countNoun(Selectors.orderCount(state, c), "order")}", style = fig(13, color = Tokens.Muted))
                     if (c.address.isNotBlank()) Text(c.address, style = fig(13, color = Tokens.Muted))
                 }
             }

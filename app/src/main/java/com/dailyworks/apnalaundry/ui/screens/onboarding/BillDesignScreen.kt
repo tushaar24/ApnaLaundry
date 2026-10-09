@@ -59,6 +59,11 @@ import com.dailyworks.apnalaundry.ui.components.tap
 import com.dailyworks.apnalaundry.ui.screens.bill.rememberBillImages
 import com.dailyworks.apnalaundry.ui.screens.bill.sendTestBillOnWhatsApp
 import com.dailyworks.apnalaundry.ui.theme.Tokens
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import com.dailyworks.apnalaundry.R
+import androidx.compose.ui.res.painterResource
 import kotlinx.coroutines.launch
 
 /**
@@ -111,6 +116,7 @@ fun BillDesignScreen(shopVm: ShopViewModel, editing: Boolean, onBack: () -> Unit
 
     StepScaffold(
         bottomNote = if (editing) null else "You can change the design and details anytime in Settings.",
+        top = if (editing) ({ TopBar("Bill design & details", onBack = onBack) }) else null,
         bottom = {
             if (editing) {
                 PrimaryButton("Save", height = 56.dp, enabled = BillDetails.isNameOk(name)) {
@@ -124,7 +130,6 @@ fun BillDesignScreen(shopVm: ShopViewModel, editing: Boolean, onBack: () -> Unit
         },
     ) {
         if (editing) {
-            Box(Modifier.padding(start = 0.dp)) { TopBar("Bill design & details", onBack = onBack) }
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("Laundry name", style = fig(13, FontWeight.Bold, Tokens.InkSecondary))
                 FieldBox(name, { name = it.take(40) }, height = 56.dp, capitalization = KeyboardCapitalization.Words)
@@ -173,16 +178,19 @@ fun BillDesignScreen(shopVm: ShopViewModel, editing: Boolean, onBack: () -> Unit
                     ) { Text("$added", style = fig(12, FontWeight.Bold, Tokens.OnDark), modifier = Modifier.padding(horizontal = 6.dp)) }
                 }
             }
-            OutlineButton(
-                if (tested) "Sent · again" else "Test on WhatsApp",
-                Modifier.weight(1f), height = 48.dp, border = Tokens.FieldBorder, fg = Tokens.Ink,
-            ) {
+            Row(
+                Modifier.weight(1f).height(48.dp).rounded(14.dp).border(1.5.dp, Tokens.FieldBorder, RoundedCornerShape(14.dp)).tap {
                 val receipt = receipts[index]
                 scope.launch {
                     sendTestBillOnWhatsApp(context, receipt, shopVm.sampleBillUrl())
                     tested = true
                     shopVm.showInfo("Opening WhatsApp · pick who gets the test bill")
                 }
+                },
+                horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(painterResource(R.drawable.ic_whatsapp), null, tint = Color(0xFF25D366), modifier = Modifier.size(18.dp))
+                Text("  " + if (tested) "Sent · again" else "Test on WhatsApp", style = fig(15, FontWeight.Bold, Tokens.Ink))
             }
         }
 
@@ -208,7 +216,10 @@ fun BillDesignScreen(shopVm: ShopViewModel, editing: Boolean, onBack: () -> Unit
         }
 
         Text(
-            "Good to know: Express charge and discount are sample lines. They show on a bill only when you add them to an order. Express % comes from your rate list.",
+            buildAnnotatedString {
+                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("Good to know: ") }
+                append("Express charge and discount are sample lines. They show on a bill only when you add them to an order. Express % comes from your rate list.")
+            },
             style = fig(13, color = Color(0xFF6B3A10)),
             modifier = Modifier.fillMaxWidth().rounded(14.dp).background(Color(0xFFFBEEDC)).padding(16.dp),
         )

@@ -69,6 +69,7 @@ import com.dailyworks.apnalaundry.ui.nav.AppNavigator
 import com.dailyworks.apnalaundry.ui.sheets.ActiveSheet
 import com.dailyworks.apnalaundry.ui.sheets.SheetHost
 import com.dailyworks.apnalaundry.ui.theme.Tokens
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -90,7 +91,7 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
     var query by remember { mutableStateOf("") }
     var active by remember { mutableStateOf<ActiveSheet?>(null) }
 
-    val startNewOrder: () -> Unit = { navigator.openNewOrder(from = "home") }
+    val startNewOrder: (String) -> Unit = { from -> navigator.openNewOrder(from = from) }
 
     LaunchedEffect(Unit) { Analytics.screen("home") }
 
@@ -107,7 +108,7 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
         // Header
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (!searching) {
-                Text(state.shop.name, style = bric(22, FontWeight.Bold), modifier = Modifier.weight(1f))
+                Text(state.shop.name, style = bric(22, FontWeight.Bold), modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Box(Modifier.height(44.dp).rounded(999.dp).background(Tokens.Card).border(1.dp, Tokens.CardBorder, RoundedCornerShape(999.dp)).tap { navigator.openRates("home") }.padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
                     Text("₹ Rates", style = fig(14, FontWeight.Bold))
                 }
@@ -141,7 +142,7 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
 
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (noOrders && !searching) {
-                EmptyHome { startNewOrder() }
+                EmptyHome { startNewOrder("empty_home") }
                 return@Box
             }
             LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 170.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -180,7 +181,7 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
 
             // New order FAB
             if (!searching) {
-                Row(Modifier.align(Alignment.BottomEnd).padding(16.dp).height(58.dp).rounded(999.dp).background(Tokens.Blue).tap { startNewOrder() }.padding(start = 18.dp, end = 22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.align(Alignment.BottomEnd).padding(16.dp).height(58.dp).rounded(999.dp).background(Tokens.Blue).tap { startNewOrder("home") }.padding(start = 18.dp, end = 22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(Icons.Filled.Add, null, tint = Tokens.OnDark, modifier = Modifier.size(22.dp))
                     Text("New order", style = fig(17, FontWeight.Bold, Tokens.OnDark))
                 }
@@ -336,7 +337,7 @@ private fun DateStrip(state: LaundryState, pickup: Boolean, selDate: String, onP
                     Modifier.width(50.dp).height(58.dp).rounded(12.dp).background(if (on) Tokens.Ink else Color.Transparent).border(1.5.dp, if (on) Tokens.Ink else Color.Transparent, RoundedCornerShape(12.dp)).tap { onPick(iso) },
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
                 ) {
-                    Text(if (i == 0) "Today" else AppDate.dayName(iso), style = fig(11, FontWeight.Bold, if (on) Tokens.OnDarkMuted else if (i == 0) Tokens.Blue else Tokens.Muted))
+                    Text(if (i == 0) "Today" else if (AppDate.dayOfMonth(iso) == 1) AppDate.plain(iso).split(" ").last() else AppDate.dayName(iso), style = fig(11, FontWeight.Bold, if (on) Tokens.OnDarkMuted else if (i == 0) Tokens.Blue else Tokens.Muted))
                     Text("${AppDate.dayOfMonth(iso)}", style = fig(17, FontWeight.Bold, if (on) Tokens.OnDark else Tokens.Ink))
                     Text(if (n > 0) "$n" else "", style = fig(11, FontWeight.Bold, if (on) Tokens.BlueBar else Tokens.Blue))
                 }

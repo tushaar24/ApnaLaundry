@@ -48,7 +48,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.foundation.layout.size
 
 @Composable
-fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: () -> Unit) {
+fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (onFailed: () -> Unit) -> Unit) {
+    var loggingOut by remember { mutableStateOf(false) }
     val paywallVm: PaywallViewModel = koinViewModel()
     val state by shopVm.state.collectAsStateWithLifecycle()
     val shop = state.shop
@@ -142,10 +143,13 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: () 
             }
 
             Box(
-                Modifier.fillMaxWidth().height(52.dp).tap { onLogout() },
+                Modifier.fillMaxWidth().height(52.dp).tap(enabled = !loggingOut) {
+                    loggingOut = true
+                    onLogout { loggingOut = false }
+                },
                 contentAlignment = Alignment.Center,
             ) {
-                Text("Log out / restart", style = fig(15, FontWeight.Bold, Tokens.OrangeText))
+                Text(if (loggingOut) "Logging out…" else "Log out / restart", style = fig(15, FontWeight.Bold, Tokens.OrangeText))
             }
             Spacer(Modifier.height(8.dp))
         }

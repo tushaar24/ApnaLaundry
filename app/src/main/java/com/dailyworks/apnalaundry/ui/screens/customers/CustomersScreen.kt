@@ -81,7 +81,7 @@ fun CustomersScreen(shopVm: ShopViewModel, navigator: AppNavigator, initialFilte
         Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Customers", style = bric(24, FontWeight.Bold))
-                Text("${state.customers.size} customers", style = fig(13, color = Tokens.Muted), modifier = Modifier.padding(bottom = 3.dp))
+                Text(Selectors.countNoun(state.customers.size, "customer"), style = fig(13, color = Tokens.Muted), modifier = Modifier.padding(bottom = 3.dp))
             }
             FieldBox(query, { query = it }, placeholder = "Search name or phone", height = 48.dp, leading = {
                 Icon(Icons.Outlined.Search, null, tint = Tokens.Muted, modifier = Modifier.size(20.dp))

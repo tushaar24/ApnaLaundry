@@ -61,6 +61,9 @@ import com.dailyworks.apnalaundry.ui.components.PrimaryButton
 import com.dailyworks.apnalaundry.ui.components.fig
 import com.dailyworks.apnalaundry.ui.components.rounded
 import com.dailyworks.apnalaundry.ui.components.tap
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.runtime.LaunchedEffect
 import com.dailyworks.apnalaundry.ui.theme.Tokens
 import kotlinx.coroutines.launch
 import java.io.File
@@ -131,6 +134,14 @@ fun FieldsSheet(shopVm: ShopViewModel, details: BillDetails.Fields, onChange: (B
     }
 }
 
+/** Focuses the editor's input (keyboard up) when the sheet opens, like the web's autoFocus. */
+@Composable
+private fun autoFocus(): Modifier {
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    return Modifier.focusRequester(focus)
+}
+
 // ───────────────────────── editors ─────────────────────────
 
 @Composable
@@ -162,6 +173,7 @@ private fun UpiEditor(value: String, onSave: (String) -> Unit, onBack: () -> Uni
             FieldBox(
                 v, { v = BillDetails.cleanUpi(it) }, Modifier.padding(top = 6.dp),
                 placeholder = "e.g. sharmalaundry@okaxis", height = 56.dp, keyboardType = KeyboardType.Email,
+                fieldModifier = autoFocus(),
                 borderColor = if (check?.ok == false) Tokens.Orange else Tokens.FieldBorder,
             )
             CheckLine(check)
@@ -177,7 +189,7 @@ private fun AddressEditor(value: String, onSave: (String) -> Unit, onBack: () ->
     AppBottomSheet(title = "Shop address", subtitle = "Prints under your laundry name, so new customers can find you.", onDismiss = onBack) {
         Column {
             FieldBox(
-                v, { v = it.take(120) }, placeholder = "Shop no., road, area, city", height = 104.dp,
+                v, { v = it.take(120) }, placeholder = "Shop no., road, area, city", height = 104.dp, fieldModifier = autoFocus(),
                 singleLine = false, capitalization = KeyboardCapitalization.Words,
             )
             Text("${v.length}/120", style = fig(12, color = Tokens.Faint), modifier = Modifier.align(Alignment.End).padding(top = 4.dp))
@@ -193,7 +205,7 @@ private fun GstinEditor(value: String, onSave: (String) -> Unit, onBack: () -> U
     AppBottomSheet(title = "GSTIN", subtitle = "15 letters and numbers. Skip this if your shop is not GST registered.", onDismiss = onBack) {
         Column {
             FieldBox(
-                v, { v = BillDetails.cleanGstin(it) }, placeholder = "e.g. 27ABCDE1234F1Z5", height = 56.dp,
+                v, { v = BillDetails.cleanGstin(it) }, placeholder = "e.g. 27ABCDE1234F1Z5", height = 56.dp, fieldModifier = autoFocus(),
                 capitalization = KeyboardCapitalization.Characters, textStyle = fig(18, FontWeight.Bold),
                 borderColor = if (check?.ok == false) Tokens.Orange else Tokens.FieldBorder,
             )
@@ -210,7 +222,7 @@ private fun PhoneEditor(value: String, onSave: (String) -> Unit, onBack: () -> U
         Column {
             FieldBox(
                 v, { v = it.filter { c -> c.isDigit() }.take(10) }, prefix = "+91", placeholder = "98765 43210",
-                height = 56.dp, keyboardType = KeyboardType.Number,
+                height = 56.dp, keyboardType = KeyboardType.Number, fieldModifier = autoFocus(),
             )
             EditorFooter(value.isNotEmpty(), onRemove = { onSave("") }, onDone = { onSave(BillDetails.cleanPhone(v)) })
         }
