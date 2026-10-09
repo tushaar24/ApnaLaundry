@@ -125,10 +125,11 @@ fun shareBillImage(context: Context, state: LaundryState, o: Order) {
 }
 
 /**
- * Onboarding "Test on WhatsApp": the same wa.me text bill real bills use,
- * opened to the owner's own number with the sample order.
+ * Onboarding "Test on WhatsApp": the same wa.me text bill real bills use, but
+ * with no number, so WhatsApp lets the owner pick who gets the test bill
+ * (real bills open the customer's chat directly).
  */
-fun sendTestBillOnWhatsApp(context: Context, r: BillReceipt, ownDigits: String) {
+fun sendTestBillOnWhatsApp(context: Context, r: BillReceipt) {
     val text = buildString {
         appendLine("*${r.shopName}* — test bill")
         appendLine("${r.billNo} · ${r.date}")
@@ -138,7 +139,5 @@ fun sendTestBillOnWhatsApp(context: Context, r: BillReceipt, ownDigits: String) 
         r.upi?.let { appendLine("Pay by UPI: ${it.id}") }
         append("Thank you!")
     }
-    val digits = ownDigits.filter { it.isDigit() }.takeLast(10)
-    val enc = Uri.encode(text)
-    openWhatsApp(context, if (digits.length == 10) "https://wa.me/91$digits?text=$enc" else "https://wa.me/?text=$enc")
+    openWhatsApp(context, "https://wa.me/?text=${Uri.encode(text)}")
 }

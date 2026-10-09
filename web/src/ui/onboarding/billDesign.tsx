@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { BillDetails, BillTemplate } from "@/domain/models";
 import {
-  addedFieldsCount, BILL_TEMPLATES, cleanName, fmtBillPhone, isNameOk, sampleOrder,
+  addedFieldsCount, BILL_TEMPLATES, cleanName, isNameOk, sampleOrder,
 } from "@/domain/billDetails";
 import { sampleReceipt } from "@/domain/billReceipt";
 import { useLaundryState } from "@/data/store";
@@ -113,11 +113,10 @@ export function BillDesignScreen({
   };
 
   const added = addedFieldsCount(draft, loginPhone);
-  const ownDigits = (draft.billPhone || loginPhone || "").replace(/\D/g, "").slice(-10);
   const testOnWhatsApp = () => {
-    sendTestBill(receipts[index], ownDigits);
+    sendTestBill(receipts[index]);
     setTested(true);
-    Repo.showInfo(`Opening WhatsApp · test bill to ${fmtBillPhone(ownDigits)}`);
+    Repo.showInfo("Opening WhatsApp · pick who gets the test bill");
   };
 
   const save = () => {

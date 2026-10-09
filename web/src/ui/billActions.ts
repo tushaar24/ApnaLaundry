@@ -115,11 +115,12 @@ export function downloadBill(state: LaundryState, o: Order): void {
 }
 
 /**
- * Onboarding "Test on WhatsApp": the same wa.me path real bills take, to the
- * owner's own number. The sample order has no /b/ page, so the message
- * carries a text version of the bill instead of the link.
+ * Onboarding "Test on WhatsApp": the same wa.me path real bills take, but
+ * with no number, so WhatsApp lets the owner pick who gets the test bill
+ * (real bills open the customer's chat directly). The sample order has no
+ * /b/ page, so the message carries a text version of the bill.
  */
-export function sendTestBill(r: BillReceipt, ownDigits: string): void {
+export function sendTestBill(r: BillReceipt): void {
   const text = [
     `*${r.shop.name}* — test bill`,
     `${r.billNo} · ${r.date}`,
@@ -129,5 +130,5 @@ export function sendTestBill(r: BillReceipt, ownDigits: string): void {
     r.upi ? `Pay by UPI: ${r.upi.id}` : "",
     "Thank you!",
   ].filter(Boolean).join("\n");
-  window.open(waUrl(ownDigits, text), "_blank", "noopener,noreferrer");
+  window.open(waUrl("", text), "_blank", "noopener,noreferrer");
 }

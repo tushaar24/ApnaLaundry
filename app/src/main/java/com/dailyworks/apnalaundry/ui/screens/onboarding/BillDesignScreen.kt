@@ -104,7 +104,6 @@ fun BillDesignScreen(shopVm: ShopViewModel, editing: Boolean, onBack: () -> Unit
     val index = pager.currentPage
 
     val added = BillDetails.addedCount(draft, loginPhone)
-    val ownDigits = draft.billPhone.ifBlank { loginPhone }
 
     StepScaffold(
         bottomNote = if (editing) null else "You can change the design and details anytime in Settings.",
@@ -174,9 +173,9 @@ fun BillDesignScreen(shopVm: ShopViewModel, editing: Boolean, onBack: () -> Unit
                 if (tested) "Sent · again" else "Test on WhatsApp",
                 Modifier.weight(1f), height = 48.dp, border = Tokens.FieldBorder, fg = Tokens.Ink,
             ) {
-                sendTestBillOnWhatsApp(context, receipts[index], ownDigits)
+                sendTestBillOnWhatsApp(context, receipts[index])
                 tested = true
-                shopVm.showInfo("Opening WhatsApp · test bill to ${BillDetails.fmtBillPhone(ownDigits)}")
+                shopVm.showInfo("Opening WhatsApp · pick who gets the test bill")
             }
         }
 
