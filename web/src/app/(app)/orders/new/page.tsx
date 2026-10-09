@@ -98,7 +98,7 @@ function NewOrderScreen() {
     setFeeText(o.fee > 0 ? String(o.fee) : "");
     setExpress(o.express);
     setDiscountText(o.discount > 0 ? String(o.discount) : "");
-    setSerialText(o.serialNo);
+    setSerialText(Sel.orderNo(o)); // the number it shows today (its serial, else the order id)
     // Same base as the live auto amount below: every line, quick amount included.
     const clothesTotalForEx = o.lines.reduce((s, l) => s + l.amt, 0);
     setExOverride(

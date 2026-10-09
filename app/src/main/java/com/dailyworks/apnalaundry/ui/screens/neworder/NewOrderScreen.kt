@@ -138,7 +138,7 @@ fun NewOrderScreen(
         feeText = if (o.fee > 0) o.fee.toString() else ""
         express = o.express
         discountText = if (o.discount > 0) o.discount.toString() else ""
-        serialText = o.serialNo
+        serialText = o.no() // the number it shows today (its serial, else the order id)
         // Same base as the live auto amount below: every line, quick amount included.
         val clothesTotalForEx = o.lines.sumOf { it.amt }
         exOverride = if (o.express && o.exAmt != LaundryMath.expressAuto(clothesTotalForEx, state.shop.expressPct)) o.exAmt.toString() else null
