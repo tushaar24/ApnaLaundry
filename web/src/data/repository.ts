@@ -266,7 +266,13 @@ export function deliver(orderId: number, amountReceived: number, method: PayMeth
     }));
   }
   insertLedger(...entries);
-  updateOrder(orderId, { status: "DELIVERED", doneAt: AppDate.nowText(), doneDate: AppDate.today(), paid: alloc.paidToward });
+  // Delivered today: the delivery date / time become now, so it shows under
+  // today's Deliveries whatever was planned (or if no date was set).
+  const now = AppDate.nowText();
+  updateOrder(orderId, {
+    status: "DELIVERED", doneAt: now, doneDate: AppDate.today(),
+    deliveryDate: AppDate.today(), deliveryTime: now, ddAuto: false, paid: alloc.paidToward,
+  });
   Analytics.orderDelivered({
     orderId, total, amountReceived, method,
     toKhata: Math.max(0, total - alloc.paidToward), fromAdvance: pre,

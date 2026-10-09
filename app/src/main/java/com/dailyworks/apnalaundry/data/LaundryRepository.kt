@@ -232,7 +232,15 @@ class LaundryRepository(private val db: AppDatabase) {
         }
         db.withTransaction {
             ledgerDao.insertAll(entries.map { it.toEntity() })
-            orderDao.upsert(o.copy(status = OrderStatus.DELIVERED, doneAt = AppDate.nowText(), doneDate = AppDate.TODAY, paid = alloc.paidToward).toEntity())
+            // Delivered today: the delivery date / time become now, so it shows under
+            // today's Deliveries whatever was planned (or if no date was set).
+            val now = AppDate.nowText()
+            orderDao.upsert(
+                o.copy(
+                    status = OrderStatus.DELIVERED, doneAt = now, doneDate = AppDate.TODAY,
+                    deliveryDate = AppDate.TODAY, deliveryTime = now, ddAuto = false, paid = alloc.paidToward,
+                ).toEntity(),
+            )
         }
         Analytics.orderDelivered(
             orderId = o.id, total = total, amountReceived = amountReceived, method = method,
