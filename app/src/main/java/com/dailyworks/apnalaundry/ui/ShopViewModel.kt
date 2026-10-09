@@ -76,6 +76,21 @@ class ShopViewModel(
     }
 
     fun showInfo(text: String) = publish(CmdResult(text, null))
+
+    /**
+     * A new change (or another device's pulled changes) ends the previous
+     * command's Undo: restoring its snapshot would wipe that change. Keeps the
+     * toast text, without its Undo button.
+     */
+    private fun invalidateUndo() {
+        if (undoSnapshot == null) return
+        undoSnapshot = null
+        _toast.value = _toast.value?.copy(hasUndo = false)
+    }
+
+    init {
+        viewModelScope.launch { sync.remoteChanges.collect { invalidateUndo() } }
+    }
     fun dismissToast() { _toast.value = null; toastJob?.cancel() }
 
     fun undo() {
@@ -103,12 +118,12 @@ class ShopViewModel(
     fun addOldBaaki(custId: String, amount: Int) = launchCmd { repo.addOldBaaki(custId, amount) }
     fun deleteService(id: String) = launchCmd { repo.deleteService(id) }
 
-    fun upsertService(service: Service) = viewModelScope.launch { repo.upsertService(service); sync.requestSync() }
+    fun upsertService(service: Service) = viewModelScope.launch { invalidateUndo(); repo.upsertService(service); sync.requestSync() }
     fun updateShop(name: String, expressPct: Int) =
-        viewModelScope.launch { repo.updateShop(name, expressPct); sync.requestSync() }
+        viewModelScope.launch { invalidateUndo(); repo.updateShop(name, expressPct); sync.requestSync() }
 
     fun updateShopDetails(name: String? = null, details: BillDetails.Fields? = null) =
-        viewModelScope.launch { repo.updateShopDetails(name, details); sync.requestSync() }
+        viewModelScope.launch { invalidateUndo(); repo.updateShopDetails(name, details); sync.requestSync() }
 
     fun setOnboardingStep(step: String) =
         viewModelScope.launch { repo.setOnboardingStep(step); sync.requestSync() }
@@ -131,6 +146,7 @@ class ShopViewModel(
         editId: String?, name: String, phone: String, address: String, oldBaaki: Int, fromList: Boolean,
         onDone: (String) -> Unit,
     ) = viewModelScope.launch {
+        invalidateUndo()
         val (id, res) = repo.saveCustomer(editId, name, phone, address, oldBaaki, fromList)
         res?.let { publish(it) }
         sync.requestSync()
@@ -146,6 +162,7 @@ class ShopViewModel(
         discPct: Int = 0,
         onDone: (LaundryRepository.SaveOrderResult) -> Unit,
     ) = viewModelScope.launch {
+        invalidateUndo()
         val res = repo.saveOrder(
             editId, custId, pickup, delivery, pickupDate, pickupTime24, deliveryDate, deliveryTime24, ddAuto,
             fee, express, exAmt, discount, lines, quickAmount, quickPieces, serialNo = serialNo,
@@ -157,5 +174,14 @@ class ShopViewModel(
     }
 
     private fun launchCmd(block: suspend () -> CmdResult) =
-        viewModelScope.launch { publish(block()); sync.requestSync() }
+        viewModelScope.launch {
+            invalidateUndo()
+            // The order / customer may have been deleted on another device while
+            // its screen or sheet was open — tell the owner instead of crashing.
+            val r = try { block() } catch (e: NoSuchElementException) {
+                CmdResult("That was changed on another device — please check and try again")
+            }
+            publish(r)
+            sync.requestSync()
+        }
 }

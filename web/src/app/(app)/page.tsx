@@ -40,6 +40,19 @@ function HomeScreen() {
 
   const [tabPickup, setTabPickup] = useState(true);
   const [selDate, setSelDate] = useState(AppDate.today());
+  // Past midnight (the tab left open overnight): move "Today" to the new day.
+  const todayRef = useRef(AppDate.today());
+  useEffect(() => {
+    const tick = () => {
+      const now = AppDate.today();
+      if (now === todayRef.current) return;
+      setSelDate((d) => (d === todayRef.current ? now : d));
+      todayRef.current = now;
+    };
+    const id = setInterval(tick, 60_000);
+    document.addEventListener("visibilitychange", tick);
+    return () => { clearInterval(id); document.removeEventListener("visibilitychange", tick); };
+  }, []);
   const [filter, setFilter] = useState("all");
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState("");
@@ -448,7 +461,8 @@ function FilterTabs({
 // ---------- pure home logic (ported from the app, itself from prototype vHome) ----------
 
 function onDate(o: Order, iso: string, pickup: boolean): boolean {
-  return pickup ? o.pickupDate === iso : o.deliveryDate === iso && o.status !== "CANCELLED";
+  // A delivered order is done: it shows under Deliveries, not as a pickup.
+  return pickup ? o.pickupDate === iso && o.status !== "DELIVERED" : o.deliveryDate === iso && o.status !== "CANCELLED";
 }
 
 function isTodo(o: Order, pickup: boolean): boolean {

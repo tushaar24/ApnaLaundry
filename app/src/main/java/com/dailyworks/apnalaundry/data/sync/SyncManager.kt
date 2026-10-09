@@ -80,34 +80,40 @@ class SyncManager(
         repo.refreshTsCounter() // pulled ledger rows may carry higher ts values
     }
 
+    /** Fires after a pull applies another device's changes (ends a pending Undo). */
+    val remoteChanges = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
     private suspend fun applyPull(ch: SyncChanges) {
         if (ch.isEmpty) return
+        // Whether any pulled row was newer than ours — not just our own push echoed back.
+        var newer = false
         db.withTransaction {
             ch.shop?.let { dto ->
                 val local = db.shopDao().get()
-                if (local == null || dto.updatedAt > local.updatedAt) db.shopDao().upsert(dto.toEntity())
+                if (local == null || dto.updatedAt > local.updatedAt) { db.shopDao().upsert(dto.toEntity()); newer = true }
             }
             for (dto in ch.services) {
                 val local = db.serviceDao().get(dto.id)
-                if (local == null || dto.updatedAt > local.updatedAt) db.serviceDao().upsert(dto.toEntity())
+                if (local == null || dto.updatedAt > local.updatedAt) { db.serviceDao().upsert(dto.toEntity()); newer = true }
             }
             for (dto in ch.customers) {
                 val local = db.customerDao().get(dto.id)
-                if (local == null || dto.updatedAt > local.updatedAt) db.customerDao().upsert(dto.toEntity())
+                if (local == null || dto.updatedAt > local.updatedAt) { db.customerDao().upsert(dto.toEntity()); newer = true }
             }
             for (dto in ch.orders) {
                 val local = db.orderDao().get(dto.id)
-                if (local == null || dto.updatedAt > local.updatedAt) db.orderDao().upsert(dto.toEntity())
+                if (local == null || dto.updatedAt > local.updatedAt) { db.orderDao().upsert(dto.toEntity()); newer = true }
             }
             for (dto in ch.ledger) {
                 val local = db.ledgerDao().get(dto.id)
-                if (local == null || dto.updatedAt > local.updatedAt) db.ledgerDao().insert(dto.toEntity())
+                if (local == null || dto.updatedAt > local.updatedAt) { db.ledgerDao().insert(dto.toEntity()); newer = true }
             }
             for (dto in ch.dayCloses) {
                 val local = db.dayCloseDao().get(dto.date)
-                if (local == null || dto.updatedAt > local.updatedAt) db.dayCloseDao().upsert(dto.toEntity())
+                if (local == null || dto.updatedAt > local.updatedAt) { db.dayCloseDao().upsert(dto.toEntity()); newer = true }
             }
         }
+        if (newer) remoteChanges.tryEmit(Unit)
     }
 
     private suspend fun pushOnce() {

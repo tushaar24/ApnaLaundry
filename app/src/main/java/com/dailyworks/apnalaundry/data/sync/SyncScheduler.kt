@@ -29,6 +29,9 @@ class SyncScheduler(private val syncManager: SyncManager) {
         }
     }
 
+    /** Another device's changes were just pulled in. */
+    val remoteChanges get() = syncManager.remoteChanges
+
     fun requestSync() {
         requests.tryEmit(Unit)
     }

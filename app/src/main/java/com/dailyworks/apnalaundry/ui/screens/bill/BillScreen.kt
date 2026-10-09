@@ -58,6 +58,8 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
     val c = Selectors.customer(state, o.custId)
     val amt = LaundryMath.amtOf(o)
     val fullyPaid = o.pre >= amt && amt > 0
+    val due = amt - o.pre // still to collect before delivery
+    val open = LaundryMath.isOpen(o)
     var active by remember { mutableStateOf<ActiveSheet?>(null) }
 
     LaunchedEffect(Unit) { Analytics.screen("bill") }
@@ -123,17 +125,17 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
                 }
 
                 // paying now
-                if (!fullyPaid && amt > 0) {
+                if (open && due > 0) {
                     AppCard {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Text("Paying now?", style = fig(15, FontWeight.Bold))
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlineButton("Got cash ${Money.rupees(amt)}", Modifier.weight(1f), height = 50.dp) { shopVm.prepay(o.id, PayMethod.CASH) }
-                                OutlineButton("Got UPI ${Money.rupees(amt)}", Modifier.weight(1f), height = 50.dp) { shopVm.prepay(o.id, PayMethod.UPI) }
+                                OutlineButton("Got cash ${Money.rupees(due)}", Modifier.weight(1f), height = 50.dp) { shopVm.prepay(o.id, PayMethod.CASH) }
+                                OutlineButton("Got UPI ${Money.rupees(due)}", Modifier.weight(1f), height = 50.dp) { shopVm.prepay(o.id, PayMethod.UPI) }
                             }
                         }
                     }
-                } else if (fullyPaid) {
+                } else if (open && fullyPaid) {
                     Box(Modifier.fillMaxWidth().rounded(12.dp).background(Tokens.BlueLight).padding(14.dp)) {
                         Text("Fully paid — nothing to collect at delivery", style = fig(14, FontWeight.SemiBold, Tokens.BlueText))
                     }

@@ -1,5 +1,7 @@
 "use client";
 
+import { invalidateUndo } from "./repository";
+
 import { prefs } from "./prefs";
 import { syncApi, NotLoggedInError } from "./syncApi";
 import { useAppStore } from "./store";
@@ -32,12 +34,15 @@ export function resetCheckpoint() {
   checkpoint = 0;
 }
 
+/** Set by applyPull: whether any pulled row was newer than ours (not just our own push echoed back). */
+let pulledNewer = false;
+
 function applyPull(rows: Rows, ch: SyncChanges): Rows {
   const next: Rows = { ...rows };
 
   if (ch.shop) {
     const dto = ch.shop;
-    if (!next.shop || dto.updatedAt > next.shop.updatedAt) next.shop = shopFromDto(dto);
+    if (!next.shop || dto.updatedAt > next.shop.updatedAt) { next.shop = shopFromDto(dto); pulledNewer = true; }
   }
 
   function merge<R extends { updatedAt: number }, D extends { updatedAt: number }>(
@@ -51,8 +56,10 @@ function applyPull(rows: Rows, ch: SyncChanges): Rows {
       if (i === undefined) {
         index.set(key(d), out.length);
         out.push(from(d));
+        pulledNewer = true;
       } else if (d.updatedAt > out[i].updatedAt) {
         out[i] = from(d);
+        pulledNewer = true;
       }
     }
     return out;
@@ -70,7 +77,11 @@ async function pullOnce(): Promise<void> {
   const res = await syncApi.pull(checkpoint);
   if (!res.success) throw new Error(res.message ?? "Pull failed");
   const changes = res.changes ?? {};
+  pulledNewer = false;
   useAppStore.getState().setRows((rows) => applyPull(rows, changes));
+  // Another device's changes landed: restoring an older snapshot would delete
+  // them. (Our own push echoed back isn't newer, so it keeps the Undo.)
+  if (pulledNewer) invalidateUndo();
   checkpoint = res.checkpoint ?? checkpoint;
   refreshTsCounter(useAppStore.getState().rows.ledger);
 }

@@ -86,6 +86,18 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
 
     var tabPickup by remember { mutableStateOf(true) }
     var selDate by remember { mutableStateOf(AppDate.TODAY) }
+    // Past midnight (app left open overnight): move "Today" to the new day.
+    LaunchedEffect(Unit) {
+        var today = AppDate.TODAY
+        while (true) {
+            kotlinx.coroutines.delay(60_000)
+            val now = AppDate.TODAY
+            if (now != today) {
+                if (selDate == today) selDate = now
+                today = now
+            }
+        }
+    }
     var filter by remember { mutableStateOf("all") }
     var searching by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
@@ -374,8 +386,9 @@ private fun FilterTabs(state: LaundryState, pickup: Boolean, selDate: String, fi
 }
 
 // ---------- pure home logic (ported from prototype vHome) ----------
+// A delivered order is done: it shows under Deliveries, not as a pickup.
 private fun onDate(o: Order, iso: String, pickup: Boolean): Boolean =
-    if (pickup) o.pickupDate == iso else (o.deliveryDate == iso && o.status != OrderStatus.CANCELLED)
+    if (pickup) o.pickupDate == iso && o.status != OrderStatus.DELIVERED else (o.deliveryDate == iso && o.status != OrderStatus.CANCELLED)
 
 private fun isTodo(o: Order, pickup: Boolean): Boolean =
     if (pickup) o.status == OrderStatus.CREATED else o.status in listOf(OrderStatus.CREATED, OrderStatus.RECEIVED, OrderStatus.READY)

@@ -72,7 +72,10 @@ fun OrderMenuSheet(
             if (o.lines.isNotEmpty()) MenuRow(Icons.AutoMirrored.Outlined.ReceiptLong, "View / send bill") { onDismiss(); navigator.openBill(o.id) }
             MenuRow(Icons.Outlined.Edit, "Edit order / bill") { onDismiss(); navigator.openNewOrder(editId = o.id, from = "home") }
             if (o.status == OrderStatus.CREATED || o.status == OrderStatus.RECEIVED)
-                MenuRow(Icons.Outlined.Check, "Mark delivered now") { onOpen(ActiveSheet.Pay(o.id)) }
+                // No clothes counted yet: count first, or the bill would be ₹0.
+                MenuRow(Icons.Outlined.Check, if (o.lines.isNotEmpty()) "Mark delivered now" else "Count clothes to deliver") {
+                    onOpen(if (o.lines.isNotEmpty()) ActiveSheet.Pay(o.id) else ActiveSheet.Count(o.id, OrderStatus.READY))
+                }
             if (o.status == OrderStatus.CREATED)
                 MenuRow(Icons.Outlined.CalendarMonth, "Reschedule pickup") { onOpen(ActiveSheet.Reschedule(o.id, "pickup")) }
             if (o.status == OrderStatus.CREATED || o.status == OrderStatus.RECEIVED || o.status == OrderStatus.READY)

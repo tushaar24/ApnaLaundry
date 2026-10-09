@@ -5,7 +5,7 @@ import { rupees } from "@/core/money";
 import { syncNow as clockNow } from "@/core/syncclock";
 import {
   amtOf, balance, deliverAllocation, expressAuto, receiveAllocation,
-withPctExtras, } from "@/domain/laundryMath";
+withPctExtras, isOpen, } from "@/domain/laundryMath";
 import type {
   BillDetails, LedgerEntry, LedgerKind, OnboardingStep, Order, OrderLine, OrderStatus, PayMethod, PayTag, Route, Service,
 } from "@/domain/models";
@@ -41,7 +41,19 @@ function rows(): Rows {
 }
 
 function setRows(mut: (r: Rows) => Rows) {
+  // Any new change ends the previous command's Undo: its snapshot no longer
+  // matches, and restoring it would wipe this change. A command that offers
+  // its own Undo sets a fresh snapshot right after (publish).
+  invalidateUndo();
   useAppStore.getState().setRows(mut);
+}
+
+/** Drops the pending Undo (keeps the toast text, without its Undo button). */
+export function invalidateUndo() {
+  if (!undoSnapshot) return;
+  undoSnapshot = null;
+  const t = useAppStore.getState().toast;
+  if (t?.hasUndo) useAppStore.getState().showToast(t.text, false);
 }
 
 function firstName(name: string): string {
@@ -79,7 +91,7 @@ interface EntryArgs {
 function mkEntry(a: EntryArgs): LedgerRow {
   const ts = nextTs();
   const e: LedgerEntry = {
-    id: `e${ts}`, custId: a.cust, date: AppDate.today(), time: "Just now", ts,
+    id: `e${ts}`, custId: a.cust, date: AppDate.today(), time: AppDate.nowText(), ts,
     kind: a.kind, amt: a.amt, method: a.method ?? "NONE", tag: a.tag ?? "NONE",
     cover: a.cover ?? 0, toOld: a.toOld ?? 0, toAdv: a.toAdv ?? 0,
     ref: a.ref ?? null, note: a.note ?? "",
@@ -122,7 +134,7 @@ export function undo() {
   const s = undoSnapshot;
   if (!s) return;
   const now = clockNow();
-  setRows((cur) => {
+  useAppStore.getState().setRows((cur) => {
     function restore<T extends { dirty: boolean; updatedAt: number; deleted: boolean }, K>(
       snap: T[], current: T[], key: (t: T) => K,
     ): T[] {
@@ -240,6 +252,7 @@ export function saveCount(orderId: number, next: OrderStatus, lines: OrderLine[]
 export function deliver(orderId: number, amountReceived: number, method: PayMethod) {
   const undoSnap = snapshot();
   const o = orderOf(orderId);
+  if (!isOpen(o)) return; // already delivered / cancelled — never bill twice
   const st = deriveState(rows());
   const total = amtOf(o);
   const pre = o.pre;
@@ -253,7 +266,7 @@ export function deliver(orderId: number, amountReceived: number, method: PayMeth
     }));
   }
   insertLedger(...entries);
-  updateOrder(orderId, { status: "DELIVERED", doneAt: "Just now", doneDate: AppDate.today(), paid: alloc.paidToward });
+  updateOrder(orderId, { status: "DELIVERED", doneAt: AppDate.nowText(), doneDate: AppDate.today(), paid: alloc.paidToward });
   Analytics.orderDelivered({
     orderId, total, amountReceived, method,
     toKhata: Math.max(0, total - alloc.paidToward), fromAdvance: pre,
@@ -274,11 +287,14 @@ export function deliver(orderId: number, amountReceived: number, method: PayMeth
 export function prepay(orderId: number, method: PayMethod) {
   const undoSnap = snapshot();
   const o = orderOf(orderId);
-  const total = amtOf(o);
-  insertLedger(mkEntry({ cust: o.custId, kind: "GOT", amt: total, method, tag: "PRE", cover: total, ref: o.id }));
-  updateOrder(orderId, { pre: total });
-  Analytics.paymentReceived({ amount: total, method, type: "prepay", customerId: o.custId, orderId });
-  publish({ toast: `Got ${rupees(total)} ${method === "UPI" ? "UPI" : "cash"} · order fully paid`, undo: undoSnap });
+  // Only what's still unpaid, and only before delivery (a delivered order's
+  // payment is taken by deliver / the khata) — never charge it twice.
+  const due = amtOf(o) - o.pre;
+  if (!isOpen(o) || due <= 0) return;
+  insertLedger(mkEntry({ cust: o.custId, kind: "GOT", amt: due, method, tag: "PRE", cover: due, ref: o.id }));
+  updateOrder(orderId, { pre: o.pre + due });
+  Analytics.paymentReceived({ amount: due, method, type: "prepay", customerId: o.custId, orderId });
+  publish({ toast: `Got ${rupees(due)} ${method === "UPI" ? "UPI" : "cash"} · order fully paid`, undo: undoSnap });
 }
 
 export function cancelOrder(orderId: number, reason: string) {
@@ -332,7 +348,7 @@ export function sendBill(orderId: number) {
   const o = orderOf(orderId);
   updateOrder(orderId, { billSent: true });
   Analytics.billSent(orderId);
-  publish({ toast: `Opening WhatsApp · bill #${orderId} to ${custName(o.custId)}` });
+  publish({ toast: `Opening WhatsApp · bill #${orderNo(orderOf(orderId))} to ${custName(o.custId)}` });
 }
 
 // ---------------- khata ----------------
@@ -582,7 +598,7 @@ export function saveOrder(a: SaveOrderArgs): SaveOrderResult {
   };
   setRows((r) => ({
     ...r,
-    orders: [...r.orders, { ...order, ...stamp(), deleted: false }],
+    orders: [...r.orders.filter((x) => x.id !== id), { ...order, ...stamp(), deleted: false }],
     shop: r.shop ? { ...r.shop, nextOrder: id + 1, ...stamp() } : r.shop,
   }));
   touchCustomer(a.custId);

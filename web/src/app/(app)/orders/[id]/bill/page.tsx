@@ -4,7 +4,7 @@ import { Suspense, use, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import * as AppDate from "@/core/appdate";
 import { rupees } from "@/core/money";
-import { amtOf } from "@/domain/laundryMath";
+import { amtOf, isOpen } from "@/domain/laundryMath";
 import type { Route } from "@/domain/models";
 import * as Sel from "@/domain/selectors";
 import * as Repo from "@/data/repository";
@@ -52,6 +52,7 @@ function BillScreen({ orderId }: { orderId: number }) {
   const c = Sel.customer(state, o.custId);
   const amt = amtOf(o);
   const fullyPaid = o.pre >= amt && amt > 0;
+  const due = amt - o.pre; // still to collect before delivery
 
   const done = () => (from === "new" ? nav.openHome() : nav.back());
 
@@ -131,21 +132,21 @@ function BillScreen({ orderId }: { orderId: number }) {
         </div>
 
         {/* paying now */}
-        {!fullyPaid && amt > 0 ? (
+        {isOpen(o) && due > 0 ? (
           <AppCard>
             <div className="flex flex-col gap-2.5 p-4">
               <span className="text-[15px] font-bold">Paying now?</span>
               <div className="flex w-full gap-2">
                 <OutlineButton h={50} className="flex-1" onClick={() => Repo.prepay(o.id, "CASH")}>
-                  Got cash {rupees(amt)}
+                  Got cash {rupees(due)}
                 </OutlineButton>
                 <OutlineButton h={50} className="flex-1" onClick={() => Repo.prepay(o.id, "UPI")}>
-                  Got UPI {rupees(amt)}
+                  Got UPI {rupees(due)}
                 </OutlineButton>
               </div>
             </div>
           </AppCard>
-        ) : fullyPaid ? (
+        ) : isOpen(o) && fullyPaid ? (
           <div className="w-full rounded-xl bg-bluelight p-3.5">
             <span className="text-[14px] font-semibold text-bluetext">Fully paid — nothing to collect at delivery</span>
           </div>

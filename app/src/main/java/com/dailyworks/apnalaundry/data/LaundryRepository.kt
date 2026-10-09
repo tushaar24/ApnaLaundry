@@ -170,7 +170,7 @@ class LaundryRepository(private val db: AppDatabase) {
     private suspend fun mkEntry(
         cust: String, kind: LedgerKind, amt: Int, method: PayMethod = PayMethod.NONE, tag: PayTag = PayTag.NONE,
         cover: Int = 0, toOld: Int = 0, toAdv: Int = 0, ref: Int? = null, note: String = "",
-        date: String = AppDate.TODAY, time: String = "Just now",
+        date: String = AppDate.TODAY, time: String = AppDate.nowText(),
     ): LedgerEntry {
         val ts = nextTs()
         return LedgerEntry("e$ts", cust, date, time, ts, kind, amt, method, tag, cover, toOld, toAdv, ref, note)
@@ -218,6 +218,8 @@ class LaundryRepository(private val db: AppDatabase) {
         val undo = snapshot()
         val st = current()
         val o = st.orders.first { it.id == orderId }
+        // Already delivered / cancelled (double tap, stale sheet): never bill twice.
+        if (!LaundryMath.isOpen(o)) return CmdResult("Order #${o.no()} is already ${o.status.name.lowercase()}")
         val total = LaundryMath.amtOf(o)
         val pre = o.pre
         val oldBal = LaundryMath.balance(o.custId, st.ledger, st.orders, o.id)
@@ -230,7 +232,7 @@ class LaundryRepository(private val db: AppDatabase) {
         }
         db.withTransaction {
             ledgerDao.insertAll(entries.map { it.toEntity() })
-            orderDao.upsert(o.copy(status = OrderStatus.DELIVERED, doneAt = "Just now", doneDate = AppDate.TODAY, paid = alloc.paidToward).toEntity())
+            orderDao.upsert(o.copy(status = OrderStatus.DELIVERED, doneAt = AppDate.nowText(), doneDate = AppDate.TODAY, paid = alloc.paidToward).toEntity())
         }
         Analytics.orderDelivered(
             orderId = o.id, total = total, amountReceived = amountReceived, method = method,
@@ -252,13 +254,15 @@ class LaundryRepository(private val db: AppDatabase) {
         val undo = snapshot()
         val st = current()
         val o = st.orders.first { it.id == orderId }
-        val total = LaundryMath.amtOf(o)
+        // Only what's still unpaid, and only before delivery — never charge twice.
+        val due = LaundryMath.amtOf(o) - o.pre
+        if (!LaundryMath.isOpen(o) || due <= 0) return CmdResult("Nothing left to collect on order #${o.no()}")
         db.withTransaction {
-            ledgerDao.insert(mkEntry(o.custId, LedgerKind.GOT, total, method, PayTag.PRE, cover = total, ref = o.id).toEntity())
-            orderDao.upsert(o.copy(pre = total).toEntity())
+            ledgerDao.insert(mkEntry(o.custId, LedgerKind.GOT, due, method, PayTag.PRE, cover = due, ref = o.id).toEntity())
+            orderDao.upsert(o.copy(pre = o.pre + due).toEntity())
         }
-        Analytics.paymentReceived(total, method, "prepay", o.custId, o.id)
-        return CmdResult("Got ${money(total)} ${if (method == PayMethod.UPI) "UPI" else "cash"} · order fully paid", undo)
+        Analytics.paymentReceived(due, method, "prepay", o.custId, o.id)
+        return CmdResult("Got ${money(due)} ${if (method == PayMethod.UPI) "UPI" else "cash"} · order fully paid", undo)
     }
 
     suspend fun cancelOrder(orderId: Int, reason: String): CmdResult {
@@ -488,7 +492,7 @@ class LaundryRepository(private val db: AppDatabase) {
         return if (fields.lines.isEmpty()) {
             val toast = if (pickup == Route.HOME)
                 "Pickup scheduled for $nm" + (if (order.pickupTime.isNotBlank()) " · ${order.pickupTime}" else "")
-            else "Order #$id saved for $nm · add clothes when ready"
+            else "Order #${order.no()} saved for $nm · add clothes when ready"
             SaveOrderResult(id, goToBill = false, toast = toast, undo = undo, edited = false)
         } else {
             SaveOrderResult(id, goToBill = true, toast = null, undo = undo, edited = false)

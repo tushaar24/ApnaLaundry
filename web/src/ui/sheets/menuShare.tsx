@@ -54,7 +54,12 @@ export function OrderMenuSheet({
         ) : null}
         <MenuRow icon={<IcEdit size={22} />} label="Edit order / bill" onClick={() => { onDismiss(); nav.openNewOrder({ editId: o.id, from: "home" }); }} />
         {o.status === "CREATED" || o.status === "RECEIVED" ? (
-          <MenuRow icon={<IcCheck size={22} />} label="Mark delivered now" onClick={() => onOpen({ kind: "pay", orderId: o.id })} />
+          <MenuRow
+            icon={<IcCheck size={22} />}
+            label={o.lines.length > 0 ? "Mark delivered now" : "Count clothes to deliver"}
+            // No clothes counted yet: count first, or the bill would be ₹0.
+            onClick={() => onOpen(o.lines.length > 0 ? { kind: "pay", orderId: o.id } : { kind: "count", orderId: o.id, next: "READY" })}
+          />
         ) : null}
         {o.status === "CREATED" ? (
           <MenuRow icon={<IcCalendar size={22} />} label="Reschedule pickup" onClick={() => onOpen({ kind: "reschedule", orderId: o.id, which: "pickup" })} />
