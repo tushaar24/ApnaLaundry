@@ -29,6 +29,7 @@ import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -372,6 +373,16 @@ fun PaywallScreen(
             }
         }
     }
+    if (ui.retrySheet && ui.stage == PaywallStage.PLANS && !ui.hasActive) {
+        RetrySheet(
+            plan = ui.plan,
+            trialAmount = ui.trialAmount,
+            monthlyAmount = ui.monthlyAmount,
+            busy = ui.busy,
+            onRetry = { chosen -> vm.retry(activity, chosen) },
+            onDismiss = { vm.dismissRetry() },
+        )
+    }
 }
 
 @Composable
@@ -380,6 +391,63 @@ private fun FaqItem(q: String, a: String) {
         Text(q, style = fig(15, FontWeight.Bold))
         Spacer(Modifier.height(4.dp))
         Text(a, style = fig(14, FontWeight.Normal, Tokens.Muted))
+    }
+}
+
+/**
+ * Shown when Razorpay Checkout comes back unpaid (failed, cancelled or Back).
+ * After a failed Yearly attempt it recommends the smaller Monthly plan
+ * (mirror of the web paywall's retry sheet).
+ */
+@Composable
+private fun RetrySheet(
+    plan: PaywallPlan, trialAmount: Int, monthlyAmount: Int, busy: Boolean,
+    onRetry: (PaywallPlan) -> Unit, onDismiss: () -> Unit,
+) {
+    val trial = rupees(trialAmount)
+    AppBottomSheet(
+        title = "Your $TRIAL_DAYS free days are waiting",
+        onDismiss = onDismiss,
+        leading = {
+            Box(
+                Modifier.size(56.dp).clip(CircleShape).background(Tokens.OrangeLight),
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Outlined.WarningAmber, null, tint = Tokens.Orange, modifier = Modifier.size(28.dp)) }
+        },
+    ) {
+        Column {
+            Text(
+                "The $trial didn't go through, so nothing was charged. Try once more — the $trial is refunded instantly and the full app opens right away.",
+                style = fig(15, FontWeight.Normal, Tokens.Muted),
+            )
+            if (plan == PaywallPlan.ANNUAL) {
+                // A failed Yearly attempt: recommend the smaller Monthly plan.
+                Spacer(Modifier.height(16.dp))
+                Column(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Tokens.BlueLight)
+                        .border(2.dp, Tokens.Blue, RoundedCornerShape(16.dp)).padding(horizontal = 16.dp, vertical = 12.dp),
+                ) {
+                    Text("RECOMMENDED", style = fig(11, FontWeight.Bold, Tokens.Blue))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
+                        Text("Try the Monthly plan", style = fig(16, FontWeight.Bold, Tokens.BlueText))
+                        Text("${rupees(monthlyAmount)}/month", style = bric(18, FontWeight.Bold, Tokens.BlueText))
+                    }
+                    Text(
+                        "Same $TRIAL_DAYS free days, $trial refunded instantly — then a smaller monthly payment.",
+                        style = fig(13, color = Tokens.BlueText),
+                    )
+                }
+                Spacer(Modifier.height(16.dp))
+                PrimaryButton(text = "Switch to Monthly", enabled = !busy) { onRetry(PaywallPlan.MONTHLY) }
+                Box(
+                    Modifier.fillMaxWidth().height(48.dp).tap(enabled = !busy) { onRetry(PaywallPlan.ANNUAL) },
+                    contentAlignment = Alignment.Center,
+                ) { Text("Try Yearly again", style = fig(14, FontWeight.Bold, Tokens.Muted)) }
+            } else {
+                Spacer(Modifier.height(20.dp))
+                PrimaryButton(text = "Try again", enabled = !busy) { onRetry(plan) }
+            }
+        }
     }
 }
 

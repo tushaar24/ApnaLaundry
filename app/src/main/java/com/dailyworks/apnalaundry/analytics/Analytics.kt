@@ -230,6 +230,18 @@ object Analytics {
     fun checkoutSucceeded(plan: String) =
         track("Checkout Succeeded", mapOf("plan" to plan))
 
+    // The "try again" sheet shown when Razorpay Checkout closes unpaid.
+    // reason: "failed" | "cancelled".
+    fun paymentRetryShown(plan: String, reason: String) =
+        track("Payment Retry Shown", mapOf("plan" to plan, "reason" to reason))
+
+    /** [switchedFrom] = "annual" when a failed Yearly attempt switched to Monthly. */
+    fun paymentRetryTapped(plan: String, switchedFrom: String? = null) =
+        track("Payment Retry Tapped", if (switchedFrom != null) mapOf("plan" to plan, "switched_from" to switchedFrom) else mapOf("plan" to plan))
+
+    fun paymentRetryDismissed(plan: String) =
+        track("Payment Retry Dismissed", mapOf("plan" to plan))
+
     fun checkoutFailed(plan: String, reason: String) =
         track("Checkout Failed", mapOf("plan" to plan, "reason" to reason))
 
