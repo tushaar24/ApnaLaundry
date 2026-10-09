@@ -185,9 +185,19 @@ class PaywallViewModel(
     private fun purchasedOrSelected(): String =
         _ui.value.purchasedPlan ?: _ui.value.plan.name.lowercase()
 
+    private var pollJob: kotlinx.coroutines.Job? = null
+
+    /** Waiting screen escape: stop confirming and go back to the plans. */
+    fun backToPlans() {
+        pollJob?.cancel()
+        pollJob = null
+        _ui.value = _ui.value.copy(stage = PaywallStage.PLANS, busy = false)
+        refresh()
+    }
+
     private fun onCheckoutApproved() {
         _ui.value = _ui.value.copy(stage = PaywallStage.WAITING)
-        viewModelScope.launch {
+        pollJob = viewModelScope.launch {
             val status = repo.pollUntilActive()
             if (status?.hasActiveSubscription == true) {
                 Analytics.checkoutSucceeded(purchasedOrSelected())

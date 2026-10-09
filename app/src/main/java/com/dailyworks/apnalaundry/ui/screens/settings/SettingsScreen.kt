@@ -39,10 +39,17 @@ import com.dailyworks.apnalaundry.ui.components.fig
 import com.dailyworks.apnalaundry.ui.components.rounded
 import com.dailyworks.apnalaundry.ui.components.tap
 import com.dailyworks.apnalaundry.ui.nav.AppNavigator
+import com.dailyworks.apnalaundry.ui.screens.paywall.PaywallViewModel
 import com.dailyworks.apnalaundry.ui.theme.Tokens
+import org.koin.androidx.compose.koinViewModel
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.Icon
+import androidx.compose.foundation.layout.size
 
 @Composable
 fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: () -> Unit) {
+    val paywallVm: PaywallViewModel = koinViewModel()
     val state by shopVm.state.collectAsStateWithLifecycle()
     val shop = state.shop
 
@@ -97,18 +104,24 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: () 
                 }
             }
 
-            // Subscription / plan
-            AppCard {
-                Row(
-                    Modifier.fillMaxWidth().tap { navigator.openSubscription() }.padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column {
-                        Text("Subscription", style = fig(16, FontWeight.Bold))
-                        Text("Your plan and billing", style = fig(13, color = Tokens.Muted))
+            // Subscription row (manage / cancel the plan) — only with an active plan.
+            val billing by paywallVm.ui.collectAsStateWithLifecycle()
+            if (billing.hasActive) {
+                AppCard {
+                    Row(
+                        Modifier.fillMaxWidth().tap { navigator.openSubscription() }.padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                if (billing.status?.subscription?.plan == "annual") "Yearly plan" else "Monthly plan",
+                                style = fig(16, FontWeight.Bold),
+                            )
+                            Text("Unlimited orders", style = fig(13, color = Tokens.Muted))
+                        }
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Tokens.Muted, modifier = Modifier.size(20.dp))
                     }
-                    Text("View", style = fig(15, FontWeight.Bold, Tokens.Blue))
                 }
             }
 

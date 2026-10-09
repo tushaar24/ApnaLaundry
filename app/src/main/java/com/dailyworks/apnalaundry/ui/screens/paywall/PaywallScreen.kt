@@ -171,7 +171,7 @@ fun PaywallScreen(
             // proceed straight through instead of a summary.
             ui.stage == PaywallStage.DONE -> LaunchedEffect(Unit) { onDone() }
 
-            ui.stage == PaywallStage.WAITING -> WaitingView()
+            ui.stage == PaywallStage.WAITING -> WaitingView(onBack = { vm.backToPlans() })
 
             // Already subscribed (e.g. opened from Settings): show the plan, not
             // a Pay button — Checkout can't re-authorize an active subscription.
@@ -505,7 +505,7 @@ private fun PlanCard(
 }
 
 @Composable
-private fun WaitingView() {
+private fun WaitingView(onBack: () -> Unit) {
     Column(
         Modifier.fillMaxSize().padding(32.dp),
         verticalArrangement = Arrangement.Center,
@@ -519,7 +519,37 @@ private fun WaitingView() {
             "We're confirming the UPI AutoPay approval. This updates automatically — it only takes a moment.",
             style = fig(14, FontWeight.Normal, Tokens.Muted),
         )
+        Spacer(Modifier.height(12.dp))
+        Text("Waiting for confirmation…", style = fig(13, FontWeight.Normal, Tokens.Faint))
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Back to plans",
+            style = fig(14, FontWeight.Bold, Tokens.Blue),
+            modifier = Modifier.tap(onClick = onBack).padding(12.dp),
+        )
     }
+}
+
+/** "2026-10-16T…" -> "16 Oct 2026" (blank when unparseable). */
+private fun fmtChargeDate(iso: String?): String {
+    if (iso.isNullOrBlank()) return ""
+    val date = runCatching { java.time.OffsetDateTime.parse(iso).atZoneSameInstant(java.time.ZoneId.systemDefault()).toLocalDate() }
+        .recoverCatching { java.time.LocalDate.parse(iso.take(10)) }
+        .getOrNull() ?: return ""
+    val mon = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")[date.monthValue - 1]
+    return "${date.dayOfMonth} $mon ${date.year}"
+}
+
+@Composable
+private fun SummaryRow(k: String, v: String, last: Boolean = false) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(k, style = fig(14, FontWeight.Normal, Tokens.Muted))
+        Text(v, style = fig(14, FontWeight.Bold))
+    }
+    if (!last) Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Divider))
 }
 
 @Composable
@@ -548,11 +578,21 @@ private fun ActiveView(ui: PaywallUiState, onClose: () -> Unit, onCancel: () -> 
             Spacer(Modifier.height(8.dp))
             Text("Unlimited orders. Nothing to do here.", style = fig(14, FontWeight.Normal, Tokens.Muted))
             Spacer(Modifier.height(6.dp))
-            Text(
-                "${rupees(sub?.amount ?: 0)}${if (sub?.plan == "annual") "/year" else "/month"}" +
-                    if (sub?.status == "pending") " · payment retrying" else "",
-                style = fig(14, FontWeight.SemiBold, Tokens.Muted),
-            )
+            Spacer(Modifier.height(10.dp))
+            Column(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Tokens.Card)
+                    .border(1.dp, Tokens.CardBorder, RoundedCornerShape(16.dp)),
+            ) {
+                val next = fmtChargeDate(sub?.chargeAt)
+                SummaryRow("Plan", planName)
+                SummaryRow("Amount", "${rupees(sub?.amount ?: 0)}${if (sub?.plan == "annual") "/year" else "/month"}")
+                if (next.isNotEmpty()) SummaryRow("Next charge", next)
+                SummaryRow("Status", if (sub?.status == "pending") "Payment retrying" else "Active", last = true)
+            }
+            if ((sub?.trialAmount ?: 0) > 0) {
+                Spacer(Modifier.height(8.dp))
+                Text("Started with the ₹2 trial.", style = fig(12, FontWeight.Normal, Tokens.Muted))
+            }
             ui.error?.let {
                 Spacer(Modifier.height(8.dp))
                 Text(it, style = fig(13, FontWeight.SemiBold, Tokens.OrangeText))
