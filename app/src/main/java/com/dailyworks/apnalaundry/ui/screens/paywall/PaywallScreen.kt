@@ -230,7 +230,7 @@ fun PaywallScreen(
                     Text(rupees(ui.trialAmount), style = bric(64, FontWeight.Bold, Pw.Accent))
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "${rupees(ui.trialAmount)} REFUNDED INSTANTLY · NOTHING TO PAY TILL ${trialEnd.uppercase()}",
+                        "${rupees(ui.trialAmount)} REFUNDED INSTANTLY",
                         style = fig(11, FontWeight.ExtraBold, Pw.Text).copy(letterSpacing = 0.12.em),
                         textAlign = TextAlign.Center,
                     )
