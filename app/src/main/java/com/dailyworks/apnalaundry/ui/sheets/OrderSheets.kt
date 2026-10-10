@@ -38,6 +38,7 @@ import com.dailyworks.apnalaundry.domain.LaundryMath
 import com.dailyworks.apnalaundry.domain.LaundryState
 import com.dailyworks.apnalaundry.domain.Order
 import com.dailyworks.apnalaundry.domain.OrderStatus
+import com.dailyworks.apnalaundry.domain.Route
 import com.dailyworks.apnalaundry.domain.PayMethod
 import com.dailyworks.apnalaundry.ui.Selectors
 import com.dailyworks.apnalaundry.ui.ShopViewModel
@@ -179,7 +180,7 @@ fun ReadySheet(state: LaundryState, orderId: Int, vm: ShopViewModel, onDismiss: 
 }
 
 @Composable
-fun CountClothesSheet(state: LaundryState, orderId: Int, next: OrderStatus, vm: ShopViewModel, onDismiss: () -> Unit) {
+fun CountClothesSheet(state: LaundryState, orderId: Int, next: OrderStatus, vm: ShopViewModel, onDismiss: () -> Unit, onSaved: () -> Unit = onDismiss) {
     val o = Selectors.order(state, orderId) ?: return onDismiss()
     val c = Selectors.customer(state, o.custId)
     val clothes = rememberClothesState(state.services)
@@ -202,7 +203,7 @@ fun CountClothesSheet(state: LaundryState, orderId: Int, next: OrderStatus, vm: 
                     else -> "Picked up · make bill"
                 },
                 enabled = total > 0 && (!askDate || date.isNotBlank()), height = 56.dp,
-            ) { vm.saveCount(orderId, next, clothes.lines(state.services), if (askDate) date else ""); onDismiss() }
+            ) { vm.saveCount(orderId, next, clothes.lines(state.services), if (askDate) date else ""); onSaved() }
         }
     }
 }
@@ -217,8 +218,6 @@ fun RescheduleSheet(state: LaundryState, orderId: Int, kind: String, vm: ShopVie
     val base = if (isPickup) o.pickupDate else o.deliveryDate
     var date by remember { mutableStateOf(base) }
     var time by remember { mutableStateOf(if (isPickup) AppDate.to24h(o.pickupTime) else AppDate.to24h(o.deliveryTime)) }
-    var notify by remember { mutableStateOf(true) }
-
     val title = if (isPickup) "Reschedule pickup" else if (o.deliveryDate.isNotBlank()) "Reschedule delivery" else "Set delivery date"
     val chips = listOf("Today" to AppDate.TODAY, "Tomorrow" to AppDate.add(AppDate.TODAY, 1), "Day after" to AppDate.add(AppDate.TODAY, 2))
 
@@ -245,12 +244,8 @@ fun RescheduleSheet(state: LaundryState, orderId: Int, kind: String, vm: ShopVie
                 val shift = AppDate.daysBetween(o.pickupDate, date)
                 Text("Delivery moves too: ${AppDate.short(AppDate.add(o.deliveryDate, shift))}", style = fig(13, color = Tokens.Muted))
             }
-            Row(Modifier.fillMaxWidth().rounded(12.dp).background(Tokens.Card).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Tell customer on WhatsApp", style = fig(15, FontWeight.SemiBold), modifier = Modifier.weight(1f))
-                Toggle(notify) { notify = !notify }
-            }
             PrimaryButton(if (date.isBlank()) "Pick a date to save" else "Save", height = 56.dp, enabled = date.isNotBlank()) {
-                if (date.isNotBlank()) { vm.reschedule(orderId, kind, date, time, notify); onDismiss() }
+                if (date.isNotBlank()) { vm.reschedule(orderId, kind, date, time, notify = false); onDismiss() }
             }
         }
     }
@@ -293,17 +288,21 @@ fun CancelSheet(state: LaundryState, orderId: Int, vm: ShopViewModel, onDismiss:
     val c = Selectors.customer(state, o.custId)
     var reason by remember { mutableStateOf("") }
     val reasons = listOf("Customer not home", "Customer cancelled", "Wrong address", "Other")
+    val word = if (o.status == OrderStatus.CREATED) "pickup" else "order"
 
-    AppBottomSheet(title = "Cancel pickup?", subtitle = "${c.name} · #${o.no()}", onDismiss = onDismiss) {
+    AppBottomSheet(title = "Cancel $word?", subtitle = "${c.name} · #${o.no()}", onDismiss = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 reasons.forEach { r -> PillChip(r, reason == r) { reason = if (reason == r) "" else r } }
+            }
+            if (o.status == OrderStatus.DELIVERED) {
+                Text("The bill comes off the khata. Money already taken stays as ${Selectors.firstName(c.name)}'s advance.", style = fig(13, color = Tokens.Muted))
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(Modifier.weight(1f).height(54.dp).rounded(14.dp).background(Tokens.NeutralFill).tap { onDismiss() }, contentAlignment = Alignment.Center) {
                     Text("Keep order", style = fig(16, FontWeight.Bold, Tokens.InkSecondary))
                 }
-                PrimaryButton("Cancel pickup", Modifier.weight(1f), height = 54.dp, bg = Tokens.Orange) { vm.cancelOrder(orderId, reason); onDismiss() }
+                PrimaryButton("Cancel $word", Modifier.weight(1f), height = 54.dp, bg = Tokens.Orange) { vm.cancelOrder(orderId, reason); onDismiss() }
             }
         }
     }
@@ -347,3 +346,98 @@ fun Toggle(on: Boolean, onColor: Color = Tokens.Blue, onToggle: () -> Unit) {
 
 @Suppress("UNUSED_PARAMETER")
 val forwardIcon = Icons.AutoMirrored.Filled.ArrowForward
+
+/**
+ * Change status: every state the order can be in, the next one pre-selected.
+ * Forward steps that need input reuse the usual sheets (count clothes,
+ * delivery date, collect payment, cancel reason); everything else is a
+ * direct move, going backward included.
+ */
+@Composable
+fun ChangeStatusSheet(
+    state: LaundryState, orderId: Int, vm: ShopViewModel,
+    onOpen: (ActiveSheet) -> Unit, onDismiss: () -> Unit,
+) {
+    val o = Selectors.order(state, orderId) ?: return onDismiss()
+    val c = Selectors.customer(state, o.custId)
+    val steps = buildList {
+        if (o.pickup == Route.HOME) add(OrderStatus.CREATED to "To pick up")
+        add(OrderStatus.RECEIVED to "Received · clothes at shop")
+        add(OrderStatus.READY to "Ready")
+        add(OrderStatus.DELIVERED to "Delivered")
+        add(OrderStatus.CANCELLED to "Cancelled")
+    }
+    var sel by remember {
+        mutableStateOf(
+            when (o.status) {
+                OrderStatus.CREATED -> OrderStatus.RECEIVED
+                OrderStatus.RECEIVED -> OrderStatus.READY
+                OrderStatus.READY -> OrderStatus.DELIVERED
+                OrderStatus.DELIVERED -> OrderStatus.READY // only way is back
+                OrderStatus.CANCELLED -> OrderStatus.RECEIVED
+            },
+        )
+    }
+
+    fun apply(target: OrderStatus) {
+        when {
+            target == o.status -> onDismiss()
+            target == OrderStatus.CANCELLED -> onOpen(ActiveSheet.Cancel(o.id))
+            target == OrderStatus.DELIVERED ->
+                // No bill yet: count the clothes first, then collect.
+                onOpen(if (o.lines.isEmpty()) ActiveSheet.Count(o.id, OrderStatus.READY, thenPay = true) else ActiveSheet.Pay(o.id))
+            target == OrderStatus.READY && o.status != OrderStatus.DELIVERED && o.status != OrderStatus.CANCELLED ->
+                // Forward to ready asks the delivery date; back from delivered doesn't.
+                onOpen(if (o.lines.isEmpty()) ActiveSheet.Count(o.id, OrderStatus.READY) else ActiveSheet.Ready(o.id))
+            target == OrderStatus.RECEIVED && o.status == OrderStatus.CREATED && o.lines.isEmpty() ->
+                onOpen(ActiveSheet.Count(o.id, OrderStatus.RECEIVED))
+            else -> { vm.setStatus(o.id, target); onDismiss() }
+        }
+    }
+
+    AppBottomSheet(title = "Change status", subtitle = "${c.name} · #${o.no()}", onDismiss = onDismiss) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            steps.forEach { (st, label) ->
+                val current = st == o.status
+                val on = sel == st && !current
+                val danger = st == OrderStatus.CANCELLED
+                Row(
+                    Modifier.fillMaxWidth().rounded(14.dp)
+                        .background(if (on) Tokens.BlueLight else Tokens.Card)
+                        .border(1.5.dp, if (on) Tokens.Blue else Tokens.CardBorder, RoundedCornerShape(14.dp))
+                        .tap(enabled = !current) { sel = st }
+                        .padding(horizontal = 14.dp, vertical = 13.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Box(
+                        Modifier.size(18.dp).rounded(999.dp)
+                            .background(if (on) Tokens.Blue else Tokens.Card)
+                            .border(1.5.dp, if (on) Tokens.Blue else Tokens.FieldBorder, RoundedCornerShape(999.dp)),
+                    )
+                    Text(
+                        label,
+                        style = fig(15, if (on) FontWeight.Bold else FontWeight.SemiBold,
+                            if (current) Tokens.Muted else if (danger) Tokens.OrangeText else Tokens.Ink),
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (current) Text("Current", style = fig(12, FontWeight.Bold, Tokens.Muted))
+                }
+            }
+            if (o.status == OrderStatus.DELIVERED && sel != OrderStatus.DELIVERED) {
+                Text(
+                    "Going back takes the bill off the khata. Money already taken stays with the order and counts when you deliver again.",
+                    style = fig(13, color = Tokens.Muted),
+                )
+            }
+            PrimaryButton(
+                when (sel) {
+                    OrderStatus.DELIVERED -> if (o.lines.isEmpty()) "Count clothes · deliver" else "Mark delivered"
+                    OrderStatus.CANCELLED -> "Cancel order"
+                    else -> "Move to " + steps.first { it.first == sel }.second.substringBefore(" ·")
+                },
+                height = 54.dp, bg = if (sel == OrderStatus.CANCELLED) Tokens.Orange else Tokens.Blue,
+                enabled = sel != o.status,
+            ) { apply(sel) }
+        }
+    }
+}

@@ -11,7 +11,8 @@ sealed interface ActiveSheet {
     data class Menu(val orderId: Int) : ActiveSheet
     data class Pay(val orderId: Int) : ActiveSheet
     data class Ready(val orderId: Int) : ActiveSheet
-    data class Count(val orderId: Int, val next: OrderStatus) : ActiveSheet
+    data class Count(val orderId: Int, val next: OrderStatus, val thenPay: Boolean = false) : ActiveSheet
+    data class ChangeStatus(val orderId: Int) : ActiveSheet
     data class Reschedule(val orderId: Int, val kind: String) : ActiveSheet
     data class Cancel(val orderId: Int) : ActiveSheet
     data class DeleteOrder(val orderId: Int) : ActiveSheet
@@ -41,10 +42,15 @@ fun SheetHost(
         null -> Unit
         is ActiveSheet.Menu -> OrderMenuSheet(state, active.orderId, navigator, onOpen, onDismiss)
         is ActiveSheet.Pay -> CollectPaymentSheet(state, active.orderId, vm, onDismiss)
-        is ActiveSheet.Count -> CountClothesSheet(state, active.orderId, active.next, vm, onDismiss)
+        is ActiveSheet.Count -> CountClothesSheet(
+            state, active.orderId, active.next, vm, onDismiss,
+            // Straight to Delivered with no bill yet: count first, then collect.
+            onSaved = { if (active.thenPay) onOpen(ActiveSheet.Pay(active.orderId)) else onDismiss() },
+        )
         is ActiveSheet.Ready -> ReadySheet(state, active.orderId, vm, onDismiss)
         is ActiveSheet.Reschedule -> RescheduleSheet(state, active.orderId, active.kind, vm, onDismiss)
         is ActiveSheet.Cancel -> CancelSheet(state, active.orderId, vm, onDismiss)
+        is ActiveSheet.ChangeStatus -> ChangeStatusSheet(state, active.orderId, vm, onOpen, onDismiss)
         is ActiveSheet.DeleteOrder -> DeleteOrderSheet(state, active.orderId, vm, navigator, onDismiss)
         is ActiveSheet.CustomerForm -> CustomerFormSheet(state, active, vm, onDismiss)
         is ActiveSheet.Receive -> ReceivePaymentSheet(state, active.custId, vm, onDismiss)

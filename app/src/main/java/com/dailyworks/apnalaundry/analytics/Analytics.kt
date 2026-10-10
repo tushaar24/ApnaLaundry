@@ -148,6 +148,9 @@ object Analytics {
         charged(total, methodName(method), orderId, lines)
     }
 
+    fun orderStatusChanged(orderId: Int, from: String, to: String) =
+        track("Order Status Changed", mapOf("order_id" to orderId, "from" to from, "to" to to))
+
     fun orderCancelled(orderId: Int, reason: String) =
         track("Order Cancelled", mapOf("order_id" to orderId, "reason" to reason))
 

@@ -161,9 +161,6 @@ class LaundryRepository(private val db: AppDatabase) {
     private fun firstName(name: String): String =
         if (name.startsWith("+")) name else name.substringBefore(" ")
 
-    private fun waReady(nm: String): String =
-        if (AppDate.isLateNight()) "ready message to $nm goes at 9 AM" else "WhatsApp sent to $nm"
-
     private fun nextTs(): Long = ++tsCounter
     private fun newLedgerId(): String = "e${nextTs()}"
 
@@ -198,7 +195,7 @@ class LaundryRepository(private val db: AppDatabase) {
         val ready = o.copy(status = OrderStatus.READY)
         orderDao.upsert((if (deliveryDate.isNotBlank()) ready.copy(deliveryDate = deliveryDate, ddAuto = false) else ready).toEntity())
         Analytics.orderMarkedReady(orderId)
-        return CmdResult("Marked ready · ${waReady(nm)}", undo)
+        return CmdResult("Marked ready · $nm", undo)
     }
 
     /** Count-clothes sheet: attach lines and advance to [next] (received or ready). */
@@ -215,7 +212,7 @@ class LaundryRepository(private val db: AppDatabase) {
         if (next == OrderStatus.READY && deliveryDate.isNotBlank()) counted = counted.copy(deliveryDate = deliveryDate, ddAuto = false)
         orderDao.upsert(counted.toEntity())
         Analytics.clothesCounted(orderId, next.name, total)
-        val head = if (next == OrderStatus.READY) "Marked ready · ${waReady(nm)}" else "Picked up"
+        val head = if (next == OrderStatus.READY) "Marked ready · $nm" else "Picked up"
         return CmdResult("$head · bill of ${money(total)} made — send it from the order", undo)
     }
 
@@ -223,8 +220,9 @@ class LaundryRepository(private val db: AppDatabase) {
         val undo = snapshot()
         val st = current()
         val o = st.orders.first { it.id == orderId }
-        // Already delivered / cancelled (double tap, stale sheet): never bill twice.
-        if (!LaundryMath.isOpen(o)) return CmdResult("Order #${o.no()} is already ${o.status.name.lowercase()}")
+        // Already delivered (double tap, stale sheet): never bill twice. A
+        // cancelled order may be delivered — that revives it (no BILL exists).
+        if (o.status == OrderStatus.DELIVERED) return CmdResult("Order #${o.no()} is already delivered")
         val total = LaundryMath.amtOf(o)
         val pre = o.pre
         val oldBal = LaundryMath.balance(o.custId, st.ledger, st.orders, o.id)
@@ -242,7 +240,7 @@ class LaundryRepository(private val db: AppDatabase) {
             val now = AppDate.nowText()
             orderDao.upsert(
                 o.copy(
-                    status = OrderStatus.DELIVERED, doneAt = now, doneDate = AppDate.TODAY,
+                    status = OrderStatus.DELIVERED, cancelReason = "", doneAt = now, doneDate = AppDate.TODAY,
                     deliveryDate = AppDate.TODAY, deliveryTime = now, ddAuto = false, paid = alloc.paidToward,
                 ).toEntity(),
             )
@@ -283,9 +281,54 @@ class LaundryRepository(private val db: AppDatabase) {
         val st = current()
         val o = st.orders.first { it.id == orderId }
         val nm = firstName(st.customers.first { it.id == o.custId }.name)
-        orderDao.upsert(o.copy(status = OrderStatus.CANCELLED, cancelReason = reason).toEntity())
+        db.withTransaction {
+            val base = if (o.status == OrderStatus.DELIVERED) reverseDelivery(o) else o
+            orderDao.upsert(base.copy(status = OrderStatus.CANCELLED, cancelReason = reason).toEntity())
+        }
         Analytics.orderCancelled(orderId, reason)
-        return CmdResult("Pickup cancelled · $nm", undo)
+        return CmdResult((if (o.status == OrderStatus.CREATED) "Pickup cancelled" else "Order cancelled") + " · $nm", undo)
+    }
+
+    /**
+     * Change-status sheet: move an order to any state. Steps that need input
+     * (count clothes, delivery date, payment, cancel reason) go through their
+     * own sheets and commands; this does the direct writes, backward moves
+     * included. Leaving DELIVERED first takes the bill off the khata.
+     */
+    suspend fun setStatus(orderId: Int, target: OrderStatus): CmdResult {
+        val undo = snapshot()
+        val st = current()
+        val o = st.orders.first { it.id == orderId }
+        if (o.status == target) return CmdResult("Order #${o.no()} is already there")
+        // Delivering bills and collects — that path is deliver(), never this.
+        if (target == OrderStatus.DELIVERED) return CmdResult("Use Mark delivered for order #${o.no()}")
+        val nm = firstName(st.customers.first { it.id == o.custId }.name)
+        val unDelivered = o.status == OrderStatus.DELIVERED
+        db.withTransaction {
+            val base = if (unDelivered) reverseDelivery(o) else o
+            orderDao.upsert(base.copy(status = target, cancelReason = "").toEntity())
+        }
+        Analytics.orderStatusChanged(orderId, o.status.name, target.name)
+        val word = when (target) {
+            OrderStatus.CREATED -> "To pick up"; OrderStatus.RECEIVED -> "Received"
+            OrderStatus.READY -> "Ready"; OrderStatus.DELIVERED -> "Delivered"; OrderStatus.CANCELLED -> "Cancelled"
+        }
+        return CmdResult("Moved to $word · $nm" + if (unDelivered) " · bill taken off the khata" else "", undo)
+    }
+
+    /**
+     * Un-deliver: the BILL (and any ADJ) khata entries become tombstones, so
+     * the bill is gone; payments stay in the khata and are counted on the
+     * order as paid-in-advance, so delivering again never bills twice.
+     */
+    private suspend fun reverseDelivery(o: Order): Order {
+        val now = SyncClock.now()
+        val rows = ledgerDao.getAll().filter { it.ref == o.id && !it.deleted }
+        rows.filter { it.kind == "BILL" || it.kind == "ADJ" }.forEach {
+            ledgerDao.insert(it.copy(deleted = true, dirty = true, updatedAt = now))
+        }
+        val pre = rows.filter { it.kind == "GOT" }.sumOf { it.cover }
+        return o.copy(pre = pre, paid = 0, doneAt = "", doneDate = "")
     }
 
     /**
@@ -328,7 +371,7 @@ class LaundryRepository(private val db: AppDatabase) {
         }
         orderDao.upsert(updated.toEntity())
         Analytics.orderRescheduled(orderId, if (kind == "pickup") "pickup" else "delivery", notify)
-        return CmdResult(msg + if (notify) " · WhatsApp sent" else "", undo)
+        return CmdResult(msg, undo)
     }
 
     suspend fun sendBill(orderId: Int): CmdResult {

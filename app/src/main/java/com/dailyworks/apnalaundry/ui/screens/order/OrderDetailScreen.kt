@@ -115,7 +115,7 @@ fun OrderDetailScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: I
                 // stepper
                 if (!cancelled) {
                     AppCard {
-                        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.Top) {
+                        Row(Modifier.fillMaxWidth().tap { active = ActiveSheet.ChangeStatus(o.id) }.padding(16.dp), verticalAlignment = Alignment.Top) {
                             labels.forEachIndexed { i, label ->
                                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                                     Box(
@@ -130,8 +130,8 @@ fun OrderDetailScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: I
                         }
                     }
                 } else {
-                    Box(Modifier.fillMaxWidth().rounded(12.dp).background(Tokens.NeutralFill).padding(14.dp)) {
-                        Text("Cancelled" + (if (o.cancelReason.isNotBlank()) " · ${o.cancelReason}" else ""), style = fig(15, FontWeight.SemiBold, Tokens.InkSecondary))
+                    Box(Modifier.fillMaxWidth().rounded(12.dp).background(Tokens.NeutralFill).tap { active = ActiveSheet.ChangeStatus(o.id) }.padding(14.dp)) {
+                        Text("Cancelled" + (if (o.cancelReason.isNotBlank()) " · ${o.cancelReason}" else "") + " · tap to change", style = fig(15, FontWeight.SemiBold, Tokens.InkSecondary))
                     }
                 }
 
@@ -139,8 +139,8 @@ fun OrderDetailScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: I
                 if (actLabel.isNotEmpty()) {
                     PrimaryButton(actLabel, height = 54.dp) { onAct() }
                 } else if (o.status == OrderStatus.DELIVERED) {
-                    Box(Modifier.fillMaxWidth().rounded(12.dp).background(Tokens.BlueLight).padding(14.dp)) {
-                        Text("Delivered" + (if (o.doneAt.isNotBlank()) " · ${o.doneAt}" else "") + " · order closed", style = fig(14, FontWeight.SemiBold, Tokens.BlueText))
+                    Box(Modifier.fillMaxWidth().rounded(12.dp).background(Tokens.BlueLight).tap { active = ActiveSheet.ChangeStatus(o.id) }.padding(14.dp)) {
+                        Text("Delivered" + (if (o.doneAt.isNotBlank()) " · ${o.doneAt}" else "") + " · tap to change", style = fig(14, FontWeight.SemiBold, Tokens.BlueText))
                     }
                 }
 

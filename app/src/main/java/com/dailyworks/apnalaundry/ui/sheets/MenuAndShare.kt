@@ -17,10 +17,10 @@ import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Cancel
 import androidx.compose.material.icons.outlined.DeleteOutline
-import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.LocalShipping
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -71,11 +71,8 @@ fun OrderMenuSheet(
             MenuRow(Icons.Outlined.Visibility, "View order details") { onDismiss(); navigator.openOrder(o.id) }
             if (o.lines.isNotEmpty()) MenuRow(Icons.AutoMirrored.Outlined.ReceiptLong, "View / send bill") { onDismiss(); navigator.openBill(o.id) }
             MenuRow(Icons.Outlined.Edit, "Edit order / bill") { onDismiss(); navigator.openNewOrder(editId = o.id, from = "home") }
-            if (o.status == OrderStatus.CREATED || o.status == OrderStatus.RECEIVED)
-                // No clothes counted yet: count first, or the bill would be ₹0.
-                MenuRow(Icons.Outlined.Check, if (o.lines.isNotEmpty()) "Mark delivered now" else "Count clothes to deliver") {
-                    onOpen(if (o.lines.isNotEmpty()) ActiveSheet.Pay(o.id) else ActiveSheet.Count(o.id, OrderStatus.READY))
-                }
+            // Any state to any state — forward, backward, delivered included.
+            MenuRow(Icons.Outlined.SwapVert, "Change status") { onOpen(ActiveSheet.ChangeStatus(o.id)) }
             if (o.status == OrderStatus.CREATED)
                 MenuRow(Icons.Outlined.CalendarMonth, "Reschedule pickup") { onOpen(ActiveSheet.Reschedule(o.id, "pickup")) }
             if (o.status == OrderStatus.CREATED || o.status == OrderStatus.RECEIVED || o.status == OrderStatus.READY)
@@ -85,8 +82,8 @@ fun OrderMenuSheet(
                 onDismiss()
                 runCatching { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:+91${c.phone}"))) }
             }
-            if (o.status == OrderStatus.CREATED)
-                MenuRow(Icons.Outlined.Cancel, "Cancel this pickup", danger = true) { onOpen(ActiveSheet.Cancel(o.id)) }
+            if (o.status == OrderStatus.CREATED || o.status == OrderStatus.RECEIVED || o.status == OrderStatus.READY)
+                MenuRow(Icons.Outlined.Cancel, if (o.status == OrderStatus.CREATED) "Cancel this pickup" else "Cancel order", danger = true) { onOpen(ActiveSheet.Cancel(o.id)) }
             MenuRow(Icons.Outlined.DeleteOutline, if (o.lines.isNotEmpty()) "Delete bill" else "Delete order", danger = true) {
                 onOpen(ActiveSheet.DeleteOrder(o.id))
             }
