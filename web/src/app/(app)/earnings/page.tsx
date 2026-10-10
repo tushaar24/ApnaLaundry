@@ -5,7 +5,7 @@ import * as AppDate from "@/core/appdate";
 import { grouping, rupees } from "@/core/money";
 import { computeEarnings } from "@/domain/earningsMath";
 import { amtOf } from "@/domain/laundryMath";
-import type { LaundryState, LedgerEntry } from "@/domain/models";
+import type { LaundryState, LedgerEntry, Order, OrderStatus } from "@/domain/models";
 import * as Sel from "@/domain/selectors";
 import { useAppStore, useLaundryState } from "@/data/store";
 import { Analytics } from "@/analytics/events";
@@ -41,8 +41,9 @@ function EarningsScreen() {
   const hidden = useAppStore((s) => s.hideAmounts);
   const toggleHide = useAppStore((s) => s.toggleHideAmounts);
   const nav = useNav();
-  const [period, setPeriod] = useState<"today" | "week" | "month">("today");
+  const [period, setPeriod] = useState<"today" | "week" | "month" | "all">("today");
   const [payFilter, setPayFilter] = useState<"all" | "cash" | "upi">("all");
+  const [showAllOrders, setShowAllOrders] = useState(false);
   const [active, setActive] = useState<ActiveSheet | null>(null);
   useScreenView("earnings");
 
@@ -50,7 +51,10 @@ function EarningsScreen() {
   const weekStart = startOfWeekIso(today);
   const monthStart = today.slice(0, 8) + "01";
   const inRange = (iso: string): boolean =>
-    period === "week" ? iso >= weekStart && iso <= today : period === "month" ? iso >= monthStart && iso <= today : iso === today;
+    period === "all" ? true
+      : period === "week" ? iso >= weekStart && iso <= today
+        : period === "month" ? iso >= monthStart && iso <= today
+          : iso === today;
 
   const e = computeEarnings(state, inRange);
   const m = (n: number): string => (hidden ? "₹ ••••" : rupees(n));
@@ -60,8 +64,17 @@ function EarningsScreen() {
       ? `${AppDate.plain(weekStart)} – ${AppDate.plain(today)}`
       : period === "month"
         ? `1 – ${AppDate.dayOfMonth(today)} ${AppDate.plain(today).split(" ").pop()}`
-        : AppDate.plain(today);
-  const periodTitle = period === "week" ? "This week" : period === "month" ? "This month" : "Today";
+        : period === "all" ? "All time" : AppDate.plain(today);
+  const periodTitle = period === "week" ? "This week" : period === "month" ? "This month" : period === "all" ? "All time" : "Today";
+
+  // Orders in the period by their own date (same as Home's Orders / Sales
+  // tiles); live orders only — a cancelled one is listed but never counted.
+  const periodOrders = state.orders
+    .filter((o) => inRange(o.pickupDate))
+    .sort((a, b) => (a.pickupDate < b.pickupDate ? 1 : a.pickupDate > b.pickupDate ? -1 : b.id - a.id));
+  const counted = periodOrders.filter((o) => o.status !== "CANCELLED");
+  const sales = counted.reduce((s, o) => s + amtOf(o), 0);
+  const listed = showAllOrders ? periodOrders : periodOrders.slice(0, 5);
 
   const shareText =
     `${state.shop.name} — ${periodLabel}\n` +
@@ -109,22 +122,58 @@ function EarningsScreen() {
           </div>
         ) : (
           <>
-            <div className="flex gap-1.5">
+            <div className="no-scrollbar flex gap-1.5 overflow-x-auto">
               {(
                 [
                   ["today", "Today"],
                   ["week", "This week"],
                   ["month", "This month"],
+                  ["all", "All time"],
                 ] as const
               ).map(([v, label]) => (
                 <PillChip
                   key={v}
                   label={label}
                   selected={period === v}
-                  onClick={() => { setPeriod(v); setPayFilter("all"); Analytics.earningsPeriodChanged(v); }}
+                  onClick={() => { setPeriod(v); setPayFilter("all"); setShowAllOrders(false); Analytics.earningsPeriodChanged(v); }}
                 />
               ))}
             </div>
+
+            {/* Sales — same numbers as Home's tiles */}
+            <div className="flex w-full flex-col gap-1 rounded-[18px] bg-blue p-4 text-ondark shadow-md shadow-blue/20">
+              <span className="text-[13px] font-semibold text-ondark/80">Sales · {periodTitle}</span>
+              <span className="bric text-[34px]">{m(sales)}</span>
+              <span className="text-[13px] font-semibold text-ondark/80">
+                {counted.length} {counted.length === 1 ? "order" : "orders"} · total of their bills
+              </span>
+            </div>
+
+            {/* Every order in the period */}
+            <span className="text-[15px] font-bold">Orders · {periodOrders.length}</span>
+            <AppCard>
+              <div className="flex w-full flex-col px-3.5">
+                {periodOrders.length === 0 ? <span className="py-4 text-[14px] text-muted">No orders in this period.</span> : null}
+                {listed.map((o, i) => (
+                  <div key={o.id}>
+                    {i > 0 ? <Divider /> : null}
+                    <OrderRow state={state} o={o} hidden={hidden} onClick={() => nav.openOrder(o.id)} />
+                  </div>
+                ))}
+                {periodOrders.length > 5 ? (
+                  <>
+                    <Divider />
+                    <button
+                      type="button"
+                      onClick={() => setShowAllOrders((v) => !v)}
+                      className="w-full py-3.5 text-center text-[14px] font-bold text-blue"
+                    >
+                      {showAllOrders ? "Show less" : `Show all ${periodOrders.length} orders`}
+                    </button>
+                  </>
+                ) : null}
+              </div>
+            </AppCard>
 
             <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2 lg:items-start">
               {/* Money received */}
@@ -328,6 +377,37 @@ function PaymentRow({
         <span className="truncate text-[12px] text-muted">{what + (e.time ? ` · ${e.time}` : "")}</span>
       </span>
       <span className="text-[15px] font-bold">{hidden ? "₹ ••••" : rupees(e.amt)}</span>
+    </button>
+  );
+}
+
+const STATUS_CHIP: Record<OrderStatus, [string, string, string]> = {
+  CREATED: ["To pick up", "var(--color-orangelight)", "var(--color-orangetext)"],
+  RECEIVED: ["Received", "var(--color-neutralfill)", "var(--color-inksecondary)"],
+  READY: ["Ready", "var(--color-bluelight)", "var(--color-bluetext)"],
+  DELIVERED: ["Delivered", "var(--color-neutralfill)", "var(--color-inksecondary)"],
+  CANCELLED: ["Cancelled", "var(--color-neutralfill)", "var(--color-muted)"],
+};
+
+/** One order in the Earnings list: name, number · date, amount and status. */
+function OrderRow({
+  state, o, hidden, onClick,
+}: { state: LaundryState; o: Order; hidden: boolean; onClick: () => void }) {
+  const c = Sel.customer(state, o.custId);
+  const [label, bg, fg] = STATUS_CHIP[o.status];
+  const noBill = o.lines.length === 0;
+  return (
+    <button type="button" onClick={onClick} className="flex w-full items-center gap-2 py-3 text-left">
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-[15px] font-bold">{c.name}</span>
+        <span className="truncate text-[12px] text-muted">#{Sel.orderNo(o)} · {AppDate.plain(o.pickupDate)}</span>
+      </span>
+      <span className="flex shrink-0 flex-col items-end gap-1">
+        <span className={noBill ? "text-[12px] font-semibold text-muted" : "text-[15px] font-bold"}>
+          {noBill ? "No bill yet" : hidden ? "₹ ••••" : rupees(amtOf(o))}
+        </span>
+        <span className="rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ background: bg, color: fg }}>{label}</span>
+      </span>
     </button>
   );
 }

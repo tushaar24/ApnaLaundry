@@ -1,6 +1,7 @@
 package com.dailyworks.apnalaundry.ui.screens.earnings
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -70,6 +71,7 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
     val hidden by shopVm.hideAmounts.collectAsStateWithLifecycle()
     var period by remember { mutableStateOf("today") }
     var payFilter by remember { mutableStateOf("all") }
+    var showAllOrders by remember { mutableStateOf(false) }
     var active by remember { mutableStateOf<ActiveSheet?>(null) }
 
     LaunchedEffect(Unit) { Analytics.screen("earnings") }
@@ -81,6 +83,7 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
     val inRange: (String) -> Boolean = when (period) {
         "week" -> { iso -> iso in weekStart..today }
         "month" -> { iso -> iso in monthStart..today }
+        "all" -> { _ -> true }
         else -> { iso -> iso == today }
     }
     val e = EarningsMath.compute(state, inRange)
@@ -89,9 +92,17 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
     val periodLabel = when (period) {
         "week" -> "${AppDate.plain(weekStart)} – ${AppDate.plain(today)}"
         "month" -> "1 – ${AppDate.dayOfMonth(today)} ${AppDate.plain(today).split(" ").last()}"
+        "all" -> "All time"
         else -> AppDate.plain(today)
     }
-    val periodTitle = when (period) { "week" -> "This week"; "month" -> "This month"; else -> "Today" }
+    val periodTitle = when (period) { "week" -> "This week"; "month" -> "This month"; "all" -> "All time"; else -> "Today" }
+
+    // Orders in the period by their own date (same as Home's Orders / Sales
+    // tiles); live orders only — a cancelled one is listed but never counted.
+    val periodOrders = state.orders.filter { inRange(it.pickupDate) }
+        .sortedWith(compareByDescending<com.dailyworks.apnalaundry.domain.Order> { it.pickupDate }.thenByDescending { it.id })
+    val counted = periodOrders.filter { it.status != com.dailyworks.apnalaundry.domain.OrderStatus.CANCELLED }
+    val sales = counted.sumOf { LaundryMath.amtOf(it) }
 
     val shareText = buildString {
         append("${state.shop.name} — $periodLabel\n")
@@ -137,9 +148,43 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                 return@Column
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf("today" to "Today", "week" to "This week", "month" to "This month").forEach { (v, label) ->
-                    PillChip(label, period == v) { period = v; payFilter = "all"; Analytics.earningsPeriodChanged(v) }
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf("today" to "Today", "week" to "This week", "month" to "This month", "all" to "All time").forEach { (v, label) ->
+                    PillChip(label, period == v) { period = v; payFilter = "all"; showAllOrders = false; Analytics.earningsPeriodChanged(v) }
+                }
+            }
+
+            // Sales — same numbers as Home's tiles
+            Column(
+                Modifier.fillMaxWidth().rounded(18.dp).background(Tokens.Blue).padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text("Sales · $periodTitle", style = fig(13, FontWeight.SemiBold, Tokens.OnDark.copy(alpha = 0.8f)))
+                Text(m(sales), style = bric(34, FontWeight.Bold, Tokens.OnDark))
+                Text("${counted.size} ${if (counted.size == 1) "order" else "orders"} · total of their bills", style = fig(13, FontWeight.SemiBold, Tokens.OnDark.copy(alpha = 0.8f)))
+            }
+
+            // Every order in the period
+            Text("Orders · ${periodOrders.size}", style = fig(15, FontWeight.Bold))
+            AppCard {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp)) {
+                    if (periodOrders.isEmpty()) {
+                        Text("No orders in this period.", style = fig(14, color = Tokens.Muted), modifier = Modifier.padding(vertical = 16.dp))
+                    }
+                    val list = if (showAllOrders) periodOrders else periodOrders.take(5)
+                    list.forEachIndexed { i, o ->
+                        if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Divider))
+                        OrderRow(state, o, hidden) { navigator.openOrder(o.id, "earnings") }
+                    }
+                    if (periodOrders.size > 5) {
+                        Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Divider))
+                        Text(
+                            if (showAllOrders) "Show less" else "Show all ${periodOrders.size} orders",
+                            style = fig(14, FontWeight.Bold, Tokens.Blue),
+                            modifier = Modifier.fillMaxWidth().tap { showAllOrders = !showAllOrders }.padding(vertical = 14.dp),
+                            textAlign = TextAlign.Center,
+                        )
+                    }
                 }
             }
 
@@ -309,4 +354,39 @@ private fun PaymentRow(state: com.dailyworks.apnalaundry.domain.LaundryState, e:
         }
         Text(if (hidden) "₹ ••••" else Money.rupees(e.amt), style = fig(15, FontWeight.Bold))
     }
+}
+
+/** One order in the Earnings list: name, number · date, amount and status. */
+@Composable
+private fun OrderRow(state: com.dailyworks.apnalaundry.domain.LaundryState, o: com.dailyworks.apnalaundry.domain.Order, hidden: Boolean, onClick: () -> Unit) {
+    val c = Selectors.customer(state, o.custId)
+    val (label, bg, fg) = statusChip(o.status)
+    Row(Modifier.fillMaxWidth().tap(onClick = onClick).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(c.name, style = fig(15, FontWeight.Bold), maxLines = 1)
+            Text("#${o.no()} · ${AppDate.plain(o.pickupDate)}", style = fig(12, color = Tokens.Muted), maxLines = 1)
+        }
+        Spacer(Modifier.width(8.dp))
+        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                when {
+                    o.lines.isEmpty() -> "No bill yet"
+                    hidden -> "₹ ••••"
+                    else -> Money.rupees(LaundryMath.amtOf(o))
+                },
+                style = fig(if (o.lines.isEmpty()) 12 else 15, if (o.lines.isEmpty()) FontWeight.SemiBold else FontWeight.Bold, if (o.lines.isEmpty()) Tokens.Muted else Tokens.Ink),
+            )
+            Box(Modifier.rounded(999.dp).background(bg).padding(horizontal = 8.dp, vertical = 2.dp)) {
+                Text(label, style = fig(11, FontWeight.Bold, fg))
+            }
+        }
+    }
+}
+
+private fun statusChip(s: com.dailyworks.apnalaundry.domain.OrderStatus): Triple<String, Color, Color> = when (s) {
+    com.dailyworks.apnalaundry.domain.OrderStatus.CREATED -> Triple("To pick up", Tokens.OrangeLight, Tokens.OrangeText)
+    com.dailyworks.apnalaundry.domain.OrderStatus.RECEIVED -> Triple("Received", Tokens.NeutralFill, Tokens.InkSecondary)
+    com.dailyworks.apnalaundry.domain.OrderStatus.READY -> Triple("Ready", Tokens.BlueLight, Tokens.BlueText)
+    com.dailyworks.apnalaundry.domain.OrderStatus.DELIVERED -> Triple("Delivered", Tokens.NeutralFill, Tokens.InkSecondary)
+    com.dailyworks.apnalaundry.domain.OrderStatus.CANCELLED -> Triple("Cancelled", Tokens.NeutralFill, Tokens.Muted)
 }
