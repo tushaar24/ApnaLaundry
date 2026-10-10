@@ -209,32 +209,42 @@ fun PaywallScreen(
                         .padding(horizontal = 20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    // Hero: 7 days FREE, then the ₹2
+                    // Hero: 7 days FREE, then the ₹2 — or, once the trial is used, the plan.
                     Text(
                         "• YOUR LAUNDRY SHOP APP •",
                         style = fig(12, FontWeight.ExtraBold, Pw.Eyebrow).copy(letterSpacing = 0.16.em),
                     )
                     Spacer(Modifier.height(12.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Start your $TRIAL_DAYS-day ", style = fig(19, FontWeight.Bold, Tokens.OnDark))
+                    if (!ui.hasTrial) {
+                        Text("Your free trial has ended", style = fig(19, FontWeight.Bold, Tokens.OnDark))
+                        Spacer(Modifier.height(6.dp))
                         Text(
-                            "FREE",
-                            style = fig(19, FontWeight.Bold, Tokens.OnDark),
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(Tokens.Orange)
-                                .padding(horizontal = 6.dp, vertical = 1.dp),
+                            "Pick a plan to keep your shop running",
+                            style = fig(14, FontWeight.Normal, Pw.Text),
+                            textAlign = TextAlign.Center,
                         )
-                        Text(" trial for", style = fig(19, FontWeight.Bold, Tokens.OnDark))
+                    } else {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Start your $TRIAL_DAYS-day ", style = fig(19, FontWeight.Bold, Tokens.OnDark))
+                            Text(
+                                "FREE",
+                                style = fig(19, FontWeight.Bold, Tokens.OnDark),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(Tokens.Orange)
+                                    .padding(horizontal = 6.dp, vertical = 1.dp),
+                            )
+                            Text(" trial for", style = fig(19, FontWeight.Bold, Tokens.OnDark))
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Text(rupees(ui.trialAmount), style = bric(64, FontWeight.Bold, Pw.Accent))
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "${rupees(ui.trialAmount)} REFUNDED INSTANTLY",
+                            style = fig(11, FontWeight.ExtraBold, Pw.Text).copy(letterSpacing = 0.12.em),
+                            textAlign = TextAlign.Center,
+                        )
                     }
-                    Spacer(Modifier.height(4.dp))
-                    Text(rupees(ui.trialAmount), style = bric(64, FontWeight.Bold, Pw.Accent))
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "${rupees(ui.trialAmount)} REFUNDED INSTANTLY",
-                        style = fig(11, FontWeight.ExtraBold, Pw.Text).copy(letterSpacing = 0.12.em),
-                        textAlign = TextAlign.Center,
-                    )
 
                     Spacer(Modifier.height(20.dp))
                     PaywallVideo(paused = ui.busy || faq)
@@ -261,7 +271,7 @@ fun PaywallScreen(
                     }
 
                     Spacer(Modifier.height(28.dp))
-                    Text("Your plan after $TRIAL_DAYS free days", style = fig(16, FontWeight.Bold, Tokens.OnDark))
+                    Text(if (ui.hasTrial) "Your plan after $TRIAL_DAYS free days" else "Choose your plan", style = fig(16, FontWeight.Bold, Tokens.OnDark))
                     Spacer(Modifier.height(16.dp))
                     PlanCard(
                         selected = ui.plan == PaywallPlan.ANNUAL,
@@ -321,7 +331,8 @@ fun PaywallScreen(
                     val amt = if (ui.plan == PaywallPlan.ANNUAL) ui.annualAmount else ui.monthlyAmount
                     val per = if (ui.plan == PaywallPlan.ANNUAL) "year" else "month"
                     Text(
-                        "Autopays ${rupees(amt)}/$per after $trialEnd · cancel anytime before",
+                        if (ui.hasTrial) "Autopays ${rupees(amt)}/$per after $trialEnd · cancel anytime before"
+                        else "Pays ${rupees(amt)} today, then every $per by UPI AutoPay · cancel anytime",
                         style = fig(12, FontWeight.Normal, Pw.Text),
                         textAlign = TextAlign.Center,
                     )
@@ -336,7 +347,11 @@ fun PaywallScreen(
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            if (ui.busy) "Starting…" else "START $TRIAL_DAYS-DAY FREE TRIAL",
+                            when {
+                                ui.busy -> "Starting…"
+                                ui.hasTrial -> "START $TRIAL_DAYS-DAY FREE TRIAL"
+                                else -> "PAY ${rupees(amt)} & CONTINUE"
+                            },
                             style = fig(16, FontWeight.ExtraBold, Tokens.OnDark),
                         )
                     }
@@ -354,18 +369,29 @@ fun PaywallScreen(
                 Modifier.padding(horizontal = 20.dp).padding(bottom = 28.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                FaqItem(
-                    "Why do I pay $trialText today?",
-                    "The $trialText sets up UPI AutoPay for your plan, and it is refunded to you instantly. You get the full app free for $TRIAL_DAYS days.",
-                )
-                FaqItem(
-                    "When is my plan charged?",
-                    "After $trialEnd, when your free days end: $annualText/year or $monthlyText/month, whichever you picked, by UPI AutoPay.",
-                )
-                FaqItem(
-                    "Can I cancel the trial?",
-                    "Yes, you can cancel anytime during the trial. No charges will be applied if you cancel before the trial ends.",
-                )
+                if (ui.hasTrial) {
+                    FaqItem(
+                        "Why do I pay $trialText today?",
+                        "The $trialText sets up UPI AutoPay for your plan, and it is refunded to you instantly. You get the full app free for $TRIAL_DAYS days.",
+                    )
+                    FaqItem(
+                        "When is my plan charged?",
+                        "After $trialEnd, when your free days end: $annualText/year or $monthlyText/month, whichever you picked, by UPI AutoPay.",
+                    )
+                    FaqItem(
+                        "Can I cancel the trial?",
+                        "Yes, you can cancel anytime during the trial. No charges will be applied if you cancel before the trial ends.",
+                    )
+                } else {
+                    FaqItem(
+                        "When is my plan charged?",
+                        "Today, then every year ($annualText) or every month ($monthlyText), whichever you picked, by UPI AutoPay.",
+                    )
+                    FaqItem(
+                        "Can I cancel?",
+                        "Yes, anytime from Settings. You keep the app until the period you paid for ends.",
+                    )
+                }
                 FaqItem(
                     "Which UPI apps work?",
                     "Any UPI app that supports AutoPay — GPay, PhonePe, Paytm, BHIM and more.",
@@ -377,6 +403,7 @@ fun PaywallScreen(
         RetrySheet(
             plan = ui.plan,
             trialAmount = ui.trialAmount,
+            hasTrial = ui.hasTrial,
             monthlyAmount = ui.monthlyAmount,
             busy = ui.busy,
             onRetry = { chosen -> vm.retry(activity, chosen) },
@@ -401,12 +428,12 @@ private fun FaqItem(q: String, a: String) {
  */
 @Composable
 private fun RetrySheet(
-    plan: PaywallPlan, trialAmount: Int, monthlyAmount: Int, busy: Boolean,
+    plan: PaywallPlan, trialAmount: Int, hasTrial: Boolean, monthlyAmount: Int, busy: Boolean,
     onRetry: (PaywallPlan) -> Unit, onDismiss: () -> Unit,
 ) {
     val trial = rupees(trialAmount)
     AppBottomSheet(
-        title = "Your $TRIAL_DAYS free days are waiting",
+        title = if (hasTrial) "Your $TRIAL_DAYS free days are waiting" else "Your payment didn't go through",
         onDismiss = onDismiss,
         leading = {
             Box(
@@ -417,7 +444,8 @@ private fun RetrySheet(
     ) {
         Column {
             Text(
-                "The $trial didn't go through, so nothing was charged. Try once more — the $trial is refunded instantly and the full app opens right away.",
+                if (hasTrial) "The $trial didn't go through, so nothing was charged. Try once more — the $trial is refunded instantly and the full app opens right away."
+                else "Nothing was charged. Try once more and the full app opens right away.",
                 style = fig(15, FontWeight.Normal, Tokens.Muted),
             )
             if (plan == PaywallPlan.ANNUAL) {
@@ -433,7 +461,8 @@ private fun RetrySheet(
                         Text("${rupees(monthlyAmount)}/month", style = bric(18, FontWeight.Bold, Tokens.BlueText))
                     }
                     Text(
-                        "Same $TRIAL_DAYS free days, $trial refunded instantly — then a smaller monthly payment.",
+                        if (hasTrial) "Same $TRIAL_DAYS free days, $trial refunded instantly — then a smaller monthly payment."
+                        else "A smaller payment today, then every month.",
                         style = fig(13, color = Tokens.BlueText),
                     )
                 }

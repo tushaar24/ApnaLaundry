@@ -83,6 +83,10 @@ export function PaywallScreen({ onDone }: {
   const annualR = Math.round(annual / 100);
   const monthlyR = Math.round(monthly / 100);
   const trialR = Math.round((status?.plans.trial.amount ?? 200) / 100);
+  // The shop hasn't used its ₹2 trial yet. Without it the paywall offers the
+  // plan at full price, charged today.
+  const hasTrial = status?.trialEligible !== false && trialR > 0;
+  const planText = plan === "annual" ? `${rupees(annualR)}/year` : `${rupees(monthlyR)}/month`;
   const perMonth = Math.round(annual / 12 / 100);
   const saveVsMonthly = Math.round((monthly * 12 - annual) / 100);
 
@@ -209,18 +213,27 @@ export function PaywallScreen({ onDone }: {
             </button>
           </div>
 
-          {/* Hero: 7 days FREE, then the ₹2 */}
+          {/* Hero: 7 days FREE, then the ₹2 — or, once the trial is used, the plan. */}
           <div className={cls("text-center text-[12px] font-extrabold tracking-[0.16em]", PW.eyebrow)}>
             • YOUR LAUNDRY SHOP APP •
           </div>
-          <h1 className="mt-3 text-center text-[19px] font-bold leading-snug">
-            Start your {TRIAL_DAYS}-day{" "}
-            <span className="rounded-md bg-orange px-1.5 py-0.5">FREE</span> trial for
-          </h1>
-          <div className={cls("bric mt-2 text-center text-[64px] leading-none", PW.accent)}>{rupees(trialR)}</div>
-          <div className={cls("mt-2 text-center text-[11px] font-extrabold tracking-[0.12em]", PW.text)}>
-            {rupees(trialR)} REFUNDED INSTANTLY
-          </div>
+          {hasTrial ? (
+            <>
+              <h1 className="mt-3 text-center text-[19px] font-bold leading-snug">
+                Start your {TRIAL_DAYS}-day{" "}
+                <span className="rounded-md bg-orange px-1.5 py-0.5">FREE</span> trial for
+              </h1>
+              <div className={cls("bric mt-2 text-center text-[64px] leading-none", PW.accent)}>{rupees(trialR)}</div>
+              <div className={cls("mt-2 text-center text-[11px] font-extrabold tracking-[0.12em]", PW.text)}>
+                {rupees(trialR)} REFUNDED INSTANTLY
+              </div>
+            </>
+          ) : (
+            <>
+              <h1 className="mt-3 text-center text-[19px] font-bold leading-snug">Your free trial has ended</h1>
+              <p className={cls("mt-1.5 text-center text-[14px]", PW.text)}>Pick a plan to keep your shop running</p>
+            </>
+          )}
 
           <div className="mt-5">
             <PaywallVideo paused={busy || faq} />
@@ -237,7 +250,7 @@ export function PaywallScreen({ onDone }: {
             ))}
           </div>
 
-          <div className="mt-7 text-center text-[16px] font-bold">Your plan after {TRIAL_DAYS} free days</div>
+          <div className="mt-7 text-center text-[16px] font-bold">{hasTrial ? `Your plan after ${TRIAL_DAYS} free days` : "Choose your plan"}</div>
           <div className="mt-4 flex flex-col gap-3">
             <PlanCard
               selected={plan === "annual"}
@@ -273,7 +286,9 @@ export function PaywallScreen({ onDone }: {
           {/* Sticky so the video above never pushes the CTA off-screen. */}
           <div className={cls("sticky bottom-0 -mx-5 mt-5 border-t border-white/10 px-5 pb-6 pt-3 backdrop-blur", PW.bar)}>
             <p className={cls("mb-2.5 text-center text-[12px]", PW.text)}>
-              {`Autopays ${plan === "annual" ? `${rupees(annualR)}/year` : `${rupees(monthlyR)}/month`} after ${trialEnd} · cancel anytime before`}
+              {hasTrial
+                ? `Autopays ${planText} after ${trialEnd} · cancel anytime before`
+                : `Pays ${rupees(plan === "annual" ? annualR : monthlyR)} today, then every ${plan === "annual" ? "year" : "month"} by UPI AutoPay · cancel anytime`}
             </p>
             <button
               type="button"
@@ -284,7 +299,11 @@ export function PaywallScreen({ onDone }: {
                 PW.cta,
               )}
             >
-              {busy ? "Starting…" : `START ${TRIAL_DAYS}-DAY FREE TRIAL`}
+              {busy
+                ? "Starting…"
+                : hasTrial
+                  ? `START ${TRIAL_DAYS}-DAY FREE TRIAL`
+                  : `PAY ${rupees(plan === "annual" ? annualR : monthlyR)} & CONTINUE`}
             </button>
           </div>
         </div>
@@ -298,15 +317,28 @@ export function PaywallScreen({ onDone }: {
       {faq ? (
         <AppSheet title="Questions" noSidebar onDismiss={() => setFaq(false)}>
           <div className="flex flex-col gap-4">
-            <FaqItem q={`Why do I pay ${rupees(trialR)} today?`}>
-              {`The ${rupees(trialR)} sets up UPI AutoPay for your plan, and it is refunded to you instantly. You get the full app free for ${TRIAL_DAYS} days.`}
-            </FaqItem>
-            <FaqItem q="When is my plan charged?">
-              {`After ${trialEnd}, when your free days end: ${rupees(annualR)}/year or ${rupees(monthlyR)}/month, whichever you picked, by UPI AutoPay.`}
-            </FaqItem>
-            <FaqItem q="Can I cancel the trial?">
-              Yes, you can cancel anytime during the trial. No charges will be applied if you cancel before the trial ends.
-            </FaqItem>
+            {hasTrial ? (
+              <>
+                <FaqItem q={`Why do I pay ${rupees(trialR)} today?`}>
+                  {`The ${rupees(trialR)} sets up UPI AutoPay for your plan, and it is refunded to you instantly. You get the full app free for ${TRIAL_DAYS} days.`}
+                </FaqItem>
+                <FaqItem q="When is my plan charged?">
+                  {`After ${trialEnd}, when your free days end: ${rupees(annualR)}/year or ${rupees(monthlyR)}/month, whichever you picked, by UPI AutoPay.`}
+                </FaqItem>
+                <FaqItem q="Can I cancel the trial?">
+                  Yes, you can cancel anytime during the trial. No charges will be applied if you cancel before the trial ends.
+                </FaqItem>
+              </>
+            ) : (
+              <>
+                <FaqItem q="When is my plan charged?">
+                  {`Today, then every year (${rupees(annualR)}) or every month (${rupees(monthlyR)}), whichever you picked, by UPI AutoPay.`}
+                </FaqItem>
+                <FaqItem q="Can I cancel?">
+                  Yes, anytime from Settings. You keep the app until the period you paid for ends.
+                </FaqItem>
+              </>
+            )}
             <FaqItem q="Which UPI apps work?">
               Any UPI app that supports AutoPay — GPay, PhonePe, Paytm, BHIM and more.
             </FaqItem>
@@ -315,7 +347,7 @@ export function PaywallScreen({ onDone }: {
       ) : null}
       {retrySheet && stage === "plans" ? (
         <AppSheet
-          title={`Your ${TRIAL_DAYS} free days are waiting`}
+          title={hasTrial ? `Your ${TRIAL_DAYS} free days are waiting` : "Your payment didn't go through"}
           noSidebar
           onDismiss={() => {
             Analytics.paymentRetryDismissed(plan);
@@ -328,7 +360,9 @@ export function PaywallScreen({ onDone }: {
           )}
         >
           <p className="text-[15px] text-muted">
-            The {rupees(trialR)} didn&apos;t go through, so nothing was charged. Try once more — the {rupees(trialR)} is refunded instantly and the full app opens right away.
+            {hasTrial
+              ? `The ${rupees(trialR)} didn't go through, so nothing was charged. Try once more — the ${rupees(trialR)} is refunded instantly and the full app opens right away.`
+              : "Nothing was charged. Try once more and the full app opens right away."}
           </p>
           {plan === "annual" ? (
             // A failed Yearly attempt: recommend the smaller Monthly plan.
@@ -342,7 +376,9 @@ export function PaywallScreen({ onDone }: {
                   </span>
                 </div>
                 <div className="mt-0.5 text-[13px] text-bluetext">
-                  {`Same ${TRIAL_DAYS} free days, ${rupees(trialR)} refunded instantly — then a smaller monthly payment.`}
+                  {hasTrial
+                    ? `Same ${TRIAL_DAYS} free days, ${rupees(trialR)} refunded instantly — then a smaller monthly payment.`
+                    : "A smaller payment today, then every month."}
                 </div>
               </div>
               <PrimaryButton

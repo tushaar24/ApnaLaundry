@@ -15,6 +15,12 @@ export interface BillingStatus {
   /** No active subscription and past any grace period → hard paywall. */
   paywallDue: boolean;
   hasActiveSubscription: boolean;
+  /**
+   * One ₹2 trial per shop: false once a subscription has got past checkout,
+   * and the next subscription charges the full plan price straight away.
+   * (Missing on an older backend — treat as eligible.)
+   */
+  trialEligible?: boolean;
   plans: {
     monthly: { amount: number };
     annual: { amount: number };

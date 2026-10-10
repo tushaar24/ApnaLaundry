@@ -34,6 +34,9 @@ data class BillingStatus(
     val configured: Boolean = false,
     val paywallDue: Boolean = false,
     val hasActiveSubscription: Boolean = false,
+    // One ₹2 trial per shop: false once a subscription has got past checkout,
+    // and the next subscription charges the full plan price straight away.
+    val trialEligible: Boolean = true,
     val plans: BillingPlans = BillingPlans(),
     val subscription: BillingSubscriptionDto? = null,
 ) {

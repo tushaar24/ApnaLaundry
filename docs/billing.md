@@ -27,6 +27,12 @@ cancellation grace). **Hard gate** — the app is unreachable until there's an a
 subscription. (The earlier `trial_2` / `free_<N>` A/B experiment and its Firebase Remote
 Config / `LAUNDRY_PAYWALL_VARIANTS` switch were removed on 2026-10-06.)
 
+**One trial per shop (2026-10-10):** once any subscription of the shop has got past
+checkout (status other than `created`/`abandoned`), `/status` returns
+`trialEligible: false` (and `plans.trial.amount: 0`), `/subscribe` drops the ₹2 addon and
+`start_at`, so Razorpay bills the full plan on approval, and both paywalls show the
+"Your free trial has ended · Pick a plan" full-price variant.
+
 **Gate flow (both platforms):** logged in? → subscription active? → route; **a loader
 shows until that check resolves** (no flash of the app or wrong screen).
 

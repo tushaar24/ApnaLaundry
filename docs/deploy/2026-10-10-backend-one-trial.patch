@@ -1,0 +1,67 @@
+diff -ruN backend-orig/routes/laundry-billing.js backend-live/routes/laundry-billing.js
+--- backend-orig/routes/laundry-billing.js	2026-10-10 13:04:02
++++ backend-live/routes/laundry-billing.js	2026-10-10 13:04:13
+@@ -113,16 +113,19 @@
+     }
+     const inGrace = Boolean(graceUntilMs && graceUntilMs > Date.now());
+     const paywallDue = !hasActive && !inGrace;
++    const trialEligible = await isTrialEligible(userId);
+ 
+     return res.json({
+       success: true,
+       configured: rzp.isConfigured() && rzp.plansReady(),
+       paywallDue,
+       hasActiveSubscription: hasActive,
++      trialEligible,
+       plans: {
+         monthly: { amount: rzp.amountFor('monthly') },
+         annual: { amount: rzp.amountFor('annual') },
+-        trial: { amount: env.laundryTrialAmountPaise },
++        // 0 once the shop has used its trial: the plan is charged in full today.
++        trial: { amount: trialEligible ? env.laundryTrialAmountPaise : 0 },
+       },
+       subscription: sub ? serializeSub(sub) : null,
+     });
+@@ -143,10 +146,12 @@
+     // The client chooses WHICH plan (monthly/annual); the server still sets the
+     // price from its own PLANS table — never trust the client for money. The ₹2
+     // trial is layered on top of the chosen plan (so a yearly trial charges
+-    // ₹2 now, then ₹4,999/yr after TRIAL_DAYS).
++    // ₹2 now, then ₹4,999/yr after TRIAL_DAYS). One trial per shop: once a
++    // subscription has got past checkout, the next one bills the plan in full
++    // on approval.
+     let plan = String((req.body && req.body.plan) || '').toLowerCase();
+     if (!['monthly', 'annual'].includes(plan)) plan = 'monthly';
+-    const trialAmount = env.laundryTrialAmountPaise;
++    const trialAmount = (await isTrialEligible(userId)) ? env.laundryTrialAmountPaise : 0;
+ 
+     const amount = rzp.amountFor(plan);
+     const planId = rzp.planIdFor(plan);
+@@ -163,7 +168,9 @@
+     // plan the user just chose — otherwise they'd approve a mandate for a plan
+     // they didn't pick. A created sub has no mandate, so abandoning it is free.
+     if (existing && existing.status === 'created' && existing.razorpaySubscriptionId) {
+-      if (existing.plan === plan) {
++      // ...and the same trial terms (a pre-existing ₹2 attempt isn't reused
++      // once the shop has used its trial).
++      if (existing.plan === plan && (existing.trialAmount || 0) === trialAmount) {
+         return res.json({
+           success: true,
+           reused: true,
+@@ -253,6 +260,16 @@
+ });
+ 
+ // ──────────────────────────── helpers ────────────────────────────
++
++// The ₹2 trial is once per shop. Any subscription whose mandate was approved
++// (authenticated onwards — including cancelled/halted ones) uses it up; a
++// checkout that was never approved ('created') or was abandoned doesn't.
++async function isTrialEligible(userId) {
++  const used = await prisma.laundrySubscription.count({
++    where: { userId, status: { notIn: ['created', 'abandoned'] } },
++  });
++  return used === 0;
++}
+ 
+ function currentSubscription(userId) {
+   return prisma.laundrySubscription.findFirst({ where: { userId }, orderBy: { createdAt: 'desc' } });

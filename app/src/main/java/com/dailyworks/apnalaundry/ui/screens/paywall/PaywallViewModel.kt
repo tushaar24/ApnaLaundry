@@ -40,6 +40,10 @@ data class PaywallUiState(
     val monthlyAmount: Int get() = status?.plans?.monthly?.amount ?: 49900
     val trialAmount: Int get() = status?.plans?.trial?.amount ?: 200
 
+    // The shop hasn't used its ₹2 trial yet. Without it the paywall offers the
+    // plan at full price, charged today.
+    val hasTrial: Boolean get() = status?.trialEligible != false && trialAmount > 0
+
     // Only an active subscription, or a cancelled one still in the period it
     // paid for, gets in: not "unconfigured", not "not due".
     // (No status at all is undecided; the gate falls back to the local cache.)
