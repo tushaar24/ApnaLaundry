@@ -1,11 +1,13 @@
 "use client";
 
+import * as AppDate from "@/core/appdate";
+
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import * as Repo from "@/data/repository";
 import { logout } from "@/data/auth";
 import { useLaundryState } from "@/data/store";
-import { paywallInfo, useBillingStore } from "@/data/billingStore";
+import { paywallInfo, useBillingStore, inCancelGrace, accessUntilIso } from "@/data/billingStore";
 import { useScreenView } from "@/analytics/useScreenView";
 import { AppCard, FieldBox, SectionLabel } from "@/ui/basics";
 import { IcChevronRight } from "@/ui/icons";
@@ -33,6 +35,8 @@ function SettingsScreen() {
   const billing = useBillingStore((s) => s.status);
   const refreshBilling = useBillingStore((s) => s.refresh);
   const pay = paywallInfo(billing);
+  const graceCancelled = inCancelGrace(billing);
+  const graceUntil = graceCancelled ? accessUntilIso(billing) : null;
   useEffect(() => { void refreshBilling(); }, [refreshBilling]);
 
   async function doLogout() {
@@ -85,15 +89,21 @@ function SettingsScreen() {
         </div>
       </AppCard>
 
-      {/* Subscription row (manage / cancel the plan) */}
-      {pay.hasActive ? (
+      {/* Subscription row (manage / cancel the plan) — also while a cancelled
+          plan still runs, so the owner can see until when. */}
+      {pay.hasActive || graceCancelled ? (
         <AppCard onClick={nav.openSubscription}>
           <div className="flex w-full items-center justify-between p-4">
             <span className="flex min-w-0 flex-col">
               <span className="text-[16px] font-bold">
                 {billing?.subscription?.plan === "annual" ? "Yearly" : "Monthly"} plan
+                {graceCancelled ? <span className="text-orangetext"> · Cancelled</span> : null}
               </span>
-              <span className="text-[13px] text-muted">Unlimited orders</span>
+              <span className="text-[13px] text-muted">
+                {graceCancelled
+                  ? graceUntil ? `Works till ${AppDate.plain(graceUntil.slice(0, 10))}` : "Works till the end of the paid period"
+                  : "Unlimited orders"}
+              </span>
             </span>
             <span className="text-muted"><IcChevronRight size={20} /></span>
           </div>

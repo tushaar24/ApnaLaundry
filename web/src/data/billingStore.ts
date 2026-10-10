@@ -66,6 +66,22 @@ export function paywallInfo(status: BillingStatus | null): PaywallInfo {
   return { ready: status.configured, hasActive, blocked: !hasAccess(status) };
 }
 
+/** A cancelled plan still inside the period it already paid for. */
+export function inCancelGrace(status: BillingStatus | null): boolean {
+  return !!status && status.subscription?.status === "cancelled" && !status.paywallDue;
+}
+
+/**
+ * The day a cancelled plan stops working (ISO): a ₹2 trial cancelled before its
+ * first real charge runs to that charge date; a paid plan to its period end.
+ */
+export function accessUntilIso(status: BillingStatus | null): string | null {
+  const sub = status?.subscription;
+  if (!sub) return null;
+  const trialOnly = (sub.trialAmount || 0) > 0 && (sub.paidCount || 0) === 0;
+  return (trialOnly ? sub.chargeAt ?? sub.currentEnd : sub.currentEnd ?? sub.chargeAt) ?? null;
+}
+
 /**
  * May use the app: an active plan, or a cancelled one the server says is still
  * inside the period it already paid for (paywallDue false). Only a cancelled

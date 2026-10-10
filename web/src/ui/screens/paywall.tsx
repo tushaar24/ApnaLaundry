@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as AppDate from "@/core/appdate";
 import { rupees } from "@/core/money";
 import { cancelSubscription, openSubscriptionCheckout, preloadCheckout, subscribe } from "@/data/billing";
-import { paywallInfo, useBillingStore } from "@/data/billingStore";
+import { paywallInfo, useBillingStore, accessUntilIso } from "@/data/billingStore";
 import { Analytics } from "@/analytics/events";
 import { MetaPixel } from "@/analytics/metaPixel";
 import { cls, PrimaryButton } from "@/ui/basics";
@@ -614,7 +614,12 @@ function WaitingView({ onBack }: { onBack: () => void }) {
 
 /** Already-subscribed state (opened from Settings): plan summary + cancel (inline confirm). */
 export function ManagePlanScreen({ onClose }: { onClose: () => void }) {
-  const sub = useBillingStore((s) => s.status?.subscription ?? null);
+  const status = useBillingStore((s) => s.status);
+  const sub = status?.subscription ?? null;
+  // Cancelled, still inside the period it paid for: say until when; no Cancel.
+  const cancelled = sub?.status === "cancelled";
+  const untilIso = cancelled ? accessUntilIso(status) : null;
+  const until = untilIso ? fmtDate(untilIso) : null;
   const refresh = useBillingStore((s) => s.refresh);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -646,23 +651,31 @@ export function ManagePlanScreen({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         <div className="flex flex-1 flex-col items-center gap-4 p-6 text-center">
-          <div className="mt-2 flex size-16 items-center justify-center rounded-full bg-blue text-ondark">
+          <div className={cls("mt-2 flex size-16 items-center justify-center rounded-full", cancelled ? "bg-neutralfill text-inksecondary" : "bg-blue text-ondark")}>
             <IcCheck size={34} />
           </div>
-          <h2 className="bric text-[24px]">{planName} plan is active</h2>
-          <p className="text-[14px] text-muted">Unlimited orders. Nothing to do here.</p>
+          <h2 className="bric text-[24px]">{cancelled ? `${planName} plan is cancelled` : `${planName} plan is active`}</h2>
+          <p className="text-[14px] text-muted">
+            {cancelled
+              ? `It still works${until ? ` till ${until}` : " till the end of the period you paid for"}. You won't be charged again.`
+              : "Unlimited orders. Nothing to do here."}
+          </p>
           <div className="w-full rounded-2xl border border-cardborder bg-card">
             <SummaryRow k="Plan" v={planName} />
             <SummaryRow k="Amount" v={`${rupees(Math.round((sub?.amount ?? 0) / 100))}${sub?.plan === "annual" ? "/year" : "/month"}`} />
-            {next ? <SummaryRow k="Next charge" v={next} /> : null}
-            <SummaryRow k="Status" v={sub?.status === "pending" ? "Payment retrying" : "Active"} last />
+            {cancelled
+              ? until ? <SummaryRow k="Works till" v={until} /> : null
+              : next ? <SummaryRow k="Next charge" v={next} /> : null}
+            <SummaryRow k="Status" v={cancelled ? "Cancelled" : sub?.status === "pending" ? "Payment retrying" : "Active"} last />
           </div>
           {sub?.trialAmount ? (
             <p className="text-[12px] text-muted">Started with the ₹2 trial.</p>
           ) : null}
           {error ? <p className="text-[13px] font-semibold text-orangetext">{error}</p> : null}
           <div className="mt-auto w-full">
-            {confirming ? (
+            {cancelled ? (
+              <p className="py-3 text-[13px] text-muted">After that, the app asks you to pick a plan again.</p>
+            ) : confirming ? (
               <div className="flex flex-col gap-2">
                 <p className="text-[14px] font-semibold">Cancel the plan? New orders stop when it ends.</p>
                 <div className="flex gap-2">

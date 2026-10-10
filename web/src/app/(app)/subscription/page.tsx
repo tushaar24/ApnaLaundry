@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { paywallInfo, useBillingStore } from "@/data/billingStore";
+import { hasAccess, useBillingStore } from "@/data/billingStore";
 import { ManagePlanScreen } from "@/ui/screens/paywall";
 import { IcLaundry } from "@/ui/icons";
 
@@ -16,12 +16,13 @@ export default function SubscriptionPage() {
   const refresh = useBillingStore((s) => s.refresh);
   const loaded = useBillingStore((s) => s.loaded);
   const status = useBillingStore((s) => s.status);
-  const hasActive = paywallInfo(status).hasActive;
+  // Active, or cancelled but still inside the paid period (shows when it ends).
+  const canManage = !!status && hasAccess(status);
 
   useEffect(() => { void refresh(); }, [refresh]);
-  useEffect(() => { if (loaded && !hasActive) router.replace("/"); }, [loaded, hasActive, router]);
+  useEffect(() => { if (loaded && !canManage) router.replace("/"); }, [loaded, canManage, router]);
 
-  if (!loaded || !hasActive) return <Splash />;
+  if (!loaded || !canManage) return <Splash />;
 
   return (
     <ManagePlanScreen

@@ -36,6 +36,8 @@ data class PaywallUiState(
     val retrySheet: Boolean = false,
 ) {
     val hasActive: Boolean get() = status?.hasActiveSubscription == true
+    // Cancelled, still inside the period it paid for.
+    val inGrace: Boolean get() = status?.inCancelGrace == true
     val annualAmount: Int get() = status?.plans?.annual?.amount ?: 499900
     val monthlyAmount: Int get() = status?.plans?.monthly?.amount ?: 49900
     val trialAmount: Int get() = status?.plans?.trial?.amount ?: 200

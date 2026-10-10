@@ -175,7 +175,8 @@ fun PaywallScreen(
 
             // Already subscribed (e.g. opened from Settings): show the plan, not
             // a Pay button — Checkout can't re-authorize an active subscription.
-            ui.hasActive -> ActiveView(ui = ui, onClose = onClose, onCancel = { vm.cancel() })
+            // A cancelled plan still running shows here too (until when, no Cancel).
+            ui.hasActive || ui.inGrace -> ActiveView(ui = ui, onClose = onClose, onCancel = { vm.cancel() })
 
             else -> Column(Modifier.fillMaxSize()) {
                 // Close (hidden on the non-cancellable hard gate) + FAQs.
@@ -559,8 +560,18 @@ private fun WaitingView(onBack: () -> Unit) {
     }
 }
 
+/**
+ * The day a cancelled plan stops working: a ₹2 trial cancelled before its first
+ * real charge runs to that charge date; a paid plan to its period end.
+ */
+internal fun accessUntilIso(sub: com.dailyworks.apnalaundry.data.billing.BillingSubscriptionDto?): String? {
+    if (sub == null) return null
+    val trialOnly = sub.trialAmount > 0 && sub.paidCount == 0
+    return if (trialOnly) sub.chargeAt ?: sub.currentEnd else sub.currentEnd ?: sub.chargeAt
+}
+
 /** "2026-10-16T…" -> "16 Oct 2026" (blank when unparseable). */
-private fun fmtChargeDate(iso: String?): String {
+internal fun fmtChargeDate(iso: String?): String {
     if (iso.isNullOrBlank()) return ""
     val date = runCatching { java.time.OffsetDateTime.parse(iso).atZoneSameInstant(java.time.ZoneId.systemDefault()).toLocalDate() }
         .recoverCatching { java.time.LocalDate.parse(iso.take(10)) }
@@ -586,6 +597,9 @@ private fun ActiveView(ui: PaywallUiState, onClose: () -> Unit, onCancel: () -> 
     var confirming by remember { mutableStateOf(false) }
     val sub = ui.status?.subscription
     val planName = if (sub?.plan == "annual") "Yearly" else "Monthly"
+    // Cancelled, still inside the period it paid for: say until when; no Cancel.
+    val cancelled = sub?.status == "cancelled"
+    val until = if (cancelled) fmtChargeDate(accessUntilIso(sub)) else ""
     Column(Modifier.fillMaxSize()) {
         Box(
             Modifier
@@ -599,13 +613,18 @@ private fun ActiveView(ui: PaywallUiState, onClose: () -> Unit, onCancel: () -> 
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Box(
-                Modifier.size(64.dp).clip(CircleShape).background(Tokens.Blue),
+                Modifier.size(64.dp).clip(CircleShape).background(if (cancelled) Tokens.NeutralFill else Tokens.Blue),
                 contentAlignment = Alignment.Center,
-            ) { Icon(Icons.Outlined.Check, null, tint = Tokens.OnDark, modifier = Modifier.size(34.dp)) }
+            ) { Icon(Icons.Outlined.Check, null, tint = if (cancelled) Tokens.InkSecondary else Tokens.OnDark, modifier = Modifier.size(34.dp)) }
             Spacer(Modifier.height(16.dp))
-            Text("$planName plan is active", style = bric(24, FontWeight.Bold))
+            Text(if (cancelled) "$planName plan is cancelled" else "$planName plan is active", style = bric(24, FontWeight.Bold))
             Spacer(Modifier.height(8.dp))
-            Text("Unlimited orders. Nothing to do here.", style = fig(14, FontWeight.Normal, Tokens.Muted))
+            Text(
+                if (cancelled) "It still works" + (if (until.isNotEmpty()) " till $until" else " till the end of the period you paid for") + ". You won't be charged again."
+                else "Unlimited orders. Nothing to do here.",
+                style = fig(14, FontWeight.Normal, Tokens.Muted),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
             Spacer(Modifier.height(6.dp))
             Spacer(Modifier.height(10.dp))
             Column(
@@ -615,8 +634,9 @@ private fun ActiveView(ui: PaywallUiState, onClose: () -> Unit, onCancel: () -> 
                 val next = fmtChargeDate(sub?.chargeAt)
                 SummaryRow("Plan", planName)
                 SummaryRow("Amount", "${rupees(sub?.amount ?: 0)}${if (sub?.plan == "annual") "/year" else "/month"}")
-                if (next.isNotEmpty()) SummaryRow("Next charge", next)
-                SummaryRow("Status", if (sub?.status == "pending") "Payment retrying" else "Active", last = true)
+                if (cancelled) { if (until.isNotEmpty()) SummaryRow("Works till", until) }
+                else if (next.isNotEmpty()) SummaryRow("Next charge", next)
+                SummaryRow("Status", if (cancelled) "Cancelled" else if (sub?.status == "pending") "Payment retrying" else "Active", last = true)
             }
             if ((sub?.trialAmount ?: 0) > 0) {
                 Spacer(Modifier.height(8.dp))
@@ -627,7 +647,9 @@ private fun ActiveView(ui: PaywallUiState, onClose: () -> Unit, onCancel: () -> 
                 Text(it, style = fig(13, FontWeight.SemiBold, Tokens.OrangeText))
             }
             Spacer(Modifier.weight(1f))
-            if (confirming) {
+            if (cancelled) {
+                Text("After that, the app asks you to pick a plan again.", style = fig(13, FontWeight.Normal, Tokens.Muted), modifier = Modifier.padding(12.dp))
+            } else if (confirming) {
                 Text("Cancel the plan? New orders stop when it ends.", style = fig(14, FontWeight.SemiBold))
                 Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

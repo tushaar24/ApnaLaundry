@@ -105,9 +105,13 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
                 }
             }
 
-            // Subscription row (manage / cancel the plan) — only with an active plan.
+            // Subscription row (manage / cancel the plan) — also while a cancelled
+            // plan still runs, so the owner can see until when.
             val billing by paywallVm.ui.collectAsStateWithLifecycle()
-            if (billing.hasActive) {
+            if (billing.hasActive || billing.inGrace) {
+                val until = if (billing.inGrace) com.dailyworks.apnalaundry.ui.screens.paywall.fmtChargeDate(
+                    com.dailyworks.apnalaundry.ui.screens.paywall.accessUntilIso(billing.status?.subscription),
+                ) else ""
                 AppCard {
                     Row(
                         Modifier.fillMaxWidth().tap { navigator.openSubscription() }.padding(16.dp),
@@ -115,11 +119,21 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(Modifier.weight(1f)) {
+                            Row {
+                                Text(
+                                    if (billing.status?.subscription?.plan == "annual") "Yearly plan" else "Monthly plan",
+                                    style = fig(16, FontWeight.Bold),
+                                )
+                                if (billing.inGrace) Text(" · Cancelled", style = fig(16, FontWeight.Bold, Tokens.OrangeText))
+                            }
                             Text(
-                                if (billing.status?.subscription?.plan == "annual") "Yearly plan" else "Monthly plan",
-                                style = fig(16, FontWeight.Bold),
+                                when {
+                                    !billing.inGrace -> "Unlimited orders"
+                                    until.isNotEmpty() -> "Works till $until"
+                                    else -> "Works till the end of the paid period"
+                                },
+                                style = fig(13, color = Tokens.Muted),
                             )
-                            Text("Unlimited orders", style = fig(13, color = Tokens.Muted))
                         }
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Tokens.Muted, modifier = Modifier.size(20.dp))
                     }
