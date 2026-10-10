@@ -124,25 +124,39 @@ class LaundryRepository(private val db: AppDatabase) {
         val now = SyncClock.now()
         fun <T, K> tombstones(current: List<T>, keep: Set<K>, key: (T) -> K, kill: (T) -> T): List<T> =
             current.filter { key(it) !in keep }.map(kill)
+        // (rows created after the snapshot; already-deleted ones are skipped below)
 
-        val orderTombs = tombstones(orderDao.getAll(), s.orders.map { it.id }.toSet(), { it.id }) {
+        val orderTombs = tombstones(orderDao.getAll().filter { !it.deleted }, s.orders.map { it.id }.toSet(), { it.id }) {
             it.copy(deleted = true, dirty = true, updatedAt = now)
         }
-        val ledgerTombs = tombstones(ledgerDao.getAll(), s.ledger.map { it.id }.toSet(), { it.id }) {
+        val ledgerTombs = tombstones(ledgerDao.getAll().filter { !it.deleted }, s.ledger.map { it.id }.toSet(), { it.id }) {
             it.copy(deleted = true, dirty = true, updatedAt = now)
         }
-        val custTombs = tombstones(customerDao.getAll(), s.customers.map { it.id }.toSet(), { it.id }) {
+        val custTombs = tombstones(customerDao.getAll().filter { !it.deleted }, s.customers.map { it.id }.toSet(), { it.id }) {
             it.copy(deleted = true, dirty = true, updatedAt = now)
         }
-        val svcTombs = tombstones(serviceDao.getAll(), s.services.map { it.id }.toSet(), { it.id }) {
+        val svcTombs = tombstones(serviceDao.getAll().filter { !it.deleted }, s.services.map { it.id }.toSet(), { it.id }) {
             it.copy(deleted = true, dirty = true, updatedAt = now)
         }
 
-        orderDao.clear(); orderDao.upsertAll(s.orders.map { it.copy(dirty = true, updatedAt = now) } + orderTombs)
-        ledgerDao.clear(); ledgerDao.insertAll(s.ledger.map { it.copy(dirty = true, updatedAt = now) } + ledgerTombs)
-        customerDao.clear(); customerDao.upsertAll(s.customers.map { it.copy(dirty = true, updatedAt = now) } + custTombs)
-        serviceDao.clear(); serviceDao.upsertAll(s.services.map { it.copy(dirty = true, updatedAt = now) } + svcTombs)
-        s.shop?.let { shopDao.upsert(it.copy(dirty = true, updatedAt = now)) }
+        // Only rows this command changed go back (re-stamped so the rollback
+        // syncs). Untouched rows keep their own updatedAt — re-stamping them
+        // would let a stale copy beat a newer change from another device
+        // (e.g. bring back an order deleted on the website).
+        val curOrders = orderDao.getAll().associateBy { it.id }
+        val curLedger = ledgerDao.getAll().associateBy { it.id }
+        val curCusts = customerDao.getAll().associateBy { it.id }
+        val curSvcs = serviceDao.getAll().associateBy { it.id }
+        orderDao.upsertAll(s.orders.filter { it.copy(dirty = false, updatedAt = 0) != curOrders[it.id]?.copy(dirty = false, updatedAt = 0) }
+            .map { it.copy(dirty = true, updatedAt = now) } + orderTombs)
+        ledgerDao.insertAll(s.ledger.filter { it.copy(dirty = false, updatedAt = 0) != curLedger[it.id]?.copy(dirty = false, updatedAt = 0) }
+            .map { it.copy(dirty = true, updatedAt = now) } + ledgerTombs)
+        customerDao.upsertAll(s.customers.filter { it.copy(dirty = false, updatedAt = 0) != curCusts[it.id]?.copy(dirty = false, updatedAt = 0) }
+            .map { it.copy(dirty = true, updatedAt = now) } + custTombs)
+        serviceDao.upsertAll(s.services.filter { it.copy(dirty = false, updatedAt = 0) != curSvcs[it.id]?.copy(dirty = false, updatedAt = 0) }
+            .map { it.copy(dirty = true, updatedAt = now) } + svcTombs)
+        val curShop = shopDao.get()
+        s.shop?.let { if (it.copy(dirty = false, updatedAt = 0) != curShop?.copy(dirty = false, updatedAt = 0)) shopDao.upsert(it.copy(dirty = true, updatedAt = now)) }
     }
 
     // ---------------- helpers ----------------
@@ -175,13 +189,19 @@ class LaundryRepository(private val db: AppDatabase) {
 
     private suspend fun money(n: Int) = com.dailyworks.apnalaundry.core.Money.rupees(n)
 
+    /** Writes an existing order — never over a deleted one (it stays gone everywhere). */
+    private suspend fun putOrder(e: OrderEntity) {
+        if (orderDao.get(e.id)?.deleted == true) return
+        orderDao.upsert(e)
+    }
+
     // ---------------- order status ----------------
     suspend fun markPickedUp(orderId: Int): CmdResult {
         val undo = snapshot()
         val st = current()
         val o = st.orders.first { it.id == orderId }
         val nm = firstName(st.customers.first { it.id == o.custId }.name)
-        orderDao.upsert(o.copy(status = OrderStatus.RECEIVED).toEntity())
+        putOrder(o.copy(status = OrderStatus.RECEIVED).toEntity())
         Analytics.orderPickedUp(orderId)
         return CmdResult("Picked up · $nm", undo)
     }
@@ -193,7 +213,7 @@ class LaundryRepository(private val db: AppDatabase) {
         val o = st.orders.first { it.id == orderId }
         val nm = firstName(st.customers.first { it.id == o.custId }.name)
         val ready = o.copy(status = OrderStatus.READY)
-        orderDao.upsert((if (deliveryDate.isNotBlank()) ready.copy(deliveryDate = deliveryDate, ddAuto = false) else ready).toEntity())
+        putOrder((if (deliveryDate.isNotBlank()) ready.copy(deliveryDate = deliveryDate, ddAuto = false) else ready).toEntity())
         Analytics.orderMarkedReady(orderId)
         return CmdResult("Marked ready · $nm", undo)
     }
@@ -210,7 +230,7 @@ class LaundryRepository(private val db: AppDatabase) {
         var counted = o.copy(status = next, lines = lines, exAmt = priced.exAmt, discount = priced.discount, billSent = false)
         // Counted straight to ready: the delivery date asked in the sheet.
         if (next == OrderStatus.READY && deliveryDate.isNotBlank()) counted = counted.copy(deliveryDate = deliveryDate, ddAuto = false)
-        orderDao.upsert(counted.toEntity())
+        putOrder(counted.toEntity())
         Analytics.clothesCounted(orderId, next.name, total)
         val head = if (next == OrderStatus.READY) "Marked ready · $nm" else "Picked up"
         return CmdResult("$head · bill of ${money(total)} made — send it from the order", undo)
@@ -238,7 +258,7 @@ class LaundryRepository(private val db: AppDatabase) {
             // Delivered today: the delivery date / time become now, so it shows under
             // today's Deliveries whatever was planned (or if no date was set).
             val now = AppDate.nowText()
-            orderDao.upsert(
+            putOrder(
                 o.copy(
                     status = OrderStatus.DELIVERED, cancelReason = "", doneAt = now, doneDate = AppDate.TODAY,
                     deliveryDate = AppDate.TODAY, deliveryTime = now, ddAuto = false, paid = alloc.paidToward,
@@ -270,7 +290,7 @@ class LaundryRepository(private val db: AppDatabase) {
         if (!LaundryMath.isOpen(o) || due <= 0) return CmdResult("Nothing left to collect on order #${o.no()}")
         db.withTransaction {
             ledgerDao.insert(mkEntry(o.custId, LedgerKind.GOT, due, method, PayTag.PRE, cover = due, ref = o.id).toEntity())
-            orderDao.upsert(o.copy(pre = o.pre + due).toEntity())
+            putOrder(o.copy(pre = o.pre + due).toEntity())
         }
         Analytics.paymentReceived(due, method, "prepay", o.custId, o.id)
         return CmdResult("Got ${money(due)} ${if (method == PayMethod.UPI) "UPI" else "cash"} · order fully paid", undo)
@@ -283,7 +303,7 @@ class LaundryRepository(private val db: AppDatabase) {
         val nm = firstName(st.customers.first { it.id == o.custId }.name)
         db.withTransaction {
             val base = if (o.status == OrderStatus.DELIVERED) reverseDelivery(o) else o
-            orderDao.upsert(base.copy(status = OrderStatus.CANCELLED, cancelReason = reason).toEntity())
+            putOrder(base.copy(status = OrderStatus.CANCELLED, cancelReason = reason).toEntity())
         }
         Analytics.orderCancelled(orderId, reason)
         return CmdResult((if (o.status == OrderStatus.CREATED) "Pickup cancelled" else "Order cancelled") + " · $nm", undo)
@@ -306,7 +326,7 @@ class LaundryRepository(private val db: AppDatabase) {
         val unDelivered = o.status == OrderStatus.DELIVERED
         db.withTransaction {
             val base = if (unDelivered) reverseDelivery(o) else o
-            orderDao.upsert(base.copy(status = target, cancelReason = "").toEntity())
+            putOrder(base.copy(status = target, cancelReason = "").toEntity())
         }
         Analytics.orderStatusChanged(orderId, o.status.name, target.name)
         val word = when (target) {
@@ -347,6 +367,16 @@ class LaundryRepository(private val db: AppDatabase) {
             ledgerDao.getAll().filter { it.ref == orderId && !it.deleted }.forEach {
                 ledgerDao.insert(it.copy(deleted = true, dirty = true, updatedAt = now))
             }
+            // "Last order …" follows the newest order still there (or none).
+            val latest = st.orders.filter { it.custId == o.custId && it.id != orderId }.maxByOrNull { it.createdOn }
+            customerDao.get(o.custId)?.let { c ->
+                val (label, rank) = when {
+                    latest == null -> "—" to 9
+                    latest.createdOn == AppDate.TODAY -> "Today" to 0
+                    else -> AppDate.plain(latest.createdOn) to AppDate.daysBetween(latest.createdOn, AppDate.TODAY).coerceIn(1, 8)
+                }
+                if (c.lastLabel != label || c.agoRank != rank) customerDao.upsert(c.copy(lastLabel = label, agoRank = rank, dirty = true, updatedAt = now))
+            }
         }
         return CmdResult("Bill #${o.no()} deleted · $nm", undo)
     }
@@ -369,7 +399,7 @@ class LaundryRepository(private val db: AppDatabase) {
             val prefix = if (o.deliveryDate.isNotBlank()) "Delivery moved to " else "Delivery date set: "
             u to prefix + AppDate.short(dateIso) + if (time12.isNotBlank()) " · $time12" else ""
         }
-        orderDao.upsert(updated.toEntity())
+        putOrder(updated.toEntity())
         Analytics.orderRescheduled(orderId, if (kind == "pickup") "pickup" else "delivery", notify)
         return CmdResult(msg, undo)
     }
@@ -378,7 +408,7 @@ class LaundryRepository(private val db: AppDatabase) {
         val st = current()
         val o = st.orders.first { it.id == orderId }
         val nm = firstName(st.customers.first { it.id == o.custId }.name)
-        orderDao.upsert(o.copy(billSent = true).toEntity())
+        putOrder(o.copy(billSent = true).toEntity())
         Analytics.billSent(orderId)
         return CmdResult("Opening WhatsApp · bill #${current().orders.firstOrNull { it.id == orderId }?.no() ?: orderId} to $nm")
     }
@@ -527,7 +557,7 @@ class LaundryRepository(private val db: AppDatabase) {
             val diff = after - before
             if (diff != 0) updated = updated.copy(billSent = false)
             db.withTransaction {
-                orderDao.upsert(updated.toEntity())
+                putOrder(updated.toEntity())
                 if (o.status == OrderStatus.DELIVERED && diff != 0) {
                     ledgerDao.insert(mkEntry(o.custId, LedgerKind.ADJ, diff, ref = o.id).toEntity())
                 }

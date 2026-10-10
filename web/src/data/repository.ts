@@ -103,7 +103,8 @@ function mkEntry(a: EntryArgs): LedgerRow {
 function updateOrder(id: number, patch: Partial<Order>) {
   setRows((r) => ({
     ...r,
-    orders: r.orders.map((o) => (o.id === id ? { ...o, ...patch, ...stamp() } : o)),
+    // A deleted order stays deleted: later writes never bring it back.
+    orders: r.orders.map((o) => (o.id === id && !o.deleted ? { ...o, ...patch, ...stamp() } : o)),
   }));
 }
 
@@ -136,14 +137,25 @@ export function undo() {
   if (!s) return;
   const now = clockNow();
   useAppStore.getState().setRows((cur) => {
+    // Only rows this command changed go back (re-stamped so the rollback
+    // syncs). Untouched rows keep their own updatedAt — re-stamping them would
+    // let a stale copy beat a newer change from another device (e.g. bring
+    // back an order deleted on the phone).
+    function same<T extends { dirty: boolean; updatedAt: number }>(a: T, b: T | undefined): boolean {
+      if (!b) return false;
+      return JSON.stringify({ ...a, dirty: false, updatedAt: 0 }) === JSON.stringify({ ...b, dirty: false, updatedAt: 0 });
+    }
     function restore<T extends { dirty: boolean; updatedAt: number; deleted: boolean }, K>(
       snap: T[], current: T[], key: (t: T) => K,
     ): T[] {
       const keep = new Set(snap.map(key));
+      const cur = new Map(current.map((t) => [key(t), t] as const));
       const tombs = current
-        .filter((t) => !keep.has(key(t)))
+        .filter((t) => !keep.has(key(t)) && !t.deleted)
         .map((t) => ({ ...t, deleted: true, dirty: true, updatedAt: now }));
-      return [...snap.map((t) => ({ ...t, dirty: true, updatedAt: now })), ...tombs];
+      const untouched = current.filter((t) => !keep.has(key(t)) && t.deleted);
+      const back = snap.map((t) => (same(t, cur.get(key(t))) ? cur.get(key(t))! : { ...t, dirty: true, updatedAt: now }));
+      return [...back, ...tombs, ...untouched];
     }
     return {
       ...cur,
@@ -151,7 +163,7 @@ export function undo() {
       ledger: restore(s.ledger, cur.ledger, (l) => l.id),
       customers: restore(s.customers, cur.customers, (c) => c.id),
       services: restore(s.services, cur.services, (sv) => sv.id),
-      shop: s.shop ? { ...s.shop, dirty: true, updatedAt: now } : cur.shop,
+      shop: s.shop && !same(s.shop, cur.shop ?? undefined) ? { ...s.shop, dirty: true, updatedAt: now } : cur.shop,
     };
   });
   undoSnapshot = null;
@@ -329,6 +341,19 @@ export function deleteOrder(orderId: number) {
     ...r,
     orders: r.orders.map((x) => (x.id === orderId ? { ...x, deleted: true, ...stamp() } : x)),
     ledger: r.ledger.map((e) => (e.ref === orderId && !e.deleted ? { ...e, deleted: true, ...stamp() } : e)),
+    // "Last order …" follows the newest order still there (or none).
+    customers: r.customers.map((c) => {
+      if (c.id !== o.custId) return c;
+      const left = r.orders.filter((x) => !x.deleted && x.custId === c.id && x.id !== orderId);
+      const latest = left.reduce<Order | null>((a, b) => (a == null || b.createdOn > a.createdOn ? b : a), null);
+      const today = AppDate.today();
+      const [lastLabel, agoRank] = latest == null
+        ? ["—", 9]
+        : latest.createdOn === today
+          ? ["Today", 0]
+          : [AppDate.plain(latest.createdOn), Math.min(8, Math.max(1, AppDate.daysBetween(latest.createdOn, today)))];
+      return c.lastLabel === lastLabel && c.agoRank === agoRank ? c : { ...c, lastLabel, agoRank, ...stamp() };
+    }),
   }));
   publish({ toast: `Bill #${orderNo(o)} deleted · ${custName(o.custId)}`, undo: undoSnap });
 }
