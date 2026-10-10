@@ -137,7 +137,8 @@ object CombinedBill {
                 l.isQuick -> if (l.qty > 0) "${l.itemName} × ${l.qty}" else l.itemName
                 else -> "${l.itemName} × ${l.qty}"
             }
-            add(BillReceipt.Row(name, Money.rupees(l.amt)))
+            val rate = BillReceipt.rate(l)
+            add(BillReceipt.Row(if (rate.isNotEmpty()) "$name · $rate" else name, Money.rupees(l.amt)))
         }
         if (o.express && o.exAmt > 0) add(BillReceipt.Row("Express", "+ ${Money.rupees(o.exAmt)}"))
         if (o.fee > 0) add(BillReceipt.Row("Pickup / delivery", "+ ${Money.rupees(o.fee)}"))

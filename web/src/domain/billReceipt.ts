@@ -19,6 +19,7 @@ export interface ReceiptLine {
   item: string; // "Shirt × 3" / "Wash & Fold · 4 kg"
   sub: string; // service name under the item ("" = none)
   amount: string;
+  rate?: string; // price per item: "₹20 each" / "₹60/kg" ("" / absent = none)
 }
 
 export interface ReceiptRow {
@@ -103,10 +104,16 @@ export interface ReceiptOptions {
   template?: BillTemplate;
 }
 
+/** The price per item printed under it: "₹20 each", "₹60/kg"; "" for a lump (not itemised) bill. */
+function rateOf(l: OrderLine): string {
+  if (l.isQuick || l.price <= 0) return "";
+  return l.kg > 0 ? `${rupees(l.price)}/kg` : `${rupees(l.price)} each`;
+}
+
 function line(l: OrderLine): ReceiptLine {
-  if (l.kg > 0) return { item: Sel.weightLabel(l), sub: "", amount: rupees(l.amt) };
+  if (l.kg > 0) return { item: Sel.weightLabel(l), sub: "", amount: rupees(l.amt), rate: rateOf(l) };
   if (l.isQuick) return { item: l.qty > 0 ? `${l.itemName} × ${l.qty}` : l.itemName, sub: "", amount: rupees(l.amt) };
-  return { item: `${l.itemName} × ${l.qty}`, sub: l.serviceName, amount: rupees(l.amt) };
+  return { item: `${l.itemName} × ${l.qty}`, sub: l.serviceName, amount: rupees(l.amt), rate: rateOf(l) };
 }
 
 function readyByOf(o: BillOrder): string {

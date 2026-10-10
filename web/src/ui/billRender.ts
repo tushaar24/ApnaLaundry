@@ -291,7 +291,9 @@ function layout(ctx: CanvasRenderingContext2D, r: BillReceipt, draw: boolean, mi
       if (i > 0) p.y += 18;
       text(s, itemX, p.y, "left");
     });
-    if (l.sub) lines(l.sub, 12, 400, BODY, itemW, itemX, "left", C.muted, 15);
+    // price per item, then the service: "₹20 each · Dry Clean"
+    const sub = [l.rate, l.sub].filter(Boolean).join(" · ");
+    if (sub) lines(sub, 12, 400, BODY, itemW, itemX, "left", C.muted, 15);
   });
   p.y += 12;
   rule();

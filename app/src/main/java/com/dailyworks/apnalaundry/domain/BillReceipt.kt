@@ -33,7 +33,7 @@ data class BillReceipt(
     val upi: Upi?,
     val terms: List<String>,
 ) {
-    data class Line(val item: String, val sub: String, val amount: String)
+    data class Line(val item: String, val sub: String, val amount: String, val rate: String = "") // rate: "₹20 each" / "₹60/kg" / ""
     data class Row(val label: String, val value: String, val discount: Boolean = false)
     data class Upi(val id: String, val payload: String, val amount: String)
 
@@ -48,10 +48,17 @@ data class BillReceipt(
         fun sample(shop: Shop, order: Order, template: String): BillReceipt =
             build(shop, "Sample customer", "", order, sample = true, expressPct = shop.expressPct, template = template)
 
+        /** The price per item printed under it: "₹20 each", "₹60/kg"; "" for a lump (not itemised) bill. */
+        fun rate(l: OrderLine): String = when {
+            l.isQuick || l.price <= 0 -> ""
+            l.kg > 0 -> "${Money.rupees(l.price)}/kg"
+            else -> "${Money.rupees(l.price)} each"
+        }
+
         private fun line(l: OrderLine): Line = when {
-            l.kg > 0 -> Line(Selectors.weightLabel(l), "", Money.rupees(l.amt))
+            l.kg > 0 -> Line(Selectors.weightLabel(l), "", Money.rupees(l.amt), rate(l))
             l.isQuick -> Line(if (l.qty > 0) "${l.itemName} × ${l.qty}" else l.itemName, "", Money.rupees(l.amt))
-            else -> Line("${l.itemName} × ${l.qty}", l.serviceName, Money.rupees(l.amt))
+            else -> Line("${l.itemName} × ${l.qty}", l.serviceName, Money.rupees(l.amt), rate(l))
         }
 
         private fun readyBy(o: Order): String = when {

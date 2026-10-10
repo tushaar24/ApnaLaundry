@@ -373,7 +373,9 @@ object BillRender {
                     if (i > 0) cy += 18
                     text(s, itemX, cy, Paint.Align.LEFT)
                 }
-                if (l.sub.isNotEmpty()) lines(l.sub, 12f, 400, false, itemW, itemX, Paint.Align.LEFT, MUTED, 15f)
+                // price per item, then the service: "₹20 each · Dry Clean"
+                val sub = listOf(l.rate, l.sub).filter { it.isNotEmpty() }.joinToString(" · ")
+                if (sub.isNotEmpty()) lines(sub, 12f, 400, false, itemW, itemX, Paint.Align.LEFT, MUTED, 15f)
             }
             cy += 12
             rule(cy)
