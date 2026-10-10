@@ -1,6 +1,8 @@
 package com.dailyworks.apnalaundry.ui.screens.earnings
 
 import androidx.compose.foundation.background
+import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -58,6 +60,7 @@ import com.dailyworks.apnalaundry.ui.components.bric
 import com.dailyworks.apnalaundry.ui.components.fig
 import com.dailyworks.apnalaundry.ui.components.rounded
 import com.dailyworks.apnalaundry.ui.components.tap
+import com.dailyworks.apnalaundry.ui.components.showDatePicker
 import com.dailyworks.apnalaundry.ui.nav.AppNavigator
 import com.dailyworks.apnalaundry.ui.sheets.ActiveSheet
 import com.dailyworks.apnalaundry.ui.sheets.SheetHost
@@ -72,6 +75,10 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
     var period by remember { mutableStateOf("today") }
     var payFilter by remember { mutableStateOf("all") }
     var showAllOrders by remember { mutableStateOf(false) }
+    // Custom range: last 7 days until the owner picks their own.
+    var customFrom by remember { mutableStateOf(AppDate.add(AppDate.TODAY, -6)) }
+    var customTo by remember { mutableStateOf(AppDate.TODAY) }
+    val context = androidx.compose.ui.platform.LocalContext.current
     var active by remember { mutableStateOf<ActiveSheet?>(null) }
 
     LaunchedEffect(Unit) { Analytics.screen("earnings") }
@@ -84,6 +91,7 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
         "week" -> { iso -> iso in weekStart..today }
         "month" -> { iso -> iso in monthStart..today }
         "all" -> { _ -> true }
+        "custom" -> { iso -> iso in customFrom..customTo }
         else -> { iso -> iso == today }
     }
     val e = EarningsMath.compute(state, inRange)
@@ -93,9 +101,12 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
         "week" -> "${AppDate.plain(weekStart)} – ${AppDate.plain(today)}"
         "month" -> "1 – ${AppDate.dayOfMonth(today)} ${AppDate.plain(today).split(" ").last()}"
         "all" -> "All time"
+        "custom" -> if (customFrom == customTo) AppDate.plain(customFrom) else "${AppDate.plain(customFrom)} – ${AppDate.plain(customTo)}"
         else -> AppDate.plain(today)
     }
-    val periodTitle = when (period) { "week" -> "This week"; "month" -> "This month"; "all" -> "All time"; else -> "Today" }
+    val periodTitle = when (period) {
+        "week" -> "This week"; "month" -> "This month"; "all" -> "All time"; "custom" -> periodLabel; else -> "Today"
+    }
 
     // Orders in the period by their own date (same as Home's Orders / Sales
     // tiles); live orders only — a cancelled one is listed but never counted.
@@ -149,8 +160,19 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
             }
 
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf("today" to "Today", "week" to "This week", "month" to "This month", "all" to "All time").forEach { (v, label) ->
+                listOf("today" to "Today", "week" to "This week", "month" to "This month", "all" to "All time", "custom" to "Custom").forEach { (v, label) ->
                     PillChip(label, period == v) { period = v; payFilter = "all"; showAllOrders = false; Analytics.earningsPeriodChanged(v) }
+                }
+            }
+            if (period == "custom") {
+                // From / To: any dates; To never before From.
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    DateBox("From", customFrom, Modifier.weight(1f)) {
+                        showDatePicker(context, customFrom, null) { d -> customFrom = d; if (customTo < d) customTo = d; showAllOrders = false }
+                    }
+                    DateBox("To", customTo, Modifier.weight(1f)) {
+                        showDatePicker(context, customTo, customFrom) { d -> customTo = d; showAllOrders = false }
+                    }
                 }
             }
 
@@ -389,4 +411,20 @@ private fun statusChip(s: com.dailyworks.apnalaundry.domain.OrderStatus): Triple
     com.dailyworks.apnalaundry.domain.OrderStatus.READY -> Triple("Ready", Tokens.BlueLight, Tokens.BlueText)
     com.dailyworks.apnalaundry.domain.OrderStatus.DELIVERED -> Triple("Delivered", Tokens.NeutralFill, Tokens.InkSecondary)
     com.dailyworks.apnalaundry.domain.OrderStatus.CANCELLED -> Triple("Cancelled", Tokens.NeutralFill, Tokens.Muted)
+}
+
+/** A From / To box for the custom range; tap opens the date picker. */
+@Composable
+private fun DateBox(label: String, iso: String, modifier: Modifier, onClick: () -> Unit) {
+    Row(
+        modifier.height(52.dp).rounded(12.dp).background(Tokens.Card)
+            .border(1.5.dp, Tokens.FieldBorder, RoundedCornerShape(12.dp)).tap(onClick = onClick).padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(Icons.Outlined.CalendarMonth, null, tint = Tokens.Blue, modifier = Modifier.size(20.dp))
+        Column {
+            Text(label, style = fig(11, FontWeight.SemiBold, Tokens.Muted))
+            Text(AppDate.plain(iso), style = fig(14, FontWeight.Bold), maxLines = 1)
+        }
+    }
 }

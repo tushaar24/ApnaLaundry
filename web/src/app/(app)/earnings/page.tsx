@@ -10,8 +10,8 @@ import * as Sel from "@/domain/selectors";
 import { useAppStore, useLaundryState } from "@/data/store";
 import { Analytics } from "@/analytics/events";
 import { useScreenView } from "@/analytics/useScreenView";
-import { AppCard, cls, Divider, PillChip } from "@/ui/basics";
-import { IcChart, IcChevronRight, IcEye, IcEyeOff, IcShare } from "@/ui/icons";
+import { AppCard, cls, DateTimeBox, Divider, PillChip } from "@/ui/basics";
+import { IcCalendar, IcChart, IcChevronRight, IcEye, IcEyeOff, IcShare } from "@/ui/icons";
 import { SheetHost } from "@/ui/sheets/host";
 import type { ActiveSheet } from "@/ui/sheets/types";
 import { Shell, useNav } from "@/ui/shell";
@@ -41,7 +41,10 @@ function EarningsScreen() {
   const hidden = useAppStore((s) => s.hideAmounts);
   const toggleHide = useAppStore((s) => s.toggleHideAmounts);
   const nav = useNav();
-  const [period, setPeriod] = useState<"today" | "week" | "month" | "all">("today");
+  const [period, setPeriod] = useState<"today" | "week" | "month" | "all" | "custom">("today");
+  // Custom range: last 7 days until the owner picks their own.
+  const [customFrom, setCustomFrom] = useState(() => AppDate.add(AppDate.today(), -6));
+  const [customTo, setCustomTo] = useState(() => AppDate.today());
   const [payFilter, setPayFilter] = useState<"all" | "cash" | "upi">("all");
   const [showAllOrders, setShowAllOrders] = useState(false);
   const [active, setActive] = useState<ActiveSheet | null>(null);
@@ -52,6 +55,7 @@ function EarningsScreen() {
   const monthStart = today.slice(0, 8) + "01";
   const inRange = (iso: string): boolean =>
     period === "all" ? true
+      : period === "custom" ? iso >= customFrom && iso <= customTo
       : period === "week" ? iso >= weekStart && iso <= today
         : period === "month" ? iso >= monthStart && iso <= today
           : iso === today;
@@ -64,8 +68,15 @@ function EarningsScreen() {
       ? `${AppDate.plain(weekStart)} – ${AppDate.plain(today)}`
       : period === "month"
         ? `1 – ${AppDate.dayOfMonth(today)} ${AppDate.plain(today).split(" ").pop()}`
-        : period === "all" ? "All time" : AppDate.plain(today);
-  const periodTitle = period === "week" ? "This week" : period === "month" ? "This month" : period === "all" ? "All time" : "Today";
+        : period === "all" ? "All time"
+          : period === "custom"
+            ? customFrom === customTo ? AppDate.plain(customFrom) : `${AppDate.plain(customFrom)} – ${AppDate.plain(customTo)}`
+            : AppDate.plain(today);
+  const periodTitle =
+    period === "week" ? "This week"
+      : period === "month" ? "This month"
+        : period === "all" ? "All time"
+          : period === "custom" ? periodLabel : "Today";
 
   // Orders in the period by their own date (same as Home's Orders / Sales
   // tiles); live orders only — a cancelled one is listed but never counted.
@@ -129,6 +140,7 @@ function EarningsScreen() {
                   ["week", "This week"],
                   ["month", "This month"],
                   ["all", "All time"],
+                  ["custom", "Custom"],
                 ] as const
               ).map(([v, label]) => (
                 <PillChip
@@ -139,6 +151,32 @@ function EarningsScreen() {
                 />
               ))}
             </div>
+            {period === "custom" ? (
+              // From / To: any dates; To never before From.
+              <div className="flex gap-2">
+                <DateTimeBox
+                  icon={<IcCalendar size={20} />}
+                  iconTint="var(--color-blue)"
+                  text={`From ${AppDate.plain(customFrom)}`}
+                  isSet
+                  type="date"
+                  value={customFrom}
+                  onPick={(d) => { if (!d) return; setCustomFrom(d); if (customTo < d) setCustomTo(d); setShowAllOrders(false); }}
+                  className="min-w-0 flex-1"
+                />
+                <DateTimeBox
+                  icon={<IcCalendar size={20} />}
+                  iconTint="var(--color-blue)"
+                  text={`To ${AppDate.plain(customTo)}`}
+                  isSet
+                  type="date"
+                  value={customTo}
+                  min={customFrom}
+                  onPick={(d) => { if (!d) return; setCustomTo(d < customFrom ? customFrom : d); setShowAllOrders(false); }}
+                  className="min-w-0 flex-1"
+                />
+              </div>
+            ) : null}
 
             {/* Sales — same numbers as Home's tiles */}
             <div className="flex w-full flex-col gap-1 rounded-[18px] bg-blue p-4 text-ondark shadow-md shadow-blue/20">
