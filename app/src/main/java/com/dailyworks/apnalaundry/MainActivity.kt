@@ -76,6 +76,8 @@ private fun AppRoot() {
     val navController = rememberNavController()
     val navigator = AppNavigator(navController)
     val toast by shopVm.toast.collectAsStateWithLifecycle()
+    val waPrompt by shopVm.waPrompt.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     Box(Modifier.fillMaxSize().background(Tokens.Bg)) {
         AppNavGraph(navController = navController, navigator = navigator, shopVm = shopVm)
@@ -90,12 +92,15 @@ private fun AppRoot() {
                     .padding(start = 16.dp, end = 16.dp, bottom = 156.dp),
                 contentAlignment = Alignment.BottomCenter,
             ) {
-                val ctx = androidx.compose.ui.platform.LocalContext.current
-                ToastBar(
-                    text = t.text, hasUndo = t.hasUndo, onUndo = shopVm::undo,
-                    onWhatsApp = t.wa?.let { url -> { com.dailyworks.apnalaundry.ui.screens.bill.openWhatsApp(ctx, url); shopVm.dismissToast() } },
-                )
+                ToastBar(text = t.text, hasUndo = t.hasUndo, onUndo = shopVm::undo)
             }
+        }
+        waPrompt?.let { url ->
+            com.dailyworks.apnalaundry.ui.components.WhatsAppPromptDialog(
+                url = url,
+                onSend = { com.dailyworks.apnalaundry.ui.screens.bill.openWhatsApp(context, url); shopVm.dismissWaPrompt() },
+                onDismiss = shopVm::dismissWaPrompt,
+            )
         }
     }
 }

@@ -32,7 +32,7 @@ import { statusMessage, waLink } from "@/domain/statusMessage";
 export interface CmdResult {
   toast: string;
   undo?: Snapshot;
-  /** A wa.me link with a status update for the customer — the toast offers to send it. */
+  /** A wa.me link with a status update for the customer — a dialog offers to send it. */
   wa?: string;
 }
 
@@ -57,7 +57,7 @@ export function invalidateUndo() {
   if (!undoSnapshot) return;
   undoSnapshot = null;
   const t = useAppStore.getState().toast;
-  if (t?.hasUndo) useAppStore.getState().showToast(t.text, false, t.wa);
+  if (t?.hasUndo) useAppStore.getState().showToast(t.text, false);
 }
 
 /** The customer's status update for an order, as a wa.me link (its state right now). */
@@ -121,7 +121,9 @@ function insertLedger(...entries: LedgerRow[]) {
 
 function publish(res: CmdResult) {
   undoSnapshot = res.undo ?? null;
-  useAppStore.getState().showToast(res.toast, !!res.undo, res.wa);
+  useAppStore.getState().showToast(res.toast, !!res.undo);
+  // A status change: ask whether to tell the customer on WhatsApp.
+  if (res.wa) useAppStore.getState().askWhatsApp(res.wa);
   requestSync();
 }
 

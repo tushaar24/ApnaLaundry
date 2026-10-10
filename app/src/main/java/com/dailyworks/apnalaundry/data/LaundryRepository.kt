@@ -25,7 +25,7 @@ data class Snapshot(
 )
 
 /** A completed command: user-facing toast text and an optional undo snapshot. */
-/** [wa]: a wa.me link with a status update for the customer — the toast offers to send it. */
+/** [wa]: a wa.me link with a status update for the customer — a dialog offers to send it. */
 data class CmdResult(val toast: String, val undo: Snapshot? = null, val wa: String? = null)
 
 class LaundryRepository(private val db: AppDatabase) {

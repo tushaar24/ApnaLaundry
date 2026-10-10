@@ -31,16 +31,6 @@ export function ToastBar() {
     <div className="animate-toast pointer-events-none fixed inset-x-0 bottom-[156px] z-50 flex justify-center px-4 lg:bottom-6 lg:pl-[240px]">
       <div className="pointer-events-auto flex w-full max-w-[560px] items-center gap-3 rounded-[14px] bg-ink px-4 py-3.5">
         <span className="flex-1 text-[14px] font-semibold text-ondark">{toast.text}</span>
-        {toast.wa ? (
-          // Tell the customer: opens their chat with the update typed in.
-          <button
-            type="button"
-            onClick={() => { window.open(toast.wa, "_blank", "noopener,noreferrer"); useAppStore.getState().dismissToast(); }}
-            className="shrink-0 rounded-full bg-[#25D366] px-3 py-1.5 text-[13px] font-bold text-white"
-          >
-            WhatsApp
-          </button>
-        ) : null}
         {toast.hasUndo ? (
           <button type="button" onClick={undo} className="text-[15px] font-bold text-bluebar">
             Undo
@@ -143,6 +133,52 @@ export function Shell({
       </main>
       {showMobileNav ? <BottomNav current={tab} /> : null}
       <ToastBar />
+      <WhatsAppPrompt />
+    </div>
+  );
+}
+
+/**
+ * After a status change: "Tell the customer?" with the message it would send.
+ * Send opens their WhatsApp chat with it typed in; Not now just closes.
+ */
+function WhatsAppPrompt() {
+  const url = useAppStore((s) => s.waPrompt);
+  const close = () => useAppStore.getState().askWhatsApp(null);
+  if (!url) return null;
+  let text = "";
+  try { text = new URL(url).searchParams.get("text") ?? ""; } catch { text = ""; }
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 px-4" onClick={close}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Tell the customer on WhatsApp"
+        onClick={(e) => e.stopPropagation()}
+        className="flex w-full max-w-[420px] flex-col gap-3.5 rounded-[20px] bg-card p-5 shadow-xl"
+      >
+        <span className="bric text-[22px]">Tell the customer?</span>
+        <span className="text-[14px] text-muted">Send this update on WhatsApp:</span>
+        <div className="max-h-[40vh] overflow-y-auto whitespace-pre-wrap rounded-[14px] bg-[#E7F8EE] p-3.5 text-[14px] font-semibold text-ink">
+          {text.replace(/\*/g, "")}
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={close}
+            className="h-[50px] flex-1 rounded-[14px] bg-neutralfill text-[15px] font-bold text-inksecondary"
+          >
+            Not now
+          </button>
+          <button
+            type="button"
+            onClick={() => { window.open(url, "_blank", "noopener,noreferrer"); close(); }}
+            className="h-[50px] flex-[1.4] rounded-[14px] bg-[#25D366] text-[15px] font-bold text-white"
+          >
+            Send on WhatsApp
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
