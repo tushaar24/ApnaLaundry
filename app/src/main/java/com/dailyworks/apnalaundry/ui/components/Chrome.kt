@@ -108,7 +108,7 @@ fun BottomNav(current: NavTab, onSelect: (NavTab) -> Unit) {
 }
 
 @Composable
-fun ToastBar(text: String, hasUndo: Boolean, onUndo: () -> Unit, modifier: Modifier = Modifier) {
+fun ToastBar(text: String, hasUndo: Boolean, onUndo: () -> Unit, modifier: Modifier = Modifier, onWhatsApp: (() -> Unit)? = null) {
     Row(
         modifier
             .fillMaxWidth()
@@ -118,6 +118,14 @@ fun ToastBar(text: String, hasUndo: Boolean, onUndo: () -> Unit, modifier: Modif
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(text, style = fig(14, FontWeight.SemiBold, Tokens.OnDark), modifier = Modifier.weight(1f))
+        if (onWhatsApp != null) {
+            // Tell the customer: opens their chat with the update typed in.
+            Spacer(Modifier.width(10.dp))
+            Box(
+                Modifier.rounded(999.dp).background(androidx.compose.ui.graphics.Color(0xFF25D366)).tap(onClick = onWhatsApp)
+                    .padding(horizontal = 12.dp, vertical = 7.dp),
+            ) { Text("WhatsApp", style = fig(13, FontWeight.Bold, androidx.compose.ui.graphics.Color.White)) }
+        }
         if (hasUndo) {
             Spacer(Modifier.width(12.dp))
             Text("Undo", style = fig(15, FontWeight.Bold, Tokens.BlueBar), modifier = Modifier.tap(onClick = onUndo))

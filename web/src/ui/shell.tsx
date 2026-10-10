@@ -31,6 +31,16 @@ export function ToastBar() {
     <div className="animate-toast pointer-events-none fixed inset-x-0 bottom-[156px] z-50 flex justify-center px-4 lg:bottom-6 lg:pl-[240px]">
       <div className="pointer-events-auto flex w-full max-w-[560px] items-center gap-3 rounded-[14px] bg-ink px-4 py-3.5">
         <span className="flex-1 text-[14px] font-semibold text-ondark">{toast.text}</span>
+        {toast.wa ? (
+          // Tell the customer: opens their chat with the update typed in.
+          <button
+            type="button"
+            onClick={() => { window.open(toast.wa, "_blank", "noopener,noreferrer"); useAppStore.getState().dismissToast(); }}
+            className="shrink-0 rounded-full bg-[#25D366] px-3 py-1.5 text-[13px] font-bold text-white"
+          >
+            WhatsApp
+          </button>
+        ) : null}
         {toast.hasUndo ? (
           <button type="button" onClick={undo} className="text-[15px] font-bold text-bluebar">
             Undo

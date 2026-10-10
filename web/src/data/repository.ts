@@ -19,6 +19,7 @@ import { DEFAULT_SHOP_NAME, isDefaultShopName } from "@/domain/seed";
 import { emptyBillDetails } from "@/domain/billDetails";
 import { gstDefaults, type GstFields } from "@/domain/gst";
 import { orderNo } from "@/domain/selectors";
+import { statusMessage, waLink } from "@/domain/statusMessage";
 
 /**
  * Commands over the in-memory rows — a 1:1 port of data/LaundryRepository.kt
@@ -31,6 +32,8 @@ import { orderNo } from "@/domain/selectors";
 export interface CmdResult {
   toast: string;
   undo?: Snapshot;
+  /** A wa.me link with a status update for the customer — the toast offers to send it. */
+  wa?: string;
 }
 
 let undoSnapshot: Snapshot | null = null;
@@ -54,7 +57,14 @@ export function invalidateUndo() {
   if (!undoSnapshot) return;
   undoSnapshot = null;
   const t = useAppStore.getState().toast;
-  if (t?.hasUndo) useAppStore.getState().showToast(t.text, false);
+  if (t?.hasUndo) useAppStore.getState().showToast(t.text, false, t.wa);
+}
+
+/** The customer's status update for an order, as a wa.me link (its state right now). */
+function statusWa(orderId: number): string | undefined {
+  const o = orderOf(orderId);
+  const c = rows().customers.find((x) => x.id === o.custId);
+  return c ? waLink(c.phone, statusMessage(rows().shop?.name ?? "", c.name, o)) : undefined;
 }
 
 function firstName(name: string): string {
@@ -111,7 +121,7 @@ function insertLedger(...entries: LedgerRow[]) {
 
 function publish(res: CmdResult) {
   undoSnapshot = res.undo ?? null;
-  useAppStore.getState().showToast(res.toast, !!res.undo);
+  useAppStore.getState().showToast(res.toast, !!res.undo, res.wa);
   requestSync();
 }
 
@@ -233,7 +243,7 @@ export function markPickedUp(orderId: number) {
   const o = orderOf(orderId);
   updateOrder(orderId, { status: "RECEIVED" });
   Analytics.orderPickedUp(orderId);
-  publish({ toast: `Picked up · ${custName(o.custId)}`, undo: undoSnap });
+  publish({ toast: `Picked up · ${custName(o.custId)}`, undo: undoSnap, wa: statusWa(orderId) });
 }
 
 /** Ready: the owner also says when it'll be delivered (like payment on delivery). */
@@ -242,7 +252,7 @@ export function markReady(orderId: number, deliveryDate: string) {
   const o = orderOf(orderId);
   updateOrder(orderId, deliveryDate ? { status: "READY", deliveryDate, ddAuto: false } : { status: "READY" });
   Analytics.orderMarkedReady(orderId);
-  publish({ toast: `Marked ready · ${custName(o.custId)}`, undo: undoSnap });
+  publish({ toast: `Marked ready · ${custName(o.custId)}`, undo: undoSnap, wa: statusWa(orderId) });
 }
 
 /** Count-clothes sheet: attach lines and advance to `next` (received or ready). */
@@ -261,7 +271,7 @@ export function saveCount(orderId: number, next: OrderStatus, lines: OrderLine[]
   });
   Analytics.clothesCounted(orderId, next, total);
   const head = next === "READY" ? `Marked ready · ${nm}` : "Picked up";
-  publish({ toast: `${head} · bill of ${rupees(total)} made — send it from the order`, undo: undoSnap });
+  publish({ toast: `${head} · bill of ${rupees(total)} made — send it from the order`, undo: undoSnap, wa: statusWa(orderId) });
 }
 
 export function deliver(orderId: number, amountReceived: number, method: PayMethod) {
@@ -304,7 +314,7 @@ export function deliver(orderId: number, amountReceived: number, method: PayMeth
     : alloc.newBalance < 0
       ? ` · ${rupees(alloc.newBalance)} advance`
       : " · all clear";
-  publish({ toast: `Delivered${paidPart}${balPart}`, undo: undoSnap });
+  publish({ toast: `Delivered${paidPart}${balPart}`, undo: undoSnap, wa: statusWa(orderId) });
 }
 
 export function prepay(orderId: number, method: PayMethod) {
@@ -326,7 +336,7 @@ export function cancelOrder(orderId: number, reason: string) {
   const back = o.status === "DELIVERED" ? reverseDelivery(o) : {};
   updateOrder(orderId, { ...back, status: "CANCELLED", cancelReason: reason });
   Analytics.orderCancelled(orderId, reason);
-  publish({ toast: `${o.status === "CREATED" ? "Pickup" : "Order"} cancelled · ${custName(o.custId)}`, undo: undoSnap });
+  publish({ toast: `${o.status === "CREATED" ? "Pickup" : "Order"} cancelled · ${custName(o.custId)}`, undo: undoSnap, wa: statusWa(orderId) });
 }
 
 const STATUS_WORD: Record<OrderStatus, string> = {
@@ -350,6 +360,7 @@ export function setStatus(orderId: number, target: OrderStatus) {
   publish({
     toast: `Moved to ${STATUS_WORD[target]} · ${custName(o.custId)}` + (unDelivered ? " · bill taken off the khata" : ""),
     undo: undoSnap,
+    wa: statusWa(orderId),
   });
 }
 

@@ -16,6 +16,8 @@ import { prefs } from "./prefs";
 export interface ToastState {
   text: string;
   hasUndo: boolean;
+  /** A wa.me link — the toast shows a WhatsApp button that opens it. */
+  wa?: string;
 }
 
 export interface Snapshot {
@@ -45,7 +47,7 @@ interface AppStore {
   setBootError(v: string | null): void;
   setSyncing(v: boolean): void;
   toggleHideAmounts(): void;
-  showToast(text: string, hasUndo: boolean): void;
+  showToast(text: string, hasUndo: boolean, wa?: string): void;
   dismissToast(): void;
 }
 
@@ -78,11 +80,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
     prefs.setHideAmounts(next);
     set({ hideAmounts: next });
   },
-  showToast: (text, hasUndo) => {
+  showToast: (text, hasUndo, wa) => {
     if (toastTimer) clearTimeout(toastTimer);
-    set({ toast: { text, hasUndo } });
-    // Undo toasts stay long enough to act on; plain notices are brief.
-    toastTimer = setTimeout(() => set({ toast: null }), hasUndo ? 7000 : 2500);
+    set({ toast: { text, hasUndo, wa } });
+    // Toasts with Undo / WhatsApp stay long enough to act on; plain notices are brief.
+    toastTimer = setTimeout(() => set({ toast: null }), hasUndo || wa ? 7000 : 2500);
   },
   dismissToast: () => {
     if (toastTimer) clearTimeout(toastTimer);

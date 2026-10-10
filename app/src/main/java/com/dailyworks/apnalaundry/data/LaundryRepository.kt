@@ -25,7 +25,8 @@ data class Snapshot(
 )
 
 /** A completed command: user-facing toast text and an optional undo snapshot. */
-data class CmdResult(val toast: String, val undo: Snapshot? = null)
+/** [wa]: a wa.me link with a status update for the customer — the toast offers to send it. */
+data class CmdResult(val toast: String, val undo: Snapshot? = null, val wa: String? = null)
 
 class LaundryRepository(private val db: AppDatabase) {
     private val shopDao = db.shopDao()
@@ -189,6 +190,10 @@ class LaundryRepository(private val db: AppDatabase) {
 
     private suspend fun money(n: Int) = com.dailyworks.apnalaundry.core.Money.rupees(n)
 
+    /** The customer's status update as a wa.me link (for the toast's WhatsApp button). */
+    private fun statusWa(st: LaundryState, o: Order): String? =
+        st.customers.firstOrNull { it.id == o.custId }?.let { StatusMessage.link(st.shop.name, it, o) }
+
     /** Writes an existing order — never over a deleted one (it stays gone everywhere). */
     private suspend fun putOrder(e: OrderEntity) {
         if (orderDao.get(e.id)?.deleted == true) return
@@ -201,9 +206,10 @@ class LaundryRepository(private val db: AppDatabase) {
         val st = current()
         val o = st.orders.first { it.id == orderId }
         val nm = firstName(st.customers.first { it.id == o.custId }.name)
-        putOrder(o.copy(status = OrderStatus.RECEIVED).toEntity())
+        val after = o.copy(status = OrderStatus.RECEIVED)
+        putOrder(after.toEntity())
         Analytics.orderPickedUp(orderId)
-        return CmdResult("Picked up · $nm", undo)
+        return CmdResult("Picked up · $nm", undo, statusWa(st, after))
     }
 
     /** Ready: the owner also says when it'll be delivered (like payment on delivery). */
@@ -213,9 +219,10 @@ class LaundryRepository(private val db: AppDatabase) {
         val o = st.orders.first { it.id == orderId }
         val nm = firstName(st.customers.first { it.id == o.custId }.name)
         val ready = o.copy(status = OrderStatus.READY)
-        putOrder((if (deliveryDate.isNotBlank()) ready.copy(deliveryDate = deliveryDate, ddAuto = false) else ready).toEntity())
+        val after = if (deliveryDate.isNotBlank()) ready.copy(deliveryDate = deliveryDate, ddAuto = false) else ready
+        putOrder(after.toEntity())
         Analytics.orderMarkedReady(orderId)
-        return CmdResult("Marked ready · $nm", undo)
+        return CmdResult("Marked ready · $nm", undo, statusWa(st, after))
     }
 
     /** Count-clothes sheet: attach lines and advance to [next] (received or ready). */
@@ -233,7 +240,7 @@ class LaundryRepository(private val db: AppDatabase) {
         putOrder(counted.toEntity())
         Analytics.clothesCounted(orderId, next.name, total)
         val head = if (next == OrderStatus.READY) "Marked ready · $nm" else "Picked up"
-        return CmdResult("$head · bill of ${money(total)} made — send it from the order", undo)
+        return CmdResult("$head · bill of ${money(total)} made — send it from the order", undo, statusWa(st, counted))
     }
 
     suspend fun deliver(orderId: Int, amountReceived: Int, method: PayMethod): CmdResult {
@@ -253,17 +260,18 @@ class LaundryRepository(private val db: AppDatabase) {
             entries += mkEntry(o.custId, LedgerKind.GOT, amountReceived, method, PayTag.DELIVER,
                 cover = alloc.cover, toOld = alloc.toOld, toAdv = alloc.toAdv, ref = o.id)
         }
+        // Delivered today: the delivery date / time become now, so it shows under
+        // today's Deliveries whatever was planned (or if no date was set).
+        val now = AppDate.nowText()
+        val delivered = o.copy(
+            status = OrderStatus.DELIVERED, cancelReason = "", doneAt = now, doneDate = AppDate.TODAY,
+            deliveryDate = AppDate.TODAY, deliveryTime = now, ddAuto = false, paid = alloc.paidToward,
+        )
         db.withTransaction {
             ledgerDao.insertAll(entries.map { it.toEntity() })
             // Delivered today: the delivery date / time become now, so it shows under
             // today's Deliveries whatever was planned (or if no date was set).
-            val now = AppDate.nowText()
-            putOrder(
-                o.copy(
-                    status = OrderStatus.DELIVERED, cancelReason = "", doneAt = now, doneDate = AppDate.TODAY,
-                    deliveryDate = AppDate.TODAY, deliveryTime = now, ddAuto = false, paid = alloc.paidToward,
-                ).toEntity(),
-            )
+            putOrder(delivered.toEntity())
         }
         Analytics.orderDelivered(
             orderId = o.id, total = total, amountReceived = amountReceived, method = method,
@@ -278,7 +286,7 @@ class LaundryRepository(private val db: AppDatabase) {
             alloc.newBalance < 0 -> " · ${money(alloc.newBalance)} advance"
             else -> " · all clear"
         }
-        return CmdResult("Delivered$paidPart$balPart", undo)
+        return CmdResult("Delivered$paidPart$balPart", undo, statusWa(st, delivered))
     }
 
     suspend fun prepay(orderId: Int, method: PayMethod): CmdResult {
@@ -301,12 +309,12 @@ class LaundryRepository(private val db: AppDatabase) {
         val st = current()
         val o = st.orders.first { it.id == orderId }
         val nm = firstName(st.customers.first { it.id == o.custId }.name)
-        db.withTransaction {
+        val after = db.withTransaction {
             val base = if (o.status == OrderStatus.DELIVERED) reverseDelivery(o) else o
-            putOrder(base.copy(status = OrderStatus.CANCELLED, cancelReason = reason).toEntity())
+            base.copy(status = OrderStatus.CANCELLED, cancelReason = reason).also { putOrder(it.toEntity()) }
         }
         Analytics.orderCancelled(orderId, reason)
-        return CmdResult((if (o.status == OrderStatus.CREATED) "Pickup cancelled" else "Order cancelled") + " · $nm", undo)
+        return CmdResult((if (o.status == OrderStatus.CREATED) "Pickup cancelled" else "Order cancelled") + " · $nm", undo, statusWa(st, after))
     }
 
     /**
@@ -324,16 +332,16 @@ class LaundryRepository(private val db: AppDatabase) {
         if (target == OrderStatus.DELIVERED) return CmdResult("Use Mark delivered for order #${o.no()}")
         val nm = firstName(st.customers.first { it.id == o.custId }.name)
         val unDelivered = o.status == OrderStatus.DELIVERED
-        db.withTransaction {
+        val after = db.withTransaction {
             val base = if (unDelivered) reverseDelivery(o) else o
-            putOrder(base.copy(status = target, cancelReason = "").toEntity())
+            base.copy(status = target, cancelReason = "").also { putOrder(it.toEntity()) }
         }
         Analytics.orderStatusChanged(orderId, o.status.name, target.name)
         val word = when (target) {
             OrderStatus.CREATED -> "To pick up"; OrderStatus.RECEIVED -> "Received"
             OrderStatus.READY -> "Ready"; OrderStatus.DELIVERED -> "Delivered"; OrderStatus.CANCELLED -> "Cancelled"
         }
-        return CmdResult("Moved to $word · $nm" + if (unDelivered) " · bill taken off the khata" else "", undo)
+        return CmdResult("Moved to $word · $nm" + (if (unDelivered) " · bill taken off the khata" else ""), undo, statusWa(st, after))
     }
 
     /**

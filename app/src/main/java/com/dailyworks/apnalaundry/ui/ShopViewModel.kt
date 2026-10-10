@@ -24,7 +24,8 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-data class ToastState(val text: String, val hasUndo: Boolean)
+/** [wa]: a wa.me link — the toast shows a WhatsApp button that opens it. */
+data class ToastState(val text: String, val hasUndo: Boolean, val wa: String? = null)
 
 /**
  * The single source of shared, authenticated-app state: the reactive [LaundryState],
@@ -79,10 +80,10 @@ class ShopViewModel(
 
     private fun publish(r: CmdResult) {
         undoSnapshot = r.undo
-        _toast.value = ToastState(r.toast, r.undo != null)
+        _toast.value = ToastState(r.toast, r.undo != null, r.wa)
         toastJob?.cancel()
-        // Undo toasts stay long enough to act on; plain notices are brief.
-        toastJob = viewModelScope.launch { delay(if (r.undo != null) 7000 else 2500); _toast.value = null }
+        // Toasts with Undo / WhatsApp stay long enough to act on; plain notices are brief.
+        toastJob = viewModelScope.launch { delay(if (r.undo != null || r.wa != null) 7000 else 2500); _toast.value = null }
     }
 
     fun showInfo(text: String) = publish(CmdResult(text, null))

@@ -90,7 +90,11 @@ private fun AppRoot() {
                     .padding(start = 16.dp, end = 16.dp, bottom = 156.dp),
                 contentAlignment = Alignment.BottomCenter,
             ) {
-                ToastBar(text = t.text, hasUndo = t.hasUndo, onUndo = shopVm::undo)
+                val ctx = androidx.compose.ui.platform.LocalContext.current
+                ToastBar(
+                    text = t.text, hasUndo = t.hasUndo, onUndo = shopVm::undo,
+                    onWhatsApp = t.wa?.let { url -> { com.dailyworks.apnalaundry.ui.screens.bill.openWhatsApp(ctx, url); shopVm.dismissToast() } },
+                )
             }
         }
     }
