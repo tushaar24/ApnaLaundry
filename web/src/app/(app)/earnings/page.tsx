@@ -133,7 +133,8 @@ function EarningsScreen() {
           </div>
         ) : (
           <>
-            <div className="no-scrollbar flex gap-1.5 overflow-x-auto">
+            {/* Wraps, so every period (Custom included) is visible on a phone. */}
+            <div className="flex flex-wrap gap-1.5">
               {(
                 [
                   ["today", "Today"],

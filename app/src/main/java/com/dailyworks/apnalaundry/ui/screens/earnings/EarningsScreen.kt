@@ -3,9 +3,9 @@ package com.dailyworks.apnalaundry.ui.screens.earnings
 import androidx.compose.foundation.background
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.foundation.border
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -159,7 +159,8 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                 return@Column
             }
 
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            // Wraps, so every period (Custom included) is visible on a phone.
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf("today" to "Today", "week" to "This week", "month" to "This month", "all" to "All time", "custom" to "Custom").forEach { (v, label) ->
                     PillChip(label, period == v) { period = v; payFilter = "all"; showAllOrders = false; Analytics.earningsPeriodChanged(v) }
                 }
