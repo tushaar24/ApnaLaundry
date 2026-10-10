@@ -1,0 +1,149 @@
+diff -ruN a/.env.example b/.env.example
+--- a/.env.example	2026-10-10 19:16:33
++++ b/.env.example	2026-10-10 19:16:59
+@@ -87,6 +87,7 @@
+ # LAUNDRY_MINIMOTH_API_KEY=mm_live_xxxxxxxxxxxxxxxx
+ # LAUNDRY_2FACTOR_API_KEY=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+ # LAUNDRY_2FACTOR_TEMPLATE=   (optional OTP template name)
++# LAUNDRY_2FACTOR_TEST_SECRET=   (enables POST /api/laundry/auth/test-2factor/{send,verify}, X-Test-Secret header)
+ # LAUNDRY_ALLOW_TEST_OTP_IN_PROD=false
+ 
+ # Firebase Remote Config (class date spoken on calls — read live from the same
+diff -ruN a/config/env.js b/config/env.js
+--- a/config/env.js	2026-10-10 19:16:32
++++ b/config/env.js	2026-10-10 19:16:59
+@@ -93,6 +93,9 @@
+   // Optional 2Factor OTP template name (DLT-approved, set up in the 2Factor
+   // dashboard); unset = 2Factor's default OTP SMS.
+   laundryTwoFactorTemplate: process.env.LAUNDRY_2FACTOR_TEMPLATE,
++  // Shared secret for the /api/laundry/auth/test-2factor/* debug routes
++  // (X-Test-Secret header); unset = those routes 404.
++  laundryTwoFactorTestSecret: process.env.LAUNDRY_2FACTOR_TEST_SECRET,
+   // The test provider is refused when NODE_ENV=production unless this is
+   // explicitly set — same fail-closed stance as HealthProduct.
+   laundryAllowTestOtpInProd: process.env.LAUNDRY_ALLOW_TEST_OTP_IN_PROD === 'true',
+diff -ruN a/routes/laundry-auth.js b/routes/laundry-auth.js
+--- a/routes/laundry-auth.js	2026-10-10 19:16:31
++++ b/routes/laundry-auth.js	2026-10-10 19:16:59
+@@ -5,7 +5,10 @@
+ const {
+   newToken, digest, bearer, authenticateAccess, ensureApiToken, PERMANENT_EXPIRES_AT,
+ } = require('../middleware/laundry-auth');
+-const { providerFor, isReviewNumber } = require('../services/laundry-otp');
++const crypto = require('crypto');
++
++const env = require('../config/env');
++const { providerFor, isReviewNumber, twoFactorTest } = require('../services/laundry-otp');
+ const { normalizePhone, isValidIndianMobile } = require('../utils/phone');
+ const laundryMeta = require('../services/laundry-meta');
+ 
+@@ -20,6 +23,11 @@
+ //   POST /api/laundry/auth/logout       Bearer token       -> no-op (the token stays valid)
+ //   GET  /api/laundry/auth/me           Bearer token       -> user
+ //
++// Test-only (X-Test-Secret: LAUNDRY_2FACTOR_TEST_SECRET; 404 when unset) —
++// always uses 2Factor, never logs anyone in, returns 2Factor's raw reply:
++//   POST /api/laundry/auth/test-2factor/send    {phone, template?}
++//   POST /api/laundry/auth/test-2factor/verify  {phone, otp}
++//
+ // The response keeps the old access/refresh wire shape (both fields carry the
+ // permanent token, expiry 2099) so shipped app builds work unchanged.
+ //
+@@ -261,6 +269,55 @@
+       user: { id: auth.user.id, phone: auth.user.phone, name: auth.user.name },
+       sessionExpiresAt: PERMANENT_EXPIRES_AT.toISOString(),
+     });
++  } catch (error) {
++    return next(error);
++  }
++});
++
++// Gate for the 2Factor test routes: hidden (404) unless a secret is set, and
++// the caller must send it in X-Test-Secret.
++function requireTestSecret(req, res, next) {
++  const secret = env.laundryTwoFactorTestSecret;
++  if (!secret) return res.status(404).json({ success: false, message: 'Not found' });
++  const given = Buffer.from(String(req.get('x-test-secret') || ''));
++  const want = Buffer.from(secret);
++  if (given.length !== want.length || !crypto.timingSafeEqual(given, want)) {
++    return res.status(401).json({ success: false, message: 'Bad X-Test-Secret' });
++  }
++  if (!twoFactorTest.configured()) {
++    return res.status(503).json({ success: false, message: 'LAUNDRY_2FACTOR_API_KEY is not set' });
++  }
++  return next();
++}
++
++router.post('/test-2factor/send', publicWriteLimiter, requireTestSecret, async (req, res, next) => {
++  try {
++    const phone = normalizePhone(req.body?.phone);
++    if (!isValidIndianMobile(phone)) {
++      return res.status(400).json({ success: false, message: 'Enter a valid 10-digit mobile number' });
++    }
++    const template = req.body?.template === undefined || req.body?.template === null
++      ? undefined
++      : String(req.body.template);
++    const result = await twoFactorTest.send(phone, template);
++    req.log.info({ phone: maskPhone(phone), template: result.template, reply: result.reply }, '2factor test send');
++    return res.json({ success: Boolean(result.reply?.ok), phone: `+91${phone}`, ...result });
++  } catch (error) {
++    return next(error);
++  }
++});
++
++router.post('/test-2factor/verify', publicWriteLimiter, requireTestSecret, async (req, res, next) => {
++  try {
++    const phone = normalizePhone(req.body?.phone);
++    const otp = String(req.body?.otp || '');
++    if (!isValidIndianMobile(phone) || !/^[0-9]{4,6}$/.test(otp)) {
++      return res.status(400).json({ success: false, message: 'phone (10 digits) and otp (4-6 digits) are required' });
++    }
++    const result = await twoFactorTest.verify(phone, otp);
++    req.log.info({ phone: maskPhone(phone), reply: result.reply }, '2factor test verify');
++    const matched = Boolean(result.reply?.ok) && /otp matched/i.test(result.reply?.details || '');
++    return res.json({ success: matched, phone: `+91${phone}`, ...result });
+   } catch (error) {
+     return next(error);
+   }
+diff -ruN a/services/laundry-otp.js b/services/laundry-otp.js
+--- a/services/laundry-otp.js	2026-10-10 19:16:31
++++ b/services/laundry-otp.js	2026-10-10 19:16:59
+@@ -143,7 +143,12 @@
+     }
+     let payload = {};
+     try { payload = await res.json(); } catch { /* non-JSON body */ }
+-    return { ok: res.ok, status: String(payload.Status || ''), details: String(payload.Details || '') };
++    return {
++      ok: res.ok,
++      httpStatus: res.status,
++      status: String(payload.Status || ''),
++      details: String(payload.Details || ''),
++    };
+   },
+   async send(phone) {
+     const template = env.laundryTwoFactorTemplate
+@@ -196,4 +201,23 @@
+   return null;
+ }
+ 
+-module.exports = { otpProvider, providerFor, isReviewNumber };
++// Raw 2Factor calls for the secret-gated test endpoint
++// (/api/laundry/auth/test-2factor/*): always 2Factor, whatever
++// LAUNDRY_OTP_PROVIDER says, and the reply is returned as-is for debugging.
++// template: undefined = the configured LAUNDRY_2FACTOR_TEMPLATE, '' = none
++// (2Factor's default OTP), anything else = that template name.
++const twoFactorTest = {
++  configured: () => Boolean(env.laundryTwoFactorApiKey),
++  async send(phone, template) {
++    const name = template === undefined ? (env.laundryTwoFactorTemplate || '') : String(template);
++    const suffix = name ? `/${encodeURIComponent(name)}` : '';
++    const r = await twoFactorProvider.call(`${encodeURIComponent(`+91${phone}`)}/AUTOGEN${suffix}`);
++    return { template: name || null, reply: r };
++  },
++  async verify(phone, code) {
++    const r = await twoFactorProvider.call(`VERIFY3/${encodeURIComponent(`+91${phone}`)}/${encodeURIComponent(code)}`);
++    return { reply: r };
++  },
++};
++
++module.exports = { otpProvider, providerFor, isReviewNumber, twoFactorTest };
