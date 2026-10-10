@@ -49,8 +49,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.core.AppDate
 import com.dailyworks.apnalaundry.core.Money
-import com.dailyworks.apnalaundry.domain.EarningsMath
 import com.dailyworks.apnalaundry.domain.LaundryState
+import com.dailyworks.apnalaundry.domain.LaundryMath
+import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.IntrinsicSize
 import com.dailyworks.apnalaundry.domain.Order
 import com.dailyworks.apnalaundry.domain.OrderStatus
 import com.dailyworks.apnalaundry.domain.Route
@@ -332,23 +335,54 @@ private fun RoundIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, cd:
     }
 }
 
+/**
+ * Two tiles for the picked day, from live orders only (a deleted or
+ * cancelled order never counts): how many new orders, and their sales —
+ * the total of those orders' bills. Both open Earnings.
+ */
 @Composable
 private fun DashboardStrip(state: LaundryState, selDate: String, hidden: Boolean, onEye: () -> Unit, onOpen: () -> Unit) {
-    val newOrders = state.orders.count { it.createdOn == selDate && it.status != OrderStatus.CANCELLED }
-    val collected = EarningsMath.collectedOn(selDate, state.ledger)
+    val day = state.orders.filter { it.createdOn == selDate && it.status != OrderStatus.CANCELLED }
+    val newOrders = day.size
+    val sales = day.sumOf { LaundryMath.amtOf(it) }
     val rel = AppDate.rel(selDate)
     val whenText = if (rel != null) rel.lowercase() else "on ${AppDate.plain(selDate)}"
-    Row(Modifier.padding(horizontal = 16.dp).padding(bottom = 10.dp).fillMaxWidth().rounded(14.dp).background(Tokens.Card).border(1.dp, Tokens.CardBorder, RoundedCornerShape(14.dp)), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f).tap(onClick = onOpen).padding(horizontal = 14.dp, vertical = 10.dp)) {
-            Text("$newOrders", style = fig(20, FontWeight.Bold))
-            Text((if (newOrders == 1) "New order " else "New orders ") + whenText, style = fig(12, color = Tokens.Muted))
+    Row(
+        Modifier.padding(horizontal = 16.dp).padding(bottom = 10.dp).fillMaxWidth().height(IntrinsicSize.Min),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        // New orders — white card
+        Column(
+            Modifier.weight(1f).fillMaxHeight().rounded(18.dp).background(Tokens.Card)
+                .border(1.dp, Tokens.CardBorder, RoundedCornerShape(18.dp)).tap(onClick = onOpen).padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Box(Modifier.size(34.dp).rounded(10.dp).background(Tokens.BlueLight), contentAlignment = Alignment.Center) {
+                Icon(Icons.AutoMirrored.Outlined.ReceiptLong, null, tint = Tokens.Blue, modifier = Modifier.size(19.dp))
+            }
+            Column {
+                Text("$newOrders", style = bric(28, FontWeight.Bold))
+                Text((if (newOrders == 1) "New order " else "New orders ") + whenText, style = fig(12, FontWeight.SemiBold, Tokens.Muted), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
         }
-        Column(Modifier.weight(1.25f).tap(onClick = onOpen).padding(horizontal = 14.dp, vertical = 10.dp)) {
-            Text(if (hidden) "₹ ••••" else Money.rupees(collected), style = fig(20, FontWeight.Bold))
-            Text("Collected $whenText", style = fig(12, color = Tokens.Muted))
-        }
-        Box(Modifier.size(48.dp).tap(onClick = onEye), contentAlignment = Alignment.Center) {
-            Icon(if (hidden) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility, "Toggle amounts", tint = Tokens.Muted, modifier = Modifier.size(22.dp))
+        // Sales — solid blue card
+        Column(
+            Modifier.weight(1.3f).fillMaxHeight().rounded(18.dp).background(Tokens.Blue).tap(onClick = onOpen).padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(34.dp).rounded(10.dp).background(Color.White.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
+                    Text("₹", style = fig(18, FontWeight.Bold, Tokens.OnDark))
+                }
+                Spacer(Modifier.weight(1f))
+                Box(Modifier.size(34.dp).rounded(999.dp).tap(onClick = onEye), contentAlignment = Alignment.Center) {
+                    Icon(if (hidden) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility, "Show or hide amounts", tint = Tokens.OnDark.copy(alpha = 0.85f), modifier = Modifier.size(20.dp))
+                }
+            }
+            Column {
+                Text(if (hidden) "₹ ••••" else Money.rupees(sales), style = bric(28, FontWeight.Bold, Tokens.OnDark), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("Sales $whenText", style = fig(12, FontWeight.SemiBold, Tokens.OnDark.copy(alpha = 0.8f)), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
         }
     }
 }

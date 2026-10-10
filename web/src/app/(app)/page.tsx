@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as AppDate from "@/core/appdate";
 import { rupees } from "@/core/money";
-import { collectedOn } from "@/domain/earningsMath";
+import { amtOf } from "@/domain/laundryMath";
 import type { LaundryState, Order, OrderStatus } from "@/domain/models";
 import * as Sel from "@/domain/selectors";
 import * as Repo from "@/data/repository";
@@ -11,7 +11,7 @@ import { useAppStore, useLaundryState } from "@/data/store";
 import { Analytics } from "@/analytics/events";
 import { useScreenView } from "@/analytics/useScreenView";
 import { cls, PrimaryButton, SectionLabel } from "@/ui/basics";
-import { IcAdd, IcArrowDown, IcArrowUp, IcCalendar, IcEye, IcEyeOff, IcSearch, IcShirt } from "@/ui/icons";
+import { IcAdd, IcArrowDown, IcArrowUp, IcCalendar, IcEye, IcEyeOff, IcReceipt, IcSearch, IcShirt } from "@/ui/icons";
 import { OrderCard } from "@/ui/orderCard";
 import { SheetHost } from "@/ui/sheets/host";
 import type { ActiveSheet } from "@/ui/sheets/types";
@@ -315,6 +315,11 @@ function SearchBar({ value, onChange }: { value: string; onChange: (v: string) =
 
 // ---------- header pieces ----------
 
+/**
+ * Two tiles for the picked day, from live orders only (a deleted or
+ * cancelled order never counts): how many new orders, and their sales —
+ * the total of those orders' bills. Both open Earnings.
+ */
 function DashboardStrip({
   state, selDate, hidden, onEye, onOpen,
 }: {
@@ -324,23 +329,52 @@ function DashboardStrip({
   onEye: () => void;
   onOpen: () => void;
 }) {
-  const newOrders = state.orders.filter((o) => o.createdOn === selDate && o.status !== "CANCELLED").length;
-  const collected = collectedOn(selDate, state.ledger);
+  const day = state.orders.filter((o) => o.createdOn === selDate && o.status !== "CANCELLED");
+  const newOrders = day.length;
+  const sales = day.reduce((s, o) => s + amtOf(o), 0);
   const rel = AppDate.rel(selDate);
   const whenText = rel ? rel.toLowerCase() : `on ${AppDate.plain(selDate)}`;
   return (
-    <div className="mx-4 mb-2.5 flex items-center rounded-[14px] border border-cardborder bg-card">
-      <button type="button" onClick={onOpen} className="flex-1 px-3.5 py-2.5 text-left">
-        <div className="text-[20px] font-bold">{newOrders}</div>
-        <div className="text-[12px] text-muted">{(newOrders === 1 ? "New order " : "New orders ") + whenText}</div>
+    <div className="mx-4 mb-2.5 flex gap-2.5">
+      {/* New orders — white card */}
+      <button
+        type="button"
+        onClick={onOpen}
+        className="flex flex-1 flex-col gap-2 rounded-[18px] border border-cardborder bg-card p-3.5 text-left transition-colors hover:bg-bluelight/40"
+      >
+        <span className="flex size-[34px] items-center justify-center rounded-[10px] bg-bluelight text-blue">
+          <IcReceipt size={19} />
+        </span>
+        <span className="flex flex-col">
+          <span className="bric text-[28px] leading-tight">{newOrders}</span>
+          <span className="truncate text-[12px] font-semibold text-muted">{(newOrders === 1 ? "New order " : "New orders ") + whenText}</span>
+        </span>
       </button>
-      <button type="button" onClick={onOpen} className="flex-[1.25] px-3.5 py-2.5 text-left">
-        <div className="text-[20px] font-bold">{hidden ? "₹ ••••" : rupees(collected)}</div>
-        <div className="text-[12px] text-muted">Collected {whenText}</div>
-      </button>
-      <button type="button" onClick={onEye} aria-label="Toggle amounts" className="flex size-12 items-center justify-center text-muted">
-        {hidden ? <IcEyeOff size={22} /> : <IcEye size={22} />}
-      </button>
+      {/* Sales — solid blue card */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onOpen}
+        onKeyDown={(e) => { if (e.key === "Enter") onOpen(); }}
+        className="flex flex-[1.3] cursor-pointer flex-col gap-2 rounded-[18px] bg-blue p-3.5 text-left text-ondark shadow-md shadow-blue/20"
+      >
+        <span className="flex items-center">
+          <span className="flex size-[34px] items-center justify-center rounded-[10px] bg-white/20 text-[18px] font-bold">₹</span>
+          <span className="flex-1" />
+          <button
+            type="button"
+            aria-label="Show or hide amounts"
+            onClick={(e) => { e.stopPropagation(); onEye(); }}
+            className="flex size-[34px] items-center justify-center rounded-full text-ondark/85 hover:bg-white/10"
+          >
+            {hidden ? <IcEyeOff size={20} /> : <IcEye size={20} />}
+          </button>
+        </span>
+        <span className="flex min-w-0 flex-col">
+          <span className="bric truncate text-[28px] leading-tight">{hidden ? "₹ ••••" : rupees(sales)}</span>
+          <span className="truncate text-[12px] font-semibold text-ondark/80">Sales {whenText}</span>
+        </span>
+      </div>
     </div>
   );
 }
