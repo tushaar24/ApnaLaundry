@@ -21,7 +21,6 @@ import com.dailyworks.apnalaundry.ui.screens.customers.CustomersScreen
 import com.dailyworks.apnalaundry.ui.screens.earnings.EarningsScreen
 import com.dailyworks.apnalaundry.ui.screens.home.HomeScreen
 import com.dailyworks.apnalaundry.ui.screens.login.LoginScreen
-import com.dailyworks.apnalaundry.ui.screens.history.HistoryScreen
 import com.dailyworks.apnalaundry.ui.screens.neworder.NewOrderScreen
 import com.dailyworks.apnalaundry.ui.screens.order.OrderDetailScreen
 import com.dailyworks.apnalaundry.ui.screens.onboarding.BillDesignScreen
@@ -118,8 +117,6 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
                 }
             })
         }
-
-        composable(Routes.HISTORY) { HistoryScreen(shopVm, navigator) }
 
         composable(
             Routes.NEW,

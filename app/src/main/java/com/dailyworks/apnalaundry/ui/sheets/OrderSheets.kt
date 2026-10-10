@@ -200,7 +200,6 @@ fun CountClothesSheet(state: LaundryState, orderId: Int, next: OrderStatus, vm: 
                 when {
                     askDate && date.isBlank() -> "Pick a delivery date"
                     next == OrderStatus.READY -> "Mark ready · make bill"
-                    o.pickup == Route.SHOP -> "Received · make bill"
                     else -> "Picked up · make bill"
                 },
                 enabled = total > 0 && (!askDate || date.isNotBlank()), height = 56.dp,
@@ -362,7 +361,7 @@ fun ChangeStatusSheet(
     val o = Selectors.order(state, orderId) ?: return onDismiss()
     val c = Selectors.customer(state, o.custId)
     val steps = buildList {
-        if (o.pickup == Route.HOME || o.status == OrderStatus.CREATED) add(OrderStatus.CREATED to if (o.pickup == Route.HOME) "To pick up" else "To receive")
+        if (o.pickup == Route.HOME) add(OrderStatus.CREATED to "To pick up")
         add(OrderStatus.RECEIVED to "Received · clothes at shop")
         add(OrderStatus.READY to "Ready")
         add(OrderStatus.DELIVERED to "Delivered")
