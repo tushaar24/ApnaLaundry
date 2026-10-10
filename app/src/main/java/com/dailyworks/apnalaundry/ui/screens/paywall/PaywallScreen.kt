@@ -171,6 +171,12 @@ fun PaywallScreen(
             // proceed straight through instead of a summary.
             ui.stage == PaywallStage.DONE -> LaunchedEffect(Unit) { onDone() }
 
+            // Opened from Settings: the plan isn't known yet (this screen fetches it
+            // fresh). Wait for it — falling through would flash the trial paywall
+            // at someone who is already subscribed. (The hard gate only shows this
+            // screen after the status has loaded.)
+            !hardGate && ui.status == null -> if (ui.failed) CheckFailed(onRetry = vm::refresh) else ShopLoader()
+
             ui.stage == PaywallStage.WAITING -> WaitingView(onBack = { vm.backToPlans() })
 
             // Already subscribed (e.g. opened from Settings): show the plan, not

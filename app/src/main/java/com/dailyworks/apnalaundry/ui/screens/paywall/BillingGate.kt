@@ -103,7 +103,7 @@ private fun GatedContent(content: @Composable () -> Unit) {
 
 /** Billing couldn't be reached and there's no recent cached active subscription. */
 @Composable
-private fun CheckFailed(onRetry: () -> Unit) {
+internal fun CheckFailed(onRetry: () -> Unit) {
     Column(
         Modifier.fillMaxSize().background(Tokens.Bg).padding(horizontal = 32.dp),
         verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally,
