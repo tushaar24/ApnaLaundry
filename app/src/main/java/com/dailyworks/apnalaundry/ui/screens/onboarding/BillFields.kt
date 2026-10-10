@@ -16,9 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.List
@@ -109,7 +107,7 @@ fun FieldsSheet(shopVm: ShopViewModel, details: BillDetails.Fields, onChange: (B
     )
 
     AppBottomSheet(title = "Add fields to your bill", subtitle = "All optional. Your bill already works without these.", onDismiss = onClose) {
-        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Column(Modifier.fillMaxWidth().rounded(16.dp).background(Tokens.Card).border(1.dp, Tokens.CardBorder, RoundedCornerShape(16.dp))) {
                 rows.forEachIndexed { i, r ->
                     if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Divider))
@@ -257,7 +255,7 @@ private fun TermsEditor(terms: List<String>, custom: String, onSave: (List<Strin
     var picked by remember { mutableStateOf(terms.toSet()) }
     var own by remember { mutableStateOf(custom) }
     AppBottomSheet(title = "Terms & conditions", subtitle = "Small lines at the bottom of every bill. Tick the ones you want.", onDismiss = onBack) {
-        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             BillDetails.TERM_PRESETS.forEach { t ->
                 val on = t.id in picked
                 Row(
