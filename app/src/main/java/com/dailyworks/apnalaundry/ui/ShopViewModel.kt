@@ -148,6 +148,18 @@ class ShopViewModel(
     suspend fun uploadLogo(uri: Uri): Result<String> =
         runCatching { logos.upload(uri) }.onSuccess { _logoTick.value++; com.dailyworks.apnalaundry.analytics.Analytics.logoUploaded() }
 
+    private val billUrls = mutableMapOf<Int, String>()
+
+    /**
+     * An order's public bill page, for the WhatsApp message ("Download PDF:").
+     * Cached once fetched; a failure (offline, order not synced yet) isn't
+     * cached, so the next try asks again. Never waits more than 3 s.
+     */
+    suspend fun billUrl(orderId: Int): String? = billUrls[orderId]
+        ?: kotlinx.coroutines.withTimeoutOrNull(3_000) {
+            runCatching { "$BILL_PAGE_URL${api.billLink(orderId)}" }.getOrNull()
+        }?.also { billUrls[orderId] = it }
+
     private var sampleUrl: String? = null
 
     /** The shop's sample-bill page (onboarding "Test on WhatsApp"); null offline. */

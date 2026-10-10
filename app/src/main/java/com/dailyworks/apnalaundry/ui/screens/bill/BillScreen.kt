@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.core.AppDate
 import com.dailyworks.apnalaundry.core.Money
@@ -55,6 +56,7 @@ import com.dailyworks.apnalaundry.ui.theme.Tokens
 fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, from: String) {
     val state by shopVm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     val o = Selectors.order(state, orderId) ?: return
     val c = Selectors.customer(state, o.custId)
     val gst = LaundryMath.gstOf(o)
@@ -65,6 +67,8 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
     var active by remember { mutableStateOf<ActiveSheet?>(null) }
 
     LaunchedEffect(Unit) { Analytics.screen("bill") }
+    // The bill page link for the WhatsApp message — fetched ahead, so Send is instant.
+    LaunchedEffect(orderId) { shopVm.billUrl(orderId) }
 
     Box(Modifier.fillMaxSize().background(Tokens.Bg)) {
         Column(
@@ -121,7 +125,9 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
                         OutlineButton("View bill", Modifier.weight(1f), height = 50.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { active = ActiveSheet.BillView(o.id) }
                         OutlineButton("Download", Modifier.weight(1f), height = 50.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { Analytics.billDownloaded(o.id, "bill"); shareBillPdf(context, state, o) }
                     }
-                    PrimaryButton(if (o.billSent) "Send again" else "Send on WhatsApp", height = 54.dp) { sendBillOnWhatsApp(context, state, o); shopVm.sendBill(o.id) }
+                    PrimaryButton(if (o.billSent) "Send again" else "Send on WhatsApp", height = 54.dp) {
+                        scope.launch { sendBillOnWhatsApp(context, state, o, shopVm.billUrl(o.id)); shopVm.sendBill(o.id) }
+                    }
                     Text(
                         if (o.billSent) "Sent to ${Selectors.firstName(c.name)} ✓" else "Not sent yet",
                         style = fig(13, FontWeight.Bold, if (o.billSent) Tokens.BlueText else Tokens.OrangeText),

@@ -38,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.core.AppDate
 import com.dailyworks.apnalaundry.core.Money
@@ -64,6 +65,12 @@ import com.dailyworks.apnalaundry.ui.theme.Tokens
 fun OrderDetailScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, from: String) {
     val state by shopVm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    // The bill page link for the WhatsApp message — fetched ahead, so Send is instant.
+    LaunchedEffect(orderId) { shopVm.billUrl(orderId) }
+    val sendOnWhatsApp: (com.dailyworks.apnalaundry.domain.Order) -> Unit = { ord ->
+        scope.launch { sendBillOnWhatsApp(context, state, ord, shopVm.billUrl(ord.id)); shopVm.sendBill(ord.id) }
+    }
     val o = Selectors.order(state, orderId) ?: return
     val c = Selectors.customer(state, o.custId)
     val gst = LaundryMath.gstOf(o)
@@ -171,8 +178,8 @@ fun OrderDetailScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: I
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlineButton("View bill", Modifier.weight(1f), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { active = ActiveSheet.BillView(o.id) }
                         OutlineButton("Download", Modifier.weight(1f), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { Analytics.billDownloaded(o.id, "order_detail"); shareBillPdf(context, state, o) }
-                        if (o.billSent) OutlineButton("Sent ✓", Modifier.weight(1f), height = 48.dp, border = Tokens.BlueBorder, fg = Tokens.BlueText) { sendBillOnWhatsApp(context, state, o); shopVm.sendBill(o.id) }
-                        else PrimaryButton("WhatsApp", Modifier.weight(1f), height = 48.dp) { sendBillOnWhatsApp(context, state, o); shopVm.sendBill(o.id) }
+                        if (o.billSent) OutlineButton("Sent ✓", Modifier.weight(1f), height = 48.dp, border = Tokens.BlueBorder, fg = Tokens.BlueText) { sendOnWhatsApp(o) }
+                        else PrimaryButton("WhatsApp", Modifier.weight(1f), height = 48.dp) { sendOnWhatsApp(o) }
                     }
                 } else {
                     Box(Modifier.fillMaxWidth().rounded(12.dp).background(Tokens.Card).padding(14.dp)) {

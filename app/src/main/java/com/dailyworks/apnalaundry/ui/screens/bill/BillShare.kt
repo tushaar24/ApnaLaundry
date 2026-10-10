@@ -66,18 +66,59 @@ private fun combinedBillPdfUri(context: Context, r: CombinedReceipt): Uri {
     }
 }
 
+/**
+ * Writes the bill as a PNG (3× for sharp text) at cacheDir/bills/[fileName] and
+ * returns a content:// uri. WhatsApp keeps a caption on a picture, never on a
+ * document — so bills go to customers as a picture, with the message.
+ */
+private fun pngUri(context: Context, fileName: String, heightPt: Float, draw: (android.graphics.Canvas) -> Unit): Uri {
+    val scale = 3f
+    val file = File(File(context.cacheDir, "bills").apply { mkdirs() }, fileName)
+    val bmp = android.graphics.Bitmap.createBitmap(
+        (BillRender.W * scale).toInt(), kotlin.math.ceil(heightPt * scale).toInt(), android.graphics.Bitmap.Config.ARGB_8888,
+    )
+    try {
+        val canvas = android.graphics.Canvas(bmp)
+        canvas.drawColor(android.graphics.Color.WHITE)
+        canvas.scale(scale, scale)
+        draw(canvas)
+        FileOutputStream(file).use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+    } finally {
+        bmp.recycle()
+    }
+    return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+}
+
+private fun billPngUri(context: Context, state: LaundryState, o: Order): Uri {
+    val receipt = BillReceipt.of(state, o)
+    val logo = cachedLogo(receipt.logoId)
+    return pngUri(context, "Bill-${o.no().replace('/', '-')}.png", BillRender.height(context, receipt, logo)) {
+        BillRender.drawPage(context, it, receipt, logo)
+    }
+}
+
+private fun combinedBillPngUri(context: Context, r: CombinedReceipt): Uri {
+    val logo = cachedLogo(r.logoId)
+    return pngUri(context, CombinedBill.fileName(r.customerName, r.period).removeSuffix(".pdf") + ".png", BillRender.height(context, r, logo)) {
+        BillRender.drawPage(context, it, r, logo)
+    }
+}
+
 // ---------------- sending ----------------
 
 private val WHATSAPP_PACKAGES = listOf("com.whatsapp", "com.whatsapp.w4b")
 
 /**
- * Message that travels with the PDF — the web's billMessage (asterisks render
- * bold) minus the bill-page link, since the PDF itself is attached.
+ * Message that travels with the bill picture — the web's billMessage
+ * (asterisks render bold), with the bill page's link so the customer can
+ * download the PDF. Offline / not synced yet: the message without the link.
  */
-private fun billCaption(state: LaundryState, o: Order): String {
+private fun billCaption(state: LaundryState, o: Order, link: String?): String {
     val c = Selectors.customer(state, o.custId)
     return "Hi ${Selectors.firstName(c.name)}, here is your bill for order #${o.no()} from *${state.shop.name}* — " +
-        "Total *${Money.rupees(LaundryMath.amtOf(o))}*.\n\nThank you!"
+        "Total *${Money.rupees(LaundryMath.amtOf(o))}*." +
+        (if (link != null) "\n\nDownload PDF: $link" else "") +
+        "\n\nThank you!"
 }
 
 private fun combinedBillCaption(shopName: String, r: CombinedReceipt): String {
@@ -88,18 +129,16 @@ private fun combinedBillCaption(shopName: String, r: CombinedReceipt): String {
 }
 
 /**
- * Hands a PDF to WhatsApp with the customer's chat preselected (the "jid"
- * extra), never through Android's share sheet:
+ * Hands the bill picture + message to WhatsApp with the customer's chat
+ * preselected (the "jid" extra), never through Android's share sheet:
  *  - one WhatsApp installed → straight into it;
  *  - both personal and Business → the owner picks once ("Send bills from"),
  *    and that choice is remembered for every later bill;
  *  - none → the share sheet, as the only way left.
- * The caption rides along as EXTRA_TEXT, and is also copied to the clipboard,
- * because WhatsApp doesn't always keep a caption on a document.
  */
-private fun sendPdfOnWhatsApp(context: Context, uri: Uri, phoneDigits: String, caption: String, chooserTitle: String) {
+private fun sendImageOnWhatsApp(context: Context, uri: Uri, phoneDigits: String, caption: String, chooserTitle: String) {
     val send = Intent(Intent.ACTION_SEND).apply {
-        type = "application/pdf"
+        type = "image/png"
         putExtra(Intent.EXTRA_STREAM, uri)
         putExtra(Intent.EXTRA_TEXT, caption)
         if (phoneDigits.length == 10) putExtra("jid", "91$phoneDigits@s.whatsapp.net")
@@ -108,33 +147,26 @@ private fun sendPdfOnWhatsApp(context: Context, uri: Uri, phoneDigits: String, c
     val installed = WHATSAPP_PACKAGES.filter { context.packageManager.getLaunchIntentForPackage(it) != null }
     val prefs = context.getSharedPreferences("bill_share", Context.MODE_PRIVATE)
     val saved = prefs.getString("whatsapp_pkg", null)?.takeIf { it in installed }
+    val chooser = { Intent.createChooser(send, chooserTitle).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
 
     fun launch(pkg: String) {
-        copyCaption(context, caption)
         try {
             context.startActivity(Intent(send).setPackage(pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            android.widget.Toast.makeText(
-                context, "Message copied — if WhatsApp doesn't show it, long-press the box and Paste", android.widget.Toast.LENGTH_LONG,
-            ).show()
         } catch (e: ActivityNotFoundException) {
-            context.startActivity(Intent.createChooser(send, chooserTitle).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            context.startActivity(chooser())
         }
     }
 
     when {
-        installed.isEmpty() -> {
-            copyCaption(context, caption)
-            context.startActivity(Intent.createChooser(send, chooserTitle).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        }
+        installed.isEmpty() -> context.startActivity(chooser())
         installed.size == 1 -> launch(installed[0])
         saved != null -> launch(saved)
         context !is android.app.Activity -> launch(installed[0]) // no screen to ask on
         else -> {
             // Both installed, not chosen yet: ask once, remember for next time.
-            val labels = arrayOf("WhatsApp", "WhatsApp Business")
             android.app.AlertDialog.Builder(context)
                 .setTitle("Send bills from")
-                .setItems(labels) { _, which ->
+                .setItems(arrayOf("WhatsApp", "WhatsApp Business")) { _, which ->
                     val pkg = WHATSAPP_PACKAGES[which]
                     prefs.edit().putString("whatsapp_pkg", pkg).apply()
                     launch(pkg)
@@ -142,13 +174,6 @@ private fun sendPdfOnWhatsApp(context: Context, uri: Uri, phoneDigits: String, c
                 .setNegativeButton("Cancel", null)
                 .show()
         }
-    }
-}
-
-private fun copyCaption(context: Context, caption: String) {
-    runCatching {
-        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-        cm.setPrimaryClip(android.content.ClipData.newPlainText("Bill message", caption))
     }
 }
 
@@ -165,9 +190,13 @@ private fun sharePdf(context: Context, uri: Uri, title: String) {
 private fun phoneDigits(state: LaundryState, custId: String): String =
     Selectors.customer(state, custId).phone.filter { it.isDigit() }.takeLast(10)
 
-/** Sends the bill PDF to the customer on WhatsApp (their chat opens directly). Caller marks it sent. */
-fun sendBillOnWhatsApp(context: Context, state: LaundryState, o: Order) {
-    sendPdfOnWhatsApp(context, billPdfUri(context, state, o), phoneDigits(state, o.custId), billCaption(state, o), "Send bill #${o.no()}")
+/**
+ * Sends the bill to the customer on WhatsApp — their chat opens directly with
+ * the bill picture and the message ([link] = the bill page, for the PDF).
+ * Caller marks it sent.
+ */
+fun sendBillOnWhatsApp(context: Context, state: LaundryState, o: Order, link: String?) {
+    sendImageOnWhatsApp(context, billPngUri(context, state, o), phoneDigits(state, o.custId), billCaption(state, o, link), "Send bill #${o.no()}")
 }
 
 /** Renders the bill to a PDF and opens the share sheet (save or send). */
@@ -176,12 +205,12 @@ fun shareBillPdf(context: Context, state: LaundryState, o: Order) {
 }
 
 /**
- * Sends a combined bill (many orders, one PDF) to the customer on WhatsApp.
+ * Sends a combined bill (many orders, one picture + message) to the customer on WhatsApp.
  * A document only — nothing is written to the khata.
  */
 fun sendCombinedBillOnWhatsApp(context: Context, state: LaundryState, custId: String, r: CombinedReceipt) {
-    sendPdfOnWhatsApp(
-        context, combinedBillPdfUri(context, r), phoneDigits(state, custId),
+    sendImageOnWhatsApp(
+        context, combinedBillPngUri(context, r), phoneDigits(state, custId),
         combinedBillCaption(state.shop.name, r), "Send combined bill",
     )
 }
