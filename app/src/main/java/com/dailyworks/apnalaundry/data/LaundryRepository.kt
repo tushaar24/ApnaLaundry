@@ -351,8 +351,6 @@ class LaundryRepository(private val db: AppDatabase) {
             ledgerDao.getAll().filter { it.ref == orderId && !it.deleted }.forEach {
                 ledgerDao.insert(it.copy(deleted = true, dirty = true, updatedAt = now))
             }
-            // Deleting the newest order frees its number for the next one.
-            shopDao.get()?.let { s -> if (orderId == s.nextOrder - 1) shopDao.upsert(s.copy(nextOrder = orderId, dirty = true, updatedAt = now)) }
         }
         return CmdResult("Bill #${o.no()} deleted · $nm", undo)
     }
