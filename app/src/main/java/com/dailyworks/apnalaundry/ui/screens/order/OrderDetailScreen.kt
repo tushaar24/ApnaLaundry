@@ -73,12 +73,14 @@ fun OrderDetailScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: I
     LaunchedEffect(Unit) { Analytics.screen("order_detail") }
 
     val cancelled = o.status == OrderStatus.CANCELLED
-    val labels = if (o.pickup == Route.HOME) listOf("To pick up", "Received", "Ready", "Delivered") else listOf("Received", "Ready", "Delivered")
-    val keys = if (o.pickup == Route.HOME) listOf(OrderStatus.CREATED, OrderStatus.RECEIVED, OrderStatus.READY, OrderStatus.DELIVERED) else listOf(OrderStatus.RECEIVED, OrderStatus.READY, OrderStatus.DELIVERED)
+    // A shop order with no clothes yet is still CREATED: show its waiting step too.
+    val showCreated = o.pickup == Route.HOME || o.status == OrderStatus.CREATED
+    val labels = if (showCreated) listOf(if (o.pickup == Route.HOME) "To pick up" else "To receive", "Received", "Ready", "Delivered") else listOf("Received", "Ready", "Delivered")
+    val keys = if (showCreated) listOf(OrderStatus.CREATED, OrderStatus.RECEIVED, OrderStatus.READY, OrderStatus.DELIVERED) else listOf(OrderStatus.RECEIVED, OrderStatus.READY, OrderStatus.DELIVERED)
     val idx = if (cancelled) -1 else keys.indexOf(o.status)
 
     val actLabel = when (o.status) {
-        OrderStatus.CREATED -> "Mark picked up"; OrderStatus.RECEIVED -> "Mark ready"; OrderStatus.READY -> "Mark delivered"; else -> ""
+        OrderStatus.CREATED -> if (o.pickup == Route.SHOP) "Mark received" else "Mark picked up"; OrderStatus.RECEIVED -> "Mark ready"; OrderStatus.READY -> "Mark delivered"; else -> ""
     }
 
     fun onAct() {

@@ -18,6 +18,7 @@ object Routes {
     const val COMBINED_BILL = "combined-bill/{custId}"
     const val SUBSCRIPTION = "subscription"
     const val BILL_DESIGN = "bill-design"
+    const val HISTORY = "history"
 }
 
 /** Thin typed wrapper over the NavController used by every screen. */
@@ -42,6 +43,7 @@ class AppNavigator(val nav: NavHostController) {
     fun openSettings() = navigateTab(Routes.SETTINGS)
     fun openSubscription() = nav.navigate(Routes.SUBSCRIPTION) { launchSingleTop = true }
     fun openBillDesign() = nav.navigate(Routes.BILL_DESIGN) { launchSingleTop = true }
+    fun openHistory() = nav.navigate(Routes.HISTORY) { launchSingleTop = true }
 
     fun selectTab(tab: NavTab) = when (tab) {
         NavTab.ORDERS -> navigateTab(Routes.HOME)

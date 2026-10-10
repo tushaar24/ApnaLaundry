@@ -2,12 +2,11 @@ package com.dailyworks.apnalaundry.ui.screens.home
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
@@ -23,8 +21,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Checkroom
 import androidx.compose.material.icons.outlined.Visibility
@@ -32,6 +28,7 @@ import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,12 +36,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
-import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.core.AppDate
@@ -53,11 +48,9 @@ import com.dailyworks.apnalaundry.domain.EarningsMath
 import com.dailyworks.apnalaundry.domain.LaundryState
 import com.dailyworks.apnalaundry.domain.Order
 import com.dailyworks.apnalaundry.domain.OrderStatus
-import com.dailyworks.apnalaundry.domain.Route
 import com.dailyworks.apnalaundry.ui.Selectors
 import com.dailyworks.apnalaundry.ui.ShopViewModel
 import com.dailyworks.apnalaundry.ui.components.BottomNav
-import com.dailyworks.apnalaundry.ui.components.FieldBox
 import com.dailyworks.apnalaundry.ui.components.NavTab
 import com.dailyworks.apnalaundry.ui.components.OrderCard
 import com.dailyworks.apnalaundry.ui.components.PrimaryButton
@@ -71,15 +64,13 @@ import com.dailyworks.apnalaundry.ui.screens.paywall.ShopLoader
 import com.dailyworks.apnalaundry.ui.sheets.ActiveSheet
 import com.dailyworks.apnalaundry.ui.sheets.SheetHost
 import com.dailyworks.apnalaundry.ui.theme.Tokens
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.material.icons.outlined.CalendarMonth
-import androidx.compose.ui.platform.LocalDensity
-import com.dailyworks.apnalaundry.ui.components.showDatePicker
 
+/**
+ * Home = the work screen. One rule: an order never leaves this screen until
+ * it is delivered (or cancelled). No date strip, no tabs — three stacks by
+ * what to do next, late ones on top. Dates are labels on cards, never
+ * something to navigate. Delivered and cancelled orders live in History.
+ */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
@@ -92,23 +83,16 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
     // orders would flash "Your shop is ready!" for a second. Keep the gate's loader.
     if (!loaded) { ShopLoader(); return }
 
-    // Saveable: Back from an order (opened from search results) lands on the same view.
-    var tabPickup by rememberSaveable { mutableStateOf(true) }
-    var selDate by rememberSaveable { mutableStateOf(AppDate.TODAY) }
-    // Past midnight (app left open overnight): move "Today" to the new day.
+    // Past midnight (app left open overnight): "today" moves to the new day.
+    var today by remember { mutableStateOf(AppDate.TODAY) }
     LaunchedEffect(Unit) {
-        var today = AppDate.TODAY
         while (true) {
             kotlinx.coroutines.delay(60_000)
-            val now = AppDate.TODAY
-            if (now != today) {
-                if (selDate == today) selDate = now
-                today = now
-            }
+            if (AppDate.TODAY != today) today = AppDate.TODAY
         }
     }
-    var filter by rememberSaveable { mutableStateOf("all") }
-    // Search (all dates). The bottom nav clears it, so coming back starts empty.
+    // Search (all orders, all dates). Saveable: Back from an order lands on the
+    // same results; the bottom nav clears it, so coming back starts empty.
     var query by rememberSaveable { mutableStateOf("") }
     val searching = query.isNotBlank()
     val typeQuery: (String) -> Unit = { v ->
@@ -140,23 +124,23 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
         }
 
         val noOrders = state.orders.isEmpty()
-
-        if (!noOrders) {
-            // While searching only the tabs stay, so switching tab re-runs the search there.
-            if (!searching) DashboardStrip(state, selDate, hidden, onEye = shopVm::toggleHideAmounts, onOpen = { navigator.openEarnings() })
-            TabRow(state, tabPickup, selDate) { tabPickup = it; filter = "all" }
-            if (!searching) {
-                DateStrip(state, tabPickup, selDate) { selDate = it }
-                FilterTabs(state, tabPickup, selDate, filter) { filter = it }
-            }
+        if (!noOrders && !searching) {
+            DashboardStrip(state, today, hidden, onEye = shopVm::toggleHideAmounts, onOpen = { navigator.openEarnings() })
         }
+
+        // The three stacks. Late first (oldest date on top), then by date; no date = last.
+        val cmp = compareBy<Order> { stageDate(it).ifBlank { "9999-99-99" } }.thenByDescending { it.express }.thenBy { it.id }
+        val toPickUp = state.orders.filter { it.status == OrderStatus.CREATED }.sortedWith(cmp)
+        val inShop = state.orders.filter { it.status == OrderStatus.RECEIVED }.sortedWith(cmp)
+        val ready = state.orders.filter { it.status == OrderStatus.READY }.sortedWith(cmp)
+        val deliveredToday = state.orders.count { it.status == OrderStatus.DELIVERED && it.doneDate == today }
 
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (noOrders) {
                 EmptyHome { startNewOrder("empty_home") }
                 return@Box
             }
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, bottom = 170.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 170.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 // Sticky: stays on screen while scrolling orders.
                 stickyHeader(key = "search") {
                     Box(Modifier.fillMaxWidth().background(Tokens.Bg).padding(top = 4.dp, bottom = 2.dp)) {
@@ -164,11 +148,11 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                     }
                 }
                 if (searching) {
-                    val results = searchResults(state, query, tabPickup)
+                    val results = searchResults(state, query)
                     item(key = "count") {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(
-                                "${results.size} ${if (results.size == 1) "order" else "orders"} in ${if (tabPickup) "Pickups" else "Deliveries"} · all dates",
+                                "${results.size} ${if (results.size == 1) "order" else "orders"} · all dates",
                                 style = fig(14, color = Tokens.Muted), modifier = Modifier.weight(1f),
                             )
                             Text("Clear search", style = fig(14, FontWeight.Bold, Tokens.Blue), modifier = Modifier.tap { query = "" }.padding(vertical = 8.dp))
@@ -191,43 +175,50 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                             }
                         }
                     }
-                    items(results) { o -> OrderCard(state, o, tabPickup, false, { navigator.openOrder(o.id) }, { act(o) }, { active = ActiveSheet.Menu(o.id) }, { dial(context, o, state) }, showDate = true) }
+                    items(results) { o -> OrderCard(state, o, o.status == OrderStatus.CREATED, false, { navigator.openOrder(o.id) }, { act(o) }, { active = ActiveSheet.Menu(o.id) }, { dial(context, o, state) }, showDate = true) }
                     return@LazyColumn
                 }
 
-                // Pending group (today only)
-                if (selDate == AppDate.TODAY) {
-                    val pending = pendingOf(state, tabPickup).filter { pass(state, it, tabPickup, filter) }.sortedWith(byTodo())
-                    if (pending.isNotEmpty()) {
-                        item {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 2.dp)) {
-                                Box(Modifier.size(7.dp).rounded(999.dp).background(Tokens.Orange))
-                                SectionLabel((if (tabPickup) "Pending from earlier · " else "Late or no delivery date · ") + pending.size, color = Tokens.OrangeText)
-                            }
+                // A stack: header with count, then its cards. Hidden when empty.
+                fun stage(title: String, list: List<Order>, pickupSection: Boolean) {
+                    if (list.isEmpty()) return
+                    item(key = "h-$title") { SectionLabel("$title · ${list.size}", modifier = Modifier.padding(top = 6.dp)) }
+                    items(list) { o -> OrderCard(state, o, pickupSection, isLate(o, today), { navigator.openOrder(o.id) }, { act(o) }, { active = ActiveSheet.Menu(o.id) }, { dial(context, o, state) }, showDate = true) }
+                }
+                stage("To pick up", toPickUp, pickupSection = true)
+                stage("In shop", inShop, pickupSection = false)
+                stage("Ready to deliver", ready, pickupSection = false)
+
+                if (toPickUp.isEmpty() && inShop.isEmpty() && ready.isEmpty()) {
+                    item(key = "done") {
+                        Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 40.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("All caught up!", style = fig(17, FontWeight.Bold))
+                            Text("Every order is delivered. Take the next one below.", style = fig(14, color = Tokens.Muted), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                         }
-                        items(pending) { o -> OrderCard(state, o, tabPickup, true, { navigator.openOrder(o.id) }, { act(o) }, { active = ActiveSheet.Menu(o.id) }, { dial(context, o, state) }) }
                     }
                 }
 
-                val list = dayOrders(state, selDate, tabPickup).filter { pass(state, it, tabPickup, filter) }.sortedWith(byTodo())
-                item { SectionLabel(AppDate.long(selDate), modifier = Modifier.padding(top = 6.dp)) }
-                if (list.isEmpty()) {
-                    item {
-                        Column(Modifier.fillMaxWidth().padding(40.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(if (tabPickup) "No pickups" else "No deliveries", style = fig(17, FontWeight.Bold))
-                            Text("Nothing here for ${AppDate.long(selDate)}.", style = fig(14, color = Tokens.Muted))
-                        }
+                // Finished work lives in History, out of the way.
+                item(key = "history") {
+                    Row(
+                        Modifier.fillMaxWidth().padding(top = 8.dp).rounded(14.dp).background(Tokens.Card)
+                            .border(1.dp, Tokens.CardBorder, RoundedCornerShape(14.dp))
+                            .tap { navigator.openHistory() }.padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            if (deliveredToday > 0) "Delivered today · $deliveredToday" else "Delivered & cancelled orders",
+                            style = fig(15, FontWeight.SemiBold), modifier = Modifier.weight(1f),
+                        )
+                        Text("History ›", style = fig(14, FontWeight.Bold, Tokens.Blue))
                     }
                 }
-                items(list) { o -> OrderCard(state, o, tabPickup, false, { navigator.openOrder(o.id) }, { act(o) }, { active = ActiveSheet.Menu(o.id) }, { dial(context, o, state) }) }
             }
 
             // New order FAB
-            run {
-                Row(Modifier.align(Alignment.BottomEnd).padding(16.dp).height(58.dp).rounded(999.dp).background(Tokens.Blue).tap { startNewOrder("home") }.padding(start = 18.dp, end = 22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Icon(Icons.Filled.Add, null, tint = Tokens.OnDark, modifier = Modifier.size(22.dp))
-                    Text("New order", style = fig(17, FontWeight.Bold, Tokens.OnDark))
-                }
+            Row(Modifier.align(Alignment.BottomEnd).padding(16.dp).height(58.dp).rounded(999.dp).background(Tokens.Blue).tap { startNewOrder("home") }.padding(start = 18.dp, end = 22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(Icons.Filled.Add, null, tint = Tokens.OnDark, modifier = Modifier.size(22.dp))
+                Text("New order", style = fig(17, FontWeight.Bold, Tokens.OnDark))
             }
         }
 
@@ -324,28 +315,19 @@ private fun HowStep(n: Int, title: String, desc: String) {
     }
 }
 
-// ---------- header pieces ----------
+// ---------- dashboard (today, fixed) ----------
 @Composable
-private fun RoundIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, cd: String, onClick: () -> Unit) {
-    Box(Modifier.size(44.dp).rounded(999.dp).background(Tokens.Card).border(1.dp, Tokens.CardBorder, RoundedCornerShape(999.dp)).tap(onClick = onClick), contentAlignment = Alignment.Center) {
-        Icon(icon, cd, tint = Tokens.Ink, modifier = Modifier.size(20.dp))
-    }
-}
-
-@Composable
-private fun DashboardStrip(state: LaundryState, selDate: String, hidden: Boolean, onEye: () -> Unit, onOpen: () -> Unit) {
-    val newOrders = state.orders.count { it.createdOn == selDate && it.status != OrderStatus.CANCELLED }
-    val collected = EarningsMath.collectedOn(selDate, state.ledger)
-    val rel = AppDate.rel(selDate)
-    val whenText = if (rel != null) rel.lowercase() else "on ${AppDate.plain(selDate)}"
+private fun DashboardStrip(state: LaundryState, today: String, hidden: Boolean, onEye: () -> Unit, onOpen: () -> Unit) {
+    val newOrders = state.orders.count { it.createdOn == today && it.status != OrderStatus.CANCELLED }
+    val collected = EarningsMath.collectedOn(today, state.ledger)
     Row(Modifier.padding(horizontal = 16.dp).padding(bottom = 10.dp).fillMaxWidth().rounded(14.dp).background(Tokens.Card).border(1.dp, Tokens.CardBorder, RoundedCornerShape(14.dp)), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f).tap(onClick = onOpen).padding(horizontal = 14.dp, vertical = 10.dp)) {
             Text("$newOrders", style = fig(20, FontWeight.Bold))
-            Text((if (newOrders == 1) "New order " else "New orders ") + whenText, style = fig(12, color = Tokens.Muted))
+            Text((if (newOrders == 1) "New order " else "New orders ") + "today", style = fig(12, color = Tokens.Muted))
         }
         Column(Modifier.weight(1.25f).tap(onClick = onOpen).padding(horizontal = 14.dp, vertical = 10.dp)) {
             Text(if (hidden) "₹ ••••" else Money.rupees(collected), style = fig(20, FontWeight.Bold))
-            Text("Collected $whenText", style = fig(12, color = Tokens.Muted))
+            Text("Collected today", style = fig(12, color = Tokens.Muted))
         }
         Box(Modifier.size(48.dp).tap(onClick = onEye), contentAlignment = Alignment.Center) {
             Icon(if (hidden) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility, "Toggle amounts", tint = Tokens.Muted, modifier = Modifier.size(22.dp))
@@ -353,162 +335,34 @@ private fun DashboardStrip(state: LaundryState, selDate: String, hidden: Boolean
     }
 }
 
-@Composable
-private fun TabRow(state: LaundryState, pickup: Boolean, selDate: String, onSelect: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 0.dp).padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        listOf(true, false).forEach { pk ->
-            val on = pickup == pk
-            val n = tabTodo(state, pk, selDate)
-            Row(
-                Modifier.weight(1f).height(50.dp).rounded(14.dp).background(if (on) Tokens.Ink else Tokens.Card).border(1.5.dp, if (on) Tokens.Ink else Tokens.CardBorder, RoundedCornerShape(14.dp)).tap { onSelect(pk) },
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
-            ) {
-                Icon(if (pk) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward, null, tint = if (on) Tokens.OnDark else Tokens.Ink, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(if (pk) "Pickups" else "Deliveries", style = fig(16, FontWeight.Bold, if (on) Tokens.OnDark else Tokens.Ink))
-                Spacer(Modifier.width(8.dp))
-                Box(Modifier.height(22.dp).rounded(999.dp).background(if (n > 0) Tokens.Orange else if (on) Tokens.DarkChipTrack else Tokens.NeutralFill).padding(horizontal = 6.dp).width(if (n > 9) 26.dp else 22.dp), contentAlignment = Alignment.Center) {
-                    Text("$n", style = fig(12, FontWeight.Bold, if (n > 0) Tokens.OnDark else if (on) Tokens.OnDark else Tokens.InkSecondary))
-                }
-            }
-        }
-    }
+// ---------- pure home logic ----------
+/** The date an order is waiting on: pickup until it's with us, delivery after. */
+private fun stageDate(o: Order): String =
+    if (o.status == OrderStatus.CREATED) o.pickupDate else o.deliveryDate
+
+private fun isLate(o: Order, today: String): Boolean {
+    val d = stageDate(o)
+    return d.isNotBlank() && d < today
 }
-
-/** Days the strip shows around today (orders can be dated in the past). */
-private const val STRIP_BACK = 60
-private const val STRIP_AHEAD = 30
-
-@Composable
-private fun DateStrip(state: LaundryState, pickup: Boolean, selDate: String, onPick: (String) -> Unit) {
-    val context = LocalContext.current
-    val today = AppDate.TODAY
-    // Stretch the range when the date picker jumps outside it.
-    val back = maxOf(STRIP_BACK, -AppDate.daysBetween(today, selDate))
-    val ahead = maxOf(STRIP_AHEAD, AppDate.daysBetween(today, selDate))
-    val days = (-back..ahead).toList()
-    val list = rememberLazyListState()
-    val density = LocalDensity.current
-    var first by remember { mutableStateOf(true) }
-    // Keep the selected day in view: centred on open, smoothly after a pick.
-    LaunchedEffect(selDate, back) {
-        val idx = days.indexOf(AppDate.daysBetween(today, selDate)).coerceAtLeast(0)
-        val half = list.layoutInfo.viewportSize.width / 2
-        val cell = with(density) { 52.dp.roundToPx() }
-        val offset = -(half - cell / 2).coerceAtLeast(0)
-        if (first) list.scrollToItem(idx, offset) else list.animateScrollToItem(idx, offset)
-        first = false
-    }
-    Row(Modifier.fillMaxWidth().padding(bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        LazyRow(
-            state = list,
-            modifier = Modifier.weight(1f),
-            contentPadding = PaddingValues(horizontal = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            items(days, key = { it }) { i ->
-                val iso = AppDate.add(today, i)
-                val on = selDate == iso
-                val n = state.orders.count { onDate(it, iso, pickup) && it.status != OrderStatus.CANCELLED }
-                Column(
-                    Modifier.width(50.dp).height(58.dp).rounded(12.dp).background(if (on) Tokens.Ink else Color.Transparent).border(1.5.dp, if (on) Tokens.Ink else Color.Transparent, RoundedCornerShape(12.dp)).tap { onPick(iso) },
-                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
-                ) {
-                    Text(if (i == 0) "Today" else if (AppDate.dayOfMonth(iso) == 1) AppDate.plain(iso).split(" ").last() else AppDate.dayName(iso), style = fig(11, FontWeight.Bold, if (on) Tokens.OnDarkMuted else if (i == 0) Tokens.Blue else Tokens.Muted))
-                    Text("${AppDate.dayOfMonth(iso)}", style = fig(17, FontWeight.Bold, if (on) Tokens.OnDark else Tokens.Ink))
-                    Text(if (n > 0) "$n" else "", style = fig(11, FontWeight.Bold, if (on) Tokens.BlueBar else Tokens.Blue))
-                }
-            }
-        }
-        // Jump to any date (past orders included).
-        Box(
-            Modifier.padding(end = 8.dp).size(44.dp).rounded(12.dp).tap { showDatePicker(context, selDate, null, onPick) },
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(Icons.Outlined.CalendarMonth, "Pick a date", tint = Tokens.Blue, modifier = Modifier.size(22.dp))
-        }
-    }
-}
-
-@Composable
-private fun FilterTabs(state: LaundryState, pickup: Boolean, selDate: String, filter: String, onSelect: (String) -> Unit) {
-    val defs = if (pickup) listOf("all" to "All", "created" to "To pick up", "received" to "Received", "cancelled" to "Cancelled")
-    else listOf("all" to "All", "notready" to "Not ready", "ready" to "Ready", "delivered" to "Delivered")
-    val day = dayOrders(state, selDate, pickup)
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-        defs.forEach { (key, label) ->
-            val on = filter == key
-            val n = if (key == "all") day.count { it.status != OrderStatus.CANCELLED } else day.count { groupOf(it, pickup) == key }
-            Column(Modifier.tap { onSelect(key) }.height(44.dp), verticalArrangement = Arrangement.Center) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text(label, style = fig(14, FontWeight.Bold, if (on) Tokens.Ink else Tokens.Muted))
-                    Text("$n", style = fig(14, FontWeight.SemiBold, Tokens.Faint))
-                }
-                Box(Modifier.padding(top = 4.dp).height(2.5.dp).width(if (on) 40.dp else 0.dp).background(Tokens.Ink))
-            }
-        }
-    }
-}
-
-// ---------- pure home logic (ported from prototype vHome) ----------
-// Ready and delivered orders are past pickup: they live under Deliveries only.
-private fun onDate(o: Order, iso: String, pickup: Boolean): Boolean =
-    if (pickup) o.pickupDate == iso && o.status != OrderStatus.READY && o.status != OrderStatus.DELIVERED
-    else (o.deliveryDate == iso && o.status != OrderStatus.CANCELLED)
-
-private fun isTodo(o: Order, pickup: Boolean): Boolean =
-    if (pickup) o.status == OrderStatus.CREATED else o.status in listOf(OrderStatus.CREATED, OrderStatus.RECEIVED, OrderStatus.READY)
-
-private fun groupOf(o: Order, pickup: Boolean): String =
-    if (pickup) when (o.status) { OrderStatus.CREATED -> "created"; OrderStatus.CANCELLED -> "cancelled"; else -> "received" }
-    else if (o.status == OrderStatus.CREATED || o.status == OrderStatus.RECEIVED) "notready" else o.status.name.lowercase()
 
 private fun rank(s: OrderStatus) = when (s) {
     OrderStatus.CREATED -> 0; OrderStatus.RECEIVED -> 1; OrderStatus.READY -> 2; OrderStatus.DELIVERED -> 3; OrderStatus.CANCELLED -> 4
 }
 
-private fun byTodo(): Comparator<Order> = compareBy<Order> { rank(it.status) }.thenByDescending { it.express }.thenBy { it.id }
-
-private fun pendingOf(state: LaundryState, pickup: Boolean): List<Order> = state.orders.filter { o ->
-    if (pickup) o.status == OrderStatus.CREATED && o.pickupDate < AppDate.TODAY
-    else o.status in listOf(OrderStatus.CREATED, OrderStatus.RECEIVED, OrderStatus.READY) && ((o.deliveryDate.isNotBlank() && o.deliveryDate < AppDate.TODAY) || o.deliveryDate.isBlank())
-}
-
-private fun dayOrders(state: LaundryState, iso: String, pickup: Boolean): List<Order> =
-    state.orders.filter { onDate(it, iso, pickup) }
-
-private fun pass(state: LaundryState, o: Order, pickup: Boolean, filter: String): Boolean =
-    if (filter == "all") o.status != OrderStatus.CANCELLED else groupOf(o, pickup) == filter
-
-private fun tabTodo(state: LaundryState, pickup: Boolean, selDate: String): Int {
-    val base = state.orders.count { onDate(it, selDate, pickup) && isTodo(it, pickup) }
-    return base + if (selDate == AppDate.TODAY) pendingOf(state, pickup).size else 0
-}
-
-/** Deliveries: ready first, then not ready, not picked up, delivered. */
-private fun delRank(s: OrderStatus) = when (s) {
-    OrderStatus.READY -> 0; OrderStatus.RECEIVED -> 1; OrderStatus.CREATED -> 2; OrderStatus.DELIVERED -> 3; OrderStatus.CANCELLED -> 4
-}
-
 /**
- * Search across all dates: name (any part), phone (3+ digits), order no.
- * (2+ digits, "#" optional). Pickups: to-do first, then newest pickup.
- * Deliveries: no cancelled; ready first, then earliest delivery date.
+ * Search every order, any date or status: name (any part), phone (3+ digits),
+ * order no. (2+ digits, "#" optional). Open orders first, in work order.
  */
-private fun searchResults(state: LaundryState, query: String, pickup: Boolean): List<Order> {
+private fun searchResults(state: LaundryState, query: String): List<Order> {
     val qs = query.trim().lowercase()
     if (qs.isEmpty()) return emptyList()
     val qd = qs.filter { it.isDigit() }
     val qn = qs.removePrefix("#").trim()
     return state.orders.filter { o ->
-        if (!pickup && o.status == OrderStatus.CANCELLED) return@filter false
         val c = Selectors.customer(state, o.custId)
         c.name.lowercase().contains(qs) || (qd.length >= 3 && c.phone.contains(qd)) ||
             (qd.length >= 2 && (o.id.toString().contains(qn) || o.no().lowercase().contains(qn)))
-    }.sortedWith(
-        if (pickup) compareBy<Order> { rank(it.status) }.thenByDescending { it.pickupDate }.thenByDescending { it.id }
-        else compareBy<Order> { delRank(it.status) }.thenBy { it.deliveryDate.ifBlank { "9999" } }.thenBy { it.id },
-    )
+    }.sortedWith(compareBy<Order> { rank(it.status) }.thenByDescending { it.id })
 }
 
 private fun dial(context: android.content.Context, o: Order, state: LaundryState) {

@@ -183,7 +183,7 @@ class LaundryRepository(private val db: AppDatabase) {
         val nm = firstName(st.customers.first { it.id == o.custId }.name)
         orderDao.upsert(o.copy(status = OrderStatus.RECEIVED).toEntity())
         Analytics.orderPickedUp(orderId)
-        return CmdResult("Picked up · $nm", undo)
+        return CmdResult((if (o.pickup == Route.SHOP) "Clothes received" else "Picked up") + " · $nm", undo)
     }
 
     /** Ready: the owner also says when it'll be delivered (like payment on delivery). */
@@ -212,7 +212,11 @@ class LaundryRepository(private val db: AppDatabase) {
         if (next == OrderStatus.READY && deliveryDate.isNotBlank()) counted = counted.copy(deliveryDate = deliveryDate, ddAuto = false)
         orderDao.upsert(counted.toEntity())
         Analytics.clothesCounted(orderId, next.name, total)
-        val head = if (next == OrderStatus.READY) "Marked ready · $nm" else "Picked up"
+        val head = when {
+            next == OrderStatus.READY -> "Marked ready · $nm"
+            o.pickup == Route.SHOP -> "Clothes received"
+            else -> "Picked up"
+        }
         return CmdResult("$head · bill of ${money(total)} made — send it from the order", undo)
     }
 
@@ -347,6 +351,8 @@ class LaundryRepository(private val db: AppDatabase) {
             ledgerDao.getAll().filter { it.ref == orderId && !it.deleted }.forEach {
                 ledgerDao.insert(it.copy(deleted = true, dirty = true, updatedAt = now))
             }
+            // Deleting the newest order frees its number for the next one.
+            shopDao.get()?.let { s -> if (orderId == s.nextOrder - 1) shopDao.upsert(s.copy(nextOrder = orderId, dirty = true, updatedAt = now)) }
         }
         return CmdResult("Bill #${o.no()} deleted · $nm", undo)
     }
@@ -540,8 +546,10 @@ class LaundryRepository(private val db: AppDatabase) {
 
         // create
         val shopE = shopDao.get()!!
-        val id = shopE.nextOrder
-        val status = if (pickup == Route.SHOP) OrderStatus.RECEIVED else OrderStatus.CREATED
+        val id = maxOf(shopE.nextOrder, (orderDao.observeOnce().maxOfOrNull { it.id } ?: 0) + 1)
+        // Clothes in hand (itemised or a quick bill) at the shop = received;
+        // no clothes yet = nothing with us — still to pick up / be dropped off.
+        val status = if (pickup == Route.SHOP && (fields.lines.isNotEmpty() || quickAmount > 0)) OrderStatus.RECEIVED else OrderStatus.CREATED
         val order = Order(
             id = id, custId = fields.custId, pickup = fields.pickup, delivery = fields.delivery,
             pickupDate = fields.pickupDate, pickupTime = fields.pickupTime, deliveryDate = fields.deliveryDate,

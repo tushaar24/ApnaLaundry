@@ -66,7 +66,7 @@ fun OrderCard(
     val warn = when {
         !pickupTab && o.deliveryDate.isBlank() && o.status in listOf(OrderStatus.CREATED, OrderStatus.RECEIVED, OrderStatus.READY) -> "No delivery date · tap ⋯ to set"
         late -> "Late · was due ${AppDate.plain(if (pickupTab) o.pickupDate else o.deliveryDate)}"
-        !pickupTab && o.status == OrderStatus.CREATED -> "Not picked up yet"
+        !pickupTab && o.status == OrderStatus.CREATED -> if (o.pickup == Route.SHOP) "Clothes not received yet" else "Not picked up yet"
         !pickupTab && o.status == OrderStatus.RECEIVED -> "Not ready yet"
         else -> ""
     }
@@ -87,7 +87,7 @@ fun OrderCard(
     }
 
     val actLabel = when (o.status) {
-        OrderStatus.CREATED -> "Mark picked up"
+        OrderStatus.CREATED -> if (o.pickup == Route.SHOP) "Mark received" else "Mark picked up"
         OrderStatus.RECEIVED -> "Mark ready"
         OrderStatus.READY -> "Mark delivered"
         else -> ""
@@ -101,12 +101,12 @@ fun OrderCard(
 
     val whenText = when {
         !showDate -> ""
-        pickupTab -> "Pickup ${AppDate.plain(o.pickupDate)} · "
-        o.deliveryDate.isNotBlank() -> "Delivery ${AppDate.plain(o.deliveryDate)} · "
-        else -> "No delivery date · "
+        pickupTab -> "Pickup ${AppDate.short(o.pickupDate)} · "
+        o.deliveryDate.isNotBlank() -> "Delivery ${AppDate.short(o.deliveryDate)} · "
+        else -> "" // the orange "No delivery date" line below already says it
     }
     val meta = "#${o.no()} · " + whenText + if (counted) "${Selectors.itemsLabel(o)} · ${Selectors.svcLabel(o)}"
-    else if (o.pickup == Route.HOME && o.status == OrderStatus.CREATED) "Clothes will be counted at pickup"
+    else if (o.status == OrderStatus.CREATED) (if (o.pickup == Route.HOME) "Clothes will be counted at pickup" else "Clothes will be counted when they arrive")
     else (if (o.pieces > 0) "${o.pieces} pieces · " else "") + "Bill not made yet"
 
     val cardBorder = if (late) Tokens.OrangeBorder else Tokens.CardBorder
