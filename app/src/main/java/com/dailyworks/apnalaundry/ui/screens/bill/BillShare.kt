@@ -89,9 +89,13 @@ private fun combinedBillCaption(shopName: String, r: CombinedReceipt): String {
 
 /**
  * Hands a PDF to WhatsApp with the customer's chat preselected (the "jid"
- * extra) instead of the contact picker. Exactly one WhatsApp → go straight
- * in; both (personal + Business) or none → the owner picks from the share
- * sheet.
+ * extra), never through Android's share sheet:
+ *  - one WhatsApp installed → straight into it;
+ *  - both personal and Business → the owner picks once ("Send bills from"),
+ *    and that choice is remembered for every later bill;
+ *  - none → the share sheet, as the only way left.
+ * The caption rides along as EXTRA_TEXT, and is also copied to the clipboard,
+ * because WhatsApp doesn't always keep a caption on a document.
  */
 private fun sendPdfOnWhatsApp(context: Context, uri: Uri, phoneDigits: String, caption: String, chooserTitle: String) {
     val send = Intent(Intent.ACTION_SEND).apply {
@@ -102,15 +106,49 @@ private fun sendPdfOnWhatsApp(context: Context, uri: Uri, phoneDigits: String, c
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
     val installed = WHATSAPP_PACKAGES.filter { context.packageManager.getLaunchIntentForPackage(it) != null }
-    val chooser = Intent.createChooser(send, chooserTitle).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    try {
-        if (installed.size == 1) {
-            context.startActivity(Intent(send).setPackage(installed[0]).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        } else {
-            context.startActivity(chooser)
+    val prefs = context.getSharedPreferences("bill_share", Context.MODE_PRIVATE)
+    val saved = prefs.getString("whatsapp_pkg", null)?.takeIf { it in installed }
+
+    fun launch(pkg: String) {
+        copyCaption(context, caption)
+        try {
+            context.startActivity(Intent(send).setPackage(pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            android.widget.Toast.makeText(
+                context, "Message copied — if WhatsApp doesn't show it, long-press the box and Paste", android.widget.Toast.LENGTH_LONG,
+            ).show()
+        } catch (e: ActivityNotFoundException) {
+            context.startActivity(Intent.createChooser(send, chooserTitle).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }
-    } catch (e: ActivityNotFoundException) {
-        context.startActivity(chooser)
+    }
+
+    when {
+        installed.isEmpty() -> {
+            copyCaption(context, caption)
+            context.startActivity(Intent.createChooser(send, chooserTitle).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+        installed.size == 1 -> launch(installed[0])
+        saved != null -> launch(saved)
+        context !is android.app.Activity -> launch(installed[0]) // no screen to ask on
+        else -> {
+            // Both installed, not chosen yet: ask once, remember for next time.
+            val labels = arrayOf("WhatsApp", "WhatsApp Business")
+            android.app.AlertDialog.Builder(context)
+                .setTitle("Send bills from")
+                .setItems(labels) { _, which ->
+                    val pkg = WHATSAPP_PACKAGES[which]
+                    prefs.edit().putString("whatsapp_pkg", pkg).apply()
+                    launch(pkg)
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+        }
+    }
+}
+
+private fun copyCaption(context: Context, caption: String) {
+    runCatching {
+        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        cm.setPrimaryClip(android.content.ClipData.newPlainText("Bill message", caption))
     }
 }
 
