@@ -1,0 +1,21 @@
+diff -ruN a/services/laundry-otp.js b/services/laundry-otp.js
+--- a/services/laundry-otp.js	2026-10-10 18:59:02
++++ b/services/laundry-otp.js	2026-10-10 18:59:02
+@@ -149,14 +149,15 @@
+     const template = env.laundryTwoFactorTemplate
+       ? `/${encodeURIComponent(env.laundryTwoFactorTemplate)}`
+       : '';
+-    const r = await this.call(`${phone}/AUTOGEN${template}`);
++    // Phone in international format (+91…), as every 2Factor OTP example uses.
++    const r = await this.call(`${encodeURIComponent(`+91${phone}`)}/AUTOGEN${template}`);
+     if (!r) return { code: 'unknown' };
+     if (r.ok && r.status === 'Success' && r.details) return { code: 'sent', reference: r.details };
+     logger.warn({ status: r.status, details: r.details }, '2factor send rejected');
+     return { code: 'unavailable' };
+   },
+   async verify(phone, code) {
+-    const r = await this.call(`VERIFY3/${phone}/${encodeURIComponent(code)}`);
++    const r = await this.call(`VERIFY3/${encodeURIComponent(`+91${phone}`)}/${encodeURIComponent(code)}`);
+     if (!r) return { code: 'unknown' };
+     const details = r.details.toLowerCase();
+     if (r.ok && details.includes('otp matched')) return { code: 'valid' };
