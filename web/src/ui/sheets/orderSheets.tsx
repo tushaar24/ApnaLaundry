@@ -9,13 +9,14 @@ import type { LaundryState, Order, OrderStatus, PayMethod } from "@/domain/model
 import * as Sel from "@/domain/selectors";
 import * as Repo from "@/data/repository";
 import { Analytics } from "@/analytics/events";
-import { cls, DateTimeBox, Divider, FieldBox, PillChip, PrimaryButton, Toggle } from "../basics";
+import { cls, DateTimeBox, Divider, FieldBox, PillChip, PrimaryButton } from "../basics";
 import { billPreviewUrl } from "../billPdf";
 import { prepareBillAssets } from "../billRender";
 import { IcCalendar } from "../icons";
 import { AppSheet } from "../sheet";
 import { ClothesEditor, useClothesState } from "../clothes";
 import type { useNav } from "../shell";
+import type { ActiveSheet } from "./types";
 
 /** Ports of ui/sheets/OrderSheets.kt. */
 
@@ -190,8 +191,8 @@ export function ReadySheet({
 }
 
 export function CountClothesSheet({
-  state, orderId, next, onDismiss,
-}: { state: LaundryState; orderId: number; next: OrderStatus; onDismiss: () => void }) {
+  state, orderId, next, onDismiss, onSaved,
+}: { state: LaundryState; orderId: number; next: OrderStatus; onDismiss: () => void; onSaved?: () => void }) {
   const o = Sel.order(state, orderId);
   const c = Sel.customer(state, o?.custId ?? "");
   const clothes = useClothesState(state.services);
@@ -213,7 +214,7 @@ export function CountClothesSheet({
           disabled={total <= 0 || (askDate && date === "")}
           onClick={() => {
             Repo.saveCount(orderId, next, clothes.lines(state.services), askDate ? date : "");
-            onDismiss();
+            (onSaved ?? onDismiss)();
           }}
         >
           {askDate && date === "" ? "Pick a delivery date" : next === "READY" ? "Mark ready · make bill" : "Picked up · make bill"}
@@ -234,7 +235,6 @@ export function RescheduleSheet({
   const base = o ? (isPickup ? o.pickupDate : o.deliveryDate) : "";
   const [date, setDate] = useState(base);
   const [time] = useState(o ? AppDate.to24h(isPickup ? o.pickupTime : o.deliveryTime) : "");
-  const [notify, setNotify] = useState(true);
   if (!o) { onDismiss(); return null; }
 
   const title = isPickup ? "Reschedule pickup" : o.deliveryDate !== "" ? "Reschedule delivery" : "Set delivery date";
@@ -268,15 +268,11 @@ export function RescheduleSheet({
             Delivery moves too: {AppDate.short(AppDate.add(o.deliveryDate, AppDate.daysBetween(o.pickupDate, date)))}
           </span>
         ) : null}
-        <div className="flex w-full items-center rounded-xl bg-card p-3.5">
-          <span className="flex-1 text-[15px] font-semibold">Tell customer on WhatsApp</span>
-          <Toggle on={notify} onToggle={() => setNotify((v) => !v)} />
-        </div>
         <PrimaryButton
           disabled={date === ""}
           onClick={() => {
             if (date === "") return;
-            Repo.reschedule(orderId, which, date, time, notify);
+            Repo.reschedule(orderId, which, date, time, false);
             onDismiss();
           }}
         >
@@ -295,15 +291,21 @@ export function CancelSheet({
   const [reason, setReason] = useState("");
   if (!o) { onDismiss(); return null; }
   const reasons = ["Customer not home", "Customer cancelled", "Wrong address", "Other"];
+  const word = o.status === "CREATED" ? "pickup" : "order";
 
   return (
-    <AppSheet title="Cancel pickup?" subtitle={`${c.name} · #${Sel.orderNo(o)}`} onDismiss={onDismiss}>
+    <AppSheet title={`Cancel ${word}?`} subtitle={`${c.name} · #${Sel.orderNo(o)}`} onDismiss={onDismiss}>
       <div className="flex flex-col gap-3.5">
         <div className="flex flex-wrap gap-1.5">
           {reasons.map((r) => (
             <PillChip key={r} label={r} selected={reason === r} onClick={() => setReason(reason === r ? "" : r)} />
           ))}
         </div>
+        {o.status === "DELIVERED" ? (
+          <span className="text-[13px] text-muted">
+            The bill comes off the khata. Money already taken stays as {Sel.firstName(c.name)}&apos;s advance.
+          </span>
+        ) : null}
         <div className="flex w-full gap-2">
           <button
             type="button"
@@ -321,7 +323,7 @@ export function CancelSheet({
               onDismiss();
             }}
           >
-            Cancel pickup
+            Cancel {word}
           </PrimaryButton>
         </div>
       </div>
@@ -412,5 +414,116 @@ function ReceiptPreview({ state, order }: { state: LaundryState; order: Order })
   return (
     // eslint-disable-next-line @next/next/no-img-element -- a data: URL, nothing to optimise
     <img src={src} alt={`Bill #${Sel.orderNo(order)}`} className="w-full rounded-2xl border border-cardborder bg-white" />
+  );
+}
+
+/**
+ * Change status: every state the order can be in, the next one pre-selected.
+ * Forward steps that need input reuse the usual sheets (count clothes,
+ * delivery date, collect payment, cancel reason); everything else is a direct
+ * move, going backward included. Port of ChangeStatusSheet (Android).
+ */
+export function ChangeStatusSheet({
+  state, orderId, onOpen, onDismiss,
+}: {
+  state: LaundryState;
+  orderId: number;
+  onOpen: (s: ActiveSheet) => void;
+  onDismiss: () => void;
+}) {
+  const o = Sel.order(state, orderId);
+  const c = Sel.customer(state, o?.custId ?? "");
+  const [sel, setSel] = useState<OrderStatus>(() =>
+    o?.status === "CREATED" ? "RECEIVED"
+      : o?.status === "RECEIVED" ? "READY"
+        : o?.status === "READY" ? "DELIVERED"
+          : o?.status === "DELIVERED" ? "READY" // only way is back
+            : "RECEIVED",
+  );
+  if (!o) { onDismiss(); return null; }
+
+  const steps: [OrderStatus, string][] = [
+    ...(o.pickup === "HOME" ? ([["CREATED", "To pick up"]] as [OrderStatus, string][]) : []),
+    ["RECEIVED", "Received · clothes at shop"],
+    ["READY", "Ready"],
+    ["DELIVERED", "Delivered"],
+    ["CANCELLED", "Cancelled"],
+  ];
+
+  function apply(target: OrderStatus) {
+    if (!o) return;
+    if (target === o.status) return onDismiss();
+    if (target === "CANCELLED") return onOpen({ kind: "cancel", orderId: o.id });
+    if (target === "DELIVERED") {
+      // No bill yet: count the clothes first, then collect.
+      return onOpen(o.lines.length === 0 ? { kind: "count", orderId: o.id, next: "READY", thenPay: true } : { kind: "pay", orderId: o.id });
+    }
+    if (target === "READY" && o.status !== "DELIVERED" && o.status !== "CANCELLED") {
+      // Forward to ready asks the delivery date; back from delivered doesn't.
+      return onOpen(o.lines.length === 0 ? { kind: "count", orderId: o.id, next: "READY" } : { kind: "ready", orderId: o.id });
+    }
+    if (target === "RECEIVED" && o.status === "CREATED" && o.lines.length === 0) {
+      return onOpen({ kind: "count", orderId: o.id, next: "RECEIVED" });
+    }
+    Repo.setStatus(o.id, target);
+    onDismiss();
+  }
+
+  const selLabel = steps.find(([k]) => k === sel)?.[1].split(" · ")[0] ?? "";
+  return (
+    <AppSheet title="Change status" subtitle={`${c.name} · #${Sel.orderNo(o)}`} onDismiss={onDismiss}>
+      <div className="flex flex-col gap-2">
+        {steps.map(([st, label]) => {
+          const current = st === o.status;
+          const on = sel === st && !current;
+          const danger = st === "CANCELLED";
+          return (
+            <button
+              key={st}
+              type="button"
+              disabled={current}
+              onClick={() => setSel(st)}
+              className={cls(
+                "flex w-full items-center gap-2.5 rounded-[14px] border-[1.5px] px-3.5 py-[13px] text-left",
+                on ? "border-blue bg-bluelight" : "border-cardborder bg-card",
+              )}
+            >
+              <span
+                className={cls(
+                  "size-[18px] shrink-0 rounded-full border-[1.5px]",
+                  on ? "border-blue bg-blue" : "border-fieldborder bg-card",
+                )}
+              />
+              <span
+                className={cls(
+                  "flex-1 text-[15px]",
+                  on ? "font-bold" : "font-semibold",
+                  current ? "text-muted" : danger ? "text-orangetext" : "text-ink",
+                )}
+              >
+                {label}
+              </span>
+              {current ? <span className="text-[12px] font-bold text-muted">Current</span> : null}
+            </button>
+          );
+        })}
+        {o.status === "DELIVERED" && sel !== "DELIVERED" ? (
+          <span className="text-[13px] text-muted">
+            Going back takes the bill off the khata. Money already taken stays with the order and counts when you deliver again.
+          </span>
+        ) : null}
+        <PrimaryButton
+          h={54}
+          bg={sel === "CANCELLED" ? "orange" : "blue"}
+          disabled={sel === o.status}
+          onClick={() => apply(sel)}
+          className="mt-1.5"
+        >
+          {sel === "DELIVERED"
+            ? o.lines.length === 0 ? "Count clothes · deliver" : "Mark delivered"
+            : sel === "CANCELLED" ? "Cancel order" : `Move to ${selLabel}`}
+        </PrimaryButton>
+      </div>
+    </AppSheet>
   );
 }

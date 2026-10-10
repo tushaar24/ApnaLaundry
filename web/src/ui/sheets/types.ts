@@ -5,7 +5,8 @@ export type ActiveSheet =
   | { kind: "menu"; orderId: number }
   | { kind: "pay"; orderId: number }
   | { kind: "ready"; orderId: number }
-  | { kind: "count"; orderId: number; next: OrderStatus }
+  | { kind: "count"; orderId: number; next: OrderStatus; thenPay?: boolean } // thenPay: count, then collect
+  | { kind: "changeStatus"; orderId: number }
   | { kind: "reschedule"; orderId: number; which: string } // "pickup" | "drop"
   | { kind: "cancel"; orderId: number }
   | { kind: "deleteOrder"; orderId: number }

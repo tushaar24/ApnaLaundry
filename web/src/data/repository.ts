@@ -61,9 +61,6 @@ function firstName(name: string): string {
   return name.startsWith("+") ? name : name.split(" ")[0];
 }
 
-function waReady(nm: string): string {
-  return AppDate.isLateNight() ? `ready message to ${nm} goes at 9 AM` : `WhatsApp sent to ${nm}`;
-}
 
 function custName(custId: string): string {
   const c = rows().customers.find((c) => c.id === custId);
@@ -245,7 +242,7 @@ export function markReady(orderId: number, deliveryDate: string) {
   const o = orderOf(orderId);
   updateOrder(orderId, deliveryDate ? { status: "READY", deliveryDate, ddAuto: false } : { status: "READY" });
   Analytics.orderMarkedReady(orderId);
-  publish({ toast: `Marked ready · ${waReady(custName(o.custId))}`, undo: undoSnap });
+  publish({ toast: `Marked ready · ${custName(o.custId)}`, undo: undoSnap });
 }
 
 /** Count-clothes sheet: attach lines and advance to `next` (received or ready). */
@@ -263,14 +260,16 @@ export function saveCount(orderId: number, next: OrderStatus, lines: OrderLine[]
     ...(next === "READY" && deliveryDate ? { deliveryDate, ddAuto: false } : {}),
   });
   Analytics.clothesCounted(orderId, next, total);
-  const head = next === "READY" ? `Marked ready · ${waReady(nm)}` : "Picked up";
+  const head = next === "READY" ? `Marked ready · ${nm}` : "Picked up";
   publish({ toast: `${head} · bill of ${rupees(total)} made — send it from the order`, undo: undoSnap });
 }
 
 export function deliver(orderId: number, amountReceived: number, method: PayMethod) {
   const undoSnap = snapshot();
   const o = orderOf(orderId);
-  if (!isOpen(o)) return; // already delivered / cancelled — never bill twice
+  // Already delivered: never bill twice. A cancelled order may be delivered —
+  // that revives it (it has no BILL entry).
+  if (o.status === "DELIVERED") return;
   const st = deriveState(rows());
   const total = amtOf(o);
   const pre = o.pre;
@@ -288,7 +287,7 @@ export function deliver(orderId: number, amountReceived: number, method: PayMeth
   // today's Deliveries whatever was planned (or if no date was set).
   const now = AppDate.nowText();
   updateOrder(orderId, {
-    status: "DELIVERED", doneAt: now, doneDate: AppDate.today(),
+    status: "DELIVERED", cancelReason: "", doneAt: now, doneDate: AppDate.today(),
     deliveryDate: AppDate.today(), deliveryTime: now, ddAuto: false, paid: alloc.paidToward,
   });
   Analytics.orderDelivered({
@@ -324,9 +323,52 @@ export function prepay(orderId: number, method: PayMethod) {
 export function cancelOrder(orderId: number, reason: string) {
   const undoSnap = snapshot();
   const o = orderOf(orderId);
-  updateOrder(orderId, { status: "CANCELLED", cancelReason: reason });
+  const back = o.status === "DELIVERED" ? reverseDelivery(o) : {};
+  updateOrder(orderId, { ...back, status: "CANCELLED", cancelReason: reason });
   Analytics.orderCancelled(orderId, reason);
-  publish({ toast: `Pickup cancelled · ${custName(o.custId)}`, undo: undoSnap });
+  publish({ toast: `${o.status === "CREATED" ? "Pickup" : "Order"} cancelled · ${custName(o.custId)}`, undo: undoSnap });
+}
+
+const STATUS_WORD: Record<OrderStatus, string> = {
+  CREATED: "To pick up", RECEIVED: "Received", READY: "Ready", DELIVERED: "Delivered", CANCELLED: "Cancelled",
+};
+
+/**
+ * Change status: move an order to any state. Steps that need input (count
+ * clothes, delivery date, payment, cancel reason) go through their own sheets
+ * and commands; this does the direct writes, backward moves included.
+ * Leaving DELIVERED first takes the bill off the khata. Port of setStatus.
+ */
+export function setStatus(orderId: number, target: OrderStatus) {
+  const o = orderOf(orderId);
+  if (o.status === target || target === "DELIVERED") return; // delivering = deliver()
+  const undoSnap = snapshot();
+  const unDelivered = o.status === "DELIVERED";
+  const back = unDelivered ? reverseDelivery(o) : {};
+  updateOrder(orderId, { ...back, status: target, cancelReason: "" });
+  Analytics.orderStatusChanged(orderId, o.status, target);
+  publish({
+    toast: `Moved to ${STATUS_WORD[target]} · ${custName(o.custId)}` + (unDelivered ? " · bill taken off the khata" : ""),
+    undo: undoSnap,
+  });
+}
+
+/**
+ * Un-deliver: the BILL (and any ADJ) khata entries become tombstones, so the
+ * bill is gone; payments stay in the khata and count on the order as
+ * paid-in-advance, so delivering again never bills twice. Returns the order
+ * fields to write.
+ */
+function reverseDelivery(o: Order): Partial<Order> {
+  const mine = rows().ledger.filter((e) => e.ref === o.id && !e.deleted);
+  setRows((r) => ({
+    ...r,
+    ledger: r.ledger.map((e) =>
+      e.ref === o.id && !e.deleted && (e.kind === "BILL" || e.kind === "ADJ") ? { ...e, deleted: true, ...stamp() } : e,
+    ),
+  }));
+  const pre = mine.filter((e) => e.kind === "GOT").reduce((s, e) => s + e.cover, 0);
+  return { pre, paid: 0, doneAt: "", doneDate: "" };
 }
 
 /**
@@ -378,7 +420,7 @@ export function reschedule(orderId: number, kind: string, dateIso: string, time2
     msg = prefix + AppDate.short(dateIso) + (time12 ? ` · ${time12}` : "");
   }
   Analytics.orderRescheduled(orderId, kind === "pickup" ? "pickup" : "delivery", notify);
-  publish({ toast: msg + (notify ? " · WhatsApp sent" : ""), undo: undoSnap });
+  publish({ toast: msg, undo: undoSnap });
 }
 
 export function sendBill(orderId: number) {

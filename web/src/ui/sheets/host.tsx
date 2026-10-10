@@ -4,7 +4,8 @@ import type { LaundryState } from "@/domain/models";
 import type { useNav } from "../shell";
 import type { ActiveSheet } from "./types";
 import {
-  BillViewSheet, CancelSheet, CollectPaymentSheet, CountClothesSheet, DeleteOrderSheet, ReadySheet, RescheduleSheet,
+  BillViewSheet, CancelSheet, ChangeStatusSheet, CollectPaymentSheet, CountClothesSheet, DeleteOrderSheet, ReadySheet,
+  RescheduleSheet,
 } from "./orderSheets";
 import { AddOldBaakiSheet, CustomerFormSheet, ReceivePaymentSheet } from "./customerSheets";
 import { OrderMenuSheet, ShareSummarySheet } from "./menuShare";
@@ -28,7 +29,18 @@ export function SheetHost({
     case "ready":
       return <ReadySheet state={state} orderId={active.orderId} onDismiss={onDismiss} />;
     case "count":
-      return <CountClothesSheet state={state} orderId={active.orderId} next={active.next} onDismiss={onDismiss} />;
+      return (
+        <CountClothesSheet
+          state={state}
+          orderId={active.orderId}
+          next={active.next}
+          onDismiss={onDismiss}
+          // Straight to Delivered with no bill yet: count first, then collect.
+          onSaved={() => (active.thenPay ? onOpen({ kind: "pay", orderId: active.orderId }) : onDismiss())}
+        />
+      );
+    case "changeStatus":
+      return <ChangeStatusSheet state={state} orderId={active.orderId} onOpen={onOpen} onDismiss={onDismiss} />;
     case "reschedule":
       return <RescheduleSheet state={state} orderId={active.orderId} which={active.which} onDismiss={onDismiss} />;
     case "cancel":

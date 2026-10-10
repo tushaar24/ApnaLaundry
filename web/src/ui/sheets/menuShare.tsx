@@ -7,7 +7,7 @@ import * as Repo from "@/data/repository";
 import { cls, PrimaryButton } from "../basics";
 import { AppSheet } from "../sheet";
 import {
-  IcCalendar, IcCall, IcCancel, IcCheck, IcDelete, IcEdit, IcEye, IcPerson, IcReceipt, IcTruck,
+  IcCalendar, IcCall, IcCancel, IcDelete, IcEdit, IcEye, IcPerson, IcReceipt, IcReplay, IcTruck,
 } from "../icons";
 import type { ActiveSheet } from "./types";
 import type { useNav } from "../shell";
@@ -53,14 +53,8 @@ export function OrderMenuSheet({
           <MenuRow icon={<IcReceipt size={22} />} label="View / send bill" onClick={() => { onDismiss(); nav.openBill(o.id); }} />
         ) : null}
         <MenuRow icon={<IcEdit size={22} />} label="Edit order / bill" onClick={() => { onDismiss(); nav.openNewOrder({ editId: o.id, from: "home" }); }} />
-        {o.status === "CREATED" || o.status === "RECEIVED" ? (
-          <MenuRow
-            icon={<IcCheck size={22} />}
-            label={o.lines.length > 0 ? "Mark delivered now" : "Count clothes to deliver"}
-            // No clothes counted yet: count first, or the bill would be ₹0.
-            onClick={() => onOpen(o.lines.length > 0 ? { kind: "pay", orderId: o.id } : { kind: "count", orderId: o.id, next: "READY" })}
-          />
-        ) : null}
+        {/* Any state to any state — forward, backward, delivered included. */}
+        <MenuRow icon={<IcReplay size={22} />} label="Change status" onClick={() => onOpen({ kind: "changeStatus", orderId: o.id })} />
         {o.status === "CREATED" ? (
           <MenuRow icon={<IcCalendar size={22} />} label="Reschedule pickup" onClick={() => onOpen({ kind: "reschedule", orderId: o.id, which: "pickup" })} />
         ) : null}
@@ -76,8 +70,13 @@ export function OrderMenuSheet({
           <span className="text-inksecondary"><IcCall size={22} /></span>
           <span className="text-[16px] font-semibold">Call {Sel.firstName(c.name)}</span>
         </a>
-        {o.status === "CREATED" ? (
-          <MenuRow icon={<IcCancel size={22} />} label="Cancel this pickup" danger onClick={() => onOpen({ kind: "cancel", orderId: o.id })} />
+        {o.status === "CREATED" || o.status === "RECEIVED" || o.status === "READY" ? (
+          <MenuRow
+            icon={<IcCancel size={22} />}
+            label={o.status === "CREATED" ? "Cancel this pickup" : "Cancel order"}
+            danger
+            onClick={() => onOpen({ kind: "cancel", orderId: o.id })}
+          />
         ) : null}
         <MenuRow
           icon={<IcDelete size={22} />}

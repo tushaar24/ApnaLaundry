@@ -91,6 +91,9 @@ export const Analytics = {
     // Revenue event — the bill total is the "work done" value.
     rawCharged(p.total, { payment_method: method(p.method), order_id: p.orderId }, p.items);
   },
+  orderStatusChanged(orderId: number, from: string, to: string) {
+    rawTrack("Order Status Changed", { order_id: orderId, from, to });
+  },
   orderCancelled(orderId: number, reason: string) {
     rawTrack("Order Cancelled", { order_id: orderId, reason });
   },

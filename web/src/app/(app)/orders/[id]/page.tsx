@@ -115,7 +115,12 @@ function OrderDetailScreen({ orderId }: { orderId: number }) {
         {/* stepper */}
         {!cancelled ? (
           <AppCard>
-            <div className="flex w-full items-start p-4">
+            <button
+              type="button"
+              aria-label="Change status"
+              onClick={() => setActive({ kind: "changeStatus", orderId: o.id })}
+              className="flex w-full items-start p-4"
+            >
               {labels.map((label, i) => (
                 <div key={label} className="flex flex-1 flex-col items-center gap-1.5">
                   <span
@@ -129,25 +134,33 @@ function OrderDetailScreen({ orderId }: { orderId: number }) {
                   </span>
                 </div>
               ))}
-            </div>
+            </button>
           </AppCard>
         ) : (
-          <div className="w-full rounded-xl bg-neutralfill p-3.5">
+          <button
+            type="button"
+            onClick={() => setActive({ kind: "changeStatus", orderId: o.id })}
+            className="w-full rounded-xl bg-neutralfill p-3.5 text-left"
+          >
             <span className="text-[15px] font-semibold text-inksecondary">
-              Cancelled{o.cancelReason ? ` · ${o.cancelReason}` : ""}
+              Cancelled{o.cancelReason ? ` · ${o.cancelReason}` : ""} · tap to change
             </span>
-          </div>
+          </button>
         )}
 
         {/* action */}
         {actLabel !== "" ? (
           <PrimaryButton h={54} onClick={onAct}>{actLabel}</PrimaryButton>
         ) : o.status === "DELIVERED" ? (
-          <div className="w-full rounded-xl bg-bluelight p-3.5">
+          <button
+            type="button"
+            onClick={() => setActive({ kind: "changeStatus", orderId: o.id })}
+            className="w-full rounded-xl bg-bluelight p-3.5 text-left"
+          >
             <span className="text-[14px] font-semibold text-bluetext">
-              Delivered{o.doneAt ? ` · ${o.doneAt}` : ""} · order closed
+              Delivered{o.doneAt ? ` · ${o.doneAt}` : ""} · tap to change
             </span>
-          </div>
+          </button>
         ) : null}
 
         {/* items */}
