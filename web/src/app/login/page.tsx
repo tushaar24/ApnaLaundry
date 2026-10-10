@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AuthError, requestOtp, verifyOtp, type Challenge } from "@/data/auth";
+import { RECAPTCHA_CONTAINER_ID } from "@/data/firebase";
 import { Analytics } from "@/analytics/events";
 import { useScreenView } from "@/analytics/useScreenView";
 import { cls } from "@/ui/basics";
@@ -11,8 +12,8 @@ import { LegalFooter } from "@/ui/legal";
 
 /**
  * Phone → OTP sign-in. Port of ui/screens/login (LoginScreen + AuthViewModel):
- * real Indian mobiles start 6-9; 10000000xx are the backend's app-review
- * numbers (deterministic OTP, no SMS). Ad end-card look: blue hero on top,
+ * real Indian mobiles start 6-9 and get their OTP by Firebase phone auth;
+ * 10000000xx are the backend's app-review numbers (deterministic OTP, no SMS). Ad end-card look: blue hero on top,
  * cream sheet with the form at the bottom.
  */
 
@@ -25,7 +26,7 @@ export default function LoginPage() {
 }
 
 const OTP_LEN = 6;
-const WRONG_OTP = "Wrong OTP. Check your WhatsApp / SMS again.";
+const WRONG_OTP = "Wrong OTP. Check your SMS again.";
 
 function LoginScreen() {
   const [phone, setPhone] = useState("");
@@ -70,7 +71,7 @@ function LoginScreen() {
       setResent(step === "otp");
       setStep("otp");
       setOtp("");
-      setAttemptsRemaining(ch.attemptsRemaining);
+      setAttemptsRemaining(ch.kind === "backend" ? ch.attemptsRemaining : null);
       startResendCountdown(ch.nextSendAtMs);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Couldn't send OTP — try again";
@@ -95,13 +96,14 @@ function LoginScreen() {
       await verifyOtp(ch, otp);
       // The Gate reacts to authed/setupDone and routes to /setup or /.
     } catch (e) {
-      const attempts = e instanceof AuthError ? e.attemptsRemaining : undefined;
+      const ae = e instanceof AuthError ? e : null;
+      const attempts = ae?.attemptsRemaining;
       if (attempts != null) setAttemptsRemaining(attempts);
       const msg = e instanceof Error ? e.message : "Verification failed — try again";
       Analytics.otpVerificationFailed(msg, attempts);
-      // A rejected code (attempts still left) keeps the digits, shown red, until
-      // edited; anything else (expired, exhausted, offline) shows the server text.
-      const wrongCode = attempts != null && attempts > 0;
+      // A rejected code (still retryable) keeps the digits, shown red, until
+      // edited; anything else (expired, exhausted, offline) shows the error text.
+      const wrongCode = ae?.wrongCode === true;
       if (!wrongCode) setOtp("");
       setError(wrongCode ? WRONG_OTP : msg);
       setLoading(false);
@@ -164,7 +166,7 @@ function LoginScreen() {
                 {error ? (
                   <p className="text-[14px] font-semibold text-errorred">{error}</p>
                 ) : (
-                  <p className="text-[14px] leading-[1.4] text-muted">The OTP will arrive on your WhatsApp / SMS</p>
+                  <p className="text-[14px] leading-[1.4] text-muted">The OTP will arrive by SMS</p>
                 )}
               </div>
               <CtaButton disabled={!phoneValid || loading} onClick={() => void sendOtp()}>
@@ -202,7 +204,7 @@ function LoginScreen() {
               <div className="flex flex-col gap-2">
                 <h1 className="bric text-[34px] leading-[1.05]">Enter OTP</h1>
                 <p className="text-[16px] leading-[1.45] text-onbluemuted">
-                  Sent on WhatsApp / SMS to{" "}
+                  Sent by SMS to{" "}
                   <strong className="whitespace-nowrap text-ondark">+91 {phone.slice(0, 5)} {phone.slice(5)}</strong>
                   {" · "}
                   <button type="button" onClick={backToPhone} className="font-semibold text-ondark underline">
@@ -248,6 +250,8 @@ function LoginScreen() {
             </Sheet>
           </>
         )}
+        {/* Firebase's invisible reCAPTCHA (sendFirebaseOtp renders into it). */}
+        <div id={RECAPTCHA_CONTAINER_ID} />
       </div>
     </div>
   );
@@ -380,7 +384,7 @@ function OtpStatus({ otp, error, attemptsRemaining, resent }: {
   return (
     <div className="flex items-center gap-2 text-[14px] text-inksecondary">
       <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-blue)" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9" /></svg>
-      {resent ? "OTP sent again — check your WhatsApp / SMS" : "Waiting for the OTP on WhatsApp / SMS"}
+      {resent ? "OTP sent again — check your SMS" : "Waiting for the OTP SMS"}
     </div>
   );
 }
@@ -427,7 +431,7 @@ function Shirt({ x, fill, pocket }: { x: number; fill: string; pocket?: boolean 
 /** A phone receiving a masked OTP message, with a padlock badge. */
 function OtpArt() {
   return (
-    <svg className="block" width="200" height="140" viewBox="0 0 200 140" role="img" aria-label="An OTP arriving on a phone by WhatsApp or SMS">
+    <svg className="block" width="200" height="140" viewBox="0 0 200 140" role="img" aria-label="An OTP arriving on a phone by SMS">
       <g fill="none" stroke="#16191D" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="56" y="8" width="64" height="124" rx="13" fill="#16191D" />
         <rect x="62" y="17" width="52" height="106" rx="7" fill="#FFFFFF" stroke="none" />

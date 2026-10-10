@@ -1,9 +1,11 @@
 package com.dailyworks.apnalaundry.ui.screens.login
 
+import android.app.Activity
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.data.AuthRepository
+import com.google.firebase.auth.PhoneAuthCredential
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,8 +24,6 @@ data class AuthUiState(
     val attemptsRemaining: Int? = null,
     /** The current OTP came from a resend (changes the waiting line's copy). */
     val resent: Boolean = false,
-    /** Bumped on every OTP sent — restarts the SMS autofill wait. */
-    val sends: Int = 0,
 ) {
     enum class Step { PHONE, OTP }
 
@@ -34,7 +34,7 @@ data class AuthUiState(
     val otpValid get() = otp.length == 6
 }
 
-private const val WRONG_OTP = "Wrong OTP. Check your WhatsApp / SMS again."
+private const val WRONG_OTP = "Wrong OTP. Check your SMS again."
 
 class AuthViewModel(private val auth: AuthRepository) : ViewModel() {
     private val _ui = MutableStateFlow(AuthUiState())
@@ -42,16 +42,11 @@ class AuthViewModel(private val auth: AuthRepository) : ViewModel() {
 
     private var challenge: AuthRepository.Challenge? = null
     private var countdownJob: Job? = null
+    private var autoVerifyJob: Job? = null
+    private var verifyJob: Job? = null
 
     fun onPhone(v: String) { _ui.value = _ui.value.copy(phone = v.filter { it.isDigit() }.take(10), error = null) }
     fun onOtp(v: String) { _ui.value = _ui.value.copy(otp = v.filter { it.isDigit() }.take(6), error = null) }
-
-    /** A code read from the OTP SMS (SMS Retriever): fill it in and log in. */
-    fun onOtpAutofilled(code: String) {
-        if (_ui.value.step != AuthUiState.Step.OTP || _ui.value.loading) return
-        onOtp(code)
-        verify()
-    }
 
     fun backToPhone() {
         countdownJob?.cancel()
@@ -59,8 +54,12 @@ class AuthViewModel(private val auth: AuthRepository) : ViewModel() {
         _ui.value = _ui.value.copy(step = AuthUiState.Step.PHONE, otp = "", error = null, resendInSecs = 0, attemptsRemaining = null, resent = false)
     }
 
-    /** Sends (or resends) the OTP. Resending supersedes the old challenge server-side. */
-    fun requestOtp() {
+    /**
+     * Sends (or resends) the OTP. Real numbers go through Firebase phone auth,
+     * which needs the [activity] (its reCAPTCHA fallback) and may read the SMS
+     * itself — then the user is logged in without typing anything.
+     */
+    fun requestOtp(activity: Activity) {
         val s = _ui.value
         if (!s.phoneValid || s.loading || s.resendInSecs > 0) return
         _ui.value = s.copy(loading = true, error = null)
@@ -68,14 +67,17 @@ class AuthViewModel(private val auth: AuthRepository) : ViewModel() {
             phoneType = if (s.phone.startsWith("10000000")) "review" else "real",
             isResend = s.step == AuthUiState.Step.OTP,
         )
+        val previous = challenge.takeIf { s.step == AuthUiState.Step.OTP }
         viewModelScope.launch {
-            auth.requestOtp(s.phone)
+            auth.requestOtp(activity, s.phone, previous, onAutoVerified = ::onAutoVerified)
                 .onSuccess { ch ->
                     challenge = ch
                     _ui.value = _ui.value.copy(
-                        loading = false, step = AuthUiState.Step.OTP, otp = "",
-                        attemptsRemaining = ch.attemptsRemaining, resent = s.step == AuthUiState.Step.OTP,
-                        sends = _ui.value.sends + 1,
+                        // An instant (no-SMS) verification may already be logging in.
+                        loading = autoVerifyJob?.isActive == true, step = AuthUiState.Step.OTP,
+                        otp = if (autoVerifyJob?.isActive == true) _ui.value.otp else "",
+                        attemptsRemaining = (ch as? AuthRepository.Challenge.Backend)?.attemptsRemaining,
+                        resent = s.step == AuthUiState.Step.OTP,
                     )
                     startResendCountdown(ch.nextSendAtMs)
                 }
@@ -84,6 +86,15 @@ class AuthViewModel(private val auth: AuthRepository) : ViewModel() {
                     _ui.value = _ui.value.copy(loading = false, error = it.message)
                 }
         }
+    }
+
+    /** Firebase read the OTP SMS on the device: log straight in. */
+    private fun onAutoVerified(credential: PhoneAuthCredential) {
+        if (_ui.value.done || autoVerifyJob?.isActive == true || verifyJob?.isActive == true) return
+        credential.smsCode?.let { _ui.value = _ui.value.copy(otp = it, error = null) }
+        _ui.value = _ui.value.copy(loading = true)
+        Analytics.otpSubmitted()
+        autoVerifyJob = viewModelScope.launch { onVerifyResult(auth.verifyCredential(credential), typed = null) }
     }
 
     fun verify() {
@@ -96,24 +107,27 @@ class AuthViewModel(private val auth: AuthRepository) : ViewModel() {
         }
         _ui.value = s.copy(loading = true, error = null)
         Analytics.otpSubmitted()
-        viewModelScope.launch {
-            auth.verifyOtp(ch, s.otp)
-                .onSuccess { _ui.value = _ui.value.copy(loading = false, done = true) }
-                .onFailure { e ->
-                    val attempts = (e as? AuthRepository.AuthException)?.attemptsRemaining
-                    Analytics.otpVerificationFailed(e.message ?: "Verification failed", attempts)
-                    // A rejected code (attempts still left) keeps the digits, shown red,
-                    // until edited; anything else (expired, exhausted, offline) shows the
-                    // server text.
-                    val wrongCode = attempts != null && attempts > 0
-                    _ui.value = _ui.value.copy(
-                        loading = false,
-                        error = if (wrongCode) WRONG_OTP else e.message,
-                        otp = if (wrongCode) s.otp else "",
-                        attemptsRemaining = attempts ?: _ui.value.attemptsRemaining,
-                    )
-                }
-        }
+        verifyJob = viewModelScope.launch { onVerifyResult(auth.verifyOtp(ch, s.otp), typed = s.otp) }
+    }
+
+    private fun onVerifyResult(result: Result<Unit>, typed: String?) {
+        result
+            .onSuccess { _ui.value = _ui.value.copy(loading = false, done = true) }
+            .onFailure { e ->
+                val ae = e as? AuthRepository.AuthException
+                val attempts = ae?.attemptsRemaining
+                Analytics.otpVerificationFailed(e.message ?: "Verification failed", attempts)
+                // A rejected code (still retryable) keeps the digits, shown red,
+                // until edited; anything else (expired, exhausted, offline) shows
+                // the error text.
+                val wrongCode = ae?.wrongCode == true
+                _ui.value = _ui.value.copy(
+                    loading = false,
+                    error = if (wrongCode) WRONG_OTP else e.message,
+                    otp = if (wrongCode) typed ?: _ui.value.otp else "",
+                    attemptsRemaining = attempts ?: _ui.value.attemptsRemaining,
+                )
+            }
     }
 
     private fun startResendCountdown(nextSendAtMs: Long) {

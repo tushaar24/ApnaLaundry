@@ -7,6 +7,7 @@ import com.dailyworks.apnalaundry.data.LogoStore
 import com.dailyworks.apnalaundry.data.Prefs
 import com.dailyworks.apnalaundry.data.local.AppDatabase
 import com.dailyworks.apnalaundry.data.remote.AuthApi
+import com.dailyworks.apnalaundry.data.remote.FirebasePhoneAuth
 import com.dailyworks.apnalaundry.data.billing.BillingApi
 import com.dailyworks.apnalaundry.data.billing.BillingRepository
 import com.dailyworks.apnalaundry.data.billing.CheckoutBridge
@@ -43,7 +44,8 @@ val appModule = module {
     single { LogoStore(androidContext(), get()) }
     single { SyncManager(get(), get(), get(), get()) }
     single { SyncScheduler(get()) }
-    single { AuthRepository(get(), get(), get(), get()) }
+    single { FirebasePhoneAuth() }
+    single { AuthRepository(get(), get(), get(), get(), get()) }
 
     viewModel { ShopViewModel(get(), get(), get(), get(), get()) }
     viewModel { AuthViewModel(get()) }

@@ -58,6 +58,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
@@ -169,6 +170,8 @@ private fun ColumnScope.PhoneStep(ui: AuthUiState, vm: AuthViewModel) {
 
 @Composable
 private fun PhoneSheet(ui: AuthUiState, vm: AuthViewModel) {
+    val activity = LocalContext.current.findActivity()
+    val send = { activity?.let(vm::requestOtp); Unit }
     // Google's number picker: offered once, on first open with an empty field.
     val phoneHint = rememberPhoneHint(vm::onPhone)
     var hintShown by rememberSaveable { mutableStateOf(false) }
@@ -183,14 +186,14 @@ private fun PhoneSheet(ui: AuthUiState, vm: AuthViewModel) {
             Text("Mobile number", style = fig(14, FontWeight.SemiBold))
             // Focus (and so the keyboard) only when coming back via "Change number";
             // on first open the keyboard would collapse the hero straight away.
-            PhoneField(ui.phone, vm::onPhone, onDone = vm::requestOtp, autoFocus = ui.phone.isNotEmpty())
+            PhoneField(ui.phone, vm::onPhone, onDone = send, autoFocus = ui.phone.isNotEmpty())
             if (ui.error != null) {
                 Text(ui.error!!, style = fig(14, FontWeight.SemiBold, Tokens.ErrorRed))
             } else {
-                Text("The OTP will arrive on your WhatsApp / SMS", style = fig(14, color = Tokens.Muted))
+                Text("The OTP will arrive by SMS", style = fig(14, color = Tokens.Muted))
             }
         }
-        CtaButton(if (ui.loading) "Sending OTP…" else "Get started", enabled = ui.phoneValid && !ui.loading, onClick = vm::requestOtp)
+        CtaButton(if (ui.loading) "Sending OTP…" else "Get started", enabled = ui.phoneValid && !ui.loading, onClick = send)
         TermsLine()
     }
 }
@@ -200,7 +203,7 @@ private fun ColumnScope.OtpStep(ui: AuthUiState, vm: AuthViewModel) {
     // Short screens drop the art and tighten the hero so the boxes stay in view
     // (Continue is pinned above the keyboard either way).
     val compact = LocalConfiguration.current.screenHeightDp < 720
-    SmsOtpRetriever(key = ui.sends, onCode = vm::onOtpAutofilled)
+    val activity = LocalContext.current.findActivity()
     FullHeightScroll {
         Hero(bottom = if (compact) 20 else 28, compact = compact) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -218,7 +221,7 @@ private fun ColumnScope.OtpStep(ui: AuthUiState, vm: AuthViewModel) {
             if (!compact) {
                 Image(
                     painterResource(R.drawable.login_otp),
-                    contentDescription = "An OTP arriving on a phone by WhatsApp or SMS",
+                    contentDescription = "An OTP arriving on a phone by SMS",
                     modifier = Modifier.size(200.dp, 140.dp),
                 )
             }
@@ -226,7 +229,7 @@ private fun ColumnScope.OtpStep(ui: AuthUiState, vm: AuthViewModel) {
                 Text("Enter OTP", style = bric(34, FontWeight.Bold, Tokens.OnDark).copy(lineHeight = 36.sp))
                 Text(
                     buildAnnotatedString {
-                        append("Sent on WhatsApp / SMS to ")
+                        append("Sent by SMS to ")
                         withStyle(SpanStyle(color = Tokens.OnDark, fontWeight = FontWeight.Bold)) {
                             append("+91 ${ui.phone.take(5)} ${ui.phone.drop(5)}")
                         }
@@ -258,7 +261,7 @@ private fun ColumnScope.OtpStep(ui: AuthUiState, vm: AuthViewModel) {
                     Text("Didn't get the OTP? You can resend in ${ui.resendInSecs} sec", style = fig(14, color = Tokens.Muted))
                 } else {
                     Text("Didn't get the OTP?", style = fig(14, FontWeight.SemiBold, Tokens.InkSecondary))
-                    ResendButton(if (ui.loading) "Sending…" else "Resend OTP", onClick = vm::requestOtp)
+                    ResendButton(if (ui.loading) "Sending…" else "Resend OTP", onClick = { activity?.let(vm::requestOtp) })
                 }
             }
         }
@@ -499,7 +502,7 @@ private fun OtpStatus(ui: AuthUiState) {
         }
         else -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             CircularProgressIndicator(Modifier.size(16.dp), color = Tokens.Blue, strokeWidth = 2.5.dp)
-            Text(if (ui.resent) "OTP sent again — check your WhatsApp / SMS" else "Waiting for the OTP on WhatsApp / SMS", style = fig(14, color = Tokens.InkSecondary))
+            Text(if (ui.resent) "OTP sent again — check your SMS" else "Waiting for the OTP SMS", style = fig(14, color = Tokens.InkSecondary))
         }
     }
 }

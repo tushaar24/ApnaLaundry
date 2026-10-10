@@ -1,6 +1,8 @@
 "use client";
 
+import type { ConfirmationResult } from "firebase/auth";
 import { authApi, parseIsoMs } from "./authApi";
+import { confirmFirebaseOtp, firebaseErrorCode, sendFirebaseOtp } from "./firebase";
 import { prefs } from "./prefs";
 import { useAppStore } from "./store";
 import { clearAll, ensureSeeded, hasShop, isOnboarded, pulledSetupDone } from "./repository";
@@ -11,7 +13,8 @@ import { MetaPixel } from "@/analytics/metaPixel";
 import { deriveState } from "./store";
 
 /**
- * Real OTP auth + the login/logout data lifecycle. Port of
+ * OTP login (Firebase phone auth; backend OTP for app-review numbers) + the
+ * login/logout data lifecycle. Port of
  * data/AuthRepository.kt for the online-only web client:
  *  - verify success -> store credentials -> initial sync. If the server
  *    already holds this account's shop, setup is skipped; otherwise defaults
@@ -20,26 +23,61 @@ import { deriveState } from "./store";
  *    (keeping the session) if that isn't possible.
  */
 
-export interface Challenge {
-  id: string;
-  token: string;
-  phone: string;
-  nextSendAtMs: number;
-  attemptsRemaining: number;
-}
+/**
+ * In-flight OTP. Every real number goes through Firebase phone auth; the
+ * app-review numbers 10000000xx keep the backend's own deterministic OTP.
+ */
+export type Challenge =
+  | {
+      kind: "backend";
+      id: string;
+      token: string;
+      phone: string;
+      nextSendAtMs: number;
+      attemptsRemaining: number;
+    }
+  | {
+      kind: "firebase";
+      confirmation: ConfirmationResult;
+      phone: string;
+      nextSendAtMs: number;
+    };
 
 export class AuthError extends Error {
   attemptsRemaining?: number;
-  constructor(message: string, attemptsRemaining?: number) {
+  /** The code was wrong but the same OTP can be retried. */
+  wrongCode: boolean;
+  constructor(message: string, attemptsRemaining?: number, wrongCode = false) {
     super(message);
     this.name = "AuthError";
     this.attemptsRemaining = attemptsRemaining;
+    this.wrongCode = wrongCode;
   }
 }
 
 const OFFLINE_MSG = "No internet — check your connection and try again";
+const RESEND_COOLDOWN_MS = 30_000;
+
+const isReviewNumber = (phone: string) => phone.startsWith("10000000");
 
 export async function requestOtp(phone: string): Promise<Challenge> {
+  if (isReviewNumber(phone)) return requestBackendOtp(phone);
+  let confirmation: ConfirmationResult;
+  try {
+    confirmation = await sendFirebaseOtp(phone);
+  } catch (e) {
+    const code = firebaseErrorCode(e);
+    throw new AuthError(
+      code === "auth/network-request-failed" ? OFFLINE_MSG
+        : code === "auth/too-many-requests" || code === "auth/quota-exceeded" ? "Too many OTP requests — try again later"
+        : code === "auth/invalid-phone-number" ? "Enter a valid 10-digit mobile number"
+        : "Couldn't send OTP — try again",
+    );
+  }
+  return { kind: "firebase", confirmation, phone, nextSendAtMs: Date.now() + RESEND_COOLDOWN_MS };
+}
+
+async function requestBackendOtp(phone: string): Promise<Challenge> {
   let reply;
   try {
     reply = await authApi.requestOtp(phone);
@@ -55,6 +93,7 @@ export async function requestOtp(phone: string): Promise<Challenge> {
     throw new AuthError(msg);
   }
   return {
+    kind: "backend",
     id: body.challengeId,
     token: body.challengeToken,
     phone,
@@ -66,14 +105,36 @@ export async function requestOtp(phone: string): Promise<Challenge> {
 export async function verifyOtp(challenge: Challenge, otp: string): Promise<void> {
   const deviceId = prefs.deviceId();
   let reply;
-  try {
-    reply = await authApi.verifyOtp(challenge.id, challenge.token, otp, deviceId);
-  } catch {
-    throw new AuthError(OFFLINE_MSG);
+  if (challenge.kind === "firebase") {
+    let idToken: string;
+    try {
+      idToken = await confirmFirebaseOtp(challenge.confirmation, otp);
+    } catch (e) {
+      const code = firebaseErrorCode(e);
+      if (code === "auth/invalid-verification-code") throw new AuthError("Wrong OTP", undefined, true);
+      throw new AuthError(
+        code === "auth/code-expired" ? "OTP expired — request a new one"
+          : code === "auth/network-request-failed" ? OFFLINE_MSG
+          : code === "auth/too-many-requests" ? "Too many attempts — try again later"
+          : "Verification failed — try again",
+      );
+    }
+    try {
+      reply = await authApi.firebaseLogin(idToken, deviceId);
+    } catch {
+      throw new AuthError(OFFLINE_MSG);
+    }
+  } else {
+    try {
+      reply = await authApi.verifyOtp(challenge.id, challenge.token, otp, deviceId);
+    } catch {
+      throw new AuthError(OFFLINE_MSG);
+    }
   }
   const body = reply.body;
   if (!body?.success) {
-    throw new AuthError(body?.message ?? "Verification failed — try again", body?.attemptsRemaining);
+    const attempts = body?.attemptsRemaining;
+    throw new AuthError(body?.message ?? "Verification failed — try again", attempts, attempts != null && attempts > 0);
   }
   const user = body.user;
   if (!user || !body.accessToken || !body.refreshToken) {

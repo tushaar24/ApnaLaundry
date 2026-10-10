@@ -4,6 +4,8 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
+    // Reads app/google-services.json (Firebase project shweta-makeover).
+    alias(libs.plugins.google.services)
 }
 
 android {
@@ -97,10 +99,15 @@ dependencies {
     // Razorpay Standard Checkout — UPI AutoPay subscription authorization.
     implementation(libs.razorpay.checkout)
 
-    // Login: Google's phone-number picker + SMS Retriever OTP autofill.
-    // Same versions Razorpay already pulls in.
+    // Login: Google's phone-number picker. Same versions Razorpay already pulls in.
     implementation(libs.play.services.auth)
     implementation(libs.play.services.auth.api.phone)
+
+    // Login OTP: Firebase phone auth (project shweta-makeover) sends, auto-reads
+    // and verifies the SMS; the backend trades its ID token for our session.
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.auth)
+    implementation(libs.kotlinx.coroutines.play.services)
 
     // UPI pay QR on bills (QR matrix only — drawn on our own canvas)
     implementation(libs.zxing.core)

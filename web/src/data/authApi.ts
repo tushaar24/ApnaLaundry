@@ -1,5 +1,5 @@
 /**
- * OTP login wire calls against /api/laundry/auth/* (proxied to the shared
+ * Login wire calls against /api/laundry/auth/* (proxied to the shared
  * backend by next.config rewrites). Port of data/remote/AuthApi.kt — success
  * and error responses share the same shape; `code` carries the server's
  * stable error code.
@@ -77,6 +77,11 @@ export const authApi = {
 
   verifyOtp(challengeId: string, challengeToken: string, otp: string, deviceId: string) {
     return post<CredentialsResponse>("/auth/verify-otp", { challengeId, otp, deviceId }, challengeToken);
+  },
+
+  /** Firebase phone auth done in the browser: its ID token -> our credentials. */
+  firebaseLogin(idToken: string, deviceId: string) {
+    return post<CredentialsResponse>("/auth/firebase", { idToken, deviceId });
   },
 
   refresh(refreshToken: string) {

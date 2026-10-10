@@ -1,0 +1,195 @@
+diff -ruN a/backend/routes/laundry-auth.js b/backend/routes/laundry-auth.js
+--- a/backend/routes/laundry-auth.js	2026-10-11 02:33:40
++++ b/backend/routes/laundry-auth.js	2026-10-11 02:33:40
+@@ -11,14 +11,20 @@
+ const { providerFor, isReviewNumber, twoFactorTest } = require('../services/laundry-otp');
+ const { normalizePhone, isValidIndianMobile } = require('../utils/phone');
+ const laundryMeta = require('../services/laundry-meta');
++const firebaseAuth = require('../services/laundry-firebase-auth');
+ 
+ // OTP login for the ApnaLaundry app (challenge-based OTP ported from the
+ // HealthProduct identity service). Each user has ONE permanent API token —
+ // minted on first login, returned unchanged on every later login on any
+ // device, never expiring (see middleware/laundry-auth.js):
+ //
++//   POST /api/laundry/auth/firebase     {idToken,deviceId}  -> credentials (Firebase phone auth did the OTP)
+ //   POST /api/laundry/auth/request-otp  {phone}            -> challenge (also resend: supersedes + 30s cooldown)
+ //   POST /api/laundry/auth/verify-otp   {challengeId,otp,deviceId} + Bearer challengeToken -> credentials
++//
++// Current clients send every real number's OTP through Firebase phone auth
++// (project shweta-makeover) and use request/verify-otp only for the app-review
++// numbers 10000000xx; older app builds still use request/verify-otp for all.
+ //   POST /api/laundry/auth/refresh      {refreshToken}     -> the permanent token (legacy refresh tokens migrate)
+ //   POST /api/laundry/auth/logout       Bearer token       -> no-op (the token stays valid)
+ //   GET  /api/laundry/auth/me           Bearer token       -> user
+@@ -33,7 +39,7 @@
+ //
+ // Error responses carry a stable `code` the app switches on: OTP_COOLDOWN,
+ // OTP_DAILY_LIMIT, OTP_INVALID, OTP_EXPIRED, OTP_ATTEMPTS_EXHAUSTED,
+-// OTP_UNAVAILABLE.
++// OTP_UNAVAILABLE, FIREBASE_TOKEN_INVALID.
+ 
+ const router = express.Router();
+ 
+@@ -191,30 +197,66 @@
+     }
+ 
+     const result = await prisma.$transaction(async (tx) => {
+-      // Every query here is a DB round trip on the login critical path, so
+-      // create/touch the user in one statement either way.
+-      let user = await tx.laundryUser.findUnique({ where: { phone: challenge.phone } });
+-      const isNewUser = !user;
+-      user = isNewUser
+-        ? await tx.laundryUser.create({ data: { phone: challenge.phone, lastLoginAt: now, apiToken: newToken() } })
+-        : await tx.laundryUser.update({ where: { id: user.id }, data: { lastLoginAt: now } });
+-      const token = await ensureApiToken(tx, user);
++      const login = await loginPhone(tx, challenge.phone, now);
+       await tx.laundryOtpChallenge.update({
+         where: { id: challenge.id },
+         data: { state: 'verified' },
+       });
+-      return { user, token, isNewUser };
++      return login;
+     });
++    return sendLogin(req, res, result, deviceId);
++  } catch (error) {
++    return next(error);
++  }
++});
+ 
+-    req.log.info({ userId: result.user.id, deviceId: deviceId.trim() }, 'laundry login verified');
+-    laundryMeta.saveSignals(req, result.user); // Meta CAPI match data (website logins)
+-    // isNewUser: the account was created just now, so it holds no server data
+-    // yet — clients skip their initial pull and go straight to seeding.
+-    return res.json({ ...credentialsResponse(result.user, result.token), isNewUser: result.isNewUser });
++// Firebase phone auth sent and checked the OTP on the device; its ID token
++// proves the number. Same account / token / isNewUser as verify-otp.
++router.post('/firebase', publicWriteLimiter, async (req, res, next) => {
++  try {
++    const { idToken, deviceId } = req.body || {};
++    if (!idToken || typeof deviceId !== 'string' || !deviceId.trim()) {
++      return res.status(400).json({ success: false, message: 'idToken and deviceId are required' });
++    }
++    let claims;
++    try {
++      claims = await firebaseAuth.verifyIdToken(String(idToken));
++    } catch (err) {
++      if (!(err instanceof firebaseAuth.InvalidFirebaseToken)) throw err;
++      req.log.warn({ reason: err.message }, 'laundry firebase token rejected');
++      return res.status(401).json({ success: false, code: 'FIREBASE_TOKEN_INVALID', message: 'Verification failed — request a new OTP' });
++    }
++    const phone = normalizePhone(claims.phone);
++    if (!claims.phone.startsWith('+91') || !isValidIndianMobile(phone)) {
++      return res.status(400).json({ success: false, message: 'Only Indian mobile numbers can log in' });
++    }
++    const result = await prisma.$transaction((tx) => loginPhone(tx, phone, new Date()));
++    return sendLogin(req, res, result, deviceId);
+   } catch (error) {
+     return next(error);
+   }
+ });
++
++// Creates or touches the user for a verified phone and returns its permanent token.
++async function loginPhone(tx, phone, now) {
++  // Every query here is a DB round trip on the login critical path, so
++  // create/touch the user in one statement either way.
++  let user = await tx.laundryUser.findUnique({ where: { phone } });
++  const isNewUser = !user;
++  user = isNewUser
++    ? await tx.laundryUser.create({ data: { phone, lastLoginAt: now, apiToken: newToken() } })
++    : await tx.laundryUser.update({ where: { id: user.id }, data: { lastLoginAt: now } });
++  const token = await ensureApiToken(tx, user);
++  return { user, token, isNewUser };
++}
++
++function sendLogin(req, res, result, deviceId) {
++  req.log.info({ userId: result.user.id, deviceId: deviceId.trim() }, 'laundry login verified');
++  laundryMeta.saveSignals(req, result.user); // Meta CAPI match data (website logins)
++  // isNewUser: the account was created just now, so it holds no server data
++  // yet — clients skip their initial pull and go straight to seeding.
++  return res.json({ ...credentialsResponse(result.user, result.token), isNewUser: result.isNewUser });
++}
+ 
+ // Never needed for a permanent token (its expiry is 2099), but shipped apps
+ // still call it on a 401 or when holding a legacy token. A permanent token is
+diff -ruN a/backend/services/laundry-firebase-auth.js b/backend/services/laundry-firebase-auth.js
+--- a/backend/services/laundry-firebase-auth.js	1970-01-01 05:30:00
++++ b/backend/services/laundry-firebase-auth.js	2026-10-11 02:33:40
+@@ -0,0 +1,77 @@
++const crypto = require('crypto');
++
++const env = require('../config/env');
++
++// Verifies Firebase Auth ID tokens for the ApnaLaundry login: the app / site
++// runs Firebase phone auth (project env.firebaseProjectId, shweta-makeover),
++// which sends and checks the OTP, then posts the resulting ID token here.
++// Done per Firebase's "verify ID tokens using a third-party JWT library" rules
++// with node's crypto — no firebase-admin, no service account:
++//   header  alg RS256, kid one of Google's securetoken signing keys
++//   payload aud = project id, iss = https://securetoken.google.com/<project>,
++//           exp in the future, iat / auth_time in the past, sub non-empty
++// Resolves to { uid, phone } (phone in E.164, e.g. +919876543210) or throws.
++
++const JWKS_URL = 'https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com';
++const CLOCK_SKEW_S = 300;
++
++let keyCache = { keys: new Map(), expiresAt: 0 };
++
++async function signingKeys() {
++  if (Date.now() < keyCache.expiresAt) return keyCache.keys;
++  const res = await fetch(JWKS_URL, { signal: AbortSignal.timeout(8000) });
++  if (!res.ok) throw new Error(`firebase jwks ${res.status}`);
++  const { keys = [] } = await res.json();
++  const maxAge = Number(/max-age=(\d+)/.exec(res.headers.get('cache-control') || '')?.[1]) || 3600;
++  keyCache = {
++    keys: new Map(keys.map((jwk) => [jwk.kid, crypto.createPublicKey({ key: jwk, format: 'jwk' })])),
++    expiresAt: Date.now() + maxAge * 1000,
++  };
++  return keyCache.keys;
++}
++
++class InvalidFirebaseToken extends Error {}
++
++const b64json = (part) => JSON.parse(Buffer.from(part, 'base64url').toString('utf8'));
++
++async function verifyIdToken(idToken) {
++  const parts = String(idToken || '').split('.');
++  if (parts.length !== 3) throw new InvalidFirebaseToken('malformed token');
++  let header;
++  let payload;
++  try {
++    header = b64json(parts[0]);
++    payload = b64json(parts[1]);
++  } catch {
++    throw new InvalidFirebaseToken('malformed token');
++  }
++  if (header.alg !== 'RS256') throw new InvalidFirebaseToken('bad alg');
++
++  let key = (await signingKeys()).get(header.kid);
++  if (!key) {
++    // Google rotated its keys since the cache was filled.
++    keyCache.expiresAt = 0;
++    key = (await signingKeys()).get(header.kid);
++  }
++  if (!key) throw new InvalidFirebaseToken('unknown kid');
++  const ok = crypto.verify(
++    'RSA-SHA256',
++    Buffer.from(`${parts[0]}.${parts[1]}`),
++    key,
++    Buffer.from(parts[2], 'base64url'),
++  );
++  if (!ok) throw new InvalidFirebaseToken('bad signature');
++
++  const project = env.firebaseProjectId;
++  const now = Math.floor(Date.now() / 1000);
++  if (payload.aud !== project) throw new InvalidFirebaseToken('bad aud');
++  if (payload.iss !== `https://securetoken.google.com/${project}`) throw new InvalidFirebaseToken('bad iss');
++  if (!(payload.exp > now)) throw new InvalidFirebaseToken('expired');
++  if (!(payload.iat <= now + CLOCK_SKEW_S)) throw new InvalidFirebaseToken('bad iat');
++  if (!(payload.auth_time <= now + CLOCK_SKEW_S)) throw new InvalidFirebaseToken('bad auth_time');
++  if (typeof payload.sub !== 'string' || !payload.sub) throw new InvalidFirebaseToken('bad sub');
++  if (typeof payload.phone_number !== 'string') throw new InvalidFirebaseToken('no phone_number');
++  return { uid: payload.sub, phone: payload.phone_number };
++}
++
++module.exports = { verifyIdToken, InvalidFirebaseToken };

@@ -66,9 +66,10 @@ fun parseIsoMs(iso: String?): Long {
 }
 
 /**
- * OTP login against the backend (ported from HealthProduct's identity flow):
- * request-otp -> challenge id + secret challenge token; verify-otp (Bearer
- * challenge token) -> opaque access/refresh credentials.
+ * Login against the backend. Real numbers: Firebase phone auth on the device,
+ * then firebase {idToken} -> opaque access/refresh credentials. App-review
+ * numbers (10000000xx) keep the backend's own OTP: request-otp -> challenge
+ * id + secret challenge token; verify-otp (Bearer challenge token) -> credentials.
  */
 class AuthApi(private val client: HttpClient = defaultClient()) {
 
@@ -89,6 +90,15 @@ class AuthApi(private val client: HttpClient = defaultClient()) {
             contentType(ContentType.Application.Json)
             bearerAuth(challengeToken)
             setBody(mapOf("challengeId" to challengeId, "otp" to otp, "deviceId" to deviceId))
+        }
+        return ApiReply(res.status.value, runCatching<CredentialsResponse> { res.body() }.getOrNull())
+    }
+
+    /** Firebase phone auth done on the device: its ID token -> our credentials. */
+    suspend fun firebaseLogin(idToken: String, deviceId: String): ApiReply<CredentialsResponse> {
+        val res = client.post("$base/auth/firebase") {
+            contentType(ContentType.Application.Json)
+            setBody(mapOf("idToken" to idToken, "deviceId" to deviceId))
         }
         return ApiReply(res.status.value, runCatching<CredentialsResponse> { res.body() }.getOrNull())
     }
