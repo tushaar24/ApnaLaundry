@@ -451,9 +451,10 @@ private fun FilterTabs(state: LaundryState, pickup: Boolean, selDate: String, fi
 }
 
 // ---------- pure home logic (ported from prototype vHome) ----------
-// A delivered order is done: it shows under Deliveries, not as a pickup.
+// Ready and delivered orders are past pickup: they live under Deliveries only.
 private fun onDate(o: Order, iso: String, pickup: Boolean): Boolean =
-    if (pickup) o.pickupDate == iso && o.status != OrderStatus.DELIVERED else (o.deliveryDate == iso && o.status != OrderStatus.CANCELLED)
+    if (pickup) o.pickupDate == iso && o.status != OrderStatus.READY && o.status != OrderStatus.DELIVERED
+    else (o.deliveryDate == iso && o.status != OrderStatus.CANCELLED)
 
 private fun isTodo(o: Order, pickup: Boolean): Boolean =
     if (pickup) o.status == OrderStatus.CREATED else o.status in listOf(OrderStatus.CREATED, OrderStatus.RECEIVED, OrderStatus.READY)

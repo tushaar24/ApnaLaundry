@@ -516,8 +516,10 @@ function FilterTabs({
 // ---------- pure home logic (ported from the app, itself from prototype vHome) ----------
 
 function onDate(o: Order, iso: string, pickup: boolean): boolean {
-  // A delivered order is done: it shows under Deliveries, not as a pickup.
-  return pickup ? o.pickupDate === iso && o.status !== "DELIVERED" : o.deliveryDate === iso && o.status !== "CANCELLED";
+  // Ready and delivered orders are past pickup: they live under Deliveries only.
+  return pickup
+    ? o.pickupDate === iso && o.status !== "READY" && o.status !== "DELIVERED"
+    : o.deliveryDate === iso && o.status !== "CANCELLED";
 }
 
 function isTodo(o: Order, pickup: boolean): boolean {
