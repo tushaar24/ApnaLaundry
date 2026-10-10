@@ -124,6 +124,9 @@ class ShopViewModel(
     fun markPickedUp(id: Int) = launchCmd { repo.markPickedUp(id) }
     fun markReady(id: Int, deliveryDate: String) = launchCmd { repo.markReady(id, deliveryDate) }
     fun deliver(id: Int, amount: Int, method: PayMethod) = launchCmd { repo.deliver(id, amount, method) }
+    /** Part cash, part UPI. */
+    fun deliverSplit(id: Int, cash: Int, upi: Int) =
+        launchCmd { repo.deliverSplit(id, listOf(PayMethod.CASH to cash, PayMethod.UPI to upi)) }
     fun saveCount(id: Int, next: OrderStatus, lines: List<OrderLine>, deliveryDate: String = "") =
         launchCmd { repo.saveCount(id, next, lines, deliveryDate) }
     fun prepay(id: Int, method: PayMethod) = launchCmd { repo.prepay(id, method) }

@@ -81,7 +81,14 @@ fun CollectPaymentSheet(state: LaundryState, orderId: Int, vm: ShopViewModel, on
     val billDue = total - pre
     val due = billDue + oldBal
     var payAmt by remember { mutableStateOf(max(0, due).toString()) }
-    val got = payAmt.toIntOrNull() ?: 0
+    // Part cash, part UPI: two boxes; UPI follows "amount − cash" until typed in.
+    var split by remember { mutableStateOf(false) }
+    var cashText by remember { mutableStateOf("") }
+    var upiText by remember { mutableStateOf("") }
+    var upiTouched by remember { mutableStateOf(false) }
+    val cash = cashText.toIntOrNull() ?: 0
+    val upi = upiText.toIntOrNull() ?: 0
+    val got = if (split) cash + upi else payAmt.toIntOrNull() ?: 0
     val left = due - got
 
     AppBottomSheet(title = "Collect payment", subtitle = "From ${c.name} before handing over", onDismiss = onDismiss) {
@@ -100,15 +107,40 @@ fun CollectPaymentSheet(state: LaundryState, orderId: Int, vm: ShopViewModel, on
                 MoneyRow("Total to collect", Money.rupees(max(0, due)), bold = true)
             }
 
-            FieldBox(value = payAmt, onValueChange = { payAmt = it.filter { ch -> ch.isDigit() }.take(6) }, prefix = "₹", height = 56.dp, keyboardType = KeyboardType.Number, textStyle = bric(22, FontWeight.Bold))
+            if (!split) {
+                FieldBox(value = payAmt, onValueChange = { payAmt = it.filter { ch -> ch.isDigit() }.take(6) }, prefix = "₹", height = 56.dp, keyboardType = KeyboardType.Number, textStyle = bric(22, FontWeight.Bold))
 
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                PillChip("Full ${Money.rupees(max(0, due))}", payAmt == max(0, due).toString()) { payAmt = max(0, due).toString() }
-                if (oldBal > 0 && billDue > 0) PillChip("Only this bill ${Money.rupees(billDue)}", payAmt == billDue.toString()) { payAmt = billDue.toString() }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    PillChip("Full ${Money.rupees(max(0, due))}", payAmt == max(0, due).toString()) { payAmt = max(0, due).toString() }
+                    if (oldBal > 0 && billDue > 0) PillChip("Only this bill ${Money.rupees(billDue)}", payAmt == billDue.toString()) { payAmt = billDue.toString() }
+                }
+            } else {
+                val target = payAmt.toIntOrNull() ?: max(0, due)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Cash", style = fig(13, FontWeight.Bold, Tokens.Muted))
+                        FieldBox(
+                            value = cashText,
+                            onValueChange = {
+                                cashText = it.filter { ch -> ch.isDigit() }.take(6)
+                                if (!upiTouched) upiText = max(0, target - (cashText.toIntOrNull() ?: 0)).toString()
+                            },
+                            prefix = "₹", height = 52.dp, keyboardType = KeyboardType.Number, textStyle = bric(20, FontWeight.Bold),
+                        )
+                    }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("UPI", style = fig(13, FontWeight.Bold, Tokens.Muted))
+                        FieldBox(
+                            value = upiText,
+                            onValueChange = { upiText = it.filter { ch -> ch.isDigit() }.take(6); upiTouched = true },
+                            prefix = "₹", height = 52.dp, keyboardType = KeyboardType.Number, textStyle = bric(20, FontWeight.Bold),
+                        )
+                    }
+                }
             }
 
             val (prevBg, prevFg, prevText) = when {
-                payAmt.isEmpty() -> Triple(Tokens.Bg, Tokens.Muted, "Type the amount you got")
+                (if (split) cashText.isEmpty() && upiText.isEmpty() else payAmt.isEmpty()) -> Triple(Tokens.Bg, Tokens.Muted, "Type the amount you got")
                 left > 0 -> Triple(Tokens.OrangeLight, Tokens.OrangeDeep, "${Money.rupees(left)} will stay in khata (baaki)")
                 left < 0 -> Triple(Tokens.BlueLight, Tokens.BlueText, "${Money.rupees(left)} extra — kept as advance")
                 else -> Triple(Tokens.NeutralFill, Tokens.Ink, "Full payment — all clear")
@@ -117,10 +149,29 @@ fun CollectPaymentSheet(state: LaundryState, orderId: Int, vm: ShopViewModel, on
                 Text(prevText, style = fig(14, FontWeight.SemiBold, prevFg))
             }
 
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PrimaryButton("Got cash", Modifier.weight(1f), enabled = got > 0, height = 54.dp) { vm.deliver(orderId, got, PayMethod.CASH); onDismiss() }
-                PrimaryButton("Got UPI", Modifier.weight(1f), enabled = got > 0, height = 54.dp) { vm.deliver(orderId, got, PayMethod.UPI); onDismiss() }
+            if (!split) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PrimaryButton("Got cash", Modifier.weight(1f), enabled = got > 0, height = 54.dp) { vm.deliver(orderId, got, PayMethod.CASH); onDismiss() }
+                    PrimaryButton("Got UPI", Modifier.weight(1f), enabled = got > 0, height = 54.dp) { vm.deliver(orderId, got, PayMethod.UPI); onDismiss() }
+                }
+            } else {
+                PrimaryButton(
+                    if (got > 0) "Got ${Money.rupees(got)} (cash + UPI)" else "Type cash and UPI",
+                    enabled = got > 0, height = 54.dp,
+                ) { vm.deliverSplit(orderId, cash, upi); onDismiss() }
             }
+            Text(
+                if (split) "Back to one method" else "Part cash, part UPI",
+                style = fig(14, FontWeight.Bold, Tokens.Blue),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().tap {
+                    if (!split) {
+                        // Start with all of it as cash; UPI fills the rest as cash is typed.
+                        cashText = (payAmt.toIntOrNull() ?: max(0, due)).toString(); upiText = "0"; upiTouched = false
+                    }
+                    split = !split
+                }.padding(vertical = 4.dp),
+            )
             Box(Modifier.fillMaxWidth().height(50.dp).rounded(14.dp).background(Tokens.NeutralFill).tap { vm.deliver(orderId, 0, PayMethod.NONE); onDismiss() }, contentAlignment = Alignment.Center) {
                 Text("Nothing now · add all to khata", style = fig(15, FontWeight.Bold, Tokens.InkSecondary))
             }

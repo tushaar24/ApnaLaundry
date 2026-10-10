@@ -243,7 +243,19 @@ class LaundryRepository(private val db: AppDatabase) {
         return CmdResult("$head · bill of ${money(total)} made — send it from the order", undo, statusWa(st, counted))
     }
 
-    suspend fun deliver(orderId: Int, amountReceived: Int, method: PayMethod): CmdResult {
+    suspend fun deliver(orderId: Int, amountReceived: Int, method: PayMethod): CmdResult =
+        deliverSplit(orderId, if (amountReceived > 0) listOf(method to amountReceived) else emptyList())
+
+    /**
+     * Delivers with the money received in one or more parts (e.g. part cash,
+     * part UPI). Each part is its own GOT entry, so Earnings' cash / UPI split
+     * stays right; the allocation (this bill → old baaki → advance) is worked out
+     * on the total and filled in part by part.
+     */
+    suspend fun deliverSplit(orderId: Int, payments: List<Pair<PayMethod, Int>>): CmdResult {
+        val parts = payments.filter { it.second > 0 }
+        val amountReceived = parts.sumOf { it.second }
+        val method = parts.maxByOrNull { it.second }?.first ?: PayMethod.NONE
         val undo = snapshot()
         val st = current()
         val o = st.orders.first { it.id == orderId }
@@ -256,9 +268,13 @@ class LaundryRepository(private val db: AppDatabase) {
         val alloc = LaundryMath.deliverAllocation(total, pre, oldBal, amountReceived)
         val entries = mutableListOf<LedgerEntry>()
         entries += mkEntry(o.custId, LedgerKind.BILL, total, ref = o.id)
-        if (amountReceived > 0) {
-            entries += mkEntry(o.custId, LedgerKind.GOT, amountReceived, method, PayTag.DELIVER,
-                cover = alloc.cover, toOld = alloc.toOld, toAdv = alloc.toAdv, ref = o.id)
+        var coverLeft = alloc.cover
+        var oldLeft = alloc.toOld
+        for ((m, amt) in parts) {
+            val cover = minOf(amt, coverLeft); coverLeft -= cover
+            val toOld = minOf(amt - cover, oldLeft); oldLeft -= toOld
+            entries += mkEntry(o.custId, LedgerKind.GOT, amt, m, PayTag.DELIVER,
+                cover = cover, toOld = toOld, toAdv = amt - cover - toOld, ref = o.id)
         }
         // Delivered today: the delivery date / time become now, so it shows under
         // today's Deliveries whatever was planned (or if no date was set).
@@ -277,10 +293,10 @@ class LaundryRepository(private val db: AppDatabase) {
             orderId = o.id, total = total, amountReceived = amountReceived, method = method,
             toKhata = maxOf(0, total - alloc.paidToward), fromAdvance = pre, lines = o.lines,
         )
-        if (amountReceived > 0) {
-            Analytics.paymentReceived(amountReceived, method, "delivery", o.custId, o.id)
+        parts.forEach { (m, amt) -> Analytics.paymentReceived(amt, m, "delivery", o.custId, o.id) }
+        val paidPart = if (parts.isEmpty()) "" else " · " + parts.joinToString(" + ") { (m, amt) ->
+            "${com.dailyworks.apnalaundry.core.Money.rupees(amt)} ${if (m == PayMethod.UPI) "UPI" else "cash"}"
         }
-        val paidPart = if (amountReceived > 0) " · ${money(amountReceived)} ${if (method == PayMethod.UPI) "UPI" else "cash"}" else ""
         val balPart = when {
             alloc.newBalance > 0 -> " · ${money(alloc.newBalance)} baaki"
             alloc.newBalance < 0 -> " · ${money(alloc.newBalance)} advance"

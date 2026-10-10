@@ -277,6 +277,19 @@ export function saveCount(orderId: number, next: OrderStatus, lines: OrderLine[]
 }
 
 export function deliver(orderId: number, amountReceived: number, method: PayMethod) {
+  deliverSplit(orderId, amountReceived > 0 ? [[method, amountReceived]] : []);
+}
+
+/**
+ * Delivers with the money received in one or more parts (e.g. part cash, part
+ * UPI). Each part is its own GOT entry, so Earnings' cash / UPI split stays
+ * right; the allocation (this bill → old baaki → advance) is worked out on the
+ * total and filled in part by part.
+ */
+export function deliverSplit(orderId: number, payments: [PayMethod, number][]) {
+  const parts = payments.filter(([, amt]) => amt > 0);
+  const amountReceived = parts.reduce((s, [, amt]) => s + amt, 0);
+  const method: PayMethod = parts.slice().sort((a, b) => b[1] - a[1])[0]?.[0] ?? "NONE";
   const undoSnap = snapshot();
   const o = orderOf(orderId);
   // Already delivered: never bill twice. A cancelled order may be delivered —
@@ -288,10 +301,14 @@ export function deliver(orderId: number, amountReceived: number, method: PayMeth
   const oldBal = balance(o.custId, st.ledger, st.orders, o.id);
   const alloc = deliverAllocation(total, pre, oldBal, amountReceived);
   const entries: LedgerRow[] = [mkEntry({ cust: o.custId, kind: "BILL", amt: total, ref: o.id })];
-  if (amountReceived > 0) {
+  let coverLeft = alloc.cover;
+  let oldLeft = alloc.toOld;
+  for (const [m, amt] of parts) {
+    const cover = Math.min(amt, coverLeft); coverLeft -= cover;
+    const toOld = Math.min(amt - cover, oldLeft); oldLeft -= toOld;
     entries.push(mkEntry({
-      cust: o.custId, kind: "GOT", amt: amountReceived, method, tag: "DELIVER",
-      cover: alloc.cover, toOld: alloc.toOld, toAdv: alloc.toAdv, ref: o.id,
+      cust: o.custId, kind: "GOT", amt, method: m, tag: "DELIVER",
+      cover, toOld, toAdv: amt - cover - toOld, ref: o.id,
     }));
   }
   insertLedger(...entries);
@@ -307,10 +324,12 @@ export function deliver(orderId: number, amountReceived: number, method: PayMeth
     toKhata: Math.max(0, total - alloc.paidToward), fromAdvance: pre,
     items: o.lines.map((l) => ({ service: l.serviceName, item: l.itemName, qty: l.qty, amount: l.amt })),
   });
-  if (amountReceived > 0) {
-    Analytics.paymentReceived({ amount: amountReceived, method, type: "delivery", customerId: o.custId, orderId });
+  for (const [m, amt] of parts) {
+    Analytics.paymentReceived({ amount: amt, method: m, type: "delivery", customerId: o.custId, orderId });
   }
-  const paidPart = amountReceived > 0 ? ` · ${rupees(amountReceived)} ${method === "UPI" ? "UPI" : "cash"}` : "";
+  const paidPart = parts.length === 0
+    ? ""
+    : " · " + parts.map(([m, amt]) => `${rupees(amt)} ${m === "UPI" ? "UPI" : "cash"}`).join(" + ");
   const balPart = alloc.newBalance > 0
     ? ` · ${rupees(alloc.newBalance)} baaki`
     : alloc.newBalance < 0

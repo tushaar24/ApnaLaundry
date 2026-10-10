@@ -44,12 +44,20 @@ export function CollectPaymentSheet({
   const billDue = total - pre;
   const due = billDue + oldBal;
   const [payAmt, setPayAmt] = useState(String(Math.max(0, due)));
+  // Part cash, part UPI: two boxes; UPI follows "amount − cash" until typed in.
+  const [split, setSplit] = useState(false);
+  const [cashText, setCashText] = useState("");
+  const [upiText, setUpiText] = useState("");
+  const [upiTouched, setUpiTouched] = useState(false);
   if (!o) { onDismiss(); return null; }
-  const got = parseInt(payAmt, 10) || 0;
+  const cash = parseInt(cashText, 10) || 0;
+  const upi = parseInt(upiText, 10) || 0;
+  const got = split ? cash + upi : parseInt(payAmt, 10) || 0;
   const left = due - got;
+  const target = parseInt(payAmt, 10) || Math.max(0, due);
 
   const preview =
-    payAmt === ""
+    (split ? cashText === "" && upiText === "" : payAmt === "")
       ? { bg: "var(--color-bg)", fg: "var(--color-muted)", text: "Type the amount you got" }
       : left > 0
         ? { bg: "var(--color-orangelight)", fg: "var(--color-orangedeep)", text: `${rupees(left)} will stay in khata (baaki)` }
@@ -81,42 +89,98 @@ export function CollectPaymentSheet({
           <MoneyRow label="Total to collect" value={rupees(Math.max(0, due))} bold />
         </div>
 
-        <FieldBox
-          value={payAmt}
-          onChange={(v) => setPayAmt(v.replace(/\D/g, "").slice(0, 6))}
-          prefix="₹"
-          h={56}
-          inputMode="numeric"
-          textClass="bric text-[22px]"
-        />
-
-        <div className="flex flex-wrap gap-1.5">
-          <PillChip
-            label={`Full ${rupees(Math.max(0, due))}`}
-            selected={payAmt === String(Math.max(0, due))}
-            onClick={() => setPayAmt(String(Math.max(0, due)))}
-          />
-          {oldBal > 0 && billDue > 0 ? (
-            <PillChip
-              label={`Only this bill ${rupees(billDue)}`}
-              selected={payAmt === String(billDue)}
-              onClick={() => setPayAmt(String(billDue))}
+        {!split ? (
+          <>
+            <FieldBox
+              value={payAmt}
+              onChange={(v) => setPayAmt(v.replace(/\D/g, "").slice(0, 6))}
+              prefix="₹"
+              h={56}
+              inputMode="numeric"
+              textClass="bric text-[22px]"
             />
-          ) : null}
-        </div>
+
+            <div className="flex flex-wrap gap-1.5">
+              <PillChip
+                label={`Full ${rupees(Math.max(0, due))}`}
+                selected={payAmt === String(Math.max(0, due))}
+                onClick={() => setPayAmt(String(Math.max(0, due)))}
+              />
+              {oldBal > 0 && billDue > 0 ? (
+                <PillChip
+                  label={`Only this bill ${rupees(billDue)}`}
+                  selected={payAmt === String(billDue)}
+                  onClick={() => setPayAmt(String(billDue))}
+                />
+              ) : null}
+            </div>
+          </>
+        ) : (
+          <div className="flex gap-2">
+            <label className="flex min-w-0 flex-1 flex-col gap-1">
+              <span className="text-[13px] font-bold text-muted">Cash</span>
+              <FieldBox
+                value={cashText}
+                onChange={(v) => {
+                  const c = v.replace(/\D/g, "").slice(0, 6);
+                  setCashText(c);
+                  if (!upiTouched) setUpiText(String(Math.max(0, target - (parseInt(c, 10) || 0))));
+                }}
+                prefix="₹"
+                h={52}
+                inputMode="numeric"
+                textClass="bric text-[20px]"
+              />
+            </label>
+            <label className="flex min-w-0 flex-1 flex-col gap-1">
+              <span className="text-[13px] font-bold text-muted">UPI</span>
+              <FieldBox
+                value={upiText}
+                onChange={(v) => { setUpiText(v.replace(/\D/g, "").slice(0, 6)); setUpiTouched(true); }}
+                prefix="₹"
+                h={52}
+                inputMode="numeric"
+                textClass="bric text-[20px]"
+              />
+            </label>
+          </div>
+        )}
 
         <div className="rounded-xl p-3.5" style={{ background: preview.bg }}>
           <span className="text-[14px] font-semibold" style={{ color: preview.fg }}>{preview.text}</span>
         </div>
 
-        <div className="flex w-full gap-2">
-          <PrimaryButton h={54} disabled={got <= 0} onClick={() => doPay("CASH", got)} className="flex-1">
-            Got cash
+        {!split ? (
+          <div className="flex w-full gap-2">
+            <PrimaryButton h={54} disabled={got <= 0} onClick={() => doPay("CASH", got)} className="flex-1">
+              Got cash
+            </PrimaryButton>
+            <PrimaryButton h={54} disabled={got <= 0} onClick={() => doPay("UPI", got)} className="flex-1">
+              Got UPI
+            </PrimaryButton>
+          </div>
+        ) : (
+          <PrimaryButton
+            h={54}
+            disabled={got <= 0}
+            onClick={() => { Repo.deliverSplit(orderId, [["CASH", cash], ["UPI", upi]]); onDismiss(); }}
+          >
+            {got > 0 ? `Got ${rupees(got)} (cash + UPI)` : "Type cash and UPI"}
           </PrimaryButton>
-          <PrimaryButton h={54} disabled={got <= 0} onClick={() => doPay("UPI", got)} className="flex-1">
-            Got UPI
-          </PrimaryButton>
-        </div>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            if (!split) {
+              // Start with all of it as cash; UPI fills the rest as cash is typed.
+              setCashText(String(target)); setUpiText("0"); setUpiTouched(false);
+            }
+            setSplit((v) => !v);
+          }}
+          className="py-1 text-center text-[14px] font-bold text-blue"
+        >
+          {split ? "Back to one method" : "Part cash, part UPI"}
+        </button>
         <button
           type="button"
           onClick={() => doPay("NONE", 0)}
