@@ -1,0 +1,116 @@
+diff -ruN a/.env.example b/.env.example
+--- a/.env.example	2026-10-10 18:26:14
++++ b/.env.example	2026-10-10 18:26:30
+@@ -78,12 +78,15 @@
+ # Optional: the course stack boots without these; laundry auth routes 503
+ # until a provider is configured.
+ # LAUNDRY_OTP_PROVIDER = 'test' (fixed LAUNDRY_TEST_OTP_CODE, no SMS sent)
+-#                        or 'minimoth' (api.minimoth.dev, X-Api-Key auth).
++#                        or 'minimoth' (api.minimoth.dev, X-Api-Key auth)
++#                        or '2factor' (2factor.in SMS OTP, key in the URL).
+ # The test provider is refused when NODE_ENV=production unless
+ # LAUNDRY_ALLOW_TEST_OTP_IN_PROD=true is set explicitly.
+ LAUNDRY_OTP_PROVIDER=test
+ LAUNDRY_TEST_OTP_CODE=123456
+ # LAUNDRY_MINIMOTH_API_KEY=mm_live_xxxxxxxxxxxxxxxx
++# LAUNDRY_2FACTOR_API_KEY=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
++# LAUNDRY_2FACTOR_TEMPLATE=   (optional OTP template name)
+ # LAUNDRY_ALLOW_TEST_OTP_IN_PROD=false
+ 
+ # Firebase Remote Config (class date spoken on calls — read live from the same
+diff -ruN a/config/env.js b/config/env.js
+--- a/config/env.js	2026-10-10 18:26:14
++++ b/config/env.js	2026-10-10 18:26:30
+@@ -85,10 +85,14 @@
+   // ApnaLaundry app OTP login (/api/laundry/auth/*). Deliberately NOT in
+   // REQUIRED — the course stack must keep booting without them; the laundry
+   // auth routes 503 until a provider is configured.
+-  //   LAUNDRY_OTP_PROVIDER: 'test' (fixed code, no SMS) | 'minimoth'
++  //   LAUNDRY_OTP_PROVIDER: 'test' (fixed code, no SMS) | 'minimoth' | '2factor'
+   laundryOtpProvider: process.env.LAUNDRY_OTP_PROVIDER,
+   laundryTestOtpCode: process.env.LAUNDRY_TEST_OTP_CODE,
+   laundryMinimothApiKey: process.env.LAUNDRY_MINIMOTH_API_KEY,
++  laundryTwoFactorApiKey: process.env.LAUNDRY_2FACTOR_API_KEY,
++  // Optional 2Factor OTP template name (DLT-approved, set up in the 2Factor
++  // dashboard); unset = 2Factor's default OTP SMS.
++  laundryTwoFactorTemplate: process.env.LAUNDRY_2FACTOR_TEMPLATE,
+   // The test provider is refused when NODE_ENV=production unless this is
+   // explicitly set — same fail-closed stance as HealthProduct.
+   laundryAllowTestOtpInProd: process.env.LAUNDRY_ALLOW_TEST_OTP_IN_PROD === 'true',
+diff -ruN a/services/laundry-otp.js b/services/laundry-otp.js
+--- a/services/laundry-otp.js	2026-10-10 18:26:13
++++ b/services/laundry-otp.js	2026-10-10 18:26:30
+@@ -10,6 +10,8 @@
+ //              production only with LAUNDRY_ALLOW_TEST_OTP_IN_PROD=true)
+ //   minimoth — OTP-as-a-service at api.minimoth.dev (X-Api-Key auth); it
+ //              generates, delivers and verifies the code
++//   2factor  — 2factor.in SMS OTP (API key in the URL); AUTOGEN sends a
++//              6-digit code, VERIFY3 checks it against the phone number
+ // Both expose: send(phone) / verify(phone, code) -> outcome
+ //   { code: 'sent'|'valid'|'invalid'|'expired'|'limited'|'unavailable'|'unknown',
+ //     reference?, retryAfter? }
+@@ -117,6 +119,54 @@
+   },
+ };
+ 
++// 2factor.in SMS OTP: GET /API/V1/{key}/SMS/{phone}/AUTOGEN[/{template}] sends
++// a provider-generated 6-digit code; GET /API/V1/{key}/SMS/VERIFY3/{phone}/{otp}
++// verifies by phone, so the session id it returns isn't needed. Every reply is
++// {Status, Details}; errors come back as 4xx with Status "Error" and a
++// human-readable Details string, which is what we classify on.
++const TWO_FACTOR_BASE = 'https://2factor.in/API/V1';
++
++const twoFactorProvider = {
++  name: '2factor',
++  async call(path) {
++    let res;
++    try {
++      res = await fetch(`${TWO_FACTOR_BASE}/${encodeURIComponent(env.laundryTwoFactorApiKey)}/SMS/${path}`, {
++        headers: { 'User-Agent': 'ApnaLaundry/1.0' },
++        redirect: 'manual',
++        signal: AbortSignal.timeout(8000),
++      });
++    } catch (err) {
++      // The key is in the URL — log the path only, never the request URL.
++      logger.error({ err: err.message }, '2factor request failed');
++      return null;
++    }
++    let payload = {};
++    try { payload = await res.json(); } catch { /* non-JSON body */ }
++    return { ok: res.ok, status: String(payload.Status || ''), details: String(payload.Details || '') };
++  },
++  async send(phone) {
++    const template = env.laundryTwoFactorTemplate
++      ? `/${encodeURIComponent(env.laundryTwoFactorTemplate)}`
++      : '';
++    const r = await this.call(`${phone}/AUTOGEN${template}`);
++    if (!r) return { code: 'unknown' };
++    if (r.ok && r.status === 'Success' && r.details) return { code: 'sent', reference: r.details };
++    logger.warn({ status: r.status, details: r.details }, '2factor send rejected');
++    return { code: 'unavailable' };
++  },
++  async verify(phone, code) {
++    const r = await this.call(`VERIFY3/${phone}/${encodeURIComponent(code)}`);
++    if (!r) return { code: 'unknown' };
++    const details = r.details.toLowerCase();
++    if (r.ok && details.includes('otp matched')) return { code: 'valid' };
++    if (details.includes('mismatch')) return { code: 'invalid' };
++    if (details.includes('expired')) return { code: 'expired' };
++    logger.warn({ status: r.status, details: r.details }, '2factor verify rejected');
++    return { code: 'unknown' };
++  },
++};
++
+ // Provider for a (normalized) phone: review numbers always get the local
+ // deterministic provider — even with no real provider configured — so QA and
+ // app-store review work regardless of SMS setup.
+@@ -138,6 +188,9 @@
+   }
+   if (env.laundryOtpProvider === 'minimoth') {
+     return env.laundryMinimothApiKey ? minimothProvider : null;
++  }
++  if (env.laundryOtpProvider === '2factor') {
++    return env.laundryTwoFactorApiKey ? twoFactorProvider : null;
+   }
+   return null;
+ }
