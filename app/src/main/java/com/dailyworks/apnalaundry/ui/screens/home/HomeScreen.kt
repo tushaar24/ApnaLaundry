@@ -337,12 +337,13 @@ private fun RoundIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, cd:
 
 /**
  * Two tiles for the picked day, from live orders only (a deleted or
- * cancelled order never counts): how many new orders, and their sales —
- * the total of those orders' bills. Both open Earnings.
+ * cancelled order never counts): how many orders are dated that day — the
+ * order's own date (pickup / drop-off), same as the lists, not the day it
+ * was typed in — and their sales, the total of those bills. Both open Earnings.
  */
 @Composable
 private fun DashboardStrip(state: LaundryState, selDate: String, hidden: Boolean, onEye: () -> Unit, onOpen: () -> Unit) {
-    val day = state.orders.filter { it.createdOn == selDate && it.status != OrderStatus.CANCELLED }
+    val day = state.orders.filter { it.pickupDate == selDate && it.status != OrderStatus.CANCELLED }
     val newOrders = day.size
     val sales = day.sumOf { LaundryMath.amtOf(it) }
     val rel = AppDate.rel(selDate)
@@ -362,7 +363,7 @@ private fun DashboardStrip(state: LaundryState, selDate: String, hidden: Boolean
             }
             Column {
                 Text("$newOrders", style = bric(28, FontWeight.Bold))
-                Text((if (newOrders == 1) "New order " else "New orders ") + whenText, style = fig(12, FontWeight.SemiBold, Tokens.Muted), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text((if (newOrders == 1) "Order " else "Orders ") + whenText, style = fig(12, FontWeight.SemiBold, Tokens.Muted), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         // Sales — solid blue card

@@ -317,8 +317,9 @@ function SearchBar({ value, onChange }: { value: string; onChange: (v: string) =
 
 /**
  * Two tiles for the picked day, from live orders only (a deleted or
- * cancelled order never counts): how many new orders, and their sales —
- * the total of those orders' bills. Both open Earnings.
+ * cancelled order never counts): how many orders are dated that day — the
+ * order's own date (pickup / drop-off), same as the lists, not the day it
+ * was typed in — and their sales, the total of those bills. Both open Earnings.
  */
 function DashboardStrip({
   state, selDate, hidden, onEye, onOpen,
@@ -329,7 +330,7 @@ function DashboardStrip({
   onEye: () => void;
   onOpen: () => void;
 }) {
-  const day = state.orders.filter((o) => o.createdOn === selDate && o.status !== "CANCELLED");
+  const day = state.orders.filter((o) => o.pickupDate === selDate && o.status !== "CANCELLED");
   const newOrders = day.length;
   const sales = day.reduce((s, o) => s + amtOf(o), 0);
   const rel = AppDate.rel(selDate);
@@ -347,7 +348,7 @@ function DashboardStrip({
         </span>
         <span className="flex flex-col">
           <span className="bric text-[28px] leading-tight">{newOrders}</span>
-          <span className="truncate text-[12px] font-semibold text-muted">{(newOrders === 1 ? "New order " : "New orders ") + whenText}</span>
+          <span className="truncate text-[12px] font-semibold text-muted">{(newOrders === 1 ? "Order " : "Orders ") + whenText}</span>
         </span>
       </button>
       {/* Sales — solid blue card */}
