@@ -14,7 +14,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         LedgerEntity::class,
         DayCloseEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -84,6 +84,13 @@ abstract class AppDatabase : RoomDatabase() {
                 )
                 db.execSQL("DROP TABLE shop")
                 db.execSQL("ALTER TABLE shop_new RENAME TO shop")
+            }
+        }
+
+        /** v8 -> v9: the owner's free-text note on an order. */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE orders ADD COLUMN note TEXT NOT NULL DEFAULT ''")
             }
         }
 

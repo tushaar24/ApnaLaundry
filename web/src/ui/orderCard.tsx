@@ -111,6 +111,11 @@ export function OrderCard({
             <span className={cls("text-[13px] font-bold", payTone)}>{payLabel}</span>
           ) : null}
         </div>
+        {o.note ? (
+          <div className="truncate rounded-md bg-[#FFF8DC] px-2 py-1 text-[13px] font-semibold text-[#6B5500]">
+            Note: {o.note}
+          </div>
+        ) : null}
         {showWhere ? (
           <div className="flex items-start gap-1.5 text-inksecondary">
             <span className="mt-0.5 shrink-0">{home ? <IcHome size={15} /> : <IcStore size={15} />}</span>

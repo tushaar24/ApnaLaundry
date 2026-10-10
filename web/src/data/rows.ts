@@ -78,6 +78,8 @@ export interface OrderDto {
   pieces: number; linesJson: string; serialNo?: string; exPct?: number; discPct?: number;
   // GST on the order — absent from servers / clients before the GST release.
   gstOn?: boolean; gstPct?: number; gstMode?: string;
+  // The owner's note — absent from servers / clients before the note release.
+  note?: string;
   deleted: boolean; updatedAt: number;
 }
 export interface LedgerDto {
@@ -165,7 +167,7 @@ export function orderToDto(r: OrderRow): OrderDto {
     discount: r.discount, pre: r.pre, paid: r.paid, doneAt: r.doneAt, doneDate: r.doneDate,
     createdOn: r.createdOn, billSent: r.billSent, pieces: r.pieces,
     linesJson: JSON.stringify(r.lines), serialNo: r.serialNo, exPct: r.exPct, discPct: r.discPct,
-    gstOn: r.gstOn, gstPct: r.gstPct, gstMode: r.gstMode,
+    gstOn: r.gstOn, gstPct: r.gstPct, gstMode: r.gstMode, note: r.note,
     deleted: r.deleted, updatedAt: r.updatedAt,
   };
 }
@@ -186,6 +188,7 @@ export function orderFromDto(d: OrderDto): OrderRow {
     createdOn: d.createdOn ?? "", billSent: !!d.billSent, pieces: d.pieces ?? 0, lines,
     serialNo: d.serialNo ?? "", exPct: d.exPct ?? 0, discPct: d.discPct ?? 0,
     gstOn: !!d.gstOn, gstPct: gstPctFrom(d.gstPct), gstMode: gstModeFrom(d.gstMode),
+    note: d.note ?? "",
     updatedAt: d.updatedAt, deleted: !!d.deleted, dirty: false,
   };
 }

@@ -89,6 +89,7 @@ data class Order(
     val gstOn: Boolean = false,
     val gstPct: Double = 0.0,        // 18, 5, 12 … may be fractional
     val gstMode: String = Gst.EXCL,  // Gst.EXCL = added on top of the price, Gst.INCL = already in the price
+    val note: String = "",           // owner's free-text note ("starch the shirts"); "" = none
 ) {
     /** The number shown as "#…" on the order and its bill: the owner's serial, else the id. */
     fun no(): String = serialNo.trim().ifEmpty { id.toString() }

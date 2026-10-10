@@ -112,6 +112,14 @@ function OrderDetailScreen({ orderId }: { orderId: number }) {
           </span>
         </button>
 
+        {/* note */}
+        {o.note ? (
+          <div className="w-full rounded-xl border border-[#F0D98A] bg-[#FFF8DC] p-3.5">
+            <div className="text-[12px] font-bold text-[#8A6D00]">Note</div>
+            <div className="whitespace-pre-wrap text-[15px] font-semibold text-ink">{o.note}</div>
+          </div>
+        ) : null}
+
         {/* stepper */}
         {!cancelled ? (
           <AppCard>

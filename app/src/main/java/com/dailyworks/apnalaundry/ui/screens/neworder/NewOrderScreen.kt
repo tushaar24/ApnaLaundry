@@ -130,6 +130,7 @@ fun NewOrderScreen(
     var gstPctText by remember { mutableStateOf(if (state.shop.gstPct > 0) Gst.fmtPct(state.shop.gstPct) else "") }
     var gstMode by remember { mutableStateOf(state.shop.gstMode) }
     var serialText by remember { mutableStateOf("") } // "" = the order id
+    var note by remember { mutableStateOf("") } // owner's note on the order
     var serialTouched by remember { mutableStateOf(false) } // owner typed in it
     var quickAmt by remember { mutableStateOf("") }
     var quickPcs by remember { mutableStateOf("") }
@@ -166,6 +167,7 @@ fun NewOrderScreen(
         gstPctText = if (o.gstPct > 0) Gst.fmtPct(o.gstPct) else if (state.shop.gstPct > 0) Gst.fmtPct(state.shop.gstPct) else ""
         gstMode = if (o.gstOn) o.gstMode else state.shop.gstMode
         serialText = o.no() // the number it shows today (its serial, else the order id)
+        note = o.note
         when {
             o.express && o.exPct > 0 -> { exIsPct = true; exPctText = o.exPct.toString() }
             o.express && o.exAmt > 0 -> { exIsPct = false; exAmtText = o.exAmt.toString() }
@@ -455,6 +457,27 @@ fun NewOrderScreen(
                 )
             }
 
+            // ---- note ----
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SectionLabel("Note")
+                Box(
+                    Modifier.fillMaxWidth().heightIn(min = 72.dp).rounded(12.dp).background(Tokens.Card)
+                        .border(1.5.dp, Tokens.FieldBorder, RoundedCornerShape(12.dp)).padding(horizontal = 14.dp, vertical = 12.dp),
+                ) {
+                    if (note.isEmpty()) Text("Optional — e.g. Starch the shirts, stain on the collar", style = fig(16, color = Tokens.Faint))
+                    androidx.compose.foundation.text.BasicTextField(
+                        value = note,
+                        onValueChange = { note = it.take(500) },
+                        textStyle = fig(16, FontWeight.SemiBold),
+                        cursorBrush = androidx.compose.ui.graphics.SolidColor(Tokens.Blue),
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Sentences,
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+
             // ---- live bill ----
             if (clothesTotal > 0) {
                 AppCard {
@@ -492,6 +515,7 @@ fun NewOrderScreen(
                     lines = clothes.lines(services), quickAmount = if (showQuickBox) quickAmt.toIntOrNull() ?: 0 else 0,
                     quickPieces = if (showQuickBox) quickPcs.toIntOrNull() ?: 0 else 0,
                     serialNo = serialText,
+                    note = note,
                 ) { result ->
                     if (editId != null) navigator.back()
                     else if (result.goToBill) navigator.openBill(result.orderId, "new")

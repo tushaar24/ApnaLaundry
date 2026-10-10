@@ -614,6 +614,7 @@ export interface SaveOrderArgs {
   quickAmount: number;
   quickPieces: number;
   serialNo: string; // "" = the order id
+  note: string; // owner's note ("" = none)
 }
 
 function quickLine(amount: number, pieces: number): OrderLine {
@@ -641,7 +642,7 @@ export function saveOrder(a: SaveOrderArgs): SaveOrderResult {
     fee: anyHome ? a.fee : 0, express: a.express, exAmt: a.express ? a.exAmt : 0,
     exPct: a.express ? a.exPct : 0, discount: a.discount, discPct: a.discPct,
     gstOn: a.gstOn && a.gstPct > 0, gstPct: a.gstPct, gstMode: a.gstMode,
-    lines: a.lines, serialNo: a.serialNo.trim(),
+    lines: a.lines, serialNo: a.serialNo.trim(), note: a.note.trim().slice(0, 500),
   };
   const nm = custName(a.custId);
 
@@ -659,7 +660,7 @@ export function saveOrder(a: SaveOrderArgs): SaveOrderResult {
       ddAuto: fields.ddAuto, fee: fields.fee, express: fields.express, exAmt: fields.exAmt,
       exPct: fields.exPct, discount: fields.discount, discPct: fields.discPct,
       gstOn: fields.gstOn, gstPct: fields.gstPct, gstMode: fields.gstMode,
-      lines: newLines, serialNo: fields.serialNo,
+      lines: newLines, serialNo: fields.serialNo, note: fields.note,
     };
     updated = withPctExtras(updated, st.shop.expressPct);
     if (updated.status === "CREATED" && newLines.length > 0 && a.pickup === "SHOP") {
@@ -704,7 +705,7 @@ export function saveOrder(a: SaveOrderArgs): SaveOrderResult {
     discount: fields.discount, discPct: fields.discPct,
     gstOn: fields.gstOn, gstPct: fields.gstPct, gstMode: fields.gstMode,
     pre: 0, paid: 0, doneAt: "", doneDate: "", createdOn: AppDate.today(),
-    billSent: false, pieces: 0, lines: fields.lines, serialNo: fields.serialNo,
+    billSent: false, pieces: 0, lines: fields.lines, serialNo: fields.serialNo, note: fields.note,
   };
   setRows((r) => ({
     ...r,

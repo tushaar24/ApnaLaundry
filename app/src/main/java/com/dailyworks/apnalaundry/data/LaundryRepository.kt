@@ -532,6 +532,7 @@ class LaundryRepository(private val db: AppDatabase) {
         exPct: Int = 0, // 0 = exAmt is a fixed ₹ amount
         discPct: Int = 0, // 0 = discount is a fixed ₹ amount
         gstOn: Boolean = false, gstPct: Double = 0.0, gstMode: String = Gst.EXCL,
+        note: String = "",
     ): SaveOrderResult {
         val undo = snapshot()
         val st = current()
@@ -554,7 +555,7 @@ class LaundryRepository(private val db: AppDatabase) {
                 ddAuto = fields.ddAuto, fee = fields.fee, express = fields.express, exAmt = fields.exAmt,
                 discount = fields.discount, lines = newLines, serialNo = serialNo.trim(),
                 exPct = if (fields.express) exPct else 0, discPct = discPct,
-                gstOn = gstOn && gstPct > 0, gstPct = gstPct, gstMode = gstMode,
+                gstOn = gstOn && gstPct > 0, gstPct = gstPct, gstMode = gstMode, note = note.trim().take(500),
             )
             updated = LaundryMath.withPctExtras(updated, st.shop.expressPct)
             if (updated.status == OrderStatus.CREATED && newLines.isNotEmpty() && pickup == Route.SHOP) {
@@ -588,7 +589,7 @@ class LaundryRepository(private val db: AppDatabase) {
             pre = 0, paid = 0, doneAt = "", doneDate = "", createdOn = AppDate.TODAY, billSent = false,
             pieces = 0, lines = fields.lines,
             serialNo = serialNo.trim(), exPct = if (fields.express) exPct else 0, discPct = discPct,
-            gstOn = gstOn && gstPct > 0, gstPct = gstPct, gstMode = gstMode,
+            gstOn = gstOn && gstPct > 0, gstPct = gstPct, gstMode = gstMode, note = note.trim().take(500),
         )
         db.withTransaction {
             orderDao.upsert(order.toEntity())

@@ -84,6 +84,7 @@ export interface Order {
   gstOn: boolean;
   gstPct: number; // 18, 5, 12 … may be fractional
   gstMode: GstMode; // "excl" = added on top of the price, "incl" = already in the price
+  note: string; // owner's free-text note ("starch the shirts"); "" = none
   lines: OrderLine[];
 }
 

@@ -60,6 +60,7 @@ import com.dailyworks.apnalaundry.ui.nav.AppNavigator
 import com.dailyworks.apnalaundry.ui.sheets.ActiveSheet
 import com.dailyworks.apnalaundry.ui.sheets.SheetHost
 import com.dailyworks.apnalaundry.ui.theme.Tokens
+import androidx.compose.foundation.shape.RoundedCornerShape
 
 @Composable
 fun OrderDetailScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, from: String) {
@@ -116,6 +117,17 @@ fun OrderDetailScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: I
                     Column(Modifier.weight(1f)) {
                         Text(c.name, style = fig(18, FontWeight.Bold))
                         Text("+91 ${Selectors.fmtPhone(c.phone)}", style = fig(13, color = Tokens.Muted))
+                    }
+                }
+
+                // note
+                if (o.note.isNotBlank()) {
+                    Column(
+                        Modifier.fillMaxWidth().rounded(12.dp).background(androidx.compose.ui.graphics.Color(0xFFFFF8DC))
+                            .border(1.dp, androidx.compose.ui.graphics.Color(0xFFF0D98A), RoundedCornerShape(12.dp)).padding(14.dp),
+                    ) {
+                        Text("Note", style = fig(12, FontWeight.Bold, androidx.compose.ui.graphics.Color(0xFF8A6D00)))
+                        Text(o.note, style = fig(15, FontWeight.SemiBold))
                     }
                 }
 

@@ -107,6 +107,7 @@ data class OrderEntity(
     @ColumnInfo(defaultValue = "0") val gstOn: Boolean = false,
     @ColumnInfo(defaultValue = "0") val gstPct: Double = 0.0,
     @ColumnInfo(defaultValue = "excl") val gstMode: String = "excl",
+    @ColumnInfo(defaultValue = "") val note: String = "", // v9: owner's note
 )
 
 @Entity(tableName = "ledger")

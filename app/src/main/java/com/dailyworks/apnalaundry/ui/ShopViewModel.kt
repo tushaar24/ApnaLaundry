@@ -190,13 +190,14 @@ class ShopViewModel(
         exPct: Int = 0,
         discPct: Int = 0,
         gstOn: Boolean = false, gstPct: Double = 0.0, gstMode: String = "excl",
+        note: String = "",
         onDone: (LaundryRepository.SaveOrderResult) -> Unit,
     ) = viewModelScope.launch {
         invalidateUndo()
         val res = repo.saveOrder(
             editId, custId, pickup, delivery, pickupDate, pickupTime24, deliveryDate, deliveryTime24, ddAuto,
             fee, express, exAmt, discount, lines, quickAmount, quickPieces, serialNo = serialNo,
-            exPct = exPct, discPct = discPct, gstOn = gstOn, gstPct = gstPct, gstMode = gstMode,
+            exPct = exPct, discPct = discPct, gstOn = gstOn, gstPct = gstPct, gstMode = gstMode, note = note,
         )
         res.toast?.let { publish(CmdResult(it, res.undo)) }
         sync.requestSync()

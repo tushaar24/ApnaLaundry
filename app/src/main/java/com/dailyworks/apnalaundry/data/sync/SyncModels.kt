@@ -61,6 +61,8 @@ data class OrderDto(
     val exPct: Int? = null, val discPct: Int? = null,
     // GST on the order; older servers / clients omit it (the server writes it only when present).
     val gstOn: Boolean? = null, val gstPct: Double? = null, val gstMode: String? = null,
+    // The owner's note; older servers / clients omit it (the server writes it only when present).
+    val note: String? = null,
 )
 
 @Serializable
@@ -120,7 +122,7 @@ fun CustomerDto.toEntity() = CustomerEntity(id, name, phone, address, pastOrders
 fun OrderEntity.toDto() = OrderDto(
     id, custId, pickup, delivery, pickupDate, pickupTime, deliveryDate, deliveryTime, ddAuto, status,
     cancelReason, fee, express, exAmt, discount, pre, paid, doneAt, doneDate, createdOn, billSent,
-    pieces, linesJson, deleted, updatedAt, serialNo, exPct, discPct, gstOn, gstPct, gstMode,
+    pieces, linesJson, deleted, updatedAt, serialNo, exPct, discPct, gstOn, gstPct, gstMode, note,
 )
 fun OrderDto.toEntity() = OrderEntity(
     id, custId, pickup, delivery, pickupDate, pickupTime, deliveryDate, deliveryTime, ddAuto, status,
@@ -128,6 +130,7 @@ fun OrderDto.toEntity() = OrderEntity(
     pieces, linesJson, deleted, updatedAt, dirty = false, serialNo = serialNo ?: "",
     exPct = exPct ?: 0, discPct = discPct ?: 0,
     gstOn = gstOn ?: false, gstPct = Gst.pctFrom(gstPct), gstMode = Gst.modeOrDefault(gstMode),
+    note = note ?: "",
 )
 
 fun LedgerEntity.toDto() = LedgerDto(id, custId, date, time, ts, kind, amt, method, tag, cover, toOld, toAdv, ref, note, deleted, updatedAt)

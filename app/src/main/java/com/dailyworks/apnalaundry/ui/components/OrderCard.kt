@@ -124,6 +124,15 @@ fun OrderCard(
                 Text(meta, style = fig(13, color = Tokens.Muted), modifier = Modifier.weight(1f))
                 if (counted && o.status != OrderStatus.CANCELLED) Text(payLabel, style = fig(13, FontWeight.Bold, payFg))
             }
+            if (o.note.isNotBlank()) {
+                Text(
+                    "Note: ${o.note}",
+                    style = fig(13, FontWeight.SemiBold, androidx.compose.ui.graphics.Color(0xFF6B5500)),
+                    maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth().rounded(6.dp).background(androidx.compose.ui.graphics.Color(0xFFFFF8DC))
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                )
+            }
             if (showWhere) {
                 Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Icon(if (home) Icons.Outlined.Home else Icons.Outlined.Storefront, null, tint = Tokens.InkSecondary, modifier = Modifier.size(16.dp).padding(top = 2.dp))

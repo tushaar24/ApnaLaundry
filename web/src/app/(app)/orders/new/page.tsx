@@ -82,6 +82,7 @@ function NewOrderScreen() {
   const [gstPctText, setGstPctText] = useState(state.shop.gstPct > 0 ? fmtPct(state.shop.gstPct) : "");
   const [gstMode, setGstMode] = useState<GstMode>(state.shop.gstMode);
   const [serialText, setSerialText] = useState(""); // "" = the order id
+  const [note, setNote] = useState(""); // owner's note on the order
   const [serialTouched, setSerialTouched] = useState(false);
   const [quickAmt, setQuickAmt] = useState("");
   const [quickPcs, setQuickPcs] = useState("");
@@ -121,6 +122,7 @@ function NewOrderScreen() {
     setGstPctText(o.gstPct > 0 ? fmtPct(o.gstPct) : state.shop.gstPct > 0 ? fmtPct(state.shop.gstPct) : "");
     setGstMode(o.gstOn ? o.gstMode : state.shop.gstMode);
     setSerialText(Sel.orderNo(o)); // the number it shows today (its serial, else the order id)
+    setNote(o.note ?? "");
     // Same base as the live auto amount below: every line, quick amount included.
     const clothesTotalForEx = o.lines.reduce((s, l) => s + l.amt, 0);
     if (o.express && o.exPct > 0) { setExMode("pct"); setExPctText(String(o.exPct)); }
@@ -247,6 +249,7 @@ function NewOrderScreen() {
       quickAmount: showQuickBox ? parseInt(quickAmt, 10) || 0 : 0,
       quickPieces: showQuickBox ? parseInt(quickPcs, 10) || 0 : 0,
       serialNo: serialText,
+      note,
     });
     // The saved form must not stay in history (the app's nav graph pops it) —
     // otherwise browser Back lands on a blank "New order" after saving.
@@ -536,6 +539,19 @@ function NewOrderScreen() {
               hint={gstHint(gstOn, gstPct, gstMode)}
               noGstin={gstOn && !isGstinValid(state.shop.gstin)}
               footnote={editId != null ? "Changes here apply to this order only." : "Saved for your next orders. You can change it on any order."}
+            />
+          </div>
+
+          {/* ---- note ---- */}
+          <div className="flex flex-col gap-2">
+            <SectionLabel text="Note" />
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value.slice(0, 500))}
+              placeholder="Optional — e.g. Starch the shirts, stain on the collar"
+              rows={2}
+              aria-label="Note"
+              className="w-full resize-none rounded-xl border-[1.5px] border-fieldborder bg-card px-3.5 py-3 text-[16px] font-semibold outline-none placeholder:font-normal placeholder:text-faint focus:border-blue"
             />
           </div>
 
