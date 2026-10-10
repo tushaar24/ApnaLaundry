@@ -1,0 +1,297 @@
+diff -ruN a/.env.example b/.env.example
+--- a/.env.example	2026-10-10 21:51:30
++++ b/.env.example	2026-10-10 21:51:51
+@@ -88,6 +88,12 @@
+ # LAUNDRY_2FACTOR_API_KEY=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+ # LAUNDRY_2FACTOR_TEMPLATE=   (optional OTP template name)
+ # LAUNDRY_2FACTOR_TEST_SECRET=   (enables POST /api/laundry/auth/test-2factor/{send,verify}, X-Test-Secret header)
++
++# MyLaundry WhatsApp Business number — webhook at /api/laundry/whatsapp/webhook
++# LAUNDRY_WHATSAPP_VERIFY_TOKEN=   (any random string; paste the same into Meta's "Verify token")
++# LAUNDRY_WHATSAPP_APP_SECRET=     (Meta app → App settings → Basic → App secret)
++# LAUNDRY_WHATSAPP_ACCESS_TOKEN=   (system-user token, for sending later)
++# LAUNDRY_WHATSAPP_PHONE_NUMBER_ID=
+ # LAUNDRY_ALLOW_TEST_OTP_IN_PROD=false
+ 
+ # Firebase Remote Config (class date spoken on calls — read live from the same
+diff -ruN a/app.js b/app.js
+--- a/app.js	2026-10-10 21:51:28
++++ b/app.js	2026-10-10 21:51:51
+@@ -50,6 +50,13 @@
+   express.json({ limit: '1mb', verify: (req, res, buf) => { req.rawBody = buf; } }),
+   require('./routes/laundry-billing'),
+ );
++// MyLaundry WhatsApp webhook (Meta) — public, before the token-gated router;
++// keeps the raw body for the X-Hub-Signature-256 check.
++app.use(
++  '/api/laundry/whatsapp',
++  express.json({ limit: '1mb', verify: (req, res, buf) => { req.rawBody = buf; } }),
++  require('./routes/laundry-whatsapp'),
++);
+ // Public bill page data (no login) — before the token-gated router below.
+ app.use('/api/laundry/public', require('./routes/laundry-public'));
+ // Customer-service app (open, no auth — owner decision) — before the generic
+diff -ruN a/config/env.js b/config/env.js
+--- a/config/env.js	2026-10-10 21:51:29
++++ b/config/env.js	2026-10-10 21:51:51
+@@ -96,6 +96,14 @@
+   // Shared secret for the /api/laundry/auth/test-2factor/* debug routes
+   // (X-Test-Secret header); unset = those routes 404.
+   laundryTwoFactorTestSecret: process.env.LAUNDRY_2FACTOR_TEST_SECRET,
++
++  // MyLaundry WhatsApp Business (Cloud) API — its own Meta app/number, apart
++  // from the course site's WHATSAPP_*. Not REQUIRED: the webhook answers 403
++  // until the verify token / app secret are set.
++  laundryWhatsappVerifyToken: process.env.LAUNDRY_WHATSAPP_VERIFY_TOKEN, // GET handshake (hub.verify_token)
++  laundryWhatsappAppSecret: process.env.LAUNDRY_WHATSAPP_APP_SECRET, // X-Hub-Signature-256 on POSTs
++  laundryWhatsappAccessToken: process.env.LAUNDRY_WHATSAPP_ACCESS_TOKEN, // Bearer for outbound /messages
++  laundryWhatsappPhoneNumberId: process.env.LAUNDRY_WHATSAPP_PHONE_NUMBER_ID, // send-from number id
+   // The test provider is refused when NODE_ENV=production unless this is
+   // explicitly set — same fail-closed stance as HealthProduct.
+   laundryAllowTestOtpInProd: process.env.LAUNDRY_ALLOW_TEST_OTP_IN_PROD === 'true',
+diff -ruN a/prisma/migrations/20261010200000_laundry_whatsapp_messages/migration.sql b/prisma/migrations/20261010200000_laundry_whatsapp_messages/migration.sql
+--- a/prisma/migrations/20261010200000_laundry_whatsapp_messages/migration.sql	1970-01-01 05:30:00
++++ b/prisma/migrations/20261010200000_laundry_whatsapp_messages/migration.sql	2026-10-10 21:51:56
+@@ -0,0 +1,37 @@
++-- MyLaundry WhatsApp Business number: webhook log of inbound messages and
++-- delivery/read/failed statuses (routes/laundry-whatsapp.js).
++-- CreateTable
++CREATE TABLE "laundry_whatsapp_messages" (
++    "id" TEXT NOT NULL,
++    "wa_message_id" TEXT,
++    "phone_number_id" TEXT,
++    "laundry_user_id" TEXT,
++    "wa_id" TEXT NOT NULL,
++    "phone" TEXT NOT NULL,
++    "direction" TEXT NOT NULL,
++    "type" TEXT NOT NULL DEFAULT 'text',
++    "body" TEXT,
++    "status" TEXT,
++    "wa_timestamp" TIMESTAMPTZ(6),
++    "error_code" TEXT,
++    "error_title" TEXT,
++    "contact_name" TEXT,
++    "media_id" TEXT,
++    "media_mime" TEXT,
++    "raw" JSONB NOT NULL,
++    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
++
++    CONSTRAINT "laundry_whatsapp_messages_pkey" PRIMARY KEY ("id")
++);
++
++-- CreateIndex
++CREATE UNIQUE INDEX "laundry_whatsapp_messages_wa_message_id_key" ON "laundry_whatsapp_messages"("wa_message_id");
++
++-- CreateIndex
++CREATE INDEX "laundry_whatsapp_messages_laundry_user_id_idx" ON "laundry_whatsapp_messages"("laundry_user_id");
++
++-- CreateIndex
++CREATE INDEX "laundry_whatsapp_messages_wa_id_created_at_idx" ON "laundry_whatsapp_messages"("wa_id", "created_at" DESC);
++
++-- CreateIndex
++CREATE INDEX "laundry_whatsapp_messages_created_at_idx" ON "laundry_whatsapp_messages"("created_at" DESC);
+diff -ruN a/prisma/schema.prisma b/prisma/schema.prisma
+--- a/prisma/schema.prisma	2026-10-10 21:51:31
++++ b/prisma/schema.prisma	2026-10-10 21:51:51
+@@ -508,6 +508,36 @@
+   @@map("laundry_webhook_events")
+ }
+ 
++// ── MyLaundry WhatsApp Business number (routes/laundry-whatsapp.js) ──
++// Meta Cloud API webhook log for the MyLaundry number — kept apart from the
++// course site's whatsapp_messages. Inbound messages + delivery/read/failed
++// statuses; a sender who is a MyLaundry shop owner is linked by phone.
++model LaundryWhatsappMessage {
++  id            String    @id @default(cuid())
++  waMessageId   String?   @unique @map("wa_message_id") // wamid.* — idempotency + status-correlation key
++  phoneNumberId String?   @map("phone_number_id") // our business number's id (metadata.phone_number_id)
++  laundryUserId String?   @map("laundry_user_id") // laundry_users.id when the counterparty is a shop owner
++  waId          String    @map("wa_id") // counterparty wa_id (full intl digits, e.g. 919876543210)
++  phone         String // normalized 10-digit key (matches LaundryUser.phone)
++  direction     String // "inbound" | "outbound"
++  type          String    @default("text") // text | image | audio | ... | status
++  body          String? // text body / caption
++  status        String? // sent | delivered | read | failed (statuses + outbound)
++  waTimestamp   DateTime? @map("wa_timestamp") @db.Timestamptz(6) // WhatsApp's own message/status timestamp
++  errorCode     String?   @map("error_code")
++  errorTitle    String?   @map("error_title")
++  contactName   String?   @map("contact_name") // WhatsApp profile name (inbound)
++  mediaId       String?   @map("media_id") // Graph media id (image/audio/video/document/sticker)
++  mediaMime     String?   @map("media_mime")
++  raw           Json // full payload node, forward-compat for non-text types
++  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
++
++  @@index([laundryUserId])
++  @@index([waId, createdAt(sort: Desc)])
++  @@index([createdAt(sort: Desc)])
++  @@map("laundry_whatsapp_messages")
++}
++
+ // ── Customer-service app (routes/laundry-support.js) ──
+ // One row per call a support agent places to a shop owner. There is no agent
+ // login (owner decision): agentName is whatever the agent typed into the app.
+diff -ruN a/routes/laundry-whatsapp.js b/routes/laundry-whatsapp.js
+--- a/routes/laundry-whatsapp.js	1970-01-01 05:30:00
++++ b/routes/laundry-whatsapp.js	2026-10-10 21:52:13
+@@ -0,0 +1,161 @@
++const express = require('express');
++const crypto = require('crypto');
++
++const prisma = require('../db');
++const env = require('../config/env');
++const { normalizePhone } = require('../utils/phone');
++
++// Meta Cloud API webhook for the MyLaundry WhatsApp Business number — same
++// shape as the course site's routes/whatsapp.js, but its own Meta app, env
++// (LAUNDRY_WHATSAPP_*) and table (laundry_whatsapp_messages):
++//
++//   GET  /api/laundry/whatsapp/webhook  hub.mode / hub.verify_token / hub.challenge -> challenge
++//   POST /api/laundry/whatsapp/webhook  X-Hub-Signature-256 -> store messages + statuses, 200
++
++const router = express.Router();
++
++// WhatsApp sends timestamps as unix-seconds strings. -> Date, or null.
++function waTime(ts) {
++  const n = Number(ts);
++  return Number.isFinite(n) && n > 0 ? new Date(n * 1000) : null;
++}
++
++function constantTimeEqual(a, b) {
++  const ab = Buffer.from(String(a));
++  const bb = Buffer.from(String(b));
++  return ab.length === bb.length && crypto.timingSafeEqual(ab, bb);
++}
++
++// Verification handshake. Meta requires the bare challenge echoed back (not
++// wrapped in JSON).
++router.get('/webhook', (req, res) => {
++  const mode = req.query['hub.mode'];
++  const token = req.query['hub.verify_token'];
++  const challenge = req.query['hub.challenge'];
++
++  if (mode === 'subscribe' && env.laundryWhatsappVerifyToken
++    && constantTimeEqual(token || '', env.laundryWhatsappVerifyToken)) {
++    req.log.info('MyLaundry WhatsApp webhook verified');
++    return res.status(200).type('text/plain').send(String(challenge ?? ''));
++  }
++  req.log.warn('MyLaundry WhatsApp webhook verification failed');
++  return res.sendStatus(403);
++});
++
++// Constant-time compare of X-Hub-Signature-256 against our HMAC of the exact
++// raw bytes (kept by the parser in app.js). The Meta App Secret is the key.
++function validSignature(rawBody, header) {
++  if (!env.laundryWhatsappAppSecret || !header || !rawBody || !rawBody.length) return false;
++  const expected = 'sha256=' + crypto.createHmac('sha256', env.laundryWhatsappAppSecret).update(rawBody).digest('hex');
++  return constantTimeEqual(header, expected);
++}
++
++// The shop owner behind a WhatsApp number, if any.
++async function laundryUserIdFor(waId) {
++  const user = await prisma.laundryUser.findUnique({
++    where: { phone: normalizePhone(waId) },
++    select: { id: true },
++  });
++  return user?.id ?? null;
++}
++
++// Persist one inbound message. Idempotent on the wamid so Meta retries of the
++// same delivery don't duplicate the row.
++async function saveInboundMessage(msg, contactName, phoneNumberId) {
++  const data = {
++    waMessageId: msg.id || null,
++    phoneNumberId,
++    laundryUserId: await laundryUserIdFor(msg.from),
++    waId: msg.from,
++    phone: normalizePhone(msg.from),
++    direction: 'inbound',
++    type: msg.type || 'text',
++    body: msg.text?.body ?? msg[msg.type]?.caption ?? null,
++    contactName: contactName || null,
++    mediaId: msg[msg.type]?.id ?? null, // media node carries the Graph media id
++    mediaMime: msg[msg.type]?.mime_type ?? null,
++    waTimestamp: waTime(msg.timestamp),
++    raw: msg,
++  };
++  if (!msg.id) return prisma.laundryWhatsappMessage.create({ data });
++  return prisma.laundryWhatsappMessage.upsert({
++    where: { waMessageId: msg.id },
++    create: data,
++    update: {}, // duplicate delivery (Meta retry) — keep the first
++  });
++}
++
++// Apply a sent/delivered/read/failed status to the outbound row we sent; if
++// there is none (sent from outside this system), record a status row so
++// nothing is lost.
++async function saveStatus(st, phoneNumberId) {
++  const patch = {
++    status: st.status,
++    waTimestamp: waTime(st.timestamp),
++    errorCode: st.errors?.[0]?.code != null ? String(st.errors[0].code) : undefined,
++    errorTitle: st.errors?.[0]?.title ?? undefined,
++  };
++
++  const { count } = await prisma.laundryWhatsappMessage.updateMany({ where: { waMessageId: st.id }, data: patch });
++  if (count > 0) return;
++
++  try {
++    await prisma.laundryWhatsappMessage.create({
++      data: {
++        waMessageId: st.id,
++        phoneNumberId,
++        laundryUserId: await laundryUserIdFor(st.recipient_id),
++        waId: st.recipient_id,
++        phone: normalizePhone(st.recipient_id),
++        direction: 'outbound',
++        type: 'status',
++        ...patch,
++        raw: st,
++      },
++    });
++  } catch (err) {
++    // A prior status event (e.g. delivered before read) already created the row.
++    if (err.code === 'P2002') {
++      await prisma.laundryWhatsappMessage.updateMany({ where: { waMessageId: st.id }, data: patch });
++    } else {
++      throw err;
++    }
++  }
++}
++
++// Event notifications: signature-verify against the raw body, persist
++// messages + statuses, then 200 so Meta stops retrying.
++router.post('/webhook', async (req, res, next) => {
++  try {
++    if (!validSignature(req.rawBody, req.headers['x-hub-signature-256'])) {
++      req.log.error(
++        { secretSet: Boolean(env.laundryWhatsappAppSecret) },
++        'Invalid MyLaundry WhatsApp webhook signature',
++      );
++      return res.sendStatus(403);
++    }
++
++    for (const entry of req.body.entry || []) {
++      for (const change of entry.changes || []) {
++        const value = change.value || {};
++        const phoneNumberId = value.metadata?.phone_number_id ?? null;
++        const nameByWaId = Object.fromEntries(
++          (value.contacts || []).map((c) => [c.wa_id, c.profile?.name])
++        );
++
++        for (const msg of value.messages || []) {
++          await saveInboundMessage(msg, nameByWaId[msg.from], phoneNumberId);
++        }
++        for (const st of value.statuses || []) {
++          await saveStatus(st, phoneNumberId);
++        }
++      }
++    }
++
++    return res.sendStatus(200);
++  } catch (error) {
++    return next(error);
++  }
++});
++
++module.exports = router;
