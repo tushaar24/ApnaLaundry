@@ -1,0 +1,20 @@
+diff -ruN backend-orig/routes/laundry-billing.js backend-live/routes/laundry-billing.js
+--- backend-orig/routes/laundry-billing.js	2026-10-10 12:46:26
++++ backend-live/routes/laundry-billing.js	2026-10-10 12:46:26
+@@ -231,7 +231,15 @@
+     try {
+       await rzp.cancelSubscription(sub.razorpaySubscriptionId, false);
+     } catch (e) {
+-      req.log.warn({ err: e }, 'laundry billing: subscription cancel failed (continuing)');
++      // Only mark it cancelled if Razorpay agrees it's over (e.g. it was already
++      // cancelled). Otherwise the mandate is still live and Razorpay would keep
++      // charging a shop we've locked out — fail so the owner can retry.
++      const remote = await rzp.fetchSubscription(sub.razorpaySubscriptionId).catch(() => null);
++      if (!remote || !TERMINAL.includes(remote.status)) {
++        req.log.error({ err: e, remoteStatus: remote && remote.status }, 'laundry billing: subscription cancel failed');
++        return res.status(502).json({ success: false, code: 'CANCEL_FAILED', message: 'Could not cancel right now — please try again' });
++      }
++      req.log.warn({ err: e, remoteStatus: remote.status }, 'laundry billing: cancel call failed but Razorpay already ended it');
+     }
+     await prisma.laundrySubscription.update({
+       where: { id: sub.id },

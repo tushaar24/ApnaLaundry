@@ -33,7 +33,8 @@ shows until that check resolves** (no flash of the app or wrong screen).
 - **Only an active subscription (`hasActiveSubscription`) gets in.** Anything else —
   no sub, billing unconfigured (`configured: false`), or `paywallDue: false` without an
   active sub — gets the non-cancellable paywall. No close/back. (Changed 2026-10-10:
-  the gate used to fail open.)
+  the gate used to fail open.) Exception: a **cancelled** plan still inside the period it
+  paid for (`paywallDue: false`) keeps access until that period ends (2026-10-10).
 - Billing unreachable: the status call is retried twice with backoff. If it still
   fails, the owner gets in **only** if a check in the last 7 days confirmed an active
   subscription for the same user (cached locally: Android `Prefs.subActiveCached`,

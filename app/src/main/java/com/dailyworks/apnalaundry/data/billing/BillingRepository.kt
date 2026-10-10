@@ -12,7 +12,7 @@ import kotlinx.coroutines.delay
 class BillingRepository(private val api: BillingApi, private val prefs: Prefs) {
 
     suspend fun status(): BillingStatus = api.status().also { s ->
-        if (s.hasActiveSubscription) prefs.markSubActive() else prefs.clearSubActive()
+        if (s.hasAccess) prefs.markSubActive() else prefs.clearSubActive()
     }
 
     /** [status], retrying a failed call [retries] more times with backoff; null if all fail. */

@@ -34,7 +34,7 @@ export const useBillingStore = create<BillingStore>((set) => ({
     for (let attempt = 0; ; attempt++) {
       try {
         const s = await getBillingStatus();
-        if (s.hasActiveSubscription) prefs.markSubActive();
+        if (hasAccess(s)) prefs.markSubActive();
         else prefs.clearSubActive();
         set({ status: s, loaded: true, failed: false });
         return;
@@ -61,6 +61,17 @@ export function paywallInfo(status: BillingStatus | null): PaywallInfo {
   // (only a recent cached "active" result can, see prefs.subActiveCached).
   if (!status) return { ready: false, hasActive: false, blocked: false };
   const hasActive = status.hasActiveSubscription;
-  // Only an active subscription gets in: not "unconfigured", not "not due".
-  return { ready: status.configured, hasActive, blocked: !hasActive };
+  // Only an active subscription, or a cancelled one still in the period it
+  // paid for, gets in: not "unconfigured".
+  return { ready: status.configured, hasActive, blocked: !hasAccess(status) };
+}
+
+/**
+ * May use the app: an active plan, or a cancelled one the server says is still
+ * inside the period it already paid for (paywallDue false). Only a cancelled
+ * plan gets the grace, so "billing unconfigured" never lets anyone in.
+ */
+export function hasAccess(status: BillingStatus): boolean {
+  if (status.hasActiveSubscription) return true;
+  return status.subscription?.status === "cancelled" && !status.paywallDue;
 }

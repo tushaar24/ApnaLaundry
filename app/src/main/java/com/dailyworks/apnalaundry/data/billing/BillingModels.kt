@@ -36,7 +36,17 @@ data class BillingStatus(
     val hasActiveSubscription: Boolean = false,
     val plans: BillingPlans = BillingPlans(),
     val subscription: BillingSubscriptionDto? = null,
-)
+) {
+    /**
+     * Cancelled, but still inside the period it already paid for (the server
+     * says the paywall isn't due yet). Only a cancelled plan qualifies, so
+     * "billing unconfigured" never gets in this way.
+     */
+    val inCancelGrace: Boolean get() = subscription?.status == "cancelled" && !paywallDue
+
+    /** May use the app: an active plan, or a cancelled one still in its paid period. */
+    val hasAccess: Boolean get() = hasActiveSubscription || inCancelGrace
+}
 
 @Serializable
 data class SubscribeRequest(val plan: String)

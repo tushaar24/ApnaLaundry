@@ -40,9 +40,10 @@ data class PaywallUiState(
     val monthlyAmount: Int get() = status?.plans?.monthly?.amount ?: 49900
     val trialAmount: Int get() = status?.plans?.trial?.amount ?: 200
 
-    // ONLY an active subscription gets in: not "unconfigured", not "not due".
+    // Only an active subscription, or a cancelled one still in the period it
+    // paid for, gets in: not "unconfigured", not "not due".
     // (No status at all is undecided; the gate falls back to the local cache.)
-    val shouldHardGate: Boolean get() = status != null && !hasActive
+    val shouldHardGate: Boolean get() = status != null && !status.hasAccess
 }
 
 /**

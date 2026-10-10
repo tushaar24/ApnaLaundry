@@ -17,7 +17,8 @@ import { IcLaundry } from "./icons";
  *   1. login        — !authed → /login
  *   2. subscription — an authed user without an active subscription (and not
  *      in grace) hits the non-cancellable ₹2-trial paywall BEFORE setup (both
- *      the setup and app zones pass through here). ONLY an active subscription
+ *      the setup and app zones pass through here). ONLY an active subscription (or a
+ *      cancelled one still in the period it paid for)
  *      gets in. A failed status check is retried; if it still fails, a recent
  *      cached "active" result (prefs.subActiveCached, 7 days) lets the owner
  *      in, otherwise a "try again" screen shows. Never fails open.

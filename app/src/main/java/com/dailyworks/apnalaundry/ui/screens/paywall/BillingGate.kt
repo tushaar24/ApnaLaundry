@@ -39,8 +39,8 @@ import androidx.compose.ui.text.style.TextAlign
  * login -> subscription -> setup -> app.
  * Flow: logged in -> check subscription -> route; a loader shows until the
  * check resolves.
- *  - active subscription -> the content. Nothing else gets in: not "billing
- *    unconfigured", not "paywall not due".
+ *  - active subscription, or a cancelled one still in the period it paid for
+ *    -> the content. Nothing else gets in: not "billing unconfigured".
  *  - no active subscription -> non-cancellable ₹2-trial paywall.
  *  - billing unreachable (after retries) -> the content only if the server
  *    confirmed an active subscription for this user in the last 7 days (cached
@@ -76,7 +76,7 @@ private fun GatedContent(content: @Composable () -> Unit) {
         if (decided || !ui.loaded) return@LaunchedEffect
         offline = false
         if (ui.status != null) {
-            // Only an active subscription gets in.
+            // Only an active subscription (or a cancelled one in its paid period) gets in.
             gated = ui.shouldHardGate
             decided = true
         } else if (vm.cachedActive()) {
