@@ -46,6 +46,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -168,6 +169,15 @@ private fun ColumnScope.PhoneStep(ui: AuthUiState, vm: AuthViewModel) {
 
 @Composable
 private fun PhoneSheet(ui: AuthUiState, vm: AuthViewModel) {
+    // Google's number picker: offered once, on first open with an empty field.
+    val phoneHint = rememberPhoneHint(vm::onPhone)
+    var hintShown by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (!hintShown && ui.phone.isEmpty()) {
+            hintShown = true
+            phoneHint()
+        }
+    }
     Sheet(Modifier.windowInsetsPadding(WindowInsets.navigationBars)) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Mobile number", style = fig(14, FontWeight.SemiBold))
@@ -190,6 +200,7 @@ private fun ColumnScope.OtpStep(ui: AuthUiState, vm: AuthViewModel) {
     // Short screens drop the art and tighten the hero so the boxes stay in view
     // (Continue is pinned above the keyboard either way).
     val compact = LocalConfiguration.current.screenHeightDp < 720
+    SmsOtpRetriever(key = ui.sends, onCode = vm::onOtpAutofilled)
     FullHeightScroll {
         Hero(bottom = if (compact) 20 else 28, compact = compact) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {

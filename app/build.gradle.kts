@@ -97,6 +97,11 @@ dependencies {
     // Razorpay Standard Checkout — UPI AutoPay subscription authorization.
     implementation(libs.razorpay.checkout)
 
+    // Login: Google's phone-number picker + SMS Retriever OTP autofill.
+    // Same versions Razorpay already pulls in.
+    implementation(libs.play.services.auth)
+    implementation(libs.play.services.auth.api.phone)
+
     // UPI pay QR on bills (QR matrix only — drawn on our own canvas)
     implementation(libs.zxing.core)
 

@@ -22,6 +22,8 @@ data class AuthUiState(
     val attemptsRemaining: Int? = null,
     /** The current OTP came from a resend (changes the waiting line's copy). */
     val resent: Boolean = false,
+    /** Bumped on every OTP sent — restarts the SMS autofill wait. */
+    val sends: Int = 0,
 ) {
     enum class Step { PHONE, OTP }
 
@@ -43,6 +45,13 @@ class AuthViewModel(private val auth: AuthRepository) : ViewModel() {
 
     fun onPhone(v: String) { _ui.value = _ui.value.copy(phone = v.filter { it.isDigit() }.take(10), error = null) }
     fun onOtp(v: String) { _ui.value = _ui.value.copy(otp = v.filter { it.isDigit() }.take(6), error = null) }
+
+    /** A code read from the OTP SMS (SMS Retriever): fill it in and log in. */
+    fun onOtpAutofilled(code: String) {
+        if (_ui.value.step != AuthUiState.Step.OTP || _ui.value.loading) return
+        onOtp(code)
+        verify()
+    }
 
     fun backToPhone() {
         countdownJob?.cancel()
@@ -66,6 +75,7 @@ class AuthViewModel(private val auth: AuthRepository) : ViewModel() {
                     _ui.value = _ui.value.copy(
                         loading = false, step = AuthUiState.Step.OTP, otp = "",
                         attemptsRemaining = ch.attemptsRemaining, resent = s.step == AuthUiState.Step.OTP,
+                        sends = _ui.value.sends + 1,
                     )
                     startResendCountdown(ch.nextSendAtMs)
                 }
