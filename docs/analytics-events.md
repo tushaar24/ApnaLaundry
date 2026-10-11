@@ -126,7 +126,7 @@ Android also keeps profile properties `orders_count`, `last_order_date` and
 Yearly or Monthly 50/50, stable per shop (hash of the user id —
 `web/src/data/paywallExperiment.ts`). `Paywall Shown`, `Checkout Started`,
 `Checkout Succeeded` and `Checkout Failed` carry `default_plan`
-(`annual`\|`monthly`); the profile carries `default_plan_variant`, which also
+(`annual`\|`monthly`); the profile carries `Default_Plan_Selected`, which also
 splits the server-side `Subscription Activated`.
 
 Profile property `subscription_status` (+ `plan`, `paywall_variant`) is kept

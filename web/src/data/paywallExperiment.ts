@@ -7,7 +7,7 @@ import { prefs } from "./prefs";
  * Only the pre-selected card changes; card order, copy and prices don't.
  *
  * Analyse in CleverTap by the `default_plan` event property (Paywall Shown,
- * Checkout Started / Succeeded / Failed) or the `default_plan_variant` profile
+ * Checkout Started / Succeeded / Failed) or the `Default_Plan_Selected` profile
  * property (also splits the server-side Subscription Activated).
  */
 

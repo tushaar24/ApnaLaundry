@@ -96,7 +96,7 @@ export function PaywallScreen({ onDone }: {
   // Fire Paywall Shown once, and warm up Razorpay Checkout (script +
   // connections) while the user reads the plans — so Pay opens it instantly.
   useEffect(() => {
-    Analytics.updateProfile({ default_plan_variant: defaultPlan });
+    Analytics.updateProfile({ Default_Plan_Selected: defaultPlan });
     Analytics.paywallShown(defaultPlan);
     if (!info.hasActive) preloadCheckout();
     // eslint-disable-next-line react-hooks/exhaustive-deps
