@@ -50,6 +50,7 @@ export const prefs = {
   get accessToken(): string | null { return get(K.ACCESS_TOKEN); },
   get accessExpiresAt(): number { return parseInt(get(K.ACCESS_EXPIRES_AT) ?? "0", 10) || 0; },
   get refreshToken(): string | null { return get(K.REFRESH_TOKEN); },
+  get userId(): string | null { return get(K.USER_ID); },
   get userPhone(): string | null { return get(K.USER_PHONE); },
 
   setCredentials(access: string, accessExpiresAt: number, refresh: string, userId: string, phone: string) {

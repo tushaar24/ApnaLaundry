@@ -122,6 +122,13 @@ revenue events can't be spoofed or lost if the app closes.
 Android also keeps profile properties `orders_count`, `last_order_date` and
 `first_order_date` (ISO dates) current on every new order.
 
+**Default-plan A/B (web, since 2026-10-11).** The web paywall pre-selects
+Yearly or Monthly 50/50, stable per shop (hash of the user id —
+`web/src/data/paywallExperiment.ts`). `Paywall Shown`, `Checkout Started`,
+`Checkout Succeeded` and `Checkout Failed` carry `default_plan`
+(`annual`\|`monthly`); the profile carries `default_plan_variant`, which also
+splits the server-side `Subscription Activated`.
+
 Profile property `subscription_status` (+ `plan`, `paywall_variant`) is kept
 current from the webhook, for retention/win-back journeys.
 

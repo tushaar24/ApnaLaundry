@@ -5,6 +5,7 @@ import * as AppDate from "@/core/appdate";
 import { rupees } from "@/core/money";
 import { cancelSubscription, openSubscriptionCheckout, preloadCheckout, subscribe } from "@/data/billing";
 import { paywallInfo, useBillingStore, accessUntilIso } from "@/data/billingStore";
+import { defaultPlanVariant } from "@/data/paywallExperiment";
 import { Analytics } from "@/analytics/events";
 import { MetaPixel } from "@/analytics/metaPixel";
 import { cls, PrimaryButton } from "@/ui/basics";
@@ -65,7 +66,9 @@ export function PaywallScreen({ onDone }: {
   const refresh = useBillingStore((s) => s.refresh);
   const info = paywallInfo(status);
 
-  const [plan, setPlan] = useState<Plan>("annual");
+  // A/B: half the shops start on Yearly, half on Monthly (stable per shop).
+  const [defaultPlan] = useState<Plan>(defaultPlanVariant);
+  const [plan, setPlan] = useState<Plan>(defaultPlan);
   const [stage, setStage] = useState<Stage>("plans");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -93,7 +96,8 @@ export function PaywallScreen({ onDone }: {
   // Fire Paywall Shown once, and warm up Razorpay Checkout (script +
   // connections) while the user reads the plans — so Pay opens it instantly.
   useEffect(() => {
-    Analytics.paywallShown();
+    Analytics.updateProfile({ default_plan_variant: defaultPlan });
+    Analytics.paywallShown(defaultPlan);
     if (!info.hasActive) preloadCheckout();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -134,7 +138,7 @@ export function PaywallScreen({ onDone }: {
     try {
       // The server decides the real plan/amount (never trust the client for money).
       const res = await subscribe(chosen);
-      Analytics.checkoutStarted(res.plan, res.amount, res.trialAmount || 0);
+      Analytics.checkoutStarted(res.plan, res.amount, res.trialAmount || 0, defaultPlan);
       // Value in rupees: what this approval charges now (the ₹2 trial).
       const chargeRupees = (res.trialAmount || res.amount) / 100;
       MetaPixel.subscriptionInitiated(res.subscriptionId, res.plan, chargeRupees);
@@ -154,14 +158,14 @@ export function PaywallScreen({ onDone }: {
         // Checkout stays open on a failed payment (Razorpay offers its own
         // retry); the sheet sits behind it and is there once it's closed.
         onError: (msg) => {
-          Analytics.checkoutFailed(res.plan, msg);
+          Analytics.checkoutFailed(res.plan, msg, defaultPlan);
           setBusy(false);
           showRetry(res.plan, "failed");
         },
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not start — try again");
-      Analytics.checkoutFailed(chosen, e instanceof Error ? e.message : "error");
+      Analytics.checkoutFailed(chosen, e instanceof Error ? e.message : "error", defaultPlan);
       setBusy(false);
       // e.g. ALREADY_SUBSCRIBED from another device — refetch so an active
       // subscription lets the user through instead of a broken Pay button.
@@ -182,7 +186,7 @@ export function PaywallScreen({ onDone }: {
       const s = useBillingStore.getState().status;
       if (s?.hasActiveSubscription) {
         if (pollRef.current) clearInterval(pollRef.current);
-        Analytics.checkoutSucceeded(purchasedPlan);
+        Analytics.checkoutSucceeded(purchasedPlan, defaultPlan);
         // The trial has no success screen (handoff 08b) — the ₹2 only starts the
         // trial, the plan charges later, so proceed straight through.
         onDone();

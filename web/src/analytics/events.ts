@@ -154,8 +154,10 @@ export const Analytics = {
   // The client fires the UI funnel below; the backend fires the money-confirmed
   // events (Subscription Activated / Charged / Payment Failed / Halted /
   // Cancelled) from the Razorpay webhook.
-  paywallShown() {
-    rawTrack("Paywall Shown");
+  // defaultPlan: the paywall's pre-selected plan — the A/B bucket
+  // (data/paywallExperiment.ts).
+  paywallShown(defaultPlan: string) {
+    rawTrack("Paywall Shown", { default_plan: defaultPlan });
   },
   // Paywall intro video: muted = the browser blocked autoplay with sound.
   paywallVideoStarted(muted: boolean) {
@@ -173,14 +175,14 @@ export const Analytics = {
   planSelected(plan: string) {
     rawTrack("Plan Selected", { plan });
   },
-  checkoutStarted(plan: string, amount: number, trialAmount: number) {
-    rawTrack("Checkout Started", { plan, amount, trial_amount: trialAmount });
+  checkoutStarted(plan: string, amount: number, trialAmount: number, defaultPlan: string) {
+    rawTrack("Checkout Started", { plan, amount, trial_amount: trialAmount, default_plan: defaultPlan });
   },
-  checkoutSucceeded(plan: string) {
-    rawTrack("Checkout Succeeded", { plan });
+  checkoutSucceeded(plan: string, defaultPlan: string) {
+    rawTrack("Checkout Succeeded", { plan, default_plan: defaultPlan });
   },
-  checkoutFailed(plan: string, reason: string) {
-    rawTrack("Checkout Failed", { plan, reason });
+  checkoutFailed(plan: string, reason: string, defaultPlan: string) {
+    rawTrack("Checkout Failed", { plan, reason, default_plan: defaultPlan });
   },
   // The "try again" sheet shown when Razorpay Checkout closes unpaid.
   paymentRetryShown(plan: string, reason: "failed" | "cancelled") {
