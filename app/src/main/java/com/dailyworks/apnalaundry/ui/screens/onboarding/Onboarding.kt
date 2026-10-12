@@ -7,13 +7,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -67,7 +66,8 @@ import org.koin.compose.koinInject
 
 /**
  * Onboarding after login + the paywall (handoff §1):
- *   Intro → 1 · Laundry name → 2 · Services & rates → 3 · Your bill → Home.
+ *   1 · Laundry name → 2 · Services & rates → 3 · Your bill → Home.
+ * (The old Intro screen is gone; a saved "intro" step — e.g. from the web — opens on the name.)
  * The step is saved on the shop after every move (and synced), so a killed
  * app — or another device — resumes exactly there. Port twin:
  * web/src/app/setup/page.tsx.
@@ -85,7 +85,7 @@ fun OnboardingFlow(shopVm: ShopViewModel, onFinished: () -> Unit) {
     var step by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
         val saved = repo.onboardingStep()
-        step = if (saved == "" || saved == "done") "intro" else saved
+        step = if (saved == "" || saved == "done" || saved == "intro") "name" else saved
     }
     var finished by remember { mutableStateOf(false) }
     // One event per step shown, so the funnel shows where new shops drop off.
@@ -116,12 +116,9 @@ fun OnboardingFlow(shopVm: ShopViewModel, onFinished: () -> Unit) {
 
     when (step) {
         null -> Box(Modifier.fillMaxSize().background(Tokens.Bg))
-        "intro" -> IntroStep(onStart = { goTo("name") })
         "name" -> {
-            BackHandler { goTo("intro") }
             NameStep(
                 initial = state.shop.name.takeUnless { SeedData.isDefaultShopName(it) } ?: "",
-                onBack = { goTo("intro") },
                 onNext = { name ->
                     shopVm.updateShopDetails(name = BillDetails.cleanName(name))
                     goTo("services")
@@ -146,13 +143,15 @@ fun OnboardingFlow(shopVm: ShopViewModel, onFinished: () -> Unit) {
 
 private val STEP_LABELS = listOf("Laundry name", "Services", "Your bill")
 
-/** "Step N of 3" with a back arrow, then three labelled segments (handoff §3). */
+/** "Step N of 3" with a back arrow (none on step 1), then three labelled segments (handoff §3). */
 @Composable
-fun StepBar(step: Int, onBack: () -> Unit) {
+fun StepBar(step: Int, onBack: (() -> Unit)?) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 0.dp)) {
-            Box(Modifier.size(44.dp).rounded(999.dp).tap(onClick = onBack), contentAlignment = Alignment.Center) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Tokens.Ink, modifier = Modifier.size(24.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.heightIn(min = 44.dp)) {
+            if (onBack != null) {
+                Box(Modifier.size(44.dp).rounded(999.dp).tap(onClick = onBack), contentAlignment = Alignment.Center) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Tokens.Ink, modifier = Modifier.size(24.dp))
+                }
             }
             Text("Step $step of 3", style = fig(14, FontWeight.SemiBold, Tokens.Muted))
         }
@@ -205,55 +204,8 @@ internal fun StepScaffold(
     }
 }
 
-private data class IntroItem(val title: String, val body: String)
-
-private val INTRO = listOf(
-    IntroItem("Laundry name", "Printed at the top of every bill"),
-    IntroItem("Services & rates", "Common prices are already filled in — just check them"),
-    IntroItem("Your bill", "Pick a bill design. Add phone, email, address and GSTIN if you want"),
-)
-
 @Composable
-private fun IntroStep(onStart: () -> Unit) {
-    StepScaffold(bottom = { PrimaryButton("Start with step 1", height = 56.dp) { onStart() } }) {
-        Row(
-            Modifier.rounded(999.dp).background(GreenLight).padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Icon(Icons.Filled.Check, null, tint = Green, modifier = Modifier.size(15.dp))
-            Text("Number verified", style = fig(13, FontWeight.Bold, Green))
-        }
-        Text("Let's set up your shop", style = bric(30, FontWeight.Bold))
-        Text("3 quick steps. Then you can send your first bill on WhatsApp.", style = fig(15, color = Tokens.Muted))
-        Column {
-            INTRO.forEachIndexed { i, item ->
-                Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Column(Modifier.fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
-                        val first = i == 0
-                        Box(
-                            Modifier.size(36.dp).rounded(999.dp)
-                                .background(if (first) Tokens.Blue else Tokens.Card)
-                                .then(if (first) Modifier else Modifier.border(2.dp, Tokens.Blue, RoundedCornerShape(999.dp))),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text("${i + 1}", style = fig(15, FontWeight.Bold, if (first) Tokens.OnDark else Tokens.Blue))
-                        }
-                        if (i < INTRO.lastIndex) {
-                            Box(Modifier.padding(vertical = 4.dp).width(2.dp).weight(1f).background(Tokens.BlueBorder))
-                        }
-                    }
-                    Column(Modifier.padding(top = 6.dp, bottom = if (i < INTRO.lastIndex) 24.dp else 0.dp)) {
-                        Text(item.title, style = fig(17, FontWeight.Bold))
-                        Text(item.body, style = fig(14, color = Tokens.Muted))
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun NameStep(initial: String, onBack: () -> Unit, onNext: (String) -> Unit) {
+private fun NameStep(initial: String, onNext: (String) -> Unit) {
     var name by remember { mutableStateOf(initial) }
     val ok = BillDetails.isNameOk(name)
     val focus = remember { FocusRequester() }
@@ -266,7 +218,7 @@ private fun NameStep(initial: String, onBack: () -> Unit, onNext: (String) -> Un
     fun next() { if (ok) onNext(name.trim()) }
 
     StepScaffold(bottom = { PrimaryButton("Next: Services", height = 56.dp, enabled = ok) { next() } }) {
-        StepBar(1, onBack)
+        StepBar(1, onBack = null)
         Text("What is your laundry called?", style = bric(28, FontWeight.Bold))
         Text("This name goes on every bill you send to customers.", style = fig(14, color = Tokens.Muted))
         FieldBox(
