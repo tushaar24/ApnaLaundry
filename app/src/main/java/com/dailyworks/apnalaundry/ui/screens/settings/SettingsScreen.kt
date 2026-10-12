@@ -75,7 +75,7 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
                 )
             }
 
-            // Rate card
+            // Services
             AppCard {
                 Row(
                     Modifier.fillMaxWidth().tap { navigator.openRates("settings") }.padding(16.dp),
@@ -83,8 +83,8 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column {
-                        Text("Rate card", style = fig(16, FontWeight.Bold))
-                        Text("Services and prices", style = fig(13, color = Tokens.Muted))
+                        Text("Services", style = fig(16, FontWeight.Bold))
+                        Text("Prices for each service", style = fig(13, color = Tokens.Muted))
                     }
                     Text("Edit", style = fig(15, FontWeight.Bold, Tokens.Blue))
                 }

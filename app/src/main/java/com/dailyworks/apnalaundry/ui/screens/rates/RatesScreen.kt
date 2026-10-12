@@ -160,7 +160,7 @@ private fun RateListPage(
     }
 
     Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars)) {
-        if (!setup) TopBar("Rate list", onBack = onBack)
+        if (!setup) TopBar("Services", onBack = onBack)
 
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 16.dp),
@@ -168,7 +168,7 @@ private fun RateListPage(
         ) {
             if (setupHeader != null) {
                 setupHeader()
-                Text("Set up your rate list", style = bric(28, FontWeight.Bold))
+                Text("Setup Services", style = bric(28, FontWeight.Bold))
                 Text(
                     "These services and prices go on your bills. Check them once — change only what is different.",
                     style = fig(14, color = Tokens.Muted),

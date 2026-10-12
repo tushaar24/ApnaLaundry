@@ -138,7 +138,7 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(state.shop.name, style = bric(22, FontWeight.Bold), modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
             Box(Modifier.height(44.dp).rounded(999.dp).background(Tokens.Card).border(1.dp, Tokens.CardBorder, RoundedCornerShape(999.dp)).tap { navigator.openRates("home") }.padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
-                Text("₹ Rates", style = fig(14, FontWeight.Bold))
+                Text("Services", style = fig(14, FontWeight.Bold))
             }
         }
 
@@ -307,7 +307,7 @@ private fun EmptyHome(onNewOrder: () -> Unit) {
         }
 
         Text(
-            "Your prices are already set. Change them anytime from ₹ Rates at the top.",
+            "Your prices are already set. Change them anytime from Services at the top.",
             style = fig(13, color = Tokens.Muted), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
         )

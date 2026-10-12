@@ -284,7 +284,7 @@ private fun AddItemRow(svc: Service, onAdd: (String, Int) -> Unit) {
             ) { Text("Add", style = fig(14, FontWeight.Bold, if (ok) Tokens.OnDark else Tokens.Muted)) }
         }
         Text(
-            if (priced) "Already on your rate list — Add puts 1 in this order." else "Saved to your rate list and added to this order.",
+            if (priced) "Already in your services list — Add puts 1 in this order." else "Saved to your services list and added to this order.",
             style = fig(12, color = Tokens.BlueText),
         )
     }
