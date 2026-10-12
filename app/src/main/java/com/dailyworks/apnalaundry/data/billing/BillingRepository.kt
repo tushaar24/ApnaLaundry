@@ -6,14 +6,17 @@ import kotlinx.coroutines.delay
 /**
  * Billing data access for the paywall: create the subscription, read status, and
  * poll for the webhook-confirmed activation after the user approves the mandate
- * in Razorpay Checkout. Every good status updates the local "subscription
- * active" cache in [Prefs], used only when billing can't be reached.
+ * in Razorpay Checkout. Every good status saves the subscription (active + end
+ * date) in [Prefs]; the free-orders gate reads that instead of the network.
  */
 class BillingRepository(private val api: BillingApi, private val prefs: Prefs) {
 
     suspend fun status(): BillingStatus = api.status().also { s ->
-        if (s.hasAccess) prefs.markSubActive() else prefs.clearSubActive()
+        prefs.saveSubscription(active = s.hasAccess, endsAtIso = s.subscription?.accessUntil)
     }
+
+    /** Refresh the saved subscription; failures keep the last saved one. */
+    suspend fun refreshSaved() { runCatching { status() } }
 
     /** [status], retrying a failed call [retries] more times with backoff; null if all fail. */
     suspend fun statusWithRetry(retries: Int = 2): BillingStatus? {
@@ -25,8 +28,8 @@ class BillingRepository(private val api: BillingApi, private val prefs: Prefs) {
         return null
     }
 
-    /** A recent (7-day) server-confirmed active subscription for this user. */
-    suspend fun cachedActive(): Boolean = prefs.subActiveCached()
+    /** The saved subscription gives access now (no network; false until a check saved one). */
+    suspend fun savedActive(): Boolean = prefs.subscriptionActive()
 
     suspend fun subscribe(plan: String): SubscribeResponse = api.subscribe(plan)
 

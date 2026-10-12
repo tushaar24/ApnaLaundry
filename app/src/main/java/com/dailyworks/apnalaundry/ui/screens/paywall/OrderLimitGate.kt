@@ -18,13 +18,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.Celebration
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -51,41 +49,42 @@ import org.koin.compose.koinInject
  */
 private const val FREE_ORDERS = 5
 
-private enum class Access { OPEN, FREE_OVER, UNKNOWN }
+private enum class Access { OPEN, FREE_OVER }
 
 /**
  * Wraps the New order screen. Within the free orders, or with a plan, it's
  * just [content]. After that: "Your free orders are over" → the paywall
  * (Yearly picked, charged in full today) → [content] once the plan is active.
  * Back / ✕ leave New order.
+ *
+ * Decides from the local DB + the subscription saved in Prefs — no network
+ * wait. The saved one is refreshed in the background (app start, after paying,
+ * and here when it says "not subscribed", in case they paid on the website).
  */
 @Composable
 fun OrderLimitGate(onBack: () -> Unit, content: @Composable () -> Unit) {
     val repo: LaundryRepository = koinInject()
     val billing: BillingRepository = koinInject()
     var access by remember { mutableStateOf<Access?>(null) }
-    var attempt by remember { mutableIntStateOf(0) }
     var plans by remember { mutableStateOf(false) }
 
-    LaunchedEffect(attempt) {
+    LaunchedEffect(Unit) {
         val made = repo.ordersEverMade()
-        access = when {
-            made < FREE_ORDERS -> Access.OPEN
-            // Server confirmed a plan in the last 7 days: don't make them wait on the network.
-            billing.cachedActive() -> Access.OPEN
-            else -> when (val s = billing.statusWithRetry()) {
-                null -> Access.UNKNOWN
-                else -> if (s.hasAccess) Access.OPEN else Access.FREE_OVER.also { Analytics.freeOrdersOverShown(made) }
-            }
+        if (made < FREE_ORDERS || billing.savedActive()) {
+            access = Access.OPEN
+            return@LaunchedEffect
         }
+        access = Access.FREE_OVER
+        Analytics.freeOrdersOverShown(made)
+        // Paid elsewhere (website, another phone) since the last save? Let them through.
+        billing.refreshSaved()
+        if (billing.savedActive() && !plans) access = Access.OPEN
     }
 
     when (access) {
-        null -> Box(Modifier.fillMaxSize().background(Tokens.Bg), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = Tokens.Blue, strokeWidth = 3.dp, modifier = Modifier.size(32.dp))
-        }
+        // Two local reads — a blink, not a loader.
+        null -> Box(Modifier.fillMaxSize().background(Tokens.Bg))
         Access.OPEN -> content()
-        Access.UNKNOWN -> CheckFailed(onRetry = { access = null; attempt++ })
         Access.FREE_OVER -> if (plans) {
             PaywallScreen(onClose = onBack, onDone = { access = Access.OPEN })
         } else {

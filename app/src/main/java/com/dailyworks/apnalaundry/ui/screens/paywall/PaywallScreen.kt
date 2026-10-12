@@ -572,9 +572,7 @@ private fun WaitingView(onBack: () -> Unit) {
  * real charge runs to that charge date; a paid plan to its period end.
  */
 internal fun accessUntilIso(sub: com.dailyworks.apnalaundry.data.billing.BillingSubscriptionDto?): String? {
-    if (sub == null) return null
-    val trialOnly = sub.trialAmount > 0 && sub.paidCount == 0
-    return if (trialOnly) sub.chargeAt ?: sub.currentEnd else sub.currentEnd ?: sub.chargeAt
+    return sub?.accessUntil
 }
 
 /** "2026-10-16T…" -> "16 Oct 2026" (blank when unparseable). */

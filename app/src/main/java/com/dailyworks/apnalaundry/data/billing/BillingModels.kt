@@ -26,7 +26,11 @@ data class BillingSubscriptionDto(
     val paidCount: Int = 0,
     val currentEnd: String? = null,
     val chargeAt: String? = null,
-)
+) {
+    /** When the paid period (or a ₹2 trial's free days) ends — access runs until then. */
+    val accessUntil: String?
+        get() = if (trialAmount > 0 && paidCount == 0) chargeAt ?: currentEnd else currentEnd ?: chargeAt
+}
 
 @Serializable
 data class BillingStatus(

@@ -30,6 +30,7 @@ import com.dailyworks.apnalaundry.ui.screens.rates.RatesScreen
 import com.dailyworks.apnalaundry.ui.screens.settings.SettingsScreen
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import com.dailyworks.apnalaundry.data.billing.BillingRepository
 import org.koin.compose.koinInject
 
 @Composable
@@ -54,6 +55,11 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
     // If the session dies mid-use (refresh token revoked/expired — TokenManager
     // flips loggedIn off), return to login. Local data is kept; logging back
     // into the same account merges cleanly.
+    // Keep the saved subscription fresh in the background (app start / login):
+    // the free-orders gate on New order reads it instead of waiting on the network.
+    val billing: BillingRepository = koinInject()
+    LaunchedEffect(li) { if (li) billing.refreshSaved() }
+
     LaunchedEffect(li) {
         if (!li && navController.currentDestination?.route?.let { it != Routes.LOGIN } == true) {
             navController.navigate(Routes.LOGIN) { popUpTo(0) { inclusive = true } }

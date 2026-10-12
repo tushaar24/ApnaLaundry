@@ -126,9 +126,6 @@ class PaywallViewModel(
         }
     }
 
-    /** A recent server-confirmed active subscription (for the gate when billing is unreachable). */
-    suspend fun cachedActive(): Boolean = repo.cachedActive()
-
     fun selectPlan(plan: PaywallPlan) { _ui.value = _ui.value.copy(plan = plan) }
 
     /** Create the subscription and open Razorpay Checkout for the mandate. */
