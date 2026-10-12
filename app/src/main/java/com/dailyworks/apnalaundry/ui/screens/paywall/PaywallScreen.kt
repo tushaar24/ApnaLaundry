@@ -123,9 +123,10 @@ private fun rupees(paise: Int): String {
 }
 
 /**
- * The ₹2-trial paywall. [hardGate] is the post-login BillingGate (no close, Back
- * consumed); otherwise it's Settings → Subscription, which shows the active plan
- * (with cancel) or, if there's none, the same trial offer with a close button.
+ * The paywall: Yearly (picked by default) or Monthly, charged in full today —
+ * Android has no trial. Shown when the free orders run out (OrderLimitGate) and
+ * from Settings → Subscription, which shows the active plan (with cancel)
+ * instead when there is one. [hardGate] hides the close button and eats Back.
  * [onDone] fires once the subscription is confirmed active.
  */
 @Composable
@@ -223,10 +224,10 @@ fun PaywallScreen(
                     )
                     Spacer(Modifier.height(12.dp))
                     if (!ui.hasTrial) {
-                        Text("Your free trial has ended", style = fig(19, FontWeight.Bold, Tokens.OnDark))
+                        Text("Take unlimited orders", style = fig(19, FontWeight.Bold, Tokens.OnDark))
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            "Pick a plan to keep your shop running",
+                            "Pick a plan to keep your shop running on the app",
                             style = fig(14, FontWeight.Normal, Pw.Text),
                             textAlign = TextAlign.Center,
                         )

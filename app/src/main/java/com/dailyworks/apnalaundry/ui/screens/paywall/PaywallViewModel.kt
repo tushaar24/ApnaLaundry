@@ -42,9 +42,10 @@ data class PaywallUiState(
     val monthlyAmount: Int get() = status?.plans?.monthly?.amount ?: 49900
     val trialAmount: Int get() = status?.plans?.trial?.amount ?: 200
 
-    // The shop hasn't used its ₹2 trial yet. Without it the paywall offers the
-    // plan at full price, charged today.
-    val hasTrial: Boolean get() = status?.trialEligible != false && trialAmount > 0
+    // The Android app has no ₹2 trial — a shop gets free orders, then the plan
+    // is charged in full today (see OrderLimitGate). The trial UI stays for now
+    // in case it comes back, but is never shown.
+    val hasTrial: Boolean get() = false
 
     // Only an active subscription, or a cancelled one still in the period it
     // paid for, gets in: not "unconfigured", not "not due".
@@ -145,6 +146,10 @@ class PaywallViewModel(
                 if (!res.success || res.subscriptionId == null || res.keyId == null) {
                     throw IllegalStateException(res.message ?: "Could not start subscription")
                 }
+                // We asked for no trial. A server without the no-trial change would
+                // still add the ₹2 one, which this screen doesn't describe — don't
+                // open Checkout on terms the owner hasn't seen.
+                if (res.trialAmount > 0) throw IllegalStateException("Could not start your plan. Please try again later.")
                 // The server decides the real plan (never trust the client for money).
                 _ui.value = _ui.value.copy(purchasedPlan = res.plan)
                 Analytics.checkoutStarted(res.plan, res.amount, res.trialAmount)

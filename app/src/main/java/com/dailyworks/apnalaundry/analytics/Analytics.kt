@@ -233,6 +233,10 @@ object Analytics {
     // Cancelled) from the Razorpay webhook.
     fun paywallShown() = track("Paywall Shown")
 
+    // Free orders used up (Android): the notice before the paywall, and its "See plans" tap.
+    fun freeOrdersOverShown(orders: Int) = track("Free Orders Over Shown", mapOf("orders" to orders))
+    fun freeOrdersOverPlansTapped() = track("Free Orders Over Plans Tapped")
+
     // Paywall intro video (autoplays with sound; muted = the user muted it).
     fun paywallVideoStarted(muted: Boolean) =
         track("Paywall Video Started", mapOf("muted" to muted))

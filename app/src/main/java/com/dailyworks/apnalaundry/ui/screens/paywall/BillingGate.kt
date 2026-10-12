@@ -1,105 +1,33 @@
 package com.dailyworks.apnalaundry.ui.screens.paywall
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.LocalLaundryService
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.dailyworks.apnalaundry.ui.theme.Tokens
-import androidx.compose.ui.unit.dp
-import com.dailyworks.apnalaundry.ui.components.fig
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.material3.Text
-import androidx.compose.material3.Icon
-import androidx.compose.material.icons.outlined.LocalLaundryService
-import androidx.compose.material.icons.Icons
 import androidx.compose.ui.draw.clip
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Arrangement
-import org.koin.androidx.compose.koinViewModel
-import com.dailyworks.apnalaundry.ui.components.PrimaryButton
-import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import com.dailyworks.apnalaundry.ui.components.PrimaryButton
+import com.dailyworks.apnalaundry.ui.components.fig
+import com.dailyworks.apnalaundry.ui.theme.Tokens
 
-/**
- * Subscription gate for the authed app (mirrors the web Gate). The subscription
- * is resolved right after login and BEFORE setup, so the order is
- * login -> subscription -> setup -> app.
- * Flow: logged in -> check subscription -> route; a loader shows until the
- * check resolves.
- *  - active subscription, or a cancelled one still in the period it paid for
- *    -> the content. Nothing else gets in: not "billing unconfigured".
- *  - no active subscription -> non-cancellable ₹2-trial paywall.
- *  - billing unreachable (after retries) -> the content only if the server
- *    confirmed an active subscription for this user in the last 7 days (cached
- *    in Prefs); otherwise a "Try again" screen.
- *
- * [enabled] is false only on the login screen, where billing must not be checked.
- */
-@Composable
-fun BillingGate(
-    enabled: Boolean,
-    content: @Composable () -> Unit,
-) {
-    if (!enabled) {
-        content()
-        return
-    }
-    GatedContent(content)
-}
-
-@Composable
-private fun GatedContent(content: @Composable () -> Unit) {
-    val vm: PaywallViewModel = koinViewModel()
-    val ui by vm.ui.collectAsStateWithLifecycle()
-    // Latch the decision once billing first loads, so the success -> "Done"
-    // screen isn't skipped the instant the subscription goes active.
-    var decided by remember { mutableStateOf(false) }
-    var gated by remember { mutableStateOf(false) }
-
-    // Billing unreachable and no recent cached "active": can't let them in.
-    var offline by remember { mutableStateOf(false) }
-
-    LaunchedEffect(ui.loaded, ui.failed) {
-        if (decided || !ui.loaded) return@LaunchedEffect
-        offline = false
-        if (ui.status != null) {
-            // Only an active subscription (or a cancelled one in its paid period) gets in.
-            gated = ui.shouldHardGate
-            decided = true
-        } else if (vm.cachedActive()) {
-            // Offline, but the server confirmed an active subscription recently.
-            gated = false
-            decided = true
-        } else {
-            offline = true
-        }
-    }
-
-    when {
-        !decided && offline -> CheckFailed(onRetry = vm::refresh)
-        !ui.loaded || !decided -> ShopLoader()
-        gated -> PaywallScreen(
-            hardGate = true,
-            onClose = {},
-            onDone = { gated = false },
-            vm = vm,
-        )
-        else -> content()
-    }
-}
+// There is no paywall after login any more: a new shop sets up and takes its
+// free orders, and the subscription is asked for only when those run out
+// (OrderLimitGate). These are the shared billing loading / failure screens.
 
 /** Billing couldn't be reached and there's no recent cached active subscription. */
 @Composable

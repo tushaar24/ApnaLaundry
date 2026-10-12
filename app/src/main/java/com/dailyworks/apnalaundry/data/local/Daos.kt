@@ -56,6 +56,7 @@ interface OrderDao {
     @Query("SELECT * FROM orders WHERE deleted = 0") fun observe(): Flow<List<OrderEntity>>
     @Query("SELECT * FROM orders WHERE deleted = 0") suspend fun observeOnce(): List<OrderEntity>
     @Query("SELECT * FROM orders") suspend fun getAll(): List<OrderEntity>
+    @Query("SELECT COUNT(*) FROM orders") suspend fun countAll(): Int
     @Query("SELECT * FROM orders WHERE id = :id") suspend fun get(id: Int): OrderEntity?
     @Query("SELECT * FROM orders WHERE dirty = 1") suspend fun dirtyRows(): List<OrderEntity>
     @Upsert suspend fun upsert(order: OrderEntity)

@@ -537,6 +537,9 @@ class LaundryRepository(private val db: AppDatabase) {
 
     suspend fun onboardingStep(): String = shopDao.get()?.onboardingStep ?: ""
 
+    /** Every order the shop has ever made, deleted ones included (for the free-orders limit). */
+    suspend fun ordersEverMade(): Int = orderDao.countAll()
+
     // ---------------- new / edit order ----------------
     data class SaveOrderResult(val orderId: Int, val goToBill: Boolean, val toast: String?, val undo: Snapshot?, val edited: Boolean)
 

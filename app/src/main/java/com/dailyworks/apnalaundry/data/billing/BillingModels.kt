@@ -51,8 +51,10 @@ data class BillingStatus(
     val hasAccess: Boolean get() = hasActiveSubscription || inCancelGrace
 }
 
+// trial = false: no ₹2 trial — the plan is charged in full on approval (the
+// Android app gives free orders instead of a trial). The website never sends it.
 @Serializable
-data class SubscribeRequest(val plan: String)
+data class SubscribeRequest(val plan: String, val trial: Boolean = false)
 
 @Serializable
 data class SubscribeResponse(

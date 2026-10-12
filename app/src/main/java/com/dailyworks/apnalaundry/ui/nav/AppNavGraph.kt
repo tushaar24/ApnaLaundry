@@ -24,7 +24,7 @@ import com.dailyworks.apnalaundry.ui.screens.login.LoginScreen
 import com.dailyworks.apnalaundry.ui.screens.neworder.NewOrderScreen
 import com.dailyworks.apnalaundry.ui.screens.order.OrderDetailScreen
 import com.dailyworks.apnalaundry.ui.screens.onboarding.BillDesignScreen
-import com.dailyworks.apnalaundry.ui.screens.paywall.BillingGate
+import com.dailyworks.apnalaundry.ui.screens.paywall.OrderLimitGate
 import com.dailyworks.apnalaundry.ui.screens.paywall.PaywallScreen
 import com.dailyworks.apnalaundry.ui.screens.rates.RatesScreen
 import com.dailyworks.apnalaundry.ui.screens.settings.SettingsScreen
@@ -60,11 +60,8 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
         }
     }
 
-    // Subscription is resolved right after login and BEFORE setup
-    // (login -> subscription -> setup -> app): any logged-in user without an
-    // active subscription is hard-gated on the ₹2 trial, so a brand-new shop
-    // subscribes first, then sets up. Only the login screen is ungated.
-    BillingGate(enabled = li) {
+    // No paywall after login: login -> setup -> app. A shop pays only when its
+    // free orders run out — OrderLimitGate on New order.
     NavHost(navController = navController, startDestination = start) {
         composable(Routes.LOGIN) {
             LoginScreen(onLoggedIn = {
@@ -131,7 +128,11 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
             val cust = entry.arguments?.getString("cust")?.takeIf { it.isNotBlank() }
             val from = entry.arguments?.getString("from") ?: "home"
             val q = entry.arguments?.getString("q") ?: ""
-            NewOrderScreen(shopVm, navigator, editId = edit, presetCustId = cust, from = from, presetQuery = q)
+            // Editing an existing order is never gated; a new one may need a plan.
+            if (edit != null) NewOrderScreen(shopVm, navigator, editId = edit, presetCustId = cust, from = from, presetQuery = q)
+            else OrderLimitGate(onBack = { navigator.back() }) {
+                NewOrderScreen(shopVm, navigator, editId = null, presetCustId = cust, from = from, presetQuery = q)
+            }
         }
 
         composable(
@@ -184,6 +185,5 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
                 onDone = { navigator.openHome() },
             )
         }
-    }
     }
 }

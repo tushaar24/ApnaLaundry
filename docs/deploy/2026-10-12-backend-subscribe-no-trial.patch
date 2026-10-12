@@ -1,0 +1,15 @@
+--- a/routes/laundry-billing.js	2026-10-12 07:29:07
++++ b/routes/laundry-billing.js	2026-10-12 07:29:10
+@@ -156,7 +156,11 @@
+     // on approval.
+     let plan = String((req.body && req.body.plan) || '').toLowerCase();
+     if (!['monthly', 'annual'].includes(plan)) plan = 'monthly';
+-    const trialAmount = (await isTrialEligible(userId)) ? env.laundryTrialAmountPaise : 0;
++    // `trial: false` asks for no trial at all (the Android app's free-orders
++    // model: the plan is charged in full on approval). Anything else keeps the
++    // one-per-shop ₹2 trial, so the website is unchanged.
++    const wantsTrial = !(req.body && req.body.trial === false);
++    const trialAmount = wantsTrial && (await isTrialEligible(userId)) ? env.laundryTrialAmountPaise : 0;
+ 
+     const amount = rzp.amountFor(plan);
+     const planId = rzp.planIdFor(plan);
