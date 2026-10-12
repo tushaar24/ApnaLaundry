@@ -293,7 +293,7 @@ private fun EmptyHome(onNewOrder: () -> Unit) {
                 "No orders yet. Take your first one — it takes less than a minute.",
                 style = fig(15, color = Tokens.Muted), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
-            PrimaryButton("+ Take your first order", height = 56.dp, onClick = onNewOrder)
+            PrimaryButton("Create New Order", height = 56.dp, onClick = onNewOrder)
         }
 
         Column(
