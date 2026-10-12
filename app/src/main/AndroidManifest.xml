@@ -53,17 +53,35 @@
         <meta-data android:name="com.facebook.sdk.ClientToken" android:value="@string/facebook_client_token" />
         <meta-data android:name="com.facebook.sdk.AutoInitEnabled" android:value="false" />
 
+        <!-- Portrait only, everywhere. Android 16 (targetSdk 36) ignores
+             screenOrientation on large screens (tablets, foldables, sw >= 600dp)
+             unless the app opts out with this property. The opt-out is honoured
+             only while targeting 36 — when targetSdk goes to 37 the lock stops
+             applying on large screens and the layouts must handle landscape. -->
+        <property
+            android:name="android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY"
+            android:value="true" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
             android:windowSoftInputMode="adjustResize"
+            android:screenOrientation="portrait"
             android:theme="@style/Theme.ApnaLaundry">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Razorpay Checkout (payment screen) follows the app: portrait. It's a
+             translucent activity, and Android 8.0 crashes a translucent activity
+             that asks for a fixed orientation — "behind" takes MainActivity's. -->
+        <activity
+            android:name="com.razorpay.CheckoutActivity"
+            android:screenOrientation="behind"
+            tools:node="merge" />
 
         <!-- Shares rendered bill PNGs from cacheDir/bills via a content:// URI. -->
         <provider
