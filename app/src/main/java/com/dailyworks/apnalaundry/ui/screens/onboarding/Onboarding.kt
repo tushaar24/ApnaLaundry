@@ -2,7 +2,6 @@ package com.dailyworks.apnalaundry.ui.screens.onboarding
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,11 +19,11 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -48,7 +47,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dailyworks.apnalaundry.analytics.Analytics
-import com.dailyworks.apnalaundry.core.AppDate
 import com.dailyworks.apnalaundry.data.LaundryRepository
 import com.dailyworks.apnalaundry.domain.BillDetails
 import com.dailyworks.apnalaundry.domain.SeedData
@@ -61,7 +59,6 @@ import com.dailyworks.apnalaundry.ui.components.rounded
 import com.dailyworks.apnalaundry.ui.components.tap
 import com.dailyworks.apnalaundry.ui.screens.rates.RatesEditor
 import com.dailyworks.apnalaundry.ui.theme.Tokens
-import java.time.LocalDate
 import org.koin.compose.koinInject
 
 /**
@@ -217,45 +214,20 @@ private fun NameStep(initial: String, onNext: (String) -> Unit) {
     }
     fun next() { if (ok) onNext(name.trim()) }
 
-    StepScaffold(bottom = { PrimaryButton("Next: Services", height = 56.dp, enabled = ok) { next() } }) {
+    StepScaffold(bottom = { PrimaryButton("Next", height = 56.dp, enabled = ok) { next() } }) {
         StepBar(1, onBack = null)
-        Text("What is your laundry called?", style = bric(28, FontWeight.Bold))
-        Text("This name goes on every bill you send to customers.", style = fig(14, color = Tokens.Muted))
+        Box(Modifier.size(64.dp).rounded(16.dp).background(Tokens.BlueLight), contentAlignment = Alignment.Center) {
+            Icon(Icons.Outlined.Storefront, null, tint = Tokens.Blue, modifier = Modifier.size(32.dp))
+        }
+        Text("What is your shop name?", style = bric(28, FontWeight.Bold))
+        Text("Your customers will see this name on their bill.", style = fig(15, color = Tokens.Muted))
         FieldBox(
             name, { name = it.take(40) },
-            placeholder = "e.g. Sharma Laundry",
             height = 56.dp, borderColor = Tokens.Blue, borderWidth = 2.dp,
             fieldModifier = Modifier.focusRequester(focus).semantics { contentDescription = "Laundry name" },
             capitalization = KeyboardCapitalization.Words,
             imeAction = ImeAction.Next,
             onImeAction = { next() },
         )
-        MiniBill(name.trim())
-    }
-}
-
-/** The small "On your bill" card under the name input; updates as the owner types. */
-@Composable
-private fun MiniBill(name: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("ON YOUR BILL", style = fig(12, FontWeight.Bold, Tokens.Faint))
-        Column(
-            Modifier.fillMaxWidth().rounded(16.dp).background(Tokens.Card)
-                .border(1.dp, Tokens.CardBorder, RoundedCornerShape(16.dp)).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Text(
-                name.ifEmpty { "Your laundry name" },
-                style = bric(22, FontWeight.Bold, if (name.isEmpty()) Tokens.Faint else Tokens.Ink),
-                maxLines = 1, overflow = TextOverflow.Ellipsis,
-            )
-            Text("Bill #1001 · ${AppDate.plain(LocalDate.now().toString())}", style = fig(13, color = Tokens.Muted))
-            listOf(0.78f, 0.62f, 0.70f).forEach { w ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Box(Modifier.fillMaxWidth(w).height(10.dp).rounded(999.dp).background(Tokens.NeutralFill))
-                    Box(Modifier.width(40.dp).height(10.dp).rounded(999.dp).background(Tokens.NeutralFill))
-                }
-            }
-        }
     }
 }
