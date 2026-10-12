@@ -183,6 +183,7 @@ fun FieldBox(
     capitalization: KeyboardCapitalization = KeyboardCapitalization.None,
     imeAction: ImeAction = ImeAction.Default,
     onImeAction: (() -> Unit)? = null,
+    trailing: @Composable (() -> Unit)? = null,
 ) {
     Row(
         modifier
@@ -212,6 +213,7 @@ fun FieldBox(
             )
         }
         if (suffix != null) Text(suffix, style = fig(15, FontWeight.SemiBold, Tokens.Muted))
+        trailing?.invoke()
     }
 }
 

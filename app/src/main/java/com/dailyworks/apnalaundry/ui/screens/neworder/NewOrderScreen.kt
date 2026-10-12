@@ -23,6 +23,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.Icon
@@ -138,6 +140,19 @@ fun NewOrderScreen(
     var active by remember { mutableStateOf<ActiveSheet?>(null) }
     var editingRates by remember { mutableStateOf(false) } // rate list opened over this form
     var loaded by remember { mutableStateOf(false) }
+
+    // No customers yet: there's nobody to search, so open "Add customer" straight away.
+    val vmLoaded by shopVm.loaded.collectAsStateWithLifecycle()
+    var autoAdded by remember { mutableStateOf(false) }
+    LaunchedEffect(vmLoaded) {
+        if (!vmLoaded || autoAdded || editId != null || presetCustId != null || state.customers.isNotEmpty()) return@LaunchedEffect
+        autoAdded = true
+        active = ActiveSheet.CustomerForm(
+            editId = null, ctx = "order",
+            needAddress = pickup == Route.HOME || delivery == Route.HOME,
+            onSaved = { id -> custId = id; query = "" },
+        )
+    }
 
     LaunchedEffect(Unit) {
         Analytics.screen("new_order")
@@ -260,10 +275,12 @@ fun NewOrderScreen(
         ) {
             Spacer(Modifier.height(2.dp))
             // ---- serial no. ----
+            val serialFocus = remember { FocusRequester() }
             FieldBox(
                 serialText, { serialTouched = true; serialText = it.filter { c -> c.isLetterOrDigit() && c.code < 128 || c in "_/-" }.take(12) },
-                prefix = "#", placeholder = "Serial no.",
-                suffix = "Serial no.", height = 48.dp,
+                prefix = "# Serial no.", height = 48.dp,
+                fieldModifier = Modifier.focusRequester(serialFocus),
+                trailing = { EditIcon("Edit serial no.") { serialFocus.requestFocus() } },
             )
             // ---- customer ----
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -354,6 +371,7 @@ fun NewOrderScreen(
                     seedIso = pickupDate,
                     dateText = AppDate.short(pickupDate),
                     dateIsSet = true,
+                    dateEditIcon = true,
                     minIso = null, // past pickups allowed (orders entered after the fact)
                     time24 = pickupTime,
                     onPickDate = { pickupDate = it },
@@ -583,6 +601,7 @@ private fun DateRow(
     time24: String,
     onPickDate: (String) -> Unit,
     onPickTime: (String) -> Unit,
+    dateEditIcon: Boolean = false,
 ) {
     val context = LocalContext.current
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -594,6 +613,7 @@ private fun DateRow(
                 iconTint = Tokens.Blue,
                 text = dateText,
                 isSet = dateIsSet,
+                editIcon = dateEditIcon,
             ) { showDatePicker(context, seedIso, minIso, onPickDate) }
             DateTimeBox(
                 modifier = Modifier.weight(1f),
@@ -613,6 +633,7 @@ private fun DateTimeBox(
     iconTint: Color,
     text: String,
     isSet: Boolean,
+    editIcon: Boolean = false,
     onClick: () -> Unit,
 ) {
     val borderMod = if (isSet) Modifier.border(1.5.dp, Tokens.FieldBorder, RoundedCornerShape(12.dp))
@@ -629,7 +650,16 @@ private fun DateTimeBox(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Icon(icon, null, tint = iconTint, modifier = Modifier.size(20.dp))
-        Text(text, style = fig(14, FontWeight.Bold, if (isSet) Tokens.Ink else Tokens.Muted), maxLines = 1)
+        Text(text, style = fig(14, FontWeight.Bold, if (isSet) Tokens.Ink else Tokens.Muted), maxLines = 1, modifier = Modifier.weight(1f))
+        if (editIcon) Icon(Icons.Outlined.Edit, null, tint = Tokens.Blue, modifier = Modifier.size(18.dp))
+    }
+}
+
+/** Pencil at the right end of a field: says "you can change this". */
+@Composable
+private fun EditIcon(label: String, onClick: () -> Unit) {
+    Box(Modifier.size(36.dp).rounded(999.dp).tap(onClick = onClick), contentAlignment = Alignment.Center) {
+        Icon(Icons.Outlined.Edit, label, tint = Tokens.Blue, modifier = Modifier.size(18.dp))
     }
 }
 
