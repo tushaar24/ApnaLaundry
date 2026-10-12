@@ -3,4 +3,6 @@
     <color name="app_bg">#F5F3EE</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <!-- Push notification icon tint (Tokens.Blue). -->
+    <color name="notification_accent">#FF1D4ED8</color>
 </resources>

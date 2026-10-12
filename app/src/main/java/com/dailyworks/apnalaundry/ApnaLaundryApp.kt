@@ -12,6 +12,7 @@ import com.dailyworks.apnalaundry.data.Prefs
 import com.dailyworks.apnalaundry.data.sync.SyncScheduler
 import com.dailyworks.apnalaundry.data.sync.SyncWorker
 import com.dailyworks.apnalaundry.di.appModule
+import com.dailyworks.apnalaundry.push.Push
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -29,6 +30,7 @@ class ApnaLaundryApp : Application() {
         super.onCreate()
         Analytics.init(this)
         MetaEvents.init(this)
+        Push.init(this)
 
         startKoin {
             androidContext(this@ApnaLaundryApp)

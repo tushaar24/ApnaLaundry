@@ -57,6 +57,7 @@ play-services-auth = { group = "com.google.android.gms", name = "play-services-a
 play-services-auth-api-phone = { group = "com.google.android.gms", name = "play-services-auth-api-phone", version.ref = "playServicesAuthApiPhone" }
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
 firebase-auth = { group = "com.google.firebase", name = "firebase-auth" }
+firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging" }
 zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
 facebook-core = { group = "com.facebook.android", name = "facebook-core", version.ref = "facebookCore" }
 

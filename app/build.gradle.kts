@@ -107,6 +107,7 @@ dependencies {
     // and verifies the SMS; the backend trades its ID token for our session.
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
+    implementation(libs.firebase.messaging) // push (FCM) — also CleverTap's push transport
     implementation(libs.kotlinx.coroutines.play.services)
 
     // UPI pay QR on bills (QR matrix only — drawn on our own canvas)

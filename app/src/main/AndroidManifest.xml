@@ -6,6 +6,8 @@
     <!-- Add a customer from the phone's contacts (asked only when the owner taps
          "Choose from contacts"; manual entry works without it). -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <!-- Push notifications (Android 13+ asks at runtime, once, on Home). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Advertising ID (Android 13+): used by the Meta SDK for Meta ads install /
          subscription attribution. The SDK also merges this in; declared here so
          the Play Console "uses advertising ID" declaration always matches. -->
@@ -53,6 +55,20 @@
         <meta-data android:name="com.facebook.sdk.ClientToken" android:value="@string/facebook_client_token" />
         <meta-data android:name="com.facebook.sdk.AutoInitEnabled" android:value="false" />
 
+        <!-- Push (FCM): channel / icon / colour for notifications Firebase draws
+             itself (app in the background) and for CleverTap campaigns. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="general" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notification" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/notification_accent" />
+        <meta-data android:name="CLEVERTAP_DEFAULT_CHANNEL_ID" android:value="general" />
+        <meta-data android:name="CLEVERTAP_NOTIFICATION_ICON" android:value="ic_notification" />
+
         <!-- Portrait only, everywhere. Android 16 (targetSdk 36) ignores
              screenOrientation on large screens (tablets, foldables, sw >= 600dp)
              unless the app opts out with this property. The opt-out is honoured
@@ -82,6 +98,15 @@
             android:name="com.razorpay.CheckoutActivity"
             android:screenOrientation="behind"
             tools:node="merge" />
+
+        <!-- Receives FCM pushes + token refreshes (push/Push.kt). -->
+        <service
+            android:name=".push.PushService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
 
         <!-- Shares rendered bill PNGs from cacheDir/bills via a content:// URI. -->
         <provider
