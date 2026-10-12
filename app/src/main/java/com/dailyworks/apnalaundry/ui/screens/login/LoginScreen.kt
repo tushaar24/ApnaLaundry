@@ -1,5 +1,6 @@
 package com.dailyworks.apnalaundry.ui.screens.login
 
+import com.dailyworks.apnalaundry.push.AskNotificationPermission
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -103,6 +104,18 @@ fun LoginScreen(onLoggedIn: () -> Unit, vm: AuthViewModel = koinViewModel()) {
     LightStatusBarIcons()
     BackHandler(enabled = ui.step == AuthUiState.Step.OTP, onBack = vm::backToPhone)
 
+    // First open: the notification permission (Android 13+), then Google's
+    // number picker — one after the other, never both on screen. Kept at this
+    // level so "Change number" (back from the OTP step) doesn't ask again.
+    val phoneHint = rememberPhoneHint(vm::onPhone)
+    var askedOnOpen by rememberSaveable { mutableStateOf(false) }
+    if (!askedOnOpen) {
+        AskNotificationPermission(onDone = {
+            askedOnOpen = true
+            if (vm.ui.value.phone.isEmpty()) phoneHint()
+        })
+    }
+
     Column(Modifier.fillMaxSize().background(Tokens.Blue).imePadding()) {
         if (ui.step == AuthUiState.Step.PHONE) PhoneStep(ui, vm) else OtpStep(ui, vm)
     }
@@ -172,15 +185,6 @@ private fun ColumnScope.PhoneStep(ui: AuthUiState, vm: AuthViewModel) {
 private fun PhoneSheet(ui: AuthUiState, vm: AuthViewModel) {
     val activity = LocalContext.current.findActivity()
     val send = { activity?.let(vm::requestOtp); Unit }
-    // Google's number picker: offered once, on first open with an empty field.
-    val phoneHint = rememberPhoneHint(vm::onPhone)
-    var hintShown by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        if (!hintShown && ui.phone.isEmpty()) {
-            hintShown = true
-            phoneHint()
-        }
-    }
     Sheet(Modifier.windowInsetsPadding(WindowInsets.navigationBars)) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Mobile number", style = fig(14, FontWeight.SemiBold))

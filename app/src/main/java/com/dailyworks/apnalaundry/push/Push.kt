@@ -13,6 +13,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -100,13 +102,17 @@ class PushService : FirebaseMessagingService() {
     }
 }
 
-/** Android 13+: ask once for the notification permission (the system won't re-ask after a "Don't allow"). */
+/**
+ * Android 13+: ask for the notification permission (the system stops showing
+ * the prompt after the owner says "Don't allow" twice). [onDone] runs once
+ * it's answered — or straight away when there's nothing to ask.
+ */
 @Composable
-fun AskNotificationPermission() {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+fun AskNotificationPermission(onDone: () -> Unit = {}) {
     val context = LocalContext.current
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    val done by rememberUpdatedState(onDone)
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { done() }
     LaunchedEffect(Unit) {
-        if (!Push.canNotify(context)) launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        if (Push.canNotify(context)) done() else launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 }

@@ -1,6 +1,5 @@
 package com.dailyworks.apnalaundry.ui.screens.home
 
-import com.dailyworks.apnalaundry.push.AskNotificationPermission
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -91,8 +90,6 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
     val hidden by shopVm.hideAmounts.collectAsStateWithLifecycle()
     val loaded by shopVm.loaded.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    // Ask for push permission here — the shop is set up, not mid-login or onboarding.
-    AskNotificationPermission()
 
     // The database hasn't answered yet: the state is a placeholder, and its zero
     // orders would flash "Your shop is ready!" for a second. Keep the gate's loader.
