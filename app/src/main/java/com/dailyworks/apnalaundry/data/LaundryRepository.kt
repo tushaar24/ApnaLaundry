@@ -161,6 +161,17 @@ class LaundryRepository(private val db: AppDatabase) {
     }
 
     // ---------------- helpers ----------------
+    /**
+     * Read → change → write of the one shop row, inside a transaction. Room runs
+     * transactions one at a time, so two edits that land together (the name step
+     * saves the name and the next step back to back) can't write over each other.
+     * Before this, the step write could put the stale placeholder name back.
+     */
+    private suspend fun editShop(change: (ShopEntity) -> ShopEntity?): ShopEntity? = db.withTransaction {
+        val e = shopDao.get() ?: return@withTransaction null
+        change(e)?.also { shopDao.upsert(it) }
+    }
+
     private suspend fun current(): LaundryState {
         val shopE = shopDao.get()
         return LaundryState(
@@ -473,10 +484,13 @@ class LaundryRepository(private val db: AppDatabase) {
             customerDao.upsert(c.copy(name = name, phone = phone, address = address).toEntity())
             return editId to null
         }
-        val shopE = shopDao.get()!!
-        val id = "c${shopE.nextCust}"
-        customerDao.upsert(Customer(id, name, phone, address, 0, "—", 9).toEntity())
-        shopDao.upsert(shopE.copy(nextCust = shopE.nextCust + 1, dirty = true, updatedAt = SyncClock.now()))
+        val id = db.withTransaction {
+            val shopE = shopDao.get()!!
+            val id = "c${shopE.nextCust}"
+            customerDao.upsert(Customer(id, name, phone, address, 0, "—", 9).toEntity())
+            shopDao.upsert(shopE.copy(nextCust = shopE.nextCust + 1, dirty = true, updatedAt = SyncClock.now()))
+            id
+        }
         if (oldBaaki > 0) ledgerDao.insert(mkEntry(id, LedgerKind.OLD, oldBaaki).toEntity())
         Analytics.customerAdded(if (fromList) "list" else "order", oldBaaki > 0)
         val res = if (fromList)
@@ -499,22 +513,22 @@ class LaundryRepository(private val db: AppDatabase) {
     }
 
     suspend fun updateShop(name: String, expressPct: Int) {
-        val e = shopDao.get()!!
-        shopDao.upsert(e.copy(name = name, expressPct = expressPct, dirty = true, updatedAt = SyncClock.now()))
+        editShop { it.copy(name = name, expressPct = expressPct, dirty = true, updatedAt = SyncClock.now()) }
         if (name.isNotBlank()) Analytics.updateProfile(mapOf("Name" to name))
     }
 
     /** Saves the shop name and/or bill details (onboarding "Your bill", Settings). */
     suspend fun updateShopDetails(name: String? = null, details: BillDetails.Fields? = null) {
-        val e = shopDao.get() ?: return
-        var n = e.copy(dirty = true, updatedAt = SyncClock.now())
-        if (name != null) n = n.copy(name = name)
-        if (details != null) n = n.copy(
-            billPhone = details.billPhone, address = details.address, gstin = details.gstin, email = details.email,
-            upiId = details.upiId, logoId = details.logoId, termsJson = encodeTerms(details.terms),
-            termsCustom = details.termsCustom, billTemplate = details.billTemplate,
-        )
-        shopDao.upsert(n)
+        editShop { e ->
+            var n = e.copy(dirty = true, updatedAt = SyncClock.now())
+            if (name != null) n = n.copy(name = name)
+            if (details != null) n = n.copy(
+                billPhone = details.billPhone, address = details.address, gstin = details.gstin, email = details.email,
+                upiId = details.upiId, logoId = details.logoId, termsJson = encodeTerms(details.terms),
+                termsCustom = details.termsCustom, billTemplate = details.billTemplate,
+            )
+            n
+        } ?: return
         if (!name.isNullOrBlank()) Analytics.updateProfile(mapOf("Name" to name))
     }
 
@@ -523,16 +537,18 @@ class LaundryRepository(private val db: AppDatabase) {
      * away, so the next order opens the same way (edits of an old order don't).
      */
     suspend fun setGstDefaults(on: Boolean, pct: Double, mode: String) {
-        val e = shopDao.get() ?: return
-        if (e.gstOn == on && e.gstPct == pct && e.gstMode == mode) return
-        shopDao.upsert(e.copy(gstOn = on, gstPct = pct, gstMode = mode, dirty = true, updatedAt = SyncClock.now()))
+        editShop { e ->
+            if (e.gstOn == on && e.gstPct == pct && e.gstMode == mode) null
+            else e.copy(gstOn = on, gstPct = pct, gstMode = mode, dirty = true, updatedAt = SyncClock.now())
+        }
     }
 
     /** Records onboarding progress so a killed app (or another device) resumes there. */
     suspend fun setOnboardingStep(step: String) {
-        val e = shopDao.get() ?: return
-        if (e.onboardingStep == step) return
-        shopDao.upsert(e.copy(onboardingStep = step, dirty = true, updatedAt = SyncClock.now()))
+        editShop { e ->
+            if (e.onboardingStep == step) null
+            else e.copy(onboardingStep = step, dirty = true, updatedAt = SyncClock.now())
+        }
     }
 
     suspend fun onboardingStep(): String = shopDao.get()?.onboardingStep ?: ""
@@ -597,24 +613,28 @@ class LaundryRepository(private val db: AppDatabase) {
         }
 
         // create
-        val shopE = shopDao.get()!!
-        val id = shopE.nextOrder
         val status = if (pickup == Route.SHOP) OrderStatus.RECEIVED else OrderStatus.CREATED
-        val order = Order(
-            id = id, custId = fields.custId, pickup = fields.pickup, delivery = fields.delivery,
-            pickupDate = fields.pickupDate, pickupTime = fields.pickupTime, deliveryDate = fields.deliveryDate,
-            deliveryTime = fields.deliveryTime, ddAuto = fields.ddAuto, status = status, cancelReason = "",
-            fee = fields.fee, express = fields.express, exAmt = fields.exAmt, discount = fields.discount,
-            pre = 0, paid = 0, doneAt = "", doneDate = "", createdOn = AppDate.TODAY, billSent = false,
-            pieces = 0, lines = fields.lines,
-            serialNo = serialNo.trim(), exPct = if (fields.express) exPct else 0, discPct = discPct,
-            gstOn = gstOn && gstPct > 0, gstPct = gstPct, gstMode = gstMode, note = note.trim().take(500),
-        )
-        db.withTransaction {
+        // The number is taken and bumped in one transaction, with the shop read
+        // inside it, so a concurrent shop edit is never written over.
+        val order = db.withTransaction {
+            val shopE = shopDao.get()!!
+            val id = shopE.nextOrder
+            val order = Order(
+                id = id, custId = fields.custId, pickup = fields.pickup, delivery = fields.delivery,
+                pickupDate = fields.pickupDate, pickupTime = fields.pickupTime, deliveryDate = fields.deliveryDate,
+                deliveryTime = fields.deliveryTime, ddAuto = fields.ddAuto, status = status, cancelReason = "",
+                fee = fields.fee, express = fields.express, exAmt = fields.exAmt, discount = fields.discount,
+                pre = 0, paid = 0, doneAt = "", doneDate = "", createdOn = AppDate.TODAY, billSent = false,
+                pieces = 0, lines = fields.lines,
+                serialNo = serialNo.trim(), exPct = if (fields.express) exPct else 0, discPct = discPct,
+                gstOn = gstOn && gstPct > 0, gstPct = gstPct, gstMode = gstMode, note = note.trim().take(500),
+            )
             orderDao.upsert(order.toEntity())
             shopDao.upsert(shopE.copy(nextOrder = id + 1, dirty = true, updatedAt = SyncClock.now()))
             touchCustomer(custId)
+            order
         }
+        val id = order.id
         trackOrderSaved(order, isEdit = false)
         trackOrderMilestone()
         return if (fields.lines.isEmpty()) {
