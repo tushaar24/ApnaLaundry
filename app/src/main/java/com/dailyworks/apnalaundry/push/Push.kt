@@ -24,6 +24,7 @@ import com.clevertap.android.sdk.CleverTapAPI
 import com.clevertap.android.sdk.interfaces.NotificationHandler
 import com.clevertap.android.sdk.pushnotification.fcm.CTFcmMessageHandler
 import com.dailyworks.apnalaundry.MainActivity
+import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.R
 import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.messaging.FirebaseMessagingService
@@ -62,11 +63,14 @@ object Push {
     }
 
     /** A push that isn't CleverTap's: title + body, tap opens the app. */
-    internal fun show(context: Context, title: String?, body: String?) {
+    internal fun show(context: Context, title: String?, body: String?, link: String? = null) {
         if (title.isNullOrBlank() && body.isNullOrBlank()) return
+        val intent = Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        // Optional `link` data field: mylaundry://new-order etc. (DeepLinks).
+        link?.let { runCatching { android.net.Uri.parse(it) }.getOrNull() }?.let { intent.action = Intent.ACTION_VIEW; intent.data = it }
         val open = PendingIntent.getActivity(
             context, 0,
-            Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val n = NotificationCompat.Builder(context, CHANNEL_ID)
@@ -83,6 +87,23 @@ object Push {
             NotificationManagerCompat.from(context).notify(System.currentTimeMillis().toInt(), n)
         }
     }
+
+    /**
+     * Keep the CleverTap profile's `notifications_enabled` current (any Android
+     * version), and fire "Notifications Status Changed" when it differs from
+     * the last status this install reported.
+     */
+    fun reportEnabled(context: Context) {
+        val on = NotificationManagerCompat.from(context).areNotificationsEnabled()
+        val sp = context.getSharedPreferences("push", Context.MODE_PRIVATE)
+        val last = if (sp.contains(KEY_LAST_ENABLED)) sp.getBoolean(KEY_LAST_ENABLED, false) else null
+        if (on == last) return
+        sp.edit().putBoolean(KEY_LAST_ENABLED, on).apply()
+        Analytics.updateProfile(mapOf("notifications_enabled" to on))
+        Analytics.notificationsStatusChanged(on)
+    }
+
+    private const val KEY_LAST_ENABLED = "last_enabled"
 
     fun canNotify(context: Context): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
@@ -103,6 +124,7 @@ class PushService : FirebaseMessagingService() {
             applicationContext,
             message.notification?.title ?: message.data["title"],
             message.notification?.body ?: message.data["body"],
+            message.data["link"],
         )
     }
 }
@@ -113,11 +135,20 @@ class PushService : FirebaseMessagingService() {
  * it's answered — or straight away when there's nothing to ask.
  */
 @Composable
-fun AskNotificationPermission(onDone: () -> Unit = {}) {
+fun AskNotificationPermission(where: String, onDone: () -> Unit = {}) {
     val context = LocalContext.current
     val done by rememberUpdatedState(onDone)
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { done() }
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        Analytics.notificationPermissionAnswered(granted, where, prompted = true)
+        Push.reportEnabled(context)
+        done()
+    }
     LaunchedEffect(Unit) {
-        if (Push.canNotify(context)) done() else launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        if (Push.canNotify(context)) {
+            Analytics.notificationPermissionAnswered(granted = true, where = where, prompted = false)
+            done()
+        } else {
+            launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
     }
 }

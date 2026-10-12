@@ -235,6 +235,20 @@ object Analytics {
     // Cancelled) from the Razorpay webhook.
     fun paywallShown() = track("Paywall Shown")
 
+    // ---- push ----
+    // A push tap's deep link opened a screen (mylaundry://<screen>).
+    fun deepLinkOpened(screen: String) = track("Deep Link Opened", mapOf("screen" to screen))
+
+    // Push permission on the login screen (where = "login"). prompted = false:
+    // no dialog was needed (Android 12 and older, or already allowed).
+    fun notificationPermissionAnswered(granted: Boolean, where: String, prompted: Boolean) =
+        track("Notification Permission Answered", mapOf("granted" to granted, "where" to where, "prompted" to prompted))
+
+    // Notifications switched on/off for the app (any Android version, incl. from
+    // phone Settings) — fired when the status differs from the last one seen.
+    fun notificationsStatusChanged(enabled: Boolean) =
+        track("Notifications Status Changed", mapOf("enabled" to enabled))
+
     // Free orders used up (Android): the notice before the paywall, and its "See plans" tap.
     fun freeOrdersOverShown(orders: Int) = track("Free Orders Over Shown", mapOf("orders" to orders))
     fun freeOrdersOverPlansTapped() = track("Free Orders Over Plans Tapped")

@@ -110,7 +110,7 @@ fun LoginScreen(onLoggedIn: () -> Unit, vm: AuthViewModel = koinViewModel()) {
     val phoneHint = rememberPhoneHint(vm::onPhone)
     var askedOnOpen by rememberSaveable { mutableStateOf(false) }
     if (!askedOnOpen) {
-        AskNotificationPermission(onDone = {
+        AskNotificationPermission(where = "login", onDone = {
             askedOnOpen = true
             if (vm.ui.value.phone.isEmpty()) phoneHint()
         })

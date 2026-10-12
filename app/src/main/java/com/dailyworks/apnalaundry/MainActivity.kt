@@ -4,6 +4,8 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import com.clevertap.android.sdk.CleverTapAPI
+import com.dailyworks.apnalaundry.push.DeepLinks
+import com.dailyworks.apnalaundry.push.Push
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -44,6 +46,7 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
 
     // Sync on open and every minute while visible (edits from other devices).
     override fun onStart() {
+        Push.reportEnabled(this) // they may have switched notifications on/off in Settings
         super.onStart()
         syncScheduler.onForeground()
     }
@@ -55,6 +58,7 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (savedInstanceState == null) DeepLinks.offer(intent)
         Checkout.preload(applicationContext)
         enableEdgeToEdge()
         setContent {
@@ -69,6 +73,8 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
     // which records the click only when the activity is created — misses it.
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        setIntent(intent)
+        DeepLinks.offer(intent)
         val extras = intent.extras ?: return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && CleverTapAPI.getNotificationInfo(extras).fromCleverTap) {
             CleverTapAPI.getDefaultInstance(applicationContext)?.pushNotificationClickedEvent(extras)

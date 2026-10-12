@@ -156,7 +156,7 @@ fun NewOrderScreen(
 
     LaunchedEffect(Unit) {
         Analytics.screen("new_order")
-        Analytics.newOrderStarted(if (presetCustId != null) "customer" else if (from == "empty_home") "empty_home" else "home", editId != null)
+        Analytics.newOrderStarted(if (presetCustId != null) "customer" else if (from == "empty_home" || from == "push") from else "home", editId != null)
     }
 
     // Prefill for edit mode.
