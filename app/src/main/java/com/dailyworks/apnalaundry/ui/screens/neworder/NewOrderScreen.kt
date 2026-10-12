@@ -92,8 +92,7 @@ import com.dailyworks.apnalaundry.ui.theme.Tokens
 import androidx.compose.material.icons.outlined.Edit
 import com.dailyworks.apnalaundry.domain.ServiceItem
 import com.dailyworks.apnalaundry.ui.screens.rates.RatesEditor
-import androidx.compose.ui.window.DialogProperties
-import androidx.compose.ui.window.Dialog
+import androidx.activity.compose.BackHandler
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -582,14 +581,13 @@ fun NewOrderScreen(
 
     SheetHost(active, state, shopVm, navigator, onOpen = { active = it }, onDismiss = { active = null })
     if (editingRates) {
-        // The rate list over this form, so nothing typed here is lost.
-        Dialog(
-            onDismissRequest = { editingRates = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
-        ) {
-            Box(Modifier.fillMaxSize().background(Tokens.Bg)) {
-                RatesEditor(shopVm, setupHeader = null, onDone = { editingRates = false }, onBack = { editingRates = false })
-            }
+        // The rate list drawn over this form, in the same screen (not a Dialog), so
+        // nothing typed here is lost and back returns here: a Dialog's back could
+        // reach the NavHost and pop New order to Home. Its Add / Edit pages register
+        // their own BackHandlers later, so they still go back to the list first.
+        BackHandler { editingRates = false }
+        Box(Modifier.fillMaxSize().background(Tokens.Bg).tap { /* keep taps off the form below */ }) {
+            RatesEditor(shopVm, setupHeader = null, onDone = { editingRates = false }, onBack = { editingRates = false })
         }
     }
 }
