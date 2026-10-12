@@ -30,6 +30,8 @@ import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -51,7 +53,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
+import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.Locale
@@ -140,6 +144,15 @@ fun NewOrderScreen(
     var active by remember { mutableStateOf<ActiveSheet?>(null) }
     var editingRates by remember { mutableStateOf(false) } // rate list opened over this form
     var loaded by remember { mutableStateOf(false) }
+    // For "New Order Abandoned": how far the owner got before leaving without saving.
+    var saved by remember { mutableStateOf(false) }
+    var custFormOpened by remember { mutableStateOf(false) }
+    var custAdded by remember { mutableStateOf(false) }
+    val openedAt = remember { System.currentTimeMillis() }
+    val entryPoint = if (presetCustId != null) "customer" else if (from == "empty_home" || from == "push") from else "home"
+    LaunchedEffect(active) {
+        if (active is ActiveSheet.CustomerForm && (active as ActiveSheet.CustomerForm).editId == null) custFormOpened = true
+    }
 
     // No customers yet: there's nobody to search, so open "Add customer" straight away.
     val vmLoaded by shopVm.loaded.collectAsStateWithLifecycle()
@@ -150,13 +163,13 @@ fun NewOrderScreen(
         active = ActiveSheet.CustomerForm(
             editId = null, ctx = "order",
             needAddress = pickup == Route.HOME || delivery == Route.HOME,
-            onSaved = { id -> custId = id; query = "" },
+            onSaved = { id -> custId = id; query = ""; custAdded = true },
         )
     }
 
     LaunchedEffect(Unit) {
         Analytics.screen("new_order")
-        Analytics.newOrderStarted(if (presetCustId != null) "customer" else if (from == "empty_home" || from == "push") from else "home", editId != null)
+        Analytics.newOrderStarted(entryPoint, editId != null)
     }
 
     // Prefill for edit mode.
@@ -263,6 +276,29 @@ fun NewOrderScreen(
         else -> "Save & make bill"
     }
 
+    // Leaving without saving (back, or Home from a notification) → "New Order Abandoned".
+    // Not fired on a rotation / theme change (the screen comes straight back), nor if the
+    // app is killed from the background (nothing is disposed then).
+    val pieces = clothes.qty.values.sumOf { it.values.sum() } + (if (showQuickBox) quickPcs.toIntOrNull() ?: 0 else 0)
+    val kg = clothes.weight.values.sumOf { it.toDoubleOrNull() ?: 0.0 }
+    val abandon by rememberUpdatedState {
+        val stage = when {
+            cust == null -> "customer"
+            empty -> "clothes"
+            else -> "save"
+        }
+        Analytics.newOrderAbandoned(
+            entryPoint = entryPoint, isEdit = editId != null, stage = stage,
+            customerSet = cust != null, customerAdded = custAdded, customerFormOpened = custFormOpened,
+            clothesAdded = !empty, pieces = pieces, kg = kg, total = grand,
+            seconds = (System.currentTimeMillis() - openedAt) / 1000,
+        )
+    }
+    val activity = LocalContext.current.findActivity()
+    DisposableEffect(Unit) {
+        onDispose { if (!saved && activity?.isChangingConfigurations != true) abandon() }
+    }
+
     Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.statusBars)) {
         TopBar(
             title = if (editId != null) "Edit order" else "New order",
@@ -332,7 +368,7 @@ fun NewOrderScreen(
                                             prefillName = if (isPhone) "" else q,
                                             prefillPhone = if (isPhone) qd.takeLast(10) else "",
                                             needAddress = anyHome,
-                                            onSaved = { id -> custId = id; query = "" },
+                                            onSaved = { id -> custId = id; query = ""; custAdded = true },
                                         )
                                     },
                                 contentAlignment = Alignment.Center,
@@ -535,6 +571,7 @@ fun NewOrderScreen(
                     serialNo = serialText,
                     note = note,
                 ) { result ->
+                    saved = true
                     if (editId != null) navigator.back()
                     else if (result.goToBill) navigator.openBill(result.orderId, "new")
                     else navigator.openHome()
@@ -555,6 +592,12 @@ fun NewOrderScreen(
             }
         }
     }
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
 
 private fun tatText(n: Int): String = when (n) { 0 -> "same day"; 1 -> "in 1 day"; else -> "in $n days" }

@@ -115,6 +115,23 @@ object Analytics {
     fun newOrderStarted(entryPoint: String, isEdit: Boolean) =
         track("New Order Started", mapOf("entry_point" to entryPoint, "is_edit" to isEdit))
 
+    /**
+     * Left New/Edit order without saving. `stage` is how far they got:
+     * customer (none chosen) → clothes (customer, no clothes) → save (both, never tapped save).
+     */
+    fun newOrderAbandoned(
+        entryPoint: String, isEdit: Boolean, stage: String, customerSet: Boolean, customerAdded: Boolean,
+        customerFormOpened: Boolean, clothesAdded: Boolean, pieces: Int, kg: Double, total: Int, seconds: Long,
+    ) = track(
+        "New Order Abandoned",
+        mapOf(
+            "entry_point" to entryPoint, "is_edit" to isEdit, "stage" to stage,
+            "customer_set" to customerSet, "customer_added" to customerAdded,
+            "customer_form_opened" to customerFormOpened, "clothes_added" to clothesAdded,
+            "pieces" to pieces, "kg" to kg, "total" to total, "seconds_on_screen" to seconds,
+        ),
+    )
+
     fun orderSaved(
         orderId: Int, isEdit: Boolean, hasBill: Boolean, pickup: String, delivery: String,
         express: Boolean, discount: Int, fee: Int, pieces: Int, kg: Double,
