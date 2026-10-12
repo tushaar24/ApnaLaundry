@@ -123,7 +123,7 @@ fun CustomerFormSheet(state: LaundryState, form: ActiveSheet.CustomerForm, vm: S
                     borderColor = if (addrNeeded && address.isBlank()) Tokens.OrangeBorder else Tokens.FieldBorder)
             }
             if (form.ctx == "list" && !editing) {
-                Field("Old baaki from your notebook", oldBaaki, { oldBaaki = it.filter { c -> c.isDigit() }.take(6) }, "0", prefix = "₹", kb = KeyboardType.Number)
+                Field("Old khata from your notebook", oldBaaki, { oldBaaki = it.filter { c -> c.isDigit() }.take(6) }, "0", prefix = "₹", kb = KeyboardType.Number)
             }
             PrimaryButton(if (editing) "Save changes" else "Save customer", enabled = valid, height = 56.dp) {
                 vm.saveCustomer(form.editId, name.trim(), phone, address.trim(), oldBaaki.toIntOrNull() ?: 0, form.ctx == "list") { id ->
@@ -205,7 +205,7 @@ fun ReceivePaymentSheet(state: LaundryState, custId: String, vm: ShopViewModel, 
             }
             val (bg, fg, text) = when {
                 amt.isEmpty() -> Triple(Tokens.Bg, Tokens.Muted, "Type the amount you got")
-                left > 0 -> Triple(Tokens.OrangeLight, Tokens.OrangeDeep, "${Money.rupees(left)} will still be baaki")
+                left > 0 -> Triple(Tokens.OrangeLight, Tokens.OrangeDeep, "${Money.rupees(left)} will stay in khata")
                 left < 0 -> Triple(Tokens.BlueLight, Tokens.BlueText, "${Money.rupees(left)} extra — kept as advance for next bill")
                 else -> Triple(Tokens.NeutralFill, Tokens.Ink, "Full payment — all clear")
             }
@@ -224,13 +224,13 @@ fun AddOldBaakiSheet(state: LaundryState, custId: String, vm: ShopViewModel, onD
     val bal = max(0, Selectors.balance(state, custId))
     var amt by remember { mutableStateOf("") }
     val got = amt.toIntOrNull() ?: 0
-    AppBottomSheet(title = "Add old baaki", subtitle = "Money ${Selectors.firstName(c.name)} owed you before you started using the app", onDismiss = onDismiss) {
+    AppBottomSheet(title = "Add old khata", subtitle = "Money ${Selectors.firstName(c.name)} owed you before you started using the app", onDismiss = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             FieldBox(amt, { amt = it.filter { ch -> ch.isDigit() }.take(6) }, prefix = "₹", height = 56.dp, keyboardType = KeyboardType.Number, textStyle = bric(22, FontWeight.Bold))
             Box(Modifier.fillMaxWidth().rounded(12.dp).background(Tokens.Bg).padding(14.dp)) {
-                Text(if (amt.isEmpty()) "Baaki now: ${Money.rupees(bal)}" else "Baaki will become ${Money.rupees(bal + got)}", style = fig(14, FontWeight.SemiBold, Tokens.InkSecondary))
+                Text(if (amt.isEmpty()) "Khata now: ${Money.rupees(bal)}" else "Khata will become ${Money.rupees(bal + got)}", style = fig(14, FontWeight.SemiBold, Tokens.InkSecondary))
             }
-            PrimaryButton("Add old baaki", enabled = got > 0, height = 54.dp) { vm.addOldBaaki(custId, got); onDismiss() }
+            PrimaryButton("Add old khata", enabled = got > 0, height = 54.dp) { vm.addOldBaaki(custId, got); onDismiss() }
         }
     }
 }

@@ -88,7 +88,7 @@ fun CustomersScreen(shopVm: ShopViewModel, navigator: AppNavigator, initialFilte
             })
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterTile("All", state.customers.size.toString(), "customers", Tokens.Ink, filter == "all", Modifier.weight(1f)) { filter = "all" }
-                FilterTile("Baaki", Money.rupees(sumOwe), "${owe.size} to collect", Tokens.OrangeText, filter == "baaki", Modifier.weight(1f)) { filter = if (filter == "baaki") "all" else "baaki" }
+                FilterTile("Khata", Money.rupees(sumOwe), "${owe.size} to collect", Tokens.OrangeText, filter == "baaki", Modifier.weight(1f)) { filter = if (filter == "baaki") "all" else "baaki" }
                 FilterTile("Advance", Money.rupees(sumAdv), "${adv.size} paid extra", Tokens.BlueText, filter == "advance", Modifier.weight(1f)) { filter = if (filter == "advance") "all" else "advance" }
             }
         }
@@ -160,7 +160,7 @@ private fun CustomerRow(state: com.dailyworks.apnalaundry.domain.LaundryState, c
             }
             Column(horizontalAlignment = Alignment.End) {
                 if (bal != 0) Text(Money.rupees(bal), style = fig(16, FontWeight.Bold, avFg))
-                Text(if (bal > 0) "baaki" else if (bal < 0) "advance" else "All clear", style = fig(12, color = avFg))
+                Text(if (bal > 0) "khata" else if (bal < 0) "advance" else "All clear", style = fig(12, color = avFg))
             }
         }
     }

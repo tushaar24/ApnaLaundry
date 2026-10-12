@@ -151,7 +151,7 @@ fun CustomerScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: Strin
                     }
                 }
             }
-            Text("+ Add old baaki from notebook", style = fig(14, FontWeight.Bold, Tokens.Blue), modifier = Modifier.tap { active = ActiveSheet.AddOld(custId) })
+            Text("+ Add old khata from notebook", style = fig(14, FontWeight.Bold, Tokens.Blue), modifier = Modifier.tap { active = ActiveSheet.AddOld(custId) })
 
             if (inProgress.isNotEmpty()) {
                 Text("ORDERS IN PROGRESS", style = fig(12, FontWeight.Bold, Tokens.Muted))
@@ -176,7 +176,7 @@ fun CustomerScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: Strin
 
 private fun methodName(m: PayMethod) = when (m) { PayMethod.CASH -> "Cash"; PayMethod.UPI -> "UPI"; else -> "" }
 
-private fun balWord(b: Int) = if (b > 0) "Baaki ${Money.rupees(b)}" else if (b < 0) "Advance ${Money.rupees(b)}" else "All clear"
+private fun balWord(b: Int) = if (b > 0) "Khata ${Money.rupees(b)}" else if (b < 0) "Advance ${Money.rupees(b)}" else "All clear"
 
 private fun khataRows(state: com.dailyworks.apnalaundry.domain.LaundryState, custId: String): List<KhataRow> {
     val led = state.ledger.filter { it.custId == custId }.sortedWith(compareBy({ it.date }, { it.ts }))
@@ -194,7 +194,7 @@ private fun khataRows(state: com.dailyworks.apnalaundry.domain.LaundryState, cus
                 val desc = if (e.note.isNotBlank()) e.note else o?.let { "${Selectors.itemsLabel(it)} · ${Selectors.svcLabel(it)}" } ?: ""
                 sub = whenStr + (if (desc.isNotBlank()) " · $desc" else "") + (if (before < 0) " · ${Money.rupees(min(-before, e.amt))} advance used" else "")
             }
-            LedgerKind.OLD -> { isAdd = true; run += e.amt; title = "Old baaki"; sub = "$whenStr · from notebook" }
+            LedgerKind.OLD -> { isAdd = true; run += e.amt; title = "Old khata"; sub = "$whenStr · from notebook" }
             LedgerKind.ADJ -> { isAdd = e.amt > 0; run += e.amt; title = "Bill changed · Order #${Selectors.order(state, e.ref ?: -1)?.no() ?: e.ref}"; sub = "$whenStr · order edited after delivery" }
             LedgerKind.GOT -> {
                 run -= e.amt
