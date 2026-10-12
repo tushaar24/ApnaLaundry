@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,6 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -31,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -43,6 +46,7 @@ import com.dailyworks.apnalaundry.ui.components.AppCard
 import com.dailyworks.apnalaundry.ui.components.BottomNav
 import com.dailyworks.apnalaundry.ui.components.FieldBox
 import com.dailyworks.apnalaundry.ui.components.NavTab
+import com.dailyworks.apnalaundry.ui.components.PrimaryButton
 import com.dailyworks.apnalaundry.ui.components.bric
 import com.dailyworks.apnalaundry.ui.components.fig
 import com.dailyworks.apnalaundry.ui.components.rounded
@@ -77,22 +81,30 @@ fun CustomersScreen(shopVm: ShopViewModel, navigator: AppNavigator, initialFilte
         else -> list.sortedBy { it.first.agoRank }
     }
 
+    // No customers yet: no search, ₹0 tiles or floating button — just one clear way to add the first one.
+    val noCustomers = state.customers.isEmpty()
+    fun addCustomer() { active = ActiveSheet.CustomerForm(editId = null, ctx = "list") }
+
     Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars)) {
         Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Customers", style = bric(24, FontWeight.Bold))
                 Text(Selectors.countNoun(state.customers.size, "customer"), style = fig(13, color = Tokens.Muted), modifier = Modifier.padding(bottom = 3.dp))
             }
-            FieldBox(query, { query = it }, placeholder = "Search name or phone", height = 48.dp, leading = {
-                Icon(Icons.Outlined.Search, null, tint = Tokens.Muted, modifier = Modifier.size(20.dp))
-            })
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterTile("All", state.customers.size.toString(), "customers", Tokens.Ink, filter == "all", Modifier.weight(1f)) { filter = "all" }
-                FilterTile("Khata", Money.rupees(sumOwe), "${owe.size} to collect", Tokens.OrangeText, filter == "baaki", Modifier.weight(1f)) { filter = if (filter == "baaki") "all" else "baaki" }
-                FilterTile("Advance", Money.rupees(sumAdv), "${adv.size} paid extra", Tokens.BlueText, filter == "advance", Modifier.weight(1f)) { filter = if (filter == "advance") "all" else "advance" }
+            if (!noCustomers) {
+                FieldBox(query, { query = it }, placeholder = "Search name or phone", height = 48.dp, leading = {
+                    Icon(Icons.Outlined.Search, null, tint = Tokens.Muted, modifier = Modifier.size(20.dp))
+                })
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterTile("All", state.customers.size.toString(), "customers", Tokens.Ink, filter == "all", Modifier.weight(1f)) { filter = "all" }
+                    FilterTile("Khata", Money.rupees(sumOwe), "${owe.size} to collect", Tokens.OrangeText, filter == "baaki", Modifier.weight(1f)) { filter = if (filter == "baaki") "all" else "baaki" }
+                    FilterTile("Advance", Money.rupees(sumAdv), "${adv.size} paid extra", Tokens.BlueText, filter == "advance", Modifier.weight(1f)) { filter = if (filter == "advance") "all" else "advance" }
+                }
             }
         }
-        Box(Modifier.weight(1f).fillMaxWidth()) {
+        if (noCustomers) {
+            NoCustomers(Modifier.weight(1f), onAdd = ::addCustomer)
+        } else Box(Modifier.weight(1f).fillMaxWidth()) {
             LazyColumn(
                 Modifier.fillMaxSize(),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 96.dp),
@@ -115,7 +127,7 @@ fun CustomersScreen(shopVm: ShopViewModel, navigator: AppNavigator, initialFilte
             }
             Row(
                 Modifier.align(Alignment.BottomEnd).padding(16.dp).height(52.dp).rounded(999.dp).background(Tokens.Blue)
-                    .tap { active = ActiveSheet.CustomerForm(editId = null, ctx = "list") }.padding(horizontal = 20.dp),
+                    .tap(onClick = ::addCustomer).padding(horizontal = 20.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Icon(Icons.Filled.Add, null, tint = Tokens.OnDark, modifier = Modifier.size(22.dp))
@@ -126,6 +138,28 @@ fun CustomersScreen(shopVm: ShopViewModel, navigator: AppNavigator, initialFilte
     }
 
     SheetHost(active, state, shopVm, navigator, onOpen = { active = it }, onDismiss = { active = null })
+}
+
+/** Empty Customers tab: icon, one line of what to do, one big button. */
+@Composable
+private fun NoCustomers(modifier: Modifier, onAdd: () -> Unit) {
+    Column(
+        modifier.fillMaxWidth().padding(horizontal = 24.dp),
+        verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(Modifier.size(88.dp).rounded(999.dp).background(Tokens.BlueLight), contentAlignment = Alignment.Center) {
+            Icon(Icons.Outlined.Groups, null, tint = Tokens.Blue, modifier = Modifier.size(44.dp))
+        }
+        Spacer(Modifier.height(20.dp))
+        Text("You have no customers added", style = bric(22, FontWeight.Bold), textAlign = TextAlign.Center)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Add your customer's name and phone number once. Next time, just search and take their order.",
+            style = fig(15, color = Tokens.Muted), textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(24.dp))
+        PrimaryButton("Add customers", height = 56.dp, onClick = onAdd)
+    }
 }
 
 @Composable
