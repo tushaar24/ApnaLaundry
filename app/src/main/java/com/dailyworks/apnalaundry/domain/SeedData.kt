@@ -15,7 +15,7 @@ object SeedData {
 
     // Placeholder names this and older builds have seeded — a shop still
     // carrying one of these hasn't been named by its owner yet.
-    private val UNNAMED_SHOP_NAMES = setOf("", "mylaundry", "apna laundry", "apnalaundry", "my shop")
+    private val UNNAMED_SHOP_NAMES = setOf("", "mylaundry", "apna laundry", "apnalaundry", "my shop", "shine laundry")
 
     fun isDefaultShopName(name: String?): Boolean = (name ?: "").trim().lowercase() in UNNAMED_SHOP_NAMES
 
@@ -24,7 +24,8 @@ object SeedData {
     private fun items(vararg pairs: Pair<String, Int>) =
         pairs.map { ServiceItem(it.first, it.second) }
 
-    val shop = Shop(name = "Shine Laundry", phone = "9876543210", expressPct = 50)
+    // Stand-in until the shop row loads (and the seed for a new one): unnamed, no phone.
+    val shop = Shop(name = DEFAULT_SHOP_NAME, phone = "", expressPct = 50)
 
     val services = listOf(
         Service(

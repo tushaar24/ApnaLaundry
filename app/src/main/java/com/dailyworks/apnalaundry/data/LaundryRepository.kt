@@ -45,7 +45,7 @@ class LaundryRepository(private val db: AppDatabase) {
         ) { services, customers, orders, ledger, sd ->
             val (shopE, daysE) = sd
             LaundryState(
-                shop = shopE?.toDomain() ?: Shop(SeedData.shop.name, SeedData.shop.phone, SeedData.shop.expressPct),
+                shop = shopE?.toDomain() ?: SeedData.shop,
                 services = services.map { it.toDomain() }.sortedBy { it.sortOrder },
                 customers = customers.map { it.toDomain() },
                 orders = orders.map { it.toDomain() },
@@ -164,7 +164,7 @@ class LaundryRepository(private val db: AppDatabase) {
     private suspend fun current(): LaundryState {
         val shopE = shopDao.get()
         return LaundryState(
-            shop = shopE?.toDomain() ?: Shop("Shine Laundry", "9876543210", 50),
+            shop = shopE?.toDomain() ?: SeedData.shop,
             services = serviceDao.getAll().filter { !it.deleted }.map { it.toDomain() }.sortedBy { it.sortOrder },
             customers = customerDao.observeOnce().map { it.toDomain() },
             orders = orderDao.observeOnce().map { it.toDomain() },

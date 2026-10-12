@@ -40,7 +40,7 @@ class ShopViewModel(
 ) : ViewModel() {
 
     private val empty = LaundryState(
-        Shop("Shine Laundry", "9876543210", 50), emptyList(), emptyList(), emptyList(), emptyList(), emptySet(),
+        SeedData.shop, emptyList(), emptyList(), emptyList(), emptyList(), emptySet(),
     )
 
     /**

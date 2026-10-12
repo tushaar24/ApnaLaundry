@@ -78,6 +78,9 @@ private val StepGrey = Color(0xFFDAD5CB)
 fun OnboardingFlow(shopVm: ShopViewModel, onFinished: () -> Unit) {
     val repo: LaundryRepository = koinInject()
     val state by shopVm.state.collectAsStateWithLifecycle()
+    // The name step reads the shop's saved name — wait for the real shop, not
+    // the VM's stand-in, or a placeholder can show up in the field.
+    val vmLoaded by shopVm.loaded.collectAsStateWithLifecycle()
     // Read from the DB, not the VM's not-yet-loaded initial state.
     var step by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
@@ -111,7 +114,7 @@ fun OnboardingFlow(shopVm: ShopViewModel, onFinished: () -> Unit) {
         }
     }
 
-    when (step) {
+    when (if (vmLoaded) step else null) {
         null -> Box(Modifier.fillMaxSize().background(Tokens.Bg))
         "name" -> {
             NameStep(

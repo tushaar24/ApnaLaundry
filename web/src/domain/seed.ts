@@ -17,7 +17,7 @@ export const DEFAULT_SHOP_NAME = "MyLaundry";
 
 // Placeholder names this and older builds have seeded — a shop still carrying
 // one of these hasn't been named by its owner yet.
-const UNNAMED_SHOP_NAMES = new Set(["", "mylaundry", "apna laundry", "apnalaundry", "my shop"]);
+const UNNAMED_SHOP_NAMES = new Set(["", "mylaundry", "apna laundry", "apnalaundry", "my shop", "shine laundry"]);
 
 export function isDefaultShopName(name: string): boolean {
   return UNNAMED_SHOP_NAMES.has(name.trim().toLowerCase());
