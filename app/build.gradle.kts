@@ -92,6 +92,7 @@ dependencies {
 
     // CleverTap (events / funnel analytics)
     implementation(libs.clevertap.android.sdk)
+    implementation(libs.clevertap.push.templates) // rich CleverTap pushes (carousel, timer, rating…)
 
     // Google Play Billing (required for Play Store acceptance of a paid app).
     implementation(libs.play.billing)

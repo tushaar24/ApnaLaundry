@@ -19,7 +19,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import com.clevertap.android.pushtemplates.PushTemplateNotificationHandler
 import com.clevertap.android.sdk.CleverTapAPI
+import com.clevertap.android.sdk.interfaces.NotificationHandler
 import com.clevertap.android.sdk.pushnotification.fcm.CTFcmMessageHandler
 import com.dailyworks.apnalaundry.MainActivity
 import com.dailyworks.apnalaundry.R
@@ -31,7 +33,7 @@ import com.google.firebase.messaging.RemoteMessage
  * Firebase Cloud Messaging (project shweta-makeover, app/google-services.json).
  *
  * - CleverTap campaigns: CleverTap gets the FCM token and renders its own
- *   pushes (title, image, deep link) on the [CHANNEL_ID] channel.
+ *   pushes (title, image, deep link, Push Templates) on the [CHANNEL_ID] channel.
  * - Anything else (Firebase console, our backend): a notification with the
  *   message's title/body that opens the app. Background "notification"
  *   messages are drawn by Firebase itself, using the manifest defaults.
@@ -40,8 +42,11 @@ object Push {
     const val CHANNEL_ID = "general"
     private const val TAG = "Push"
 
-    /** App start: the notification channel, and hand the current token to CleverTap. */
+    /** App start: CleverTap's template renderer, the notification channel, and the token for CleverTap. */
     fun init(context: Context) {
+        // Push Templates: CleverTap campaigns can use rich layouts (carousel,
+        // timer, rating, …). CTFcmMessageHandler below renders through this.
+        CleverTapAPI.setNotificationHandler(PushTemplateNotificationHandler() as NotificationHandler)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(CHANNEL_ID, "Updates", NotificationManager.IMPORTANCE_DEFAULT)
                 .apply { description = "Tips and news from MyLaundry" }
