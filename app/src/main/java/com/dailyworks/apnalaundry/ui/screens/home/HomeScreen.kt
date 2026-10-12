@@ -82,6 +82,11 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.ui.platform.LocalDensity
 import com.dailyworks.apnalaundry.ui.components.showDatePicker
+import com.dailyworks.apnalaundry.ui.components.Spotlight
+import com.dailyworks.apnalaundry.ui.components.rememberSpotlightTargets
+import com.dailyworks.apnalaundry.ui.components.spotlightTarget
+import com.dailyworks.apnalaundry.ui.TOUR_STEPS
+import com.dailyworks.apnalaundry.ui.TourStage
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -89,6 +94,8 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
     val state by shopVm.state.collectAsStateWithLifecycle()
     val hidden by shopVm.hideAmounts.collectAsStateWithLifecycle()
     val loaded by shopVm.loaded.collectAsStateWithLifecycle()
+    val tour by shopVm.tour.collectAsStateWithLifecycle()
+    val targets = rememberSpotlightTargets()
     val context = LocalContext.current
 
     // The database hasn't answered yet: the state is a placeholder, and its zero
@@ -156,7 +163,7 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
 
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (noOrders) {
-                EmptyHome { startNewOrder("empty_home") }
+                EmptyHome(Modifier.spotlightTarget(targets, "new_order")) { startNewOrder("empty_home") }
                 return@Box
             }
             LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, bottom = 170.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -227,7 +234,7 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
 
             // New order FAB
             run {
-                Row(Modifier.align(Alignment.BottomEnd).padding(16.dp).height(58.dp).rounded(999.dp).background(Tokens.Blue).tap { startNewOrder("home") }.padding(start = 18.dp, end = 22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.align(Alignment.BottomEnd).padding(16.dp).spotlightTarget(targets, "new_order").height(58.dp).rounded(999.dp).background(Tokens.Blue).tap { startNewOrder("home") }.padding(start = 18.dp, end = 22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(Icons.Filled.Add, null, tint = Tokens.OnDark, modifier = Modifier.size(22.dp))
                     Text("New order", style = fig(17, FontWeight.Bold, Tokens.OnDark))
                 }
@@ -235,6 +242,28 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
         }
 
         BottomNav(NavTab.ORDERS) { query = ""; navigator.selectTab(it) }
+    }
+
+    // First-order tour: step 1 points at "New order"; after an order saved
+    // without a bill, a last "well done" card.
+    if (active == null) when (tour) {
+        TourStage.ORDER -> {
+            LaunchedEffect(Unit) { Analytics.tourStepViewed("home", 1) }
+            Spotlight(
+                targets, "new_order", step = 1, steps = TOUR_STEPS,
+                title = "Let's take your first order",
+                body = "Tap the blue button to start. We will show you each step. It takes only 1 minute.",
+                nextLabel = null, onNext = {},
+                onSkip = { Analytics.tourSkipped("home"); shopVm.setTour(TourStage.DONE) },
+            )
+        }
+        TourStage.SAVED -> Spotlight(
+            targets, null, step = TOUR_STEPS, steps = TOUR_STEPS,
+            title = "Well done! 🎉",
+            body = "Your first order is saved. You will find it here on Home. When the clothes are washed, tap the order and mark it Ready.",
+            nextLabel = "Got it", onNext = { shopVm.setTour(TourStage.DONE) }, onSkip = null,
+        )
+        TourStage.DONE -> Unit
     }
 
     SheetHost(active, state, shopVm, navigator, onOpen = { active = it }, onDismiss = { active = null })
@@ -276,7 +305,7 @@ private fun SearchBar(value: String, onChange: (String) -> Unit) {
 
 // ---------- empty state (brand-new shop) ----------
 @Composable
-private fun EmptyHome(onNewOrder: () -> Unit) {
+private fun EmptyHome(buttonModifier: Modifier = Modifier, onNewOrder: () -> Unit) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -293,7 +322,7 @@ private fun EmptyHome(onNewOrder: () -> Unit) {
                 "No orders yet. Take your first one — it takes less than a minute.",
                 style = fig(15, color = Tokens.Muted), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
-            PrimaryButton("Create New Order", height = 56.dp, onClick = onNewOrder)
+            PrimaryButton("Create New Order", buttonModifier, height = 56.dp, onClick = onNewOrder)
         }
 
         Column(
