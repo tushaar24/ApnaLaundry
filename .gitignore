@@ -24,3 +24,6 @@ local.properties
 # Separate backend project (not part of this repo)
 /courses/
 app/release/
+
+# Claude Code job worktrees (separate checkouts — never commit)
+.claude/worktrees/
