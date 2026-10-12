@@ -58,7 +58,8 @@ async function ctName(identity) {
   for (const s of shops) {
     const { name, err } = await ctName(s.userId);
     if (err) errors += 1;
-    if (name && !isPlaceholder(name) && clean(name).length >= 2) {
+    // A real name has letters (skips e.g. an OTP typed into the name field).
+    if (name && !isPlaceholder(name) && clean(name).length >= 2 && /\p{L}/u.test(name)) {
       plan.push({ userId: s.userId, phone: s.user?.phone, platform: s.user?.signupPlatform, from: s.name, to: clean(name), updatedAt: s.updatedAt });
     } else noName += 1;
     await sleep(150); // stay well under CleverTap's API rate limit
