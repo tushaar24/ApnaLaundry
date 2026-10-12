@@ -1,13 +1,17 @@
 package com.dailyworks.apnalaundry.data.remote
 
+import android.content.Context
+import com.chuckerteam.chucker.api.ChuckerInterceptor
 import com.dailyworks.apnalaundry.BuildConfig
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
@@ -120,13 +124,19 @@ class AuthApi(private val client: HttpClient = defaultClient()) {
     companion object {
         val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
-        fun defaultClient(): HttpClient = HttpClient(OkHttp) {
+        /** [context] attaches Chucker (debug builds; its no-op artifact in release). */
+        fun defaultClient(context: Context? = null): HttpClient = HttpClient(OkHttp) {
+            engine { context?.let { addInterceptor(ChuckerInterceptor.Builder(it).build()) } }
             install(ContentNegotiation) { json(json) }
             install(HttpTimeout) {
                 requestTimeoutMillis = 30_000
                 connectTimeoutMillis = 10_000
             }
             expectSuccess = false // 4xx bodies are parsed, not thrown
+            // Tells the backend which client this is (stored as the shop's
+            // signup/login platform and on each subscription). The website's
+            // proxy sends "web".
+            defaultRequest { header("x-laundry-client", "android") }
         }
     }
 }

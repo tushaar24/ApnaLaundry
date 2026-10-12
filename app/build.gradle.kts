@@ -16,8 +16,8 @@ android {
         applicationId = "com.dailyworks.apnalaundry"
         minSdk = 24
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.0.4"
+        versionCode = 7
+        versionName = "1.0.7"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -108,6 +108,10 @@ dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
     implementation(libs.kotlinx.coroutines.play.services)
+
+    // Chucker: in-app HTTP inspector (notification) on debug builds; no-op in release.
+    debugImplementation(libs.chucker)
+    releaseImplementation(libs.chucker.no.op)
 
     // UPI pay QR on bills (QR matrix only — drawn on our own canvas)
     implementation(libs.zxing.core)

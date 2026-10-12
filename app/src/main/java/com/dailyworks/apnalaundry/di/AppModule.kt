@@ -32,7 +32,7 @@ val appModule = module {
     single { Prefs(androidContext()) }
 
     // One shared OkHttp-backed Ktor client for auth + sync.
-    single<HttpClient> { AuthApi.defaultClient() }
+    single<HttpClient> { AuthApi.defaultClient(androidContext()) }
     single { AuthApi(get()) }
     single { TokenManager(get(), get()) }
     single { SyncApi(get(), get()) }

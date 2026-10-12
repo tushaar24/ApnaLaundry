@@ -67,3 +67,13 @@ Version 1.0.5 (5) from `prod`; Play-signed builds pass Firebase's app check via
 the Play signing SHA above.
 
 Rollback: revert the client commits; the backend route is additive and can stay.
+
+## Deployed 2026-10-12
+
+The original patch no longer applied (the server's uncommitted client-platform
+work had changed `verify-otp`), so `2026-10-12-backend-firebase-otp-merged.patch`
+was applied instead: the same `/auth/firebase` route, with `loginPhone` also
+recording `signupPlatform` / `lastLoginPlatform` from the `x-laundry-client` header.
+The platform migration `20261012120000` was already applied. Backup of the previous
+route: `/tmp/laundry-auth.js.bak-firebase` on the server. Existing tokens are untouched.
+Not committed on the server yet (it would bundle the uncommitted platform work).
