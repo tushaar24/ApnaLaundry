@@ -33,6 +33,8 @@ object Analytics {
     /** Resolve the default instance. Call after super.onCreate(). */
     fun init(app: Application) {
         if (accountId(app).isBlank()) return
+        // Debug builds: CleverTap logs (incl. push token + received pushes) in Logcat, tag "CleverTap".
+        if (com.dailyworks.apnalaundry.BuildConfig.DEBUG) CleverTapAPI.setDebugLevel(CleverTapAPI.LogLevel.VERBOSE)
         ct = CleverTapAPI.getDefaultInstance(app)
         enabled = ct != null
     }

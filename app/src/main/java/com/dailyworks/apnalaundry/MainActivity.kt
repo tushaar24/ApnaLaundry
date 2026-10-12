@@ -1,6 +1,9 @@
 package com.dailyworks.apnalaundry
 
+import android.content.Intent
+import android.os.Build
 import android.os.Bundle
+import com.clevertap.android.sdk.CleverTapAPI
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -58,6 +61,17 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
             ApnaLaundryTheme {
                 AppRoot()
             }
+        }
+    }
+
+    // A CleverTap push tapped while the app is already open: Android 12+ opens
+    // this activity directly (no trampoline), so CleverTap's lifecycle hook —
+    // which records the click only when the activity is created — misses it.
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        val extras = intent.extras ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && CleverTapAPI.getNotificationInfo(extras).fromCleverTap) {
+            CleverTapAPI.getDefaultInstance(applicationContext)?.pushNotificationClickedEvent(extras)
         }
     }
 
