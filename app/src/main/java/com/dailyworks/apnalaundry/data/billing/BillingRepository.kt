@@ -12,7 +12,7 @@ import kotlinx.coroutines.delay
 class BillingRepository(private val api: BillingApi, private val prefs: Prefs) {
 
     suspend fun status(): BillingStatus = api.status().also { s ->
-        prefs.saveSubscription(active = s.hasAccess, endsAtIso = s.subscription?.accessUntil)
+        prefs.saveSubscription(active = s.hasAccess, endsAtIso = s.subscription?.accessUntil, freeOrders = s.freeOrders)
     }
 
     /** Refresh the saved subscription; failures keep the last saved one. */
@@ -30,6 +30,9 @@ class BillingRepository(private val api: BillingApi, private val prefs: Prefs) {
 
     /** The saved subscription gives access now (no network; false until a check saved one). */
     suspend fun savedActive(): Boolean = prefs.subscriptionActive()
+
+    /** This shop's free orders, as last saved from the server (no network; 5 until then). */
+    suspend fun savedFreeOrders(): Int = prefs.freeOrders(DEFAULT_FREE_ORDERS)
 
     suspend fun subscribe(plan: String): SubscribeResponse = api.subscribe(plan)
 

@@ -1,0 +1,31 @@
+diff -ruN a/routes/laundry-billing.js b/routes/laundry-billing.js
+--- a/routes/laundry-billing.js	2026-10-13 10:46:50
++++ b/routes/laundry-billing.js	2026-10-13 10:48:05
+@@ -90,6 +90,19 @@
+ // ──────────────────────────── authed endpoints ────────────────────────────
+ router.use(requireLaundryAuth);
+ 
++// Free orders an Android shop gets before it needs a plan (the app's own
++// default is 5). Some shops get more, by their 10-digit login phone:
++// LAUNDRY_FREE_ORDERS_BY_PHONE="8400042643:50,9876543210:20" (backend .env).
++const DEFAULT_FREE_ORDERS = 5;
++const FREE_ORDERS_BY_PHONE = new Map(
++  String(process.env.LAUNDRY_FREE_ORDERS_BY_PHONE || '')
++    .split(',')
++    .map((pair) => pair.split(':').map((s) => s.trim()))
++    .filter(([phone, n]) => /^\d{10}$/.test(phone || '') && Number.parseInt(n, 10) > 0)
++    .map(([phone, n]) => [phone, Number.parseInt(n, 10)]),
++);
++const freeOrdersFor = (user) => FREE_ORDERS_BY_PHONE.get(String((user && user.phone) || '').slice(-10)) || DEFAULT_FREE_ORDERS;
++
+ router.get('/status', async (req, res, next) => {
+   try {
+     const userId = req.laundryUserId;
+@@ -121,6 +134,7 @@
+       paywallDue,
+       hasActiveSubscription: hasActive,
+       trialEligible,
++      freeOrders: freeOrdersFor(req.laundryAuth.user),
+       plans: {
+         monthly: { amount: rzp.amountFor('monthly') },
+         annual: { amount: rzp.amountFor('annual') },

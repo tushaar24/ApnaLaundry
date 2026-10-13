@@ -41,6 +41,7 @@ class Prefs(private val context: Context) {
     private val SUB_ACTIVE = booleanPreferencesKey("sub_active")
     private val SUB_ACTIVE_USER = stringPreferencesKey("sub_active_user") // whose status it is
     private val SUB_ENDS_AT = stringPreferencesKey("sub_ends_at") // ISO; paid / cancelled-grace period end
+    private val FREE_ORDERS = intPreferencesKey("free_orders") // orders allowed without a plan (server)
 
     // Sync cursor: the server checkpoint from the last successful pull.
     private val SYNC_CHECKPOINT = longPreferencesKey("sync_checkpoint")
@@ -98,13 +99,20 @@ class Prefs(private val context: Context) {
     }
 
     /** Save what the server just said about the logged-in user's subscription. */
-    suspend fun saveSubscription(active: Boolean, endsAtIso: String?) {
+    suspend fun saveSubscription(active: Boolean, endsAtIso: String?, freeOrders: Int) {
         context.dataStore.edit { p ->
             val u = p[USER_ID] ?: return@edit
             p[SUB_ACTIVE] = active
             p[SUB_ACTIVE_USER] = u
             if (active && !endsAtIso.isNullOrBlank()) p[SUB_ENDS_AT] = endsAtIso else p.remove(SUB_ENDS_AT)
+            p[FREE_ORDERS] = freeOrders
         }
+    }
+
+    /** Free orders for the logged-in user, as the server last said; [default] until it has. */
+    suspend fun freeOrders(default: Int): Int {
+        val p = context.dataStore.data.first()
+        return if (p[SUB_ACTIVE_USER] != null && p[SUB_ACTIVE_USER] == p[USER_ID]) p[FREE_ORDERS] ?: default else default
     }
 
     /**
@@ -136,7 +144,7 @@ class Prefs(private val context: Context) {
             it.remove(GUIDE_STAGE); it.remove(GUIDE_ORDER); it.remove(GUIDE_VARIANT)
             it.remove(ACCESS_TOKEN); it.remove(ACCESS_EXPIRES_AT); it.remove(REFRESH_TOKEN)
             it.remove(USER_ID); it.remove(USER_PHONE)
-            it.remove(SUB_ACTIVE); it.remove(SUB_ACTIVE_USER); it.remove(SUB_ENDS_AT)
+            it.remove(SUB_ACTIVE); it.remove(SUB_ACTIVE_USER); it.remove(SUB_ENDS_AT); it.remove(FREE_ORDERS)
             // DEVICE_ID survives — it identifies the installation, not the user.
         }
     }

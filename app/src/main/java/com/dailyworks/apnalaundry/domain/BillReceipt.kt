@@ -56,7 +56,7 @@ data class BillReceipt(
         }
 
         private fun line(l: OrderLine): Line = when {
-            l.kg > 0 -> Line(Selectors.weightLabel(l), "", Money.rupees(l.amt), rate(l))
+            l.kg > 0 -> Line(Selectors.weightLabel(l), Selectors.clothesList(l), Money.rupees(l.amt), rate(l))
             l.isQuick -> Line(if (l.qty > 0) "${l.itemName} × ${l.qty}" else l.itemName, "", Money.rupees(l.amt))
             else -> Line("${l.itemName} × ${l.qty}", l.serviceName, Money.rupees(l.amt), rate(l))
         }

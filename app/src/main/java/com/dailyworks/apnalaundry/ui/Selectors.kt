@@ -45,6 +45,10 @@ object Selectors {
     fun weightLabel(l: OrderLine): String =
         "${l.serviceName} · ${trimKg(l.kg)} kg" + if (l.qty > 0) " · ${l.qty} ${if (l.qty == 1) "cloth" else "clothes"}" else ""
 
+    /** A by-weight bag's clothes list: "Shirt × 3 · Pant × 2"; "" when not listed. */
+    fun clothesList(l: OrderLine): String =
+        l.clothes.filter { it.qty > 0 }.joinToString(" · ") { "${it.name} × ${it.qty}" }
+
     /**
      * The serial a new order starts with: the latest order's number (its
      * serial, else its id) + 1, keeping any prefix and zero-padding ("A-102" →

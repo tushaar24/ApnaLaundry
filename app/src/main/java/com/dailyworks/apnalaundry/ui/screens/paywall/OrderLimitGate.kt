@@ -42,13 +42,6 @@ import com.dailyworks.apnalaundry.ui.components.tap
 import com.dailyworks.apnalaundry.ui.theme.Tokens
 import org.koin.compose.koinInject
 
-/**
- * Orders a shop can have before it needs a plan. Never shown in the app — the
- * owner only learns of it when it runs out. Counts orders not deleted, so
- * deleting one frees a slot: at most 5 live orders without a plan.
- */
-private const val FREE_ORDERS = 5
-
 private enum class Access { OPEN, FREE_OVER }
 
 /**
@@ -69,8 +62,11 @@ fun OrderLimitGate(onBack: () -> Unit, content: @Composable () -> Unit) {
     var plans by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
+        // Free orders: 5, or more for shops the server lists (saved from billing
+        // status). Never shown in the app — the owner only learns of it when it
+        // runs out. Counts orders not deleted, so deleting one frees a slot.
         val made = repo.liveOrderCount()
-        if (made < FREE_ORDERS || billing.savedActive()) {
+        if (made < billing.savedFreeOrders() || billing.savedActive()) {
             access = Access.OPEN
             return@LaunchedEffect
         }
@@ -78,7 +74,7 @@ fun OrderLimitGate(onBack: () -> Unit, content: @Composable () -> Unit) {
         Analytics.freeOrdersOverShown(made)
         // Paid elsewhere (website, another phone) since the last save? Let them through.
         billing.refreshSaved()
-        if (billing.savedActive() && !plans) access = Access.OPEN
+        if ((billing.savedActive() || made < billing.savedFreeOrders()) && !plans) access = Access.OPEN
     }
 
     when (access) {

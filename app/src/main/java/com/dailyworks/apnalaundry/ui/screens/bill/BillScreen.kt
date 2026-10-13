@@ -111,7 +111,8 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
                         Divider()
                         o.lines.forEach { l ->
                             BillRow(
-                                if (l.kg > 0) Selectors.weightLabel(l) else "${l.itemName} × ${l.qty}",
+                                if (l.kg > 0) Selectors.weightLabel(l) + Selectors.clothesList(l).let { if (it.isEmpty()) "" else "\n$it" }
+                                else "${l.itemName} × ${l.qty}",
                                 Money.rupees(l.amt),
                             )
                         }

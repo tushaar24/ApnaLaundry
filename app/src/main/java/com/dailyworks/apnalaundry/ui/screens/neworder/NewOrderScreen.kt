@@ -225,7 +225,8 @@ fun NewOrderScreen(
                 l.isQuick -> { quickAmt = l.amt.toString(); quickPcs = if (l.qty > 0) l.qty.toString() else ""; showQuickBox = true }
                 l.kg > 0 -> {
                     clothes.setWeight(l.serviceId, Selectors.trimKg(l.kg))
-                    if (l.qty > 0) clothes.setPcs(l.serviceId, l.qty.toString())
+                    l.clothes.forEach { c -> clothes.bumpBag(l.serviceId, c.name, c.qty) }
+                    if (l.qty > 0 && l.clothes.isEmpty()) clothes.setPcs(l.serviceId, l.qty.toString())
                 }
                 else -> {
                     clothes.bump(l.serviceId, l.itemName, l.qty)

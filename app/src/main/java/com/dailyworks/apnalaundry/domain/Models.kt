@@ -56,7 +56,14 @@ data class OrderLine(
     val kg: Double,              // >0 for weight lines
     val amt: Int,
     val isQuick: Boolean = false,
+    // Weight lines: what's in the bag, counts only (optional). When set, qty is their total.
+    // Older apps drop it (they ignore unknown keys) — the kg, price and qty stay right.
+    val clothes: List<ClothCount> = emptyList(),
 )
+
+/** One kind of cloth in a by-weight bag: how many, no price ("Shirt × 3"). */
+@Serializable
+data class ClothCount(val name: String, val qty: Int)
 
 data class Order(
     val id: Int,

@@ -32,6 +32,9 @@ data class BillingSubscriptionDto(
         get() = if (trialAmount > 0 && paidCount == 0) chargeAt ?: currentEnd else currentEnd ?: chargeAt
 }
 
+/** Orders a shop can have without a plan, unless the server says more. */
+const val DEFAULT_FREE_ORDERS = 5
+
 @Serializable
 data class BillingStatus(
     val success: Boolean = false,
@@ -41,6 +44,9 @@ data class BillingStatus(
     // One ₹2 trial per shop: false once a subscription has got past checkout,
     // and the next subscription charges the full plan price straight away.
     val trialEligible: Boolean = true,
+    // Free orders before a plan is needed (OrderLimitGate). 5, or more for shops
+    // the server lists by phone; an older server leaves it out → 5.
+    val freeOrders: Int = DEFAULT_FREE_ORDERS,
     val plans: BillingPlans = BillingPlans(),
     val subscription: BillingSubscriptionDto? = null,
 ) {

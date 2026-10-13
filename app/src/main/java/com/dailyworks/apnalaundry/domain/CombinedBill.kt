@@ -133,7 +133,7 @@ object CombinedBill {
     private fun itemLines(o: Order): List<BillReceipt.Row> = buildList {
         o.lines.forEach { l ->
             val name = when {
-                l.kg > 0 -> Selectors.weightLabel(l)
+                l.kg > 0 -> Selectors.weightLabel(l) + Selectors.clothesList(l).let { if (it.isEmpty()) "" else " ($it)" }
                 l.isQuick -> if (l.qty > 0) "${l.itemName} × ${l.qty}" else l.itemName
                 else -> "${l.itemName} × ${l.qty}"
             }

@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.dailyworks.apnalaundry.core.Money
+import com.dailyworks.apnalaundry.domain.ClothCount
 import com.dailyworks.apnalaundry.domain.OrderLine
 import com.dailyworks.apnalaundry.domain.PricingMode
 import com.dailyworks.apnalaundry.domain.Service
@@ -44,6 +45,8 @@ class ClothesState(services: List<Service>) {
     val pcs = mutableStateMapOf<String, String>()
     // svcId -> (itemName -> price override text)
     val price = mutableStateMapOf<String, MutableMap<String, String>>()
+    // svcId -> (cloth name -> count) in a by-weight bag: what's in it, no price (optional)
+    val bag = mutableStateMapOf<String, Map<String, Int>>()
     var selected by mutableStateOf(
         (services.firstOrNull { it.mode == PricingMode.PIECE } ?: services.firstOrNull())?.id ?: "",
     )
@@ -53,6 +56,13 @@ class ClothesState(services: List<Service>) {
         val m = qty.getOrPut(svc) { mutableMapOf() }.toMutableMap()
         m[item] = max(0, (m[item] ?: 0) + d)
         qty[svc] = m
+    }
+
+    fun bagCount(svc: String): Int = bag[svc]?.values?.sum() ?: 0
+    fun bumpBag(svc: String, cloth: String, d: Int) {
+        val m = (bag[svc] ?: emptyMap()).toMutableMap() // keeps the order clothes were added
+        m[cloth] = max(0, (m[cloth] ?: 0) + d)
+        bag[svc] = m
     }
 
     fun setWeight(svc: String, v: String) { weight[svc] = v }
@@ -75,9 +85,11 @@ class ClothesState(services: List<Service>) {
                 if (kg > 0) {
                     val rate = s.ratePerKg ?: 0
                     val min = s.minKg ?: 0.0
-                    // qty on a weight line = clothes in the bag (0 = not counted)
-                    val clothes = pcs[s.id]?.toIntOrNull() ?: 0
-                    out += OrderLine(s.id, s.name, "By weight", clothes, rate, rate, kg, (max(kg, min) * rate).roundToInt())
+                    // qty on a weight line = clothes in the bag (0 = not counted): the
+                    // listed clothes' total, else the number typed in
+                    val list = bag[s.id].orEmpty().filter { it.value > 0 }.map { ClothCount(it.key, it.value) }
+                    val clothes = if (list.isNotEmpty()) list.sumOf { it.qty } else pcs[s.id]?.toIntOrNull() ?: 0
+                    out += OrderLine(s.id, s.name, "By weight", clothes, rate, rate, kg, (max(kg, min) * rate).roundToInt(), clothes = list)
                 }
             } else {
                 val q = qty[s.id] ?: emptyMap()
@@ -195,13 +207,20 @@ fun ClothesEditor(
                     Spacer8()
                     Text(Money.rupees(amt), style = bric(22, FontWeight.Bold))
                 }
-                val pc = state.pcs[cur.id] ?: ""
-                FieldBox(
-                    value = pc, onValueChange = { state.setPcs(cur.id, it.filter { ch -> ch.isDigit() }.take(4)) },
-                    placeholder = "Number of clothes (optional)", suffix = if (pc.isNotEmpty()) "clothes" else null,
-                    height = 48.dp, keyboardType = KeyboardType.Number,
-                )
+                val listed = state.bagCount(cur.id)
+                if (listed > 0) {
+                    // Counted from the list below.
+                    Text("$listed ${if (listed == 1) "cloth" else "clothes"} in this bag", style = fig(15, FontWeight.SemiBold, Tokens.InkSecondary))
+                } else {
+                    val pc = state.pcs[cur.id] ?: ""
+                    FieldBox(
+                        value = pc, onValueChange = { state.setPcs(cur.id, it.filter { ch -> ch.isDigit() }.take(4)) },
+                        placeholder = "Number of clothes (optional)", suffix = if (pc.isNotEmpty()) "clothes" else null,
+                        height = 48.dp, keyboardType = KeyboardType.Number,
+                    )
+                }
                 Text("₹$rate per kg. Bags under ${trimK(min)} kg are charged for ${trimK(min)} kg.", style = fig(13, color = Tokens.Muted))
+                BagClothes(cur, state, clothNames(services))
             }
         }
     }
@@ -209,6 +228,76 @@ fun ClothesEditor(
 
 @Composable
 private fun Spacer8() = Box(Modifier.width(12.dp))
+
+/** Offered for a bag's list when the shop has no per-piece clothes of its own. */
+private val DEFAULT_CLOTHS = listOf("Shirt", "T-shirt", "Pant", "Jeans", "Saree", "Kurta", "Bedsheet", "Towel")
+
+/** Cloth names for a bag's list: the shop's own per-piece clothes (first 12), else common ones. */
+private fun clothNames(services: List<Service>): List<String> =
+    services.filter { it.mode == PricingMode.PIECE }.flatMap { s -> s.items.map { it.name } }
+        .distinctBy { it.lowercase() }.take(12).ifEmpty { DEFAULT_CLOTHS }
+
+/**
+ * A by-weight bag's clothes, optional: tap a cloth to put 1 in, +/− to change,
+ * or type another. Counts only — the bag is priced by kg — and the list prints
+ * on the bill under the kg line. Closed until opened (or already used).
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun BagClothes(svc: Service, state: ClothesState, names: List<String>) {
+    val inBag = state.bag[svc.id].orEmpty()
+    var open by remember(svc.id) { mutableStateOf(inBag.isNotEmpty()) }
+    if (!open) {
+        Text(
+            "+ Add list of clothes (optional)", style = fig(15, FontWeight.Bold, Tokens.Blue),
+            modifier = Modifier.tap { open = true }.padding(vertical = 8.dp),
+        )
+        return
+    }
+    var other by remember(svc.id) { mutableStateOf("") }
+    val clean = other.trim().replace(Regex("\\s+"), " ")
+    fun addOther() {
+        if (clean.isEmpty()) return
+        state.bumpBag(svc.id, inBag.keys.firstOrNull { it.equals(clean, ignoreCase = true) } ?: clean, 1)
+        other = ""
+    }
+    Column(
+        Modifier.fillMaxWidth().rounded(14.dp).background(Tokens.Card)
+            .border(1.dp, Tokens.CardBorder, RoundedCornerShape(14.dp)).padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("Clothes in this bag", style = fig(15, FontWeight.Bold), modifier = Modifier.weight(1f))
+            Text("Count only, no price", style = fig(12, color = Tokens.Muted))
+        }
+        inBag.forEach { (name, n) ->
+            Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(name, style = fig(16, FontWeight.SemiBold), maxLines = 1, modifier = Modifier.weight(1f))
+                Stepper(qty = n, onDec = { state.bumpBag(svc.id, name, -1) }, onInc = { state.bumpBag(svc.id, name, 1) })
+            }
+        }
+        val left = names.filter { n -> inBag.keys.none { it.equals(n, ignoreCase = true) } }
+        if (left.isNotEmpty()) {
+            Text(if (inBag.isEmpty()) "Tap a cloth to add it" else "Add more", style = fig(12, FontWeight.Bold, Tokens.Muted))
+            androidx.compose.foundation.layout.FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                left.forEach { n -> PillChip("+ $n", false) { state.bumpBag(svc.id, n, 1) } }
+            }
+        }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FieldBox(
+                other, { other = it.take(30) }, Modifier.weight(1f), placeholder = "Other cloth, e.g. Curtain", height = 44.dp,
+                imeAction = androidx.compose.ui.text.input.ImeAction.Done, onImeAction = { addOther() },
+            )
+            Box(
+                Modifier.height(44.dp).rounded(10.dp).background(if (clean.isNotEmpty()) Tokens.Blue else Tokens.NeutralFill)
+                    .tap(enabled = clean.isNotEmpty()) { addOther() }.padding(horizontal = 14.dp),
+                contentAlignment = Alignment.Center,
+            ) { Text("Add", style = fig(14, FontWeight.Bold, if (clean.isNotEmpty()) Tokens.OnDark else Tokens.Muted)) }
+        }
+    }
+}
 
 @Composable
 fun ServiceTile(name: String, sub: String, selected: Boolean, hasAmount: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
