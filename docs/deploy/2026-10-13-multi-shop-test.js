@@ -214,6 +214,19 @@ async function verify() {
     assert.ok(!('deletedAt' in (await pull()).json.changes.shop));
     assert.strictEqual((await pull(shopId)).json.changes.shop.name, 'Branch Two');
   });
+  await check('free owner: 2 active shops at a time, a deleted one frees the slot', async () => {
+    const H2 = { 'Content-Type': 'application/json', Authorization: 'Bearer tok-other-0002' };
+    const post = (name) => fetch(`${base}/api/laundry/shops`, { method: 'POST', headers: H2, body: JSON.stringify({ name }) })
+      .then(async (r) => ({ status: r.status, json: await r.json() }));
+    const two = await post('Other Two');
+    assert.strictEqual(two.status, 200, 'the 2nd shop is free');
+    assert.strictEqual((await post('Other Three')).status, 403, 'a 3rd active shop needs a plan');
+    const d = await fetch(`${base}/api/laundry/shops/${two.json.shop.id}`, { method: 'DELETE', headers: H2 });
+    assert.strictEqual(d.status, 200);
+    const again = await post('Other Again');
+    assert.strictEqual(again.status, 200, 'deleted shops do not count: ' + JSON.stringify(again.json));
+    assert.strictEqual((await post('Other Four')).status, 403, 'still 2 active at a time');
+  });
   await check('support list: one row per owner, main shop name', async () => {
     const support = require(path.resolve('services/laundry-support-shops'));
     const rows = await support.loadSummaryRows(s.userId);

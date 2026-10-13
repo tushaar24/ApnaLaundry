@@ -12,7 +12,8 @@ B=~/backend-filebak/$(date -u +%Y%m%d-%H%M%S); mkdir -p "$B"
 
 echo "== 1. files backup + patch (dry-run first)"
 cd backend
-cp -a prisma/schema.prisma routes/laundry.js routes/laundry-shops.js services/laundry-shops.js "$B/"
+# --parents keeps the folders: routes/ and services/ both have a laundry-shops.js.
+cp -a --parents prisma/schema.prisma routes/laundry.js routes/laundry-shops.js services/laundry-shops.js "$B/"
 patch -p1 --dry-run < /tmp/shop-delete.patch
 patch -p1 < /tmp/shop-delete.patch
 cd ..
