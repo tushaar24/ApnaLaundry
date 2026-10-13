@@ -1,5 +1,8 @@
 package com.dailyworks.apnalaundry.ui.screens.paywall
 
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.heightIn
 import android.app.Activity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -271,9 +274,10 @@ fun PaywallScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Box(
-                        Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(14.dp))
+                        Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(14.dp))
                             .background(Tokens.Blue.copy(alpha = if (ui.busy) 0.6f else 1f))
-                            .tap(enabled = !ui.busy) { vm.pay(activity) },
+                            .tap(enabled = !ui.busy) { vm.pay(activity) }
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
@@ -282,7 +286,8 @@ fun PaywallScreen(
                                 annual -> "Pay ${rupees(ui.annualAmount)} for 1 year"
                                 else -> "Pay ${rupees(ui.monthlyAmount)} for 1 month"
                             },
-                            style = fig(17, FontWeight.Bold, Tokens.OnDark),
+                            style = fig(16, FontWeight.Bold, Tokens.OnDark),
+                            textAlign = TextAlign.Center,
                         )
                     }
                     Spacer(Modifier.height(8.dp))
@@ -344,9 +349,9 @@ private fun RetrySheet(
                         .border(2.dp, Tokens.Blue, RoundedCornerShape(16.dp)).padding(horizontal = 16.dp, vertical = 12.dp),
                 ) {
                     Text("RECOMMENDED", style = fig(11, FontWeight.Bold, Tokens.Blue))
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
-                        Text("Try the Monthly plan", style = fig(16, FontWeight.Bold, Tokens.BlueText))
-                        Text("${rupees(monthlyAmount)}/month", style = bric(18, FontWeight.Bold, Tokens.BlueText))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
+                        Text("Try the Monthly plan", style = fig(16, FontWeight.Bold, Tokens.BlueText), modifier = Modifier.weight(1f))
+                        Text("${rupees(monthlyAmount)}/month", style = bric(18, FontWeight.Bold, Tokens.BlueText), maxLines = 1, softWrap = false)
                     }
                     Text(
                         if (hasTrial) "Same $TRIAL_DAYS free days, $trial refunded instantly — then a smaller monthly payment."
@@ -402,10 +407,10 @@ private fun PlanCard(
                 Text(note, style = fig(13, FontWeight.SemiBold, if (selected) Tokens.BlueText else Tokens.Muted))
             }
             Column(horizontalAlignment = Alignment.End) {
-                Text(price, style = bric(26, FontWeight.Bold))
+                Text(price, style = bric(24, FontWeight.Bold), maxLines = 1, softWrap = false)
                 Row {
-                    Text(was, style = fig(12, FontWeight.Normal, Tokens.Muted).copy(textDecoration = TextDecoration.LineThrough))
-                    Text(" $per", style = fig(12, FontWeight.Normal, Tokens.Muted))
+                    Text(was, style = fig(12, FontWeight.Normal, Tokens.Muted).copy(textDecoration = TextDecoration.LineThrough), maxLines = 1, softWrap = false)
+                    Text(" $per", style = fig(12, FontWeight.Normal, Tokens.Muted), maxLines = 1, softWrap = false)
                 }
             }
         }
@@ -429,11 +434,12 @@ private fun WaitingView(onBack: () -> Unit) {
     ) {
         CircularProgressIndicator(color = Tokens.Blue)
         Spacer(Modifier.height(16.dp))
-        Text("Confirming your subscription…", style = bric(22, FontWeight.Bold))
+        Text("Confirming your subscription…", style = bric(22, FontWeight.Bold), textAlign = TextAlign.Center)
         Spacer(Modifier.height(8.dp))
         Text(
             "We're confirming the UPI AutoPay approval. This updates automatically — it only takes a moment.",
             style = fig(14, FontWeight.Normal, Tokens.Muted),
+            textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(12.dp))
         Text("Waiting for confirmation…", style = fig(13, FontWeight.Normal, Tokens.Faint))
@@ -441,7 +447,7 @@ private fun WaitingView(onBack: () -> Unit) {
         Text(
             "Back to plans",
             style = fig(14, FontWeight.Bold, Tokens.Blue),
-            modifier = Modifier.tap(onClick = onBack).padding(12.dp),
+            modifier = Modifier.tap(onClick = onBack).padding(horizontal = 12.dp, vertical = 14.dp),
         )
     }
 }
@@ -487,13 +493,13 @@ private fun ActiveView(ui: PaywallUiState, onClose: () -> Unit, onCancel: () -> 
     Column(Modifier.fillMaxSize()) {
         Box(
             Modifier
-                .size(44.dp)
-                .padding(start = 8.dp, top = 4.dp)
+                .padding(start = 4.dp, top = 4.dp)
+                .size(48.dp)
                 .tap(onClick = onClose),
             contentAlignment = Alignment.Center,
-        ) { Text("✕", style = fig(22, FontWeight.Normal, Tokens.Muted)) }
+        ) { Icon(Icons.Filled.Close, contentDescription = "Close", tint = Tokens.Ink, modifier = Modifier.size(24.dp)) }
         Column(
-            Modifier.weight(1f).padding(24.dp),
+            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Box(
@@ -501,7 +507,7 @@ private fun ActiveView(ui: PaywallUiState, onClose: () -> Unit, onCancel: () -> 
                 contentAlignment = Alignment.Center,
             ) { Icon(Icons.Outlined.Check, null, tint = if (cancelled) Tokens.InkSecondary else Tokens.OnDark, modifier = Modifier.size(34.dp)) }
             Spacer(Modifier.height(16.dp))
-            Text(if (cancelled) "$planName plan is cancelled" else "$planName plan is active", style = bric(24, FontWeight.Bold))
+            Text(if (cancelled) "$planName plan is cancelled" else "$planName plan is active", style = bric(24, FontWeight.Bold), textAlign = TextAlign.Center)
             Spacer(Modifier.height(8.dp))
             Text(
                 if (cancelled) "It still works" + (if (until.isNotEmpty()) " till $until" else " till the end of the period you paid for") + ". You won't be charged again."
@@ -528,32 +534,32 @@ private fun ActiveView(ui: PaywallUiState, onClose: () -> Unit, onCancel: () -> 
             }
             ui.error?.let {
                 Spacer(Modifier.height(8.dp))
-                Text(it, style = fig(13, FontWeight.SemiBold, Tokens.OrangeText))
+                Text(it, style = fig(13, FontWeight.SemiBold, Tokens.OrangeText), textAlign = TextAlign.Center)
             }
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.height(24.dp))
             if (cancelled) {
-                Text("After that, the app asks you to pick a plan again.", style = fig(13, FontWeight.Normal, Tokens.Muted), modifier = Modifier.padding(12.dp))
+                Text("After that, the app asks you to pick a plan again.", style = fig(13, FontWeight.Normal, Tokens.Muted), textAlign = TextAlign.Center, modifier = Modifier.padding(12.dp))
             } else if (confirming) {
-                Text("Cancel the plan? New orders stop when it ends.", style = fig(14, FontWeight.SemiBold))
+                Text("Cancel the plan? New orders stop when it ends.", style = fig(14, FontWeight.SemiBold), textAlign = TextAlign.Center)
                 Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Box(
-                        Modifier.weight(1f).height(52.dp).clip(RoundedCornerShape(14.dp))
+                        Modifier.weight(1f).fillMaxHeight().heightIn(min = 48.dp).clip(RoundedCornerShape(14.dp))
                             .border(1.5.dp, Tokens.Orange, RoundedCornerShape(14.dp))
-                            .tap { if (!ui.busy) onCancel() },
+                            .tap { if (!ui.busy) onCancel() }.padding(horizontal = 8.dp, vertical = 6.dp),
                         contentAlignment = Alignment.Center,
-                    ) { Text(if (ui.busy) "Cancelling…" else "Yes, cancel", style = fig(15, FontWeight.Bold, Tokens.OrangeText)) }
+                    ) { Text(if (ui.busy) "Cancelling…" else "Yes, cancel", style = fig(15, FontWeight.Bold, Tokens.OrangeText), textAlign = TextAlign.Center) }
                     Box(
-                        Modifier.weight(1f).height(52.dp).clip(RoundedCornerShape(14.dp)).background(Tokens.Blue)
-                            .tap { confirming = false },
+                        Modifier.weight(1f).fillMaxHeight().heightIn(min = 48.dp).clip(RoundedCornerShape(14.dp)).background(Tokens.Blue)
+                            .tap { confirming = false }.padding(horizontal = 8.dp, vertical = 6.dp),
                         contentAlignment = Alignment.Center,
-                    ) { Text("Keep plan", style = fig(15, FontWeight.Bold, Tokens.OnDark)) }
+                    ) { Text("Keep plan", style = fig(15, FontWeight.Bold, Tokens.OnDark), textAlign = TextAlign.Center) }
                 }
             } else {
                 Text(
                     "Cancel subscription",
                     style = fig(14, FontWeight.Bold, Tokens.Muted),
-                    modifier = Modifier.tap { confirming = true }.padding(12.dp),
+                    modifier = Modifier.tap { confirming = true }.padding(horizontal = 12.dp, vertical = 14.dp),
                 )
             }
         }

@@ -103,9 +103,12 @@ object BillRender {
 
     private fun toBitmap(template: String, heightPt: Float, drawOn: (Canvas) -> Unit): Bitmap {
         val h = ceil(heightPt)
-        val bmp = Bitmap.createBitmap((W * SCALE).toInt(), (h * SCALE).toInt(), Bitmap.Config.ARGB_8888)
+        // A very tall bill (long combined bill) draws at a lower scale: past
+        // ~9000px a bitmap runs cheap phones out of memory, and Android won't draw it.
+        val s = minOf(SCALE, 9000f / h.coerceAtLeast(1f))
+        val bmp = Bitmap.createBitmap((W * s).toInt(), (h * s).toInt(), Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp)
-        canvas.scale(SCALE, SCALE)
+        canvas.scale(s, s)
         canvas.drawColor(paper(template))
         drawOn(canvas)
         return bmp
@@ -114,7 +117,17 @@ object BillRender {
     private fun wrap(p: Paint, text: String, maxW: Float): List<String> {
         val out = mutableListOf<String>()
         var cur = ""
-        for (word in text.split(Regex("\\s+")).filter { it.isNotEmpty() }) {
+        // A word wider than the line (a long e-mail / UPI id) is cut into pieces that fit.
+        val words = text.split(Regex("\\s+")).filter { it.isNotEmpty() }.flatMap { w ->
+            if (p.measureText(w) <= maxW) listOf(w) else buildList {
+                var rest = w
+                while (rest.isNotEmpty()) {
+                    val n = p.breakText(rest, true, maxW, null).coerceAtLeast(1)
+                    add(rest.take(n)); rest = rest.drop(n)
+                }
+            }
+        }
+        for (word in words) {
             val next = if (cur.isEmpty()) word else "$cur $word"
             if (cur.isNotEmpty() && p.measureText(next) > maxW) {
                 out.add(cur); cur = word

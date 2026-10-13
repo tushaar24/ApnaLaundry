@@ -1,5 +1,11 @@
 package com.dailyworks.apnalaundry.ui.screens.onboarding
 
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -157,29 +163,33 @@ fun BillDesignScreen(shopVm: ShopViewModel, editing: Boolean, onBack: () -> Unit
                     Text("DESIGN", style = fig(11, FontWeight.Bold, Tokens.Faint))
                     Text(BillDetails.TEMPLATES[index].second, style = fig(14, FontWeight.Bold))
                 }
-                Text("${index + 1} of ${BillDetails.TEMPLATES.size} · swipe the bill to change", style = fig(12, color = Tokens.Muted))
+                Text("${index + 1} of ${BillDetails.TEMPLATES.size} · swipe the bill to change", style = fig(12, color = Tokens.Muted), textAlign = TextAlign.Center)
             }
             ArrowButton(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Next design", enabled = index < BillDetails.TEMPLATES.lastIndex) {
                 scope.launch { pager.animateScrollToPage(index + 1) }
             }
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(
-                Modifier.weight(1f).height(48.dp).rounded(14.dp).background(Tokens.BlueLight).tap { sheet = true },
-                horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
+                Modifier.weight(1f).fillMaxHeight().heightIn(min = 48.dp).rounded(14.dp).background(Tokens.BlueLight).tap { sheet = true }
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(Icons.Filled.Add, null, tint = Tokens.Blue, modifier = Modifier.size(18.dp))
-                Text(" Add fields", style = fig(15, FontWeight.Bold, Tokens.Blue))
+                Text(
+                    "Add fields", style = fig(15, FontWeight.Bold, Tokens.Blue), textAlign = TextAlign.Center,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
+                )
                 if (added > 0) {
                     Box(
-                        Modifier.padding(start = 6.dp).widthIn(min = 20.dp).height(20.dp).rounded(999.dp).background(Tokens.Blue),
+                        Modifier.widthIn(min = 20.dp).height(20.dp).rounded(999.dp).background(Tokens.Blue),
                         contentAlignment = Alignment.Center,
                     ) { Text("$added", style = fig(12, FontWeight.Bold, Tokens.OnDark), modifier = Modifier.padding(horizontal = 6.dp)) }
                 }
             }
             Row(
-                Modifier.weight(1f).height(48.dp).rounded(14.dp).border(1.5.dp, Tokens.FieldBorder, RoundedCornerShape(14.dp)).tap {
+                Modifier.weight(1f).fillMaxHeight().heightIn(min = 48.dp).rounded(14.dp).border(1.5.dp, Tokens.FieldBorder, RoundedCornerShape(14.dp)).tap {
                 val receipt = receipts[index]
                 scope.launch {
                     sendTestBillOnWhatsApp(context, receipt, shopVm.sampleBillUrl())
@@ -187,18 +197,23 @@ fun BillDesignScreen(shopVm: ShopViewModel, editing: Boolean, onBack: () -> Unit
                     tested = true
                     shopVm.showInfo("Opening WhatsApp · pick who gets the test bill")
                 }
-                },
-                horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
+                }.padding(horizontal = 8.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(painterResource(R.drawable.ic_whatsapp), null, tint = Color(0xFF25D366), modifier = Modifier.size(18.dp))
-                Text("  " + if (tested) "Sent · again" else "Test on WhatsApp", style = fig(15, FontWeight.Bold, Tokens.Ink))
+                Text(
+                    if (tested) "Sent · again" else "Test on WhatsApp", style = fig(15, FontWeight.Bold, Tokens.Ink), textAlign = TextAlign.Center,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
+                )
             }
         }
 
         // the bills: one page per design, the next one peeking in
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val pageW = (maxWidth - 36.dp).coerceAtMost(322.dp)
         HorizontalPager(
             state = pager,
-            pageSize = PageSize.Fixed(322.dp),
+            pageSize = PageSize.Fixed(pageW),
             pageSpacing = 12.dp,
             contentPadding = PaddingValues(end = 16.dp),
             modifier = Modifier.fillMaxWidth(),
@@ -214,6 +229,7 @@ fun BillDesignScreen(shopVm: ShopViewModel, editing: Boolean, onBack: () -> Unit
                         .border(1.dp, if (page == index) Tokens.Blue else Tokens.CardBorder, RoundedCornerShape(16.dp)),
                 )
             }
+        }
         }
 
         Text(
@@ -237,6 +253,6 @@ private fun ArrowButton(icon: androidx.compose.ui.graphics.vector.ImageVector, l
         Modifier.size(44.dp).rounded(12.dp).then(if (enabled) Modifier.tap(onClick = onClick) else Modifier),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, label, tint = if (enabled) Tokens.Ink else Color(0xFFC9C3B8), modifier = Modifier.size(26.dp))
+        Icon(icon, label, tint = if (enabled) Tokens.Ink else Color(0xFFC9C3B8), modifier = Modifier.size(24.dp))
     }
 }

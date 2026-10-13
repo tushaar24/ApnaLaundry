@@ -1,5 +1,10 @@
 package com.dailyworks.apnalaundry.ui.screens.customers
 
+import com.dailyworks.apnalaundry.ui.components.FitText
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -79,7 +84,7 @@ fun CustomersScreen(shopVm: ShopViewModel, navigator: AppNavigator, initialFilte
 
     LaunchedEffect(Unit) { Analytics.screen("customers") }
 
-    val withBal = state.customers.map { it to Selectors.balance(state, it.id) }
+    val withBal = remember(state) { state.customers.map { it to Selectors.balance(state, it.id) } }
     val owe = withBal.filter { it.second > 0 }
     val adv = withBal.filter { it.second < 0 }
     val sumOwe = owe.sumOf { it.second }
@@ -102,17 +107,17 @@ fun CustomersScreen(shopVm: ShopViewModel, navigator: AppNavigator, initialFilte
     Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars)) {
         Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Customers", style = bric(24, FontWeight.Bold))
-                Text(Selectors.countNoun(state.customers.size, "customer"), style = fig(13, color = Tokens.Muted), modifier = Modifier.padding(bottom = 3.dp))
+                Text("Customers", style = bric(24, FontWeight.Bold), maxLines = 1)
+                Text(Selectors.countNoun(state.customers.size, "customer"), style = fig(13, color = Tokens.Muted), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(bottom = 3.dp))
             }
             if (!noCustomers) {
                 FieldBox(query, { query = it }, placeholder = "Search name or phone", height = 48.dp, leading = {
                     Icon(Icons.Outlined.Search, null, tint = Tokens.Muted, modifier = Modifier.size(20.dp))
                 })
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterTile("All", state.customers.size.toString(), "customers", Tokens.Ink, filter == "all", Modifier.weight(1f)) { filter = "all" }
-                    FilterTile("Khata", Money.rupees(sumOwe), "${owe.size} to collect", Tokens.OrangeText, filter == "baaki", Modifier.weight(1f).spotlightTarget(targets, "khata_tile")) { filter = if (filter == "baaki") "all" else "baaki" }
-                    FilterTile("Advance", Money.rupees(sumAdv), "${adv.size} paid extra", Tokens.BlueText, filter == "advance", Modifier.weight(1f)) { filter = if (filter == "advance") "all" else "advance" }
+                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterTile("All", Money.grouping(state.customers.size.toLong()), "customers", Tokens.Ink, filter == "all", Modifier.weight(1f).fillMaxHeight()) { filter = "all" }
+                    FilterTile("Khata", Money.rupees(sumOwe), "${owe.size} to collect", Tokens.OrangeText, filter == "baaki", Modifier.weight(1f).fillMaxHeight().spotlightTarget(targets, "khata_tile")) { filter = if (filter == "baaki") "all" else "baaki" }
+                    FilterTile("Advance", Money.rupees(sumAdv), "${adv.size} paid extra", Tokens.BlueText, filter == "advance", Modifier.weight(1f).fillMaxHeight()) { filter = if (filter == "advance") "all" else "advance" }
                 }
             }
         }
@@ -137,12 +142,12 @@ fun CustomersScreen(shopVm: ShopViewModel, navigator: AppNavigator, initialFilte
                 if (list.isEmpty()) {
                     item {
                         Column(Modifier.fillMaxWidth().padding(top = 40.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text(if (q.isNotEmpty()) "No customer found for “$q”" else "No customers here", style = fig(16, FontWeight.SemiBold))
+                            Text(if (q.isNotEmpty()) "No customer found for “$q”" else "No customers here", style = fig(16, FontWeight.SemiBold), textAlign = TextAlign.Center)
                             val label = if (q.isNotEmpty()) (if (qd.length >= 3) "Add customer with this number" else "Add “${q.replaceFirstChar { it.uppercase() }}” as customer") else "Add customer"
                             Box(Modifier.rounded(12.dp).background(Tokens.Blue).tap {
                                 active = ActiveSheet.CustomerForm(editId = null, ctx = "list", prefillName = if (qd.length >= 3) "" else q.replaceFirstChar { it.uppercase() }, prefillPhone = if (qd.length >= 3) qd.takeLast(10) else "")
-                            }.padding(horizontal = 20.dp, vertical = 12.dp)) {
-                                Text(label, style = fig(15, FontWeight.Bold, Tokens.OnDark))
+                            }.heightIn(min = 48.dp).padding(horizontal = 20.dp, vertical = 12.dp), contentAlignment = Alignment.Center) {
+                                Text(label, style = fig(15, FontWeight.Bold, Tokens.OnDark), textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             }
                         }
                     }
@@ -206,12 +211,12 @@ private fun NoCustomers(modifier: Modifier, onAdd: () -> Unit) {
 private fun FilterTile(label: String, value: String, sub: String, tone: Color, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val bg = if (selected) Tokens.Ink else Tokens.Card
     Column(
-        modifier.height(74.dp).rounded(14.dp).background(bg).border(1.dp, if (selected) Tokens.Ink else Tokens.CardBorder, RoundedCornerShape(14.dp)).tap(onClick = onClick).padding(horizontal = 12.dp, vertical = 10.dp),
+        modifier.heightIn(min = 74.dp).rounded(14.dp).background(bg).border(1.dp, if (selected) Tokens.Ink else Tokens.CardBorder, RoundedCornerShape(14.dp)).tap(onClick = onClick).padding(horizontal = 12.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.Start,
     ) {
-        Text(label, style = fig(12, FontWeight.Bold, if (selected) Tokens.OnDarkMuted else tone))
-        Text(value, style = bric(18, FontWeight.Bold, if (selected) Tokens.OnDark else tone), maxLines = 1)
-        Text(sub, style = fig(11, color = if (selected) Tokens.OnDarkMuted else Tokens.Muted), maxLines = 1)
+        Text(label, style = fig(12, FontWeight.Bold, if (selected) Tokens.OnDarkMuted else tone), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        FitText(value, style = bric(18, FontWeight.Bold, if (selected) Tokens.OnDark else tone))
+        Text(sub, style = fig(11, color = if (selected) Tokens.OnDarkMuted else Tokens.Muted), maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -226,15 +231,16 @@ private fun CustomerRow(state: com.dailyworks.apnalaundry.domain.LaundryState, c
                 Text(Selectors.initials(c.name), style = fig(14, FontWeight.Bold, avFg))
             }
             Column(Modifier.weight(1f)) {
-                Text(c.name, style = fig(16, FontWeight.Bold), maxLines = 1)
+                Text(c.name, style = fig(16, FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                // The phone first: on a narrow phone it's the order history that gets cut.
                 Text(
-                    (if (count > 0) "Last order ${c.lastLabel} · $count orders" else "New customer") + " · " + Selectors.fmtPhone(c.phone),
-                    style = fig(13, color = Tokens.Muted), maxLines = 1,
+                    Selectors.fmtPhone(c.phone) + " · " + (if (count > 0) "Last order ${c.lastLabel} · $count orders" else "New customer"),
+                    style = fig(13, color = Tokens.Muted), maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
             }
             Column(horizontalAlignment = Alignment.End) {
-                if (bal != 0) Text(Money.rupees(bal), style = fig(16, FontWeight.Bold, avFg))
-                Text(if (bal > 0) "khata" else if (bal < 0) "advance" else "All clear", style = fig(12, color = avFg))
+                if (bal != 0) Text(Money.rupees(bal), style = fig(16, FontWeight.Bold, avFg), maxLines = 1, softWrap = false)
+                Text(if (bal > 0) "khata" else if (bal < 0) "advance" else "All clear", style = fig(12, color = avFg), maxLines = 1, softWrap = false)
             }
         }
     }

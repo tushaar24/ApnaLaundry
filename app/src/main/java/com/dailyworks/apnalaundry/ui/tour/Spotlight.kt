@@ -1,5 +1,10 @@
 package com.dailyworks.apnalaundry.ui.tour
 
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -155,9 +160,11 @@ fun Spotlight(
             }
         }
 
-        // Touch blockers on every side of the hole (or the whole screen without one).
+        // Touch blockers on every side of the hole (or the whole screen for a
+        // card with no target). A target that isn't on screen (scrolled away)
+        // gets no blocker, so the owner can scroll to it instead of being stuck.
         if (hole == null) {
-            Blocker(Rect(0f, 0f, screen.right, screen.bottom))
+            if (target == null) Blocker(Rect(0f, 0f, screen.right, screen.bottom))
         } else {
             Blocker(Rect(0f, 0f, screen.right, hole.top))
             Blocker(Rect(0f, hole.bottom, screen.right, screen.bottom))
@@ -165,15 +172,26 @@ fun Spotlight(
             Blocker(Rect(hole.right, hole.top, screen.right, hole.bottom))
         }
 
-        // The card: below the hole when there's room, else above, else centred;
-        // the arrow sits in the gap between them.
+        // The card: below the hole when it fits there, else above, else on the
+        // roomier side (capped to that room, its words scroll); the arrow sits
+        // in the gap between them. The keyboard counts as the bottom edge.
         val margin = with(density) { 16.dp.toPx() }
         val arrowW = with(density) { ARROW_W.toPx() }
         val arrowH = with(density) { ARROW_H.toPx() }
         val arrowGap = arrowH + with(density) { 18.dp.toPx() }
         val insetTop = WindowInsets.systemBars.getTop(density).toFloat()
-        val insetBottom = WindowInsets.systemBars.getBottom(density).toFloat()
-        val below = hole != null && screen.bottom - hole.bottom >= hole.top
+        val insetBottom = WindowInsets.systemBars.union(WindowInsets.ime).getBottom(density).toFloat()
+        val spaceAbove = if (hole != null) hole.top - insetTop - margin - arrowGap else 0f
+        val spaceBelow = if (hole != null) screen.bottom - insetBottom - margin - hole.bottom - arrowGap else 0f
+        val below = hole != null && when {
+            cardH in 1..spaceBelow.toInt() -> true
+            cardH in 1..spaceAbove.toInt() -> false
+            else -> spaceBelow >= spaceAbove
+        }
+        val maxCardH = with(density) {
+            val room = if (hole == null) screen.height - insetTop - insetBottom - 2 * margin else maxOf(spaceAbove, spaceBelow)
+            maxOf(room, 220.dp.toPx()).toDp()
+        }
         val minY = insetTop + margin
         val y = when {
             hole == null -> (screen.height - cardH) / 2f
@@ -199,6 +217,7 @@ fun Spotlight(
                 .offset { IntOffset(0, y.roundToInt()) }
                 .padding(horizontal = 16.dp)
                 .fillMaxWidth()
+                .heightIn(max = maxCardH)
                 .onSizeChanged { cardH = it.height }
                 .rounded(20.dp)
                 .background(Tokens.Card)
@@ -207,37 +226,47 @@ fun Spotlight(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             CardHeader(step, Tokens.Blue)
-            Text(step.title, style = bric(23, FontWeight.Bold), modifier = Modifier.padding(top = 2.dp))
-            Text(step.body, style = fig(17, color = Tokens.InkSecondary))
+            // The words scroll when the card is short of room; header and buttons always show.
+            Column(
+                Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(step.title, style = bric(22, FontWeight.Bold), modifier = Modifier.padding(top = 2.dp))
+                Text(step.body, style = fig(16, color = Tokens.InkSecondary))
+            }
+            // Two buttons need the row: "Skip guide" then goes on its own line.
+            val skipBelow = alt != null && next != null
+            val skip: @Composable (Modifier) -> Unit = { m ->
+                if (onSkip != null) Text(
+                    "Skip guide", style = fig(14, FontWeight.Bold, Tokens.Muted), maxLines = 2,
+                    modifier = m.tap(onClick = onSkip).padding(vertical = 12.dp, horizontal = 2.dp),
+                )
+            }
             Row(
                 Modifier.fillMaxWidth().padding(top = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                if (onSkip != null) {
-                    Text(
-                        "Skip guide", style = fig(14, FontWeight.Bold, Tokens.Muted),
-                        modifier = Modifier.tap(onClick = onSkip).padding(vertical = 12.dp, horizontal = 2.dp),
-                    )
-                }
-                Spacer(Modifier.weight(1f))
+                // weight: the buttons are measured first and keep their size; skip gets what's left.
+                if (!skipBelow && onSkip != null) skip(Modifier.weight(1f)) else Spacer(Modifier.weight(1f))
                 if (alt != null) {
                     Box(
-                        Modifier.height(48.dp).rounded(12.dp).border(1.5.dp, Tokens.CardBorder, RoundedCornerShape(12.dp))
-                            .tap(onClick = onAlt).padding(horizontal = 18.dp),
+                        Modifier.heightIn(min = 48.dp).rounded(12.dp).border(1.5.dp, Tokens.CardBorder, RoundedCornerShape(12.dp))
+                            .tap(onClick = onAlt).padding(horizontal = 16.dp, vertical = 6.dp),
                         contentAlignment = Alignment.Center,
-                    ) { Text(alt, style = fig(16, FontWeight.Bold)) }
+                    ) { Text(alt, style = fig(16, FontWeight.Bold), maxLines = 1, softWrap = false) }
                 }
-                if (alt != null && next != null) Spacer(Modifier.width(8.dp))
                 if (next != null) {
                     Box(
-                        Modifier.height(48.dp).rounded(12.dp).background(Tokens.Blue).tap(onClick = onNext).padding(horizontal = 22.dp),
+                        Modifier.heightIn(min = 48.dp).rounded(12.dp).background(Tokens.Blue).tap(onClick = onNext).padding(horizontal = 20.dp, vertical = 6.dp),
                         contentAlignment = Alignment.Center,
-                    ) { Text(next, style = fig(16, FontWeight.Bold, Tokens.OnDark)) }
+                    ) { Text(next, style = fig(16, FontWeight.Bold, Tokens.OnDark), maxLines = 1, softWrap = false) }
                 }
                 if (next == null && alt == null && hole != null) {
-                    Text(if (below) "👆 Tap there" else "👇 Tap there", style = fig(15, FontWeight.Bold, Tokens.Blue))
+                    Text(if (below) "👆 Tap there" else "👇 Tap there", style = fig(15, FontWeight.Bold, Tokens.Blue), maxLines = 1, softWrap = false)
                 }
             }
+            if (skipBelow) skip(Modifier)
         }
     }
 }
@@ -257,7 +286,7 @@ fun TourTip(step: TourStep, modifier: Modifier = Modifier) {
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             CardHeader(step, TipText)
-            Text(step.title, style = bric(19, FontWeight.Bold))
+            Text(step.title, style = bric(20, FontWeight.Bold))
             Text(step.body, style = fig(16))
         }
         BouncingArrow(up = false, color = Tokens.Orange, modifier = Modifier.padding(top = 2.dp), width = 30.dp, height = 34.dp)
@@ -289,7 +318,7 @@ private fun SoundButton(step: TourStep) {
     val voice: TourVoice = koinInject()
     val muted by voice.muted.collectAsStateWithLifecycle()
     Row(
-        Modifier.height(38.dp).rounded(999.dp).background(if (muted) Tokens.NeutralFill else Tokens.BlueLight)
+        Modifier.height(44.dp).rounded(999.dp).background(if (muted) Tokens.NeutralFill else Tokens.BlueLight)
             .tap {
                 val on = muted
                 Analytics.tourSound(on, step.id)

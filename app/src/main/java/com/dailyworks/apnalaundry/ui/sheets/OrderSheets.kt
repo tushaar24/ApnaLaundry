@@ -1,5 +1,6 @@
 package com.dailyworks.apnalaundry.ui.sheets
 
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -69,9 +70,10 @@ import kotlin.math.max
 
 @Composable
 private fun MoneyRow(label: String, value: String, valueColor: Color = Tokens.Ink, bold: Boolean = false) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, style = fig(if (bold) 16 else 15, if (bold) FontWeight.Bold else FontWeight.Normal, if (bold) Tokens.Ink else Tokens.InkSecondary))
-        Text(value, style = fig(if (bold) 18 else 15, FontWeight.Bold, valueColor))
+    // The label takes the room left (and wraps); the amount always stays whole.
+    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(label, Modifier.weight(1f), style = fig(if (bold) 16 else 15, if (bold) FontWeight.Bold else FontWeight.Normal, if (bold) Tokens.Ink else Tokens.InkSecondary))
+        Text(value, style = fig(if (bold) 18 else 15, FontWeight.Bold, valueColor), maxLines = 1, softWrap = false)
     }
 }
 
@@ -108,7 +110,7 @@ fun CollectPaymentSheet(state: LaundryState, orderId: Int, vm: ShopViewModel, on
                     value = (if (oldBal > 0) "+ " else "− ") + Money.rupees(oldBal),
                     valueColor = if (oldBal > 0) Tokens.OrangeText else Tokens.BlueText,
                 )
-                Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Divider).padding(vertical = 6.dp))
+                Box(Modifier.padding(vertical = 6.dp).fillMaxWidth().height(1.dp).background(Tokens.Divider))
                 MoneyRow("Total to collect", Money.rupees(max(0, due)), bold = true)
             }
 
@@ -159,13 +161,13 @@ fun CollectPaymentSheet(state: LaundryState, orderId: Int, vm: ShopViewModel, on
 
             if (!split) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PrimaryButton("Got cash", Modifier.weight(1f), enabled = got > 0, height = 54.dp) { vm.deliver(orderId, got, PayMethod.CASH); onDismiss() }
-                    PrimaryButton("Got UPI", Modifier.weight(1f), enabled = got > 0, height = 54.dp) { vm.deliver(orderId, got, PayMethod.UPI); onDismiss() }
+                    PrimaryButton("Got cash", Modifier.weight(1f), enabled = got > 0, height = 56.dp) { vm.deliver(orderId, got, PayMethod.CASH); onDismiss() }
+                    PrimaryButton("Got UPI", Modifier.weight(1f), enabled = got > 0, height = 56.dp) { vm.deliver(orderId, got, PayMethod.UPI); onDismiss() }
                 }
             } else {
                 PrimaryButton(
                     if (got > 0) "Got ${Money.rupees(got)} (cash + UPI)" else "Type cash and UPI",
-                    enabled = got > 0, height = 54.dp,
+                    enabled = got > 0, height = 56.dp,
                 ) { vm.deliverSplit(orderId, cash, upi); onDismiss() }
             }
             Text(
@@ -180,7 +182,7 @@ fun CollectPaymentSheet(state: LaundryState, orderId: Int, vm: ShopViewModel, on
                     split = !split
                 }.padding(vertical = 4.dp),
             )
-            Box(Modifier.fillMaxWidth().height(50.dp).rounded(14.dp).background(Tokens.NeutralFill).tap { vm.deliver(orderId, 0, PayMethod.NONE); onDismiss() }, contentAlignment = Alignment.Center) {
+            Box(Modifier.fillMaxWidth().height(48.dp).rounded(14.dp).background(Tokens.NeutralFill).tap { vm.deliver(orderId, 0, PayMethod.NONE); onDismiss() }, contentAlignment = Alignment.Center) {
                 Text("Nothing now · add all to khata", style = fig(15, FontWeight.Bold, Tokens.InkSecondary))
             }
         }
@@ -204,10 +206,10 @@ private fun DeliveryDateQuestion(o: Order, date: String, onDate: (String) -> Uni
             }
         }
         Row(
-            Modifier.fillMaxWidth().height(52.dp).rounded(12.dp).background(Tokens.Card)
+            Modifier.fillMaxWidth().heightIn(min = 52.dp).rounded(12.dp).background(Tokens.Card)
                 .border(1.5.dp, Tokens.FieldBorder, RoundedCornerShape(12.dp))
                 .tap { showDatePicker(context, date.ifBlank { today }, o.pickupDate, onDate) }
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -254,7 +256,7 @@ fun CountClothesSheet(state: LaundryState, orderId: Int, next: OrderStatus, vm: 
             ClothesEditor(state.services, clothes, editablePrice = false)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text("Total", style = fig(15, FontWeight.SemiBold, Tokens.Muted))
-                Text(Money.rupees(total), style = bric(26, FontWeight.Bold))
+                Text(Money.rupees(total), style = bric(24, FontWeight.Bold))
             }
             if (askDate) DeliveryDateQuestion(o, date) { date = it }
             PrimaryButton(
@@ -290,10 +292,10 @@ fun RescheduleSheet(state: LaundryState, orderId: Int, kind: String, vm: ShopVie
             // Any date, past ones included — e.g. entering an order after the fact.
             val context = LocalContext.current
             Row(
-                Modifier.fillMaxWidth().height(52.dp).rounded(12.dp).background(Tokens.Card)
+                Modifier.fillMaxWidth().heightIn(min = 52.dp).rounded(12.dp).background(Tokens.Card)
                     .border(1.5.dp, Tokens.FieldBorder, RoundedCornerShape(12.dp))
                     .tap { showDatePicker(context, date.ifBlank { AppDate.TODAY }, if (isPickup) null else o.pickupDate) { date = it } }
-                    .padding(horizontal = 12.dp),
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -328,10 +330,10 @@ fun DeleteOrderSheet(state: LaundryState, orderId: Int, vm: ShopViewModel, navig
                 modifier = Modifier.fillMaxWidth().rounded(12.dp).background(Tokens.OrangeLight).padding(14.dp),
             )
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(Modifier.weight(1f).height(54.dp).rounded(14.dp).background(Tokens.NeutralFill).tap { onDismiss() }, contentAlignment = Alignment.Center) {
+                Box(Modifier.weight(1f).height(56.dp).rounded(14.dp).background(Tokens.NeutralFill).tap { onDismiss() }, contentAlignment = Alignment.Center) {
                     Text("Keep", style = fig(16, FontWeight.Bold, Tokens.InkSecondary))
                 }
-                PrimaryButton("Delete $what", Modifier.weight(1f), height = 54.dp, bg = Tokens.Orange) {
+                PrimaryButton("Delete $what", Modifier.weight(1f), height = 56.dp, bg = Tokens.Orange) {
                     onDismiss()
                     vm.deleteOrder(orderId)
                     // The order's own screens would show "not found" — leave them.
@@ -360,10 +362,10 @@ fun CancelSheet(state: LaundryState, orderId: Int, vm: ShopViewModel, onDismiss:
                 Text("The bill comes off the khata. Money already taken stays as ${Selectors.firstName(c.name)}'s advance.", style = fig(13, color = Tokens.Muted))
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(Modifier.weight(1f).height(54.dp).rounded(14.dp).background(Tokens.NeutralFill).tap { onDismiss() }, contentAlignment = Alignment.Center) {
+                Box(Modifier.weight(1f).height(56.dp).rounded(14.dp).background(Tokens.NeutralFill).tap { onDismiss() }, contentAlignment = Alignment.Center) {
                     Text("Keep order", style = fig(16, FontWeight.Bold, Tokens.InkSecondary))
                 }
-                PrimaryButton("Cancel $word", Modifier.weight(1f), height = 54.dp, bg = Tokens.Orange) { vm.cancelOrder(orderId, reason); onDismiss() }
+                PrimaryButton("Cancel $word", Modifier.weight(1f), height = 56.dp, bg = Tokens.Orange) { vm.cancelOrder(orderId, reason); onDismiss() }
             }
         }
     }
@@ -496,7 +498,7 @@ fun ChangeStatusSheet(
                     OrderStatus.CANCELLED -> "Cancel order"
                     else -> "Move to " + steps.first { it.first == sel }.second.substringBefore(" ·")
                 },
-                height = 54.dp, bg = if (sel == OrderStatus.CANCELLED) Tokens.Orange else Tokens.Blue,
+                height = 56.dp, bg = if (sel == OrderStatus.CANCELLED) Tokens.Orange else Tokens.Blue,
                 enabled = sel != o.status,
             ) { apply(sel) }
         }

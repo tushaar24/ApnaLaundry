@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.dailyworks.apnalaundry.ui.components.PrimaryButton
+import com.dailyworks.apnalaundry.ui.components.bric
 import com.dailyworks.apnalaundry.ui.components.fig
 import com.dailyworks.apnalaundry.ui.theme.Tokens
 
@@ -36,7 +37,7 @@ internal fun CheckFailed(onRetry: () -> Unit) {
         Modifier.fillMaxSize().background(Tokens.Bg).padding(horizontal = 32.dp),
         verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("Can't check your subscription", style = fig(20, FontWeight.Bold), textAlign = TextAlign.Center)
+        Text("Can't check your subscription", style = bric(22, FontWeight.Bold), textAlign = TextAlign.Center)
         Spacer(Modifier.height(8.dp))
         Text(
             "Check your internet connection and try again.",

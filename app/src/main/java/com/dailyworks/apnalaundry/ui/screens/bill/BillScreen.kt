@@ -106,7 +106,7 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
                 // summary
                 AppCard {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(c.name, style = fig(17, FontWeight.Bold))
+                        Text(c.name, style = fig(16, FontWeight.Bold))
                         Text("+91 ${Selectors.fmtPhone(c.phone)}", style = fig(13, color = Tokens.Muted))
                         Text(routeLine(o.pickup, o.delivery), style = fig(13, color = Tokens.InkSecondary))
                         Divider()
@@ -137,12 +137,21 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Bill", style = fig(13, FontWeight.Bold, Tokens.Muted))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlineButton("View bill", Modifier.weight(1f), height = 50.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { active = ActiveSheet.BillView(o.id) }
-                        OutlineButton("Download", Modifier.weight(1f), height = 50.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { Analytics.billDownloaded(o.id, "bill"); shareBillPdf(context, state, o) }
+                        OutlineButton("View bill", Modifier.weight(1f), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { active = ActiveSheet.BillView(o.id) }
+                        OutlineButton("Download", Modifier.weight(1f), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { Analytics.billDownloaded(o.id, "bill"); scope.launch { shareBillPdf(context, state, o) } }
                     }
-                    PrimaryButton(if (o.billSent) "Send again" else "Send on WhatsApp", Modifier.bringIntoViewRequester(sendInView).spotlightTarget(targets, "send"), height = 54.dp) {
+                    // The bill link can take a few seconds on a slow network: say so, and
+                    // ignore more taps meanwhile (each would send it again).
+                    var sending by remember { mutableStateOf(false) }
+                    PrimaryButton(
+                        when { sending -> "Opening WhatsApp…"; o.billSent -> "Send again"; else -> "Send on WhatsApp" },
+                        Modifier.bringIntoViewRequester(sendInView).spotlightTarget(targets, "send"), enabled = !sending, height = 56.dp,
+                    ) {
                         if (tourOn) { sentInTour = true; shopVm.setTour(TourStage.STATUS) }
-                        scope.launch { sendBillOnWhatsApp(context, state, o, shopVm.billUrl(o.id)); shopVm.sendBill(o.id) }
+                        sending = true
+                        scope.launch {
+                            try { sendBillOnWhatsApp(context, state, o, shopVm.billUrl(o.id)); shopVm.sendBill(o.id) } finally { sending = false }
+                        }
                     }
                     Text(
                         if (o.billSent) "Sent to ${Selectors.firstName(c.name)} ✓" else "Not sent yet",
@@ -154,7 +163,7 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
                 if (o.lines.isNotEmpty() && o.status != OrderStatus.CANCELLED) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Tags", style = fig(13, FontWeight.Bold, Tokens.Muted))
-                        OutlineButton("Print tags", Modifier.fillMaxWidth(), height = 50.dp, border = Tokens.CardBorder, fg = Tokens.Ink) {
+                        OutlineButton("Print tags", Modifier.fillMaxWidth(), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) {
                             active = ActiveSheet.PrintTags(o.id, "bill")
                         }
                     }
@@ -164,10 +173,11 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
                 if (open && due > 0) {
                     AppCard {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text("Paying now?", style = fig(15, FontWeight.Bold))
+                            // The amount in the heading, so the two buttons stay short on any phone.
+                            Text("Paying now? ${Money.rupees(due)}", style = fig(15, FontWeight.Bold))
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlineButton("Got cash ${Money.rupees(due)}", Modifier.weight(1f), height = 50.dp) { shopVm.prepay(o.id, PayMethod.CASH) }
-                                OutlineButton("Got UPI ${Money.rupees(due)}", Modifier.weight(1f), height = 50.dp) { shopVm.prepay(o.id, PayMethod.UPI) }
+                                OutlineButton("Got cash", Modifier.weight(1f), height = 48.dp) { shopVm.prepay(o.id, PayMethod.CASH) }
+                                OutlineButton("Got UPI", Modifier.weight(1f), height = 48.dp) { shopVm.prepay(o.id, PayMethod.UPI) }
                             }
                         }
                     }
@@ -179,8 +189,8 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
 
                 Spacer(Modifier.height(4.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlineButton("Edit bill", Modifier.weight(1f), height = 52.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { navigator.openNewOrder(editId = o.id, from = "bill") }
-                    PrimaryButton("Done", Modifier.weight(1f), height = 52.dp) { if (from == "new") navigator.openHome() else navigator.back() }
+                    OutlineButton("Edit bill", Modifier.weight(1f), height = 56.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { navigator.openNewOrder(editId = o.id, from = "bill") }
+                    PrimaryButton("Done", Modifier.weight(1f), height = 56.dp) { if (from == "new") navigator.openHome() else navigator.back() }
                 }
                 Text(
                     "Delete bill",
@@ -213,11 +223,12 @@ private fun routeLine(pickup: Route, delivery: Route): String =
     (if (pickup == Route.HOME) "Picked up from home" else "Received at shop") + " → " +
         (if (delivery == Route.HOME) "deliver to home" else "customer collects at shop")
 
+/** A bill line: the label takes the room left, the amount always stays whole on the right. */
 @Composable
 private fun BillRow(label: String, value: String, valueColor: Color = Tokens.Ink, bold: Boolean = false) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, style = fig(if (bold) 16 else 15, if (bold) FontWeight.Bold else FontWeight.Normal, if (bold) Tokens.Ink else Tokens.InkSecondary))
-        Text(value, style = fig(if (bold) 18 else 15, FontWeight.Bold, valueColor))
+    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(label, Modifier.weight(1f), style = fig(if (bold) 16 else 15, if (bold) FontWeight.Bold else FontWeight.Normal, if (bold) Tokens.Ink else Tokens.InkSecondary))
+        Text(value, style = fig(if (bold) 18 else 15, FontWeight.Bold, valueColor), maxLines = 1, softWrap = false)
     }
 }
 

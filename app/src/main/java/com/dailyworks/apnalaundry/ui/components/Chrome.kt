@@ -1,5 +1,10 @@
 package com.dailyworks.apnalaundry.ui.components
 
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -91,7 +96,7 @@ fun BottomNav(
     Row(
         Modifier
             .fillMaxWidth()
-            .height(72.dp)
+            .heightIn(min = 72.dp)
             .background(Tokens.Card)
             .border(1.dp, Tokens.Divider, RoundedCornerShape(0.dp))
             .padding(horizontal = 4.dp),
@@ -110,7 +115,7 @@ fun BottomNav(
                 verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
                 Icon(tab.icon, tab.label, tint = color, modifier = Modifier.size(24.dp))
-                Text(tab.label, style = fig(11, if (selected) FontWeight.Bold else FontWeight.SemiBold, color))
+                Text(tab.label, style = fig(11, if (selected) FontWeight.Bold else FontWeight.SemiBold, color), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }
@@ -123,13 +128,16 @@ fun ToastBar(text: String, hasUndo: Boolean, onUndo: () -> Unit, modifier: Modif
             .fillMaxWidth()
             .rounded(14.dp)
             .background(Tokens.Ink)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .heightIn(min = 52.dp)
+            .padding(start = 16.dp, end = if (hasUndo) 4.dp else 16.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text, style = fig(14, FontWeight.SemiBold, Tokens.OnDark), modifier = Modifier.weight(1f))
+        Text(text, style = fig(14, FontWeight.SemiBold, Tokens.OnDark), modifier = Modifier.weight(1f).padding(vertical = 8.dp), maxLines = 3, overflow = TextOverflow.Ellipsis)
         if (hasUndo) {
-            Spacer(Modifier.width(12.dp))
-            Text("Undo", style = fig(15, FontWeight.Bold, Tokens.BlueBar), modifier = Modifier.tap(onClick = onUndo))
+            Box(
+                Modifier.heightIn(min = 48.dp).widthIn(min = 64.dp).rounded(10.dp).tap(onClick = onUndo).padding(horizontal = 12.dp),
+                contentAlignment = Alignment.Center,
+            ) { Text("Undo", style = fig(15, FontWeight.Bold, Tokens.BlueBar), maxLines = 1, softWrap = false) }
         }
     }
 }
@@ -148,27 +156,32 @@ fun WhatsAppPromptDialog(
 ) {
     val text = remember(url) { runCatching { android.net.Uri.parse(url).getQueryParameter("text") }.getOrNull().orEmpty().replace("*", "") }
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
-        Column(
-            Modifier.fillMaxWidth().rounded(20.dp).background(Tokens.Card).padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Text("Tell the customer?", style = bric(22, FontWeight.Bold))
-            Text("Send this update on WhatsApp:", style = fig(14, color = Tokens.Muted))
-            Box(
-                Modifier.fillMaxWidth().heightIn(max = 260.dp).rounded(14.dp)
-                    .background(androidx.compose.ui.graphics.Color(0xFFE7F8EE))
-                    .verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(14.dp),
-            ) { Text(text, style = fig(14, FontWeight.SemiBold)) }
-            if (tip != null) com.dailyworks.apnalaundry.ui.tour.TourTip(tip)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.fillMaxWidth().rounded(20.dp).background(Tokens.Card).padding(20.dp)) {
+            Column(
+                Modifier.weight(1f, fill = false).verticalScroll(androidx.compose.foundation.rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Text("Tell the customer?", style = bric(22, FontWeight.Bold))
+                Text("Send this update on WhatsApp:", style = fig(14, color = Tokens.Muted))
                 Box(
-                    Modifier.weight(1f).height(50.dp).rounded(14.dp).background(Tokens.NeutralFill).tap(onClick = onDismiss),
-                    contentAlignment = Alignment.Center,
-                ) { Text("Not now", style = fig(15, FontWeight.Bold, Tokens.InkSecondary)) }
+                    Modifier.fillMaxWidth().heightIn(max = if (tip != null) 140.dp else 260.dp).rounded(14.dp)
+                        .background(androidx.compose.ui.graphics.Color(0xFFE7F8EE))
+                        .verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(14.dp),
+                ) { Text(text, style = fig(14, FontWeight.SemiBold)) }
+                if (tip != null) com.dailyworks.apnalaundry.ui.tour.TourTip(tip)
+            }
+            Spacer(Modifier.height(14.dp))
+            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(
-                    Modifier.weight(1.4f).height(50.dp).rounded(14.dp).background(androidx.compose.ui.graphics.Color(0xFF25D366)).tap(onClick = onSend),
+                    Modifier.weight(1f).fillMaxHeight().heightIn(min = 48.dp).rounded(14.dp).background(Tokens.NeutralFill).tap(onClick = onDismiss)
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
                     contentAlignment = Alignment.Center,
-                ) { Text("Send on WhatsApp", style = fig(15, FontWeight.Bold, androidx.compose.ui.graphics.Color.White)) }
+                ) { Text("Not now", style = fig(15, FontWeight.Bold, Tokens.InkSecondary), textAlign = TextAlign.Center, maxLines = 2) }
+                Box(
+                    Modifier.weight(1.4f).fillMaxHeight().heightIn(min = 48.dp).rounded(14.dp).background(androidx.compose.ui.graphics.Color(0xFF25D366)).tap(onClick = onSend)
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center,
+                ) { Text("Send on WhatsApp", style = fig(15, FontWeight.Bold, androidx.compose.ui.graphics.Color.White), textAlign = TextAlign.Center, maxLines = 2) }
             }
         }
     }

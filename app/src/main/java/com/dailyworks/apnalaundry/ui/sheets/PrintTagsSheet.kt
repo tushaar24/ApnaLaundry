@@ -1,5 +1,7 @@
 package com.dailyworks.apnalaundry.ui.sheets
 
+import androidx.compose.runtime.DisposableEffect
+import androidx.lifecycle.viewModelScope
 import android.Manifest
 import android.bluetooth.BluetoothAdapter
 import android.content.Context
@@ -72,7 +74,6 @@ fun PrintTagsSheet(state: LaundryState, orderId: Int, from: String, vm: ShopView
     val o = Selectors.order(state, orderId) ?: return onDismiss()
     val c = Selectors.customer(state, o.custId)
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val saved = remember { TagPrefs(context) }
 
     // Bluetooth is checked again on coming back from the phone's settings or the "turn on" prompt.
@@ -103,19 +104,25 @@ fun PrintTagsSheet(state: LaundryState, orderId: Int, from: String, vm: ShopView
     var printing by remember { mutableStateOf(false) }
     var sent by remember { mutableStateOf<Int?>(null) } // null = still connecting
     var error by remember { mutableStateOf<String?>(null) }
+    val open = remember { java.util.concurrent.atomic.AtomicBoolean(true) }
+    DisposableEffect(Unit) { onDispose { open.set(false) } }
 
     fun print() {
         val p = printer ?: return
         error = null; printing = true; sent = null
-        scope.launch {
+        // The app's scope, not the sheet's: closing the sheet (swipe, Back) mid-print
+        // used to cancel the job and leave half the tags unprinted, silently.
+        vm.viewModelScope.launch {
             try {
                 TagPrinter.print(context, p.address, p.name, tags, dots) { sent = it }
                 Analytics.tagsPrinted(o.id, tags.size, if (perPiece) "piece" else "order", if (wide) "80mm" else "58mm", from)
                 vm.showInfo(if (tags.size == 1) "1 tag printed" else "${tags.size} tags printed")
-                onDismiss()
+                if (open.get()) onDismiss()
             } catch (e: TagPrinter.PrintError) {
                 error = e.message
                 Analytics.tagsPrintFailed(o.id, e.reason, from)
+                // The sheet is gone: say it here, or the owner never learns the tags didn't print.
+                if (!open.get()) vm.showInfo("Tags not printed · ${e.message}")
             } finally {
                 printing = false
             }
@@ -132,17 +139,17 @@ fun PrintTagsSheet(state: LaundryState, orderId: Int, from: String, vm: ShopView
                         if (!asked) "To find your printer, tap ‘Allow Bluetooth’. Then tap ‘Allow’ when the phone asks."
                         else "Bluetooth is not allowed yet. Tap ‘Allow Bluetooth’ again, or open phone settings → Permissions → Nearby devices → Allow.",
                     )
-                    PrimaryButton("Allow Bluetooth", height = 54.dp) {
+                    PrimaryButton("Allow Bluetooth", height = 56.dp) {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) askPermission.launch(Manifest.permission.BLUETOOTH_CONNECT)
                     }
-                    if (asked) OutlineButton("Open phone settings", Modifier.fillMaxWidth(), height = 50.dp, border = Tokens.CardBorder, fg = Tokens.Ink) {
+                    if (asked) OutlineButton("Open phone settings", Modifier.fillMaxWidth(), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) {
                         openAppSettings(context)
                     }
                 }
 
                 !on -> {
                     Notice("Bluetooth is off. Turn it on to print.")
-                    PrimaryButton("Turn on Bluetooth", height = 54.dp) {
+                    PrimaryButton("Turn on Bluetooth", height = 56.dp) {
                         runCatching { turnOn.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)) }
                             .onFailure { openBluetoothSettings(context) }
                     }
@@ -271,7 +278,7 @@ private fun PrinterPicker(
             PillChip("2 inch · 58 mm", !wide) { onWide(false) }
             PillChip("3 inch · 80 mm", wide) { onWide(true) }
         }
-        if (onDone != null) PrimaryButton("Done", height = 52.dp) { onDone() }
+        if (onDone != null) PrimaryButton("Done", height = 56.dp) { onDone() }
     }
 }
 

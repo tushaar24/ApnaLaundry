@@ -1,5 +1,8 @@
 package com.dailyworks.apnalaundry.ui.screens.onboarding
 
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.IntrinsicSize
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -119,14 +122,14 @@ fun FieldsSheet(shopVm: ShopViewModel, details: BillDetails.Fields, onChange: (B
                             Icon(r.icon, null, tint = Tokens.Blue, modifier = Modifier.size(22.dp))
                         }
                         Column(Modifier.weight(1f)) {
-                            Text(r.title, style = fig(15, FontWeight.Bold))
+                            Text(r.title, style = fig(15, FontWeight.Bold), maxLines = 2, overflow = TextOverflow.Ellipsis)
                             Text(
                                 r.set.ifEmpty { r.empty },
                                 style = if (r.set.isNotEmpty()) fig(13, FontWeight.SemiBold, Green) else fig(13, color = Tokens.Muted),
-                                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                maxLines = 2, overflow = TextOverflow.Ellipsis,
                             )
                         }
-                        Text(if (r.set.isNotEmpty()) "Change" else "Add", style = fig(14, FontWeight.Bold, Tokens.Blue))
+                        if (r.set.isEmpty()) Text("Add", style = fig(14, FontWeight.Bold, Tokens.Blue))
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Tokens.Blue, modifier = Modifier.size(18.dp))
                     }
                 }
@@ -150,9 +153,9 @@ private fun autoFocus(): Modifier {
 private fun EditorFooter(canRemove: Boolean, onRemove: () -> Unit, onDone: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(top = 20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         if (canRemove) {
-            OutlineButton("Remove", Modifier.weight(0.4f), border = Tokens.Orange, fg = Tokens.DeleteRed) { onRemove() }
+            OutlineButton("Remove", Modifier.weight(1f), border = Tokens.Orange, fg = Tokens.DeleteRed) { onRemove() }
         }
-        Box(Modifier.weight(0.6f)) { PrimaryButton("Done", height = 56.dp) { onDone() } }
+        Box(Modifier.weight(1f)) { PrimaryButton("Done", height = 56.dp) { onDone() } }
     }
 }
 
@@ -160,8 +163,8 @@ private fun EditorFooter(canRemove: Boolean, onRemove: () -> Unit, onDone: () ->
 private fun CheckLine(check: BillDetails.Check?) {
     if (check == null) return
     Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (check.ok) Icon(Icons.Filled.Check, null, tint = Green, modifier = Modifier.size(15.dp))
-        Text(check.message, style = fig(13, FontWeight.SemiBold, if (check.ok) Green else Tokens.OrangeText))
+        if (check.ok) Icon(Icons.Filled.Check, null, tint = Green, modifier = Modifier.size(16.dp))
+        Text(check.message, style = fig(13, FontWeight.SemiBold, if (check.ok) Green else Tokens.OrangeText), modifier = Modifier.weight(1f, fill = false))
     }
 }
 
@@ -326,11 +329,11 @@ private fun LogoEditor(shopVm: ShopViewModel, logoId: String, onChange: (String)
                     style = fig(14, color = Tokens.Muted), modifier = Modifier.weight(1f),
                 )
             }
-            Row(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                PickerButton(Icons.Outlined.Image, "From gallery", Modifier.weight(1f)) {
+            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                PickerButton(Icons.Outlined.Image, "From gallery", Modifier.weight(1f).fillMaxHeight()) {
                     gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                 }
-                PickerButton(Icons.Outlined.PhotoCamera, "Take photo", Modifier.weight(1f)) {
+                PickerButton(Icons.Outlined.PhotoCamera, "Take photo", Modifier.weight(1f).fillMaxHeight()) {
                     val dir = File(context.cacheDir, "camera").apply { mkdirs() }
                     val file = File(dir, "logo-${System.currentTimeMillis()}.jpg")
                     val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
@@ -350,10 +353,14 @@ private fun LogoEditor(shopVm: ShopViewModel, logoId: String, onChange: (String)
 @Composable
 private fun PickerButton(icon: ImageVector, label: String, modifier: Modifier, onClick: () -> Unit) {
     Row(
-        modifier.height(48.dp).rounded(14.dp).border(1.5.dp, Tokens.Blue, RoundedCornerShape(14.dp)).tap(onClick = onClick),
-        horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
+        modifier.heightIn(min = 48.dp).rounded(14.dp).border(1.5.dp, Tokens.Blue, RoundedCornerShape(14.dp)).tap(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(icon, null, tint = Tokens.Blue, modifier = Modifier.size(18.dp))
-        Text("  $label", style = fig(15, FontWeight.Bold, Tokens.Blue))
+        Text(
+            label, style = fig(15, FontWeight.Bold, Tokens.Blue), textAlign = TextAlign.Center,
+            maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
+        )
     }
 }

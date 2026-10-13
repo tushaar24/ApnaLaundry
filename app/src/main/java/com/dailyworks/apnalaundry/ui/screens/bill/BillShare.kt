@@ -1,5 +1,7 @@
 package com.dailyworks.apnalaundry.ui.screens.bill
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -72,7 +74,9 @@ private fun combinedBillPdfUri(context: Context, r: CombinedReceipt): Uri {
  * document — so bills go to customers as a picture, with the message.
  */
 private fun pngUri(context: Context, fileName: String, heightPt: Float, draw: (android.graphics.Canvas) -> Unit): Uri {
-    val scale = 3f
+    // 3× for sharp text, less for a very tall bill (a long combined bill): a
+    // bitmap past ~9000px tall runs cheap phones out of memory.
+    val scale = minOf(3f, 9000f / heightPt.coerceAtLeast(1f))
     val file = File(File(context.cacheDir, "bills").apply { mkdirs() }, fileName)
     val bmp = android.graphics.Bitmap.createBitmap(
         (BillRender.W * scale).toInt(), kotlin.math.ceil(heightPt * scale).toInt(), android.graphics.Bitmap.Config.ARGB_8888,
@@ -195,29 +199,31 @@ private fun phoneDigits(state: LaundryState, custId: String): String =
  * the bill picture and the message ([link] = the bill page, for the PDF).
  * Caller marks it sent.
  */
-fun sendBillOnWhatsApp(context: Context, state: LaundryState, o: Order, link: String?) {
-    sendImageOnWhatsApp(context, billPngUri(context, state, o), phoneDigits(state, o.custId), billCaption(state, o, link), "Send bill #${o.no()}")
+suspend fun sendBillOnWhatsApp(context: Context, state: LaundryState, o: Order, link: String?) {
+    // Drawing + saving the picture takes a moment on a cheap phone: off the main thread.
+    val uri = withContext(Dispatchers.Default) { billPngUri(context, state, o) }
+    sendImageOnWhatsApp(context, uri, phoneDigits(state, o.custId), billCaption(state, o, link), "Send bill #${o.no()}")
 }
 
 /** Renders the bill to a PDF and opens the share sheet (save or send). */
-fun shareBillPdf(context: Context, state: LaundryState, o: Order) {
-    sharePdf(context, billPdfUri(context, state, o), "Bill #${o.no()}")
+suspend fun shareBillPdf(context: Context, state: LaundryState, o: Order) {
+    val uri = withContext(Dispatchers.Default) { billPdfUri(context, state, o) }
+    sharePdf(context, uri, "Bill #${o.no()}")
 }
 
 /**
  * Sends a combined bill (many orders, one picture + message) to the customer on WhatsApp.
  * A document only — nothing is written to the khata.
  */
-fun sendCombinedBillOnWhatsApp(context: Context, state: LaundryState, custId: String, r: CombinedReceipt) {
-    sendImageOnWhatsApp(
-        context, combinedBillPngUri(context, r), phoneDigits(state, custId),
-        combinedBillCaption(state.shop.name, r), "Send combined bill",
-    )
+suspend fun sendCombinedBillOnWhatsApp(context: Context, state: LaundryState, custId: String, r: CombinedReceipt) {
+    val uri = withContext(Dispatchers.Default) { combinedBillPngUri(context, r) }
+    sendImageOnWhatsApp(context, uri, phoneDigits(state, custId), combinedBillCaption(state.shop.name, r), "Send combined bill")
 }
 
 /** The combined bill as a PDF in the share sheet (save or send). */
-fun shareCombinedBillPdf(context: Context, r: CombinedReceipt) {
-    sharePdf(context, combinedBillPdfUri(context, r), "Combined bill")
+suspend fun shareCombinedBillPdf(context: Context, r: CombinedReceipt) {
+    val uri = withContext(Dispatchers.Default) { combinedBillPdfUri(context, r) }
+    sharePdf(context, uri, "Combined bill")
 }
 
 /**

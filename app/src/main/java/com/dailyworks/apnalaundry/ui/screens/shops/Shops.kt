@@ -1,5 +1,12 @@
 package com.dailyworks.apnalaundry.ui.screens.shops
 
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -18,7 +25,6 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import com.dailyworks.apnalaundry.data.MAIN_SHOP
@@ -74,28 +80,32 @@ fun ShopsSheet(shopVm: ShopViewModel, navigator: AppNavigator, from: String, onD
             shops.forEachIndexed { i, s ->
                 val on = s.id == activeId
                 Row(
-                    Modifier.fillMaxWidth().height(60.dp).rounded(14.dp)
+                    Modifier.fillMaxWidth().heightIn(min = 60.dp).rounded(14.dp)
                         .background(if (on) Tokens.BlueLight else Tokens.Card)
                         .border(1.5.dp, if (on) Tokens.Blue else Tokens.CardBorder, RoundedCornerShape(14.dp))
                         .tap { shopVm.switchShop(s.id); onDismiss(); navigator.openHome() }
-                        .padding(start = 14.dp, end = 4.dp), // the ✏️ button keeps its own space
+                        .padding(start = 14.dp, end = 4.dp, top = 6.dp, bottom = 6.dp), // the ✏️ button keeps its own space
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     Icon(Icons.Outlined.Storefront, null, tint = if (on) Tokens.Blue else Tokens.InkSecondary, modifier = Modifier.size(22.dp))
-                    Text(shopLabel(s, i), style = fig(16, FontWeight.Bold), maxLines = 1, modifier = Modifier.weight(1f))
-                    if (on) Icon(Icons.Filled.CheckCircle, "Open now", tint = Tokens.Blue, modifier = Modifier.size(22.dp))
-                    // Edit this shop (switches to it first if it isn't open).
-                    Box(
-                        Modifier.size(44.dp).rounded(999.dp).tap { shopVm.openShop(s.id) { onDismiss(); navigator.openBillDesign() } },
-                        contentAlignment = Alignment.Center,
-                    ) { Icon(Icons.Outlined.Edit, "Edit ${shopLabel(s, i)}", tint = Tokens.InkSecondary, modifier = Modifier.size(20.dp)) }
-                    // Delete — extra shops only; the main shop is the account itself.
-                    if (s.id != MAIN_SHOP) {
+                    Column(Modifier.weight(1f)) {
+                        Text(shopLabel(s, i), style = fig(16, FontWeight.Bold), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        if (on) Text("Open now", style = fig(12, FontWeight.SemiBold, Tokens.Blue), maxLines = 1)
+                    }
+                    Row { // ✏️ and delete side by side, no gap
+                        // Edit this shop (switches to it first if it isn't open).
                         Box(
-                            Modifier.size(44.dp).rounded(999.dp).tap { deleting = s to shopLabel(s, i) },
+                            Modifier.size(44.dp).rounded(999.dp).tap { shopVm.openShop(s.id) { onDismiss(); navigator.openBillDesign() } },
                             contentAlignment = Alignment.Center,
-                        ) { Icon(Icons.Outlined.Delete, "Delete ${shopLabel(s, i)}", tint = Tokens.OrangeText, modifier = Modifier.size(20.dp)) }
+                        ) { Icon(Icons.Outlined.Edit, "Edit ${shopLabel(s, i)}", tint = Tokens.InkSecondary, modifier = Modifier.size(20.dp)) }
+                        // Delete — extra shops only; the main shop is the account itself.
+                        if (s.id != MAIN_SHOP) {
+                            Box(
+                                Modifier.size(44.dp).rounded(999.dp).tap { deleting = s to shopLabel(s, i) },
+                                contentAlignment = Alignment.Center,
+                            ) { Icon(Icons.Outlined.Delete, "Delete ${shopLabel(s, i)}", tint = Tokens.OrangeText, modifier = Modifier.size(20.dp)) }
+                        }
                     }
                 }
             }
@@ -132,14 +142,15 @@ private fun DeleteShopDialog(label: String, onKeep: () -> Unit, onDelete: () -> 
             )
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(
-                    Modifier.weight(1f).height(50.dp).rounded(14.dp).background(Tokens.NeutralFill).tap(onClick = onKeep),
+                    Modifier.weight(1f).heightIn(min = 48.dp).rounded(14.dp).background(Tokens.NeutralFill).tap(onClick = onKeep)
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
                     contentAlignment = Alignment.Center,
-                ) { Text("Keep", style = fig(15, FontWeight.Bold, Tokens.InkSecondary)) }
+                ) { Text("Keep", style = fig(15, FontWeight.Bold, Tokens.InkSecondary), textAlign = TextAlign.Center) }
                 Box(
-                    Modifier.weight(1f).height(50.dp).rounded(14.dp).background(Tokens.Orange)
-                        .tap(enabled = !busy) { busy = true; onDelete() },
+                    Modifier.weight(1f).heightIn(min = 48.dp).rounded(14.dp).background(Tokens.Orange)
+                        .tap(enabled = !busy) { busy = true; onDelete() }.padding(horizontal = 8.dp, vertical = 6.dp),
                     contentAlignment = Alignment.Center,
-                ) { Text(if (busy) "Deleting…" else "Delete shop", style = fig(15, FontWeight.Bold, Tokens.OnDark)) }
+                ) { Text(if (busy) "Deleting…" else "Delete", style = fig(15, FontWeight.Bold, Tokens.OnDark), textAlign = TextAlign.Center) }
             }
         }
     }
@@ -156,8 +167,8 @@ private fun SheetAction(icon: androidx.compose.ui.graphics.vector.ImageVector, t
     ) {
         Icon(icon, null, tint = Tokens.Blue, modifier = Modifier.size(22.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, style = fig(16, FontWeight.Bold, Tokens.Blue), maxLines = 1)
-            Text(sub, style = fig(13, color = Tokens.Muted), maxLines = 1)
+            Text(title, style = fig(16, FontWeight.Bold, Tokens.Blue), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(sub, style = fig(13, color = Tokens.Muted), maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -192,13 +203,26 @@ fun AddShopScreen(shopVm: ShopViewModel, navigator: AppNavigator, from: String) 
             var busy by remember { mutableStateOf(false) }
             var error by remember { mutableStateOf<String?>(null) }
             val clean = name.trim().replace(Regex("\\s+"), " ")
-            Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars)) {
+            fun submit() {
+                if (clean.isEmpty() || busy) return
+                busy = true
+                shopVm.addShop(clean) { err ->
+                    busy = false
+                    when (err) {
+                        null -> { shopVm.showInfo("$clean added · you're now in this shop"); navigator.openHome() }
+                        "plan" -> hasPlan = false
+                        else -> error = err
+                    }
+                }
+            }
+            Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars).imePadding()) {
                 TopBar(title = "Add a shop", onBack = { navigator.back() })
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Text("New shop's name", style = fig(15, FontWeight.Bold))
                     FieldBox(
                         name, { name = it.take(40); error = null }, placeholder = "e.g. Shine Laundry, Station Road",
                         height = 56.dp, capitalization = KeyboardCapitalization.Words,
+                        imeAction = ImeAction.Done, onImeAction = { submit() },
                     )
                     Column(
                         Modifier.fillMaxWidth().rounded(14.dp).background(Tokens.Card)
@@ -211,18 +235,9 @@ fun AddShopScreen(shopVm: ShopViewModel, navigator: AppNavigator, from: String) 
                         Text("• Switch shops anytime from the shop name at the top of Home.", style = fig(14, color = Tokens.InkSecondary))
                     }
                     error?.let { Text(it, style = fig(14, FontWeight.SemiBold, Tokens.OrangeText)) }
-                    Spacer(Modifier.height(4.dp))
-                    PrimaryButton(if (busy) "Adding…" else "Add shop", enabled = clean.isNotEmpty() && !busy, height = 56.dp) {
-                        busy = true
-                        shopVm.addShop(clean) { err ->
-                            busy = false
-                            when (err) {
-                                null -> { shopVm.showInfo("$clean added · you're now in this shop"); navigator.openHome() }
-                                "plan" -> hasPlan = false
-                                else -> error = err
-                            }
-                        }
-                    }
+                }
+                Box(Modifier.fillMaxWidth().background(Tokens.Card).padding(16.dp)) {
+                    PrimaryButton(if (busy) "Adding…" else "Add shop", enabled = clean.isNotEmpty() && !busy, height = 56.dp) { submit() }
                 }
             }
         }
@@ -242,10 +257,13 @@ fun ShopsCard(shopVm: ShopViewModel, hasPlan: Boolean, onSwitch: () -> Unit, onA
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Icon(Icons.Outlined.Storefront, null, tint = Tokens.Blue, modifier = Modifier.size(22.dp))
             Column(Modifier.weight(1f)) {
-                Text(state.shop.name, style = fig(16, FontWeight.Bold), maxLines = 1)
+                Text(state.shop.name, style = fig(16, FontWeight.Bold), maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(if (shops.size > 1) "${shops.size} shops · you're in this one" else "Your shop", style = fig(13, color = Tokens.Muted))
             }
-            if (shops.size > 1) Text("Switch", style = fig(15, FontWeight.Bold, Tokens.Blue), modifier = Modifier.tap(onClick = onSwitch).padding(6.dp))
+            if (shops.size > 1) Box(
+                Modifier.heightIn(min = 48.dp).rounded(10.dp).tap(onClick = onSwitch).padding(horizontal = 10.dp),
+                contentAlignment = Alignment.Center,
+            ) { Text("Switch", style = fig(15, FontWeight.Bold, Tokens.Blue)) }
         }
         Row(
             Modifier.fillMaxWidth().height(48.dp).rounded(12.dp).border(1.5.dp, Tokens.Blue, RoundedCornerShape(12.dp))
@@ -254,7 +272,7 @@ fun ShopsCard(shopVm: ShopViewModel, hasPlan: Boolean, onSwitch: () -> Unit, onA
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Icon(Icons.Filled.Add, null, tint = Tokens.Blue, modifier = Modifier.size(20.dp))
-            Text("Add another shop", style = fig(15, FontWeight.Bold, Tokens.Blue), modifier = Modifier.weight(1f))
+            Text("Add another shop", style = fig(15, FontWeight.Bold, Tokens.Blue), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         }
     }
 }

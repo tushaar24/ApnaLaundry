@@ -1,5 +1,7 @@
 package com.dailyworks.apnalaundry
 
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.ime
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
@@ -9,6 +11,10 @@ import com.dailyworks.apnalaundry.push.Push
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.SystemBarStyle
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
@@ -43,6 +49,9 @@ import org.koin.androidx.compose.koinViewModel
 
 // Implements Razorpay's result listener: Standard Checkout delivers the UPI
 // AutoPay outcome here, which we forward to the paywall via CheckoutBridge.
+/** The largest text scale the app uses (see setContent). */
+private const val MAX_FONT_SCALE = 1.15f
+
 class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
     private val checkoutBridge: CheckoutBridge by inject()
     private val syncScheduler: SyncScheduler by inject()
@@ -63,10 +72,22 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
         super.onCreate(savedInstanceState)
         if (savedInstanceState == null) DeepLinks.offer(intent)
         Checkout.preload(applicationContext)
-        enableEdgeToEdge()
+        // The app is light-only: dark status-bar and navigation icons always, even
+        // when the phone is in dark mode (the default would draw white icons on
+        // the app's light background — invisible clock, battery, back/home).
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
+        )
         setContent {
-            ApnaLaundryTheme {
-                AppRoot()
+            // Text follows the phone's font size up to 115%. Beyond that ("Extra
+            // large", common on budget phones) words get cut off in buttons,
+            // chips and tiles; Large and smaller look exactly as set.
+            val d = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(d.density, d.fontScale.coerceAtMost(MAX_FONT_SCALE))) {
+                ApnaLaundryTheme {
+                    AppRoot()
+                }
             }
         }
     }
@@ -110,7 +131,8 @@ private fun AppRoot() {
             Box(
                 Modifier
                     .fillMaxSize()
-                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    // Above the keyboard too (a toast while typing was hidden under it).
+                    .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
                     // Clears the New-order button and the bottom bar — a toast on
                     // the button turns a late "Undo" tap into a new order (web: 156px).
                     .padding(start = 16.dp, end = 16.dp, bottom = 156.dp),

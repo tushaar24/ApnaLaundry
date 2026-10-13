@@ -1,5 +1,14 @@
 package com.dailyworks.apnalaundry.ui.components
 
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -154,20 +163,21 @@ fun ClothesEditor(
         // tiles (2 columns)
         val rows = services.chunked(2)
         rows.forEach { pair ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 pair.forEach { s ->
                     val (n, kg, amt) = serviceStat(state, s)
                     val has = amt > 0
                     val sel = state.selected == s.id
                     val sub = when {
-                        has && s.mode == PricingMode.WEIGHT -> "${trimK(kg)} kg · ${Money.rupees(amt)}"
-                        has -> "$n ${if (n == 1) "item" else "items"} · ${Money.rupees(amt)}"
+                        has && s.mode == PricingMode.WEIGHT -> "${trimK(kg)} kg"
+                        has -> "$n ${if (n == 1) "item" else "items"}"
                         s.mode == PricingMode.WEIGHT -> "By weight"
                         else -> "Tap to add"
                     }
                     ServiceTile(
                         name = s.name, sub = sub, selected = sel, hasAmount = has,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                        amount = if (has) Money.rupees(amt) else null,
                     ) { state.selected = s.id }
                 }
                 if (pair.size == 1) Box(Modifier.weight(1f)) {}
@@ -205,7 +215,7 @@ fun ClothesEditor(
                         keyboardType = KeyboardType.Decimal, prefix = null,
                     )
                     Spacer8()
-                    Text(Money.rupees(amt), style = bric(22, FontWeight.Bold))
+                    Text(Money.rupees(amt), style = bric(22, FontWeight.Bold), maxLines = 1, softWrap = false)
                 }
                 val listed = state.bagCount(cur.id)
                 if (listed > 0) {
@@ -219,7 +229,10 @@ fun ClothesEditor(
                         height = 48.dp, keyboardType = KeyboardType.Number,
                     )
                 }
-                Text("₹$rate per kg. Bags under ${trimK(min)} kg are charged for ${trimK(min)} kg.", style = fig(13, color = Tokens.Muted))
+                Text(
+                    "₹$rate per kg." + (if (min > 0) " Bags under ${trimK(min)} kg are charged for ${trimK(min)} kg." else ""),
+                    style = fig(13, color = Tokens.Muted),
+                )
                 BagClothes(cur, state, clothNames(services))
             }
         }
@@ -250,7 +263,7 @@ private fun BagClothes(svc: Service, state: ClothesState, names: List<String>) {
     if (!open) {
         Text(
             "+ Add list of clothes (optional)", style = fig(15, FontWeight.Bold, Tokens.Blue),
-            modifier = Modifier.tap { open = true }.padding(vertical = 8.dp),
+            modifier = Modifier.tap { open = true }.padding(vertical = 12.dp),
         )
         return
     }
@@ -268,11 +281,12 @@ private fun BagClothes(svc: Service, state: ClothesState, names: List<String>) {
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("Clothes in this bag", style = fig(15, FontWeight.Bold), modifier = Modifier.weight(1f))
-            Text("Count only, no price", style = fig(12, color = Tokens.Muted))
+            Spacer(Modifier.width(8.dp))
+            Text("Count only, no price", style = fig(12, color = Tokens.Muted), textAlign = TextAlign.End, modifier = Modifier.widthIn(max = 120.dp))
         }
         inBag.forEach { (name, n) ->
-            Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(name, style = fig(16, FontWeight.SemiBold), maxLines = 1, modifier = Modifier.weight(1f))
+            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(name, style = fig(16, FontWeight.SemiBold), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(end = 8.dp))
                 Stepper(qty = n, onDec = { state.bumpBag(svc.id, name, -1) }, onInc = { state.bumpBag(svc.id, name, 1) })
             }
         }
@@ -287,12 +301,12 @@ private fun BagClothes(svc: Service, state: ClothesState, names: List<String>) {
         }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FieldBox(
-                other, { other = it.take(30) }, Modifier.weight(1f), placeholder = "Other cloth, e.g. Curtain", height = 44.dp,
+                other, { other = it.take(30) }, Modifier.weight(1f), placeholder = "Other cloth, e.g. Curtain", height = 48.dp,
                 imeAction = androidx.compose.ui.text.input.ImeAction.Done, onImeAction = { addOther() },
             )
             Box(
-                Modifier.height(44.dp).rounded(10.dp).background(if (clean.isNotEmpty()) Tokens.Blue else Tokens.NeutralFill)
-                    .tap(enabled = clean.isNotEmpty()) { addOther() }.padding(horizontal = 14.dp),
+                Modifier.height(48.dp).rounded(10.dp).background(if (clean.isNotEmpty()) Tokens.Blue else Tokens.NeutralFill)
+                    .tap(enabled = clean.isNotEmpty()) { addOther() }.padding(horizontal = 16.dp),
                 contentAlignment = Alignment.Center,
             ) { Text("Add", style = fig(14, FontWeight.Bold, if (clean.isNotEmpty()) Tokens.OnDark else Tokens.Muted)) }
         }
@@ -300,23 +314,31 @@ private fun BagClothes(svc: Service, state: ClothesState, names: List<String>) {
 }
 
 @Composable
-fun ServiceTile(name: String, sub: String, selected: Boolean, hasAmount: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+fun ServiceTile(
+    name: String, sub: String, selected: Boolean, hasAmount: Boolean, modifier: Modifier = Modifier,
+    /** "₹1,234" — shown whole after [sub]; the count is what gets "…" when it's tight. */
+    amount: String? = null,
+    onClick: () -> Unit,
+) {
     val bd = if (selected) Tokens.Ink else if (hasAmount) Tokens.Blue else Tokens.CardBorder
     val bg = if (selected) Tokens.Ink else if (hasAmount) Tokens.BlueLight else Tokens.Card
     val fg = if (selected) Tokens.OnDark else Tokens.Ink
     val subFg = if (selected) Tokens.OnDarkMuted else if (hasAmount) Tokens.BlueText else Tokens.Muted
     Column(
         modifier
-            .height(64.dp)
+            .heightIn(min = 64.dp)
             .rounded(14.dp)
             .background(bg)
             .border(2.dp, bd, RoundedCornerShape(14.dp))
             .tap(onClick = onClick)
-            .padding(horizontal = 14.dp),
+            .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(name, style = fig(15, FontWeight.Bold, fg), maxLines = 1)
-        Text(sub, style = fig(12, FontWeight.SemiBold, subFg), maxLines = 1)
+        Text(name, style = fig(15, FontWeight.Bold, fg), maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Row {
+            Text(sub, style = fig(12, FontWeight.SemiBold, subFg), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            if (amount != null) Text(" · $amount", style = fig(12, FontWeight.SemiBold, subFg), maxLines = 1, softWrap = false)
+        }
     }
 }
 
@@ -326,23 +348,28 @@ private fun ItemRow(
     onPrice: (String) -> Unit, onDec: () -> Unit, onInc: () -> Unit,
 ) {
     val changed = editablePrice && priceText.toIntOrNull() != base && priceText.isNotBlank()
+    val line = Tokens.Divider
     Row(
-        Modifier.fillMaxWidth().height(56.dp).border(0.dp, Tokens.Divider).padding(vertical = 2.dp),
+        Modifier.fillMaxWidth().heightIn(min = 56.dp)
+            .drawBehind { drawLine(line, Offset(0f, size.height), Offset(size.width, size.height), 1.dp.toPx()) }
+            .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Column(Modifier.weight(1f)) {
-            Text(name, style = fig(16, FontWeight.SemiBold), maxLines = 1)
-            if (changed) Text("rate ₹$base", style = fig(12, FontWeight.SemiBold, Tokens.OrangeText))
-        }
-        if (editablePrice) {
-            FieldBox(
-                value = priceText, onValueChange = onPrice, prefix = "₹", height = 42.dp,
-                modifier = Modifier.width(88.dp), keyboardType = KeyboardType.Number,
-                textStyle = fig(16, FontWeight.Bold),
-            )
-        } else {
-            Text("₹$base", style = fig(15, FontWeight.SemiBold, Tokens.Muted))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(name, style = fig(16, FontWeight.SemiBold), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (editablePrice) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FieldBox(
+                        value = priceText, onValueChange = onPrice, prefix = "₹", height = 40.dp,
+                        modifier = Modifier.width(104.dp), keyboardType = KeyboardType.Number,
+                        textStyle = fig(16, FontWeight.Bold), contentPadding = 10.dp,
+                    )
+                    if (changed) Text("rate ₹$base", style = fig(12, FontWeight.SemiBold, Tokens.OrangeText), maxLines = 1, softWrap = false)
+                }
+            } else {
+                Text("₹$base", style = fig(14, FontWeight.SemiBold, Tokens.Muted))
+            }
         }
         Stepper(qty = qty, onDec = onDec, onInc = onInc)
     }
@@ -371,17 +398,17 @@ private fun AddItemRow(svc: Service, onAdd: (String, Int) -> Unit) {
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text("Add a cloth to ${svc.name}", style = fig(13, FontWeight.Bold, Tokens.BlueText))
+        FieldBox(name, { name = it.take(30) }, Modifier.fillMaxWidth(), placeholder = "Cloth name, e.g. Blazer", height = 48.dp)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FieldBox(name, { name = it.take(30) }, Modifier.weight(1f), placeholder = "e.g. Blazer", height = 44.dp)
             FieldBox(
                 if (priced) (existing!!.price ?: 0).toString() else price,
                 { if (!priced) price = it.filter { c -> c.isDigit() }.take(5) },
-                Modifier.width(96.dp), prefix = "₹", placeholder = "Price", height = 44.dp, keyboardType = KeyboardType.Number,
+                Modifier.weight(1f), prefix = "₹", placeholder = "Price", height = 48.dp, keyboardType = KeyboardType.Number,
                 imeAction = androidx.compose.ui.text.input.ImeAction.Done, onImeAction = { add() },
             )
             Box(
-                Modifier.height(44.dp).rounded(10.dp).background(if (ok) Tokens.Blue else Tokens.NeutralFill).tap(enabled = ok) { add() }
-                    .padding(horizontal = 14.dp),
+                Modifier.height(48.dp).widthIn(min = 88.dp).rounded(10.dp).background(if (ok) Tokens.Blue else Tokens.NeutralFill).tap(enabled = ok) { add() }
+                    .padding(horizontal = 16.dp),
                 contentAlignment = Alignment.Center,
             ) { Text("Add", style = fig(14, FontWeight.Bold, if (ok) Tokens.OnDark else Tokens.Muted)) }
         }

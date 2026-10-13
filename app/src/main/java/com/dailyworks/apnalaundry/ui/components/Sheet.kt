@@ -1,5 +1,14 @@
 package com.dailyworks.apnalaundry.ui.components
 
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.CompositionLocalProvider
+import android.content.res.Configuration
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -42,8 +51,19 @@ fun AppBottomSheet(
     content: @Composable () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    // Taller lines than bric's default: a Hindi name's matras need the room when it wraps.
+    val titleStyle = bric(24, FontWeight.Bold).copy(lineHeight = 30.sp)
+    // The app is light only. The sheet picks its bar icons from the phone's dark
+    // mode (isSystemInDarkTheme), which turned them white on our light sheet:
+    // tell it the phone is in light mode.
+    val cfg = LocalConfiguration.current
+    val lightCfg = remember(cfg) {
+        Configuration(cfg).apply { uiMode = (uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or Configuration.UI_MODE_NIGHT_NO }
+    }
+    CompositionLocalProvider(LocalConfiguration provides lightCfg) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        modifier = Modifier.statusBarsPadding(),
         sheetState = sheetState,
         containerColor = Tokens.Bg,
         dragHandle = null,
@@ -69,16 +89,17 @@ fun AppBottomSheet(
             if (leading != null) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     leading()
-                    Text(title, style = bric(24, FontWeight.Bold), modifier = Modifier.weight(1f))
+                    Text(title, style = titleStyle, modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             } else {
-                Text(title, style = bric(24, FontWeight.Bold))
+                Text(title, style = titleStyle, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             if (!subtitle.isNullOrBlank()) {
                 Text(subtitle, style = fig(14, FontWeight.Normal, Tokens.Muted), modifier = Modifier.padding(top = 4.dp))
             }
             Box(Modifier.padding(top = 16.dp)) { content() }
         }
+    }
     }
 }
 
@@ -89,9 +110,9 @@ fun Stepper(
     onInc: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         StepButton(Icons.Filled.Remove, "Decrease", bg = Tokens.NeutralFill, fg = Tokens.InkSecondary, enabled = qty > 0, onClick = onDec)
-        Text(qty.toString(), style = fig(17, FontWeight.Bold), modifier = Modifier.padding(horizontal = 2.dp))
+        Text(qty.toString(), style = fig(16, FontWeight.Bold), textAlign = TextAlign.Center, maxLines = 1, softWrap = false, modifier = Modifier.widthIn(min = 20.dp))
         StepButton(Icons.Filled.Add, "Increase", bg = if (qty > 0) Tokens.Blue else Tokens.BlueLight, fg = if (qty > 0) Tokens.OnDark else Tokens.Blue, enabled = true, onClick = onInc)
     }
 }
@@ -100,8 +121,8 @@ fun Stepper(
 private fun StepButton(icon: androidx.compose.ui.graphics.vector.ImageVector, cd: String, bg: Color, fg: Color, enabled: Boolean, onClick: () -> Unit) {
     Box(
         Modifier
-            .size(38.dp)
-            .rounded(10.dp)
+            .size(44.dp)
+            .rounded(12.dp)
             .background(bg)
             .then(if (enabled) Modifier.tap(onClick = onClick) else Modifier),
         contentAlignment = Alignment.Center,

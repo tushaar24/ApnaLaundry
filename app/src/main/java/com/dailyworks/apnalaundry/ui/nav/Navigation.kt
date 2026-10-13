@@ -30,14 +30,32 @@ class AppNavigator(val nav: NavHostController) {
         launchSingleTop = true
     }
 
-    fun openRates(from: String) = nav.navigate("rates/$from")
+    fun openRates(from: String) = push("rates/$from")
     // query: the customer search pre-filled (Home "New order for …").
     fun openNewOrder(editId: Int? = null, custId: String? = null, from: String = "home", query: String = "") =
-        nav.navigate("new?edit=${editId ?: -1}&cust=${custId ?: ""}&from=$from&q=${android.net.Uri.encode(query)}")
-    fun openBill(orderId: Int, from: String = "home") = nav.navigate("bill/$orderId?from=$from")
-    fun openOrder(orderId: Int, from: String = "home") = nav.navigate("order/$orderId?from=$from")
-    fun openCustomer(custId: String, from: String = "customers") = nav.navigate("customer/$custId?from=$from")
-    fun openCombinedBill(custId: String) = nav.navigate("combined-bill/$custId")
+        push("new?edit=${editId ?: -1}&cust=${custId ?: ""}&from=$from&q=${android.net.Uri.encode(query)}")
+    fun openBill(orderId: Int, from: String = "home") = push("bill/$orderId?from=$from")
+    fun openOrder(orderId: Int, from: String = "home") = push("order/$orderId?from=$from")
+    fun openCustomer(custId: String, from: String = "customers") = push("customer/$custId?from=$from")
+    fun openCombinedBill(custId: String) = push("combined-bill/$custId")
+
+    /**
+     * Opens a screen — once. A double tap on a slow phone (or a tap on the
+     * screen that is fading out) used to open the same screen twice, so Back
+     * landed on a copy of it. The same route again within 700ms is ignored.
+     */
+    private fun push(route: String) {
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (route == lastRoute && now - lastAt < 700) return
+        lastRoute = route; lastAt = now
+        nav.navigate(route)
+    }
+
+    private companion object {
+        // Kept outside the instance: AppRoot makes a new AppNavigator on recomposition.
+        var lastRoute = ""
+        var lastAt = 0L
+    }
     fun openCustomers(filter: String = "all") = navigateTab("customers?filter=$filter")
     fun openEarnings() = navigateTab(Routes.EARNINGS)
     fun openSettings() = navigateTab(Routes.SETTINGS)

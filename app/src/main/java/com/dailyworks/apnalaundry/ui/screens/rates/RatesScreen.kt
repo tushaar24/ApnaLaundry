@@ -1,5 +1,8 @@
 package com.dailyworks.apnalaundry.ui.screens.rates
 
+import com.dailyworks.apnalaundry.ui.Selectors
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.layout.heightIn
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -82,7 +85,7 @@ private fun modeLabel(s: Service): String = if (s.mode == PricingMode.WEIGHT) "B
 
 private fun summaryLine(s: Service): String = if (s.mode == PricingMode.WEIGHT) {
     val rate = if (s.ratePerKg != null) "₹${s.ratePerKg} per kg" else "Rate not set"
-    rate + (s.minKg?.takeIf { it > 0 }?.let { " · minimum ${it.toInt()} kg" } ?: "")
+    rate + (s.minKg?.takeIf { it > 0 }?.let { " · minimum ${Selectors.trimKg(it)} kg" } ?: "")
 } else {
     val priced = s.items.filter { it.price != null }
     if (priced.isEmpty()) "No prices set yet — tap Edit"
@@ -185,7 +188,7 @@ private fun RateListPage(
             AddServiceCard(onAdd)
 
             services.forEach { s ->
-                ServiceCard(s, onEdit = { onEdit(s.id) }, onDelete = { shopVm.deleteService(s.id) })
+                ServiceCard(s, canDelete = services.size > 1, onEdit = { onEdit(s.id) }, onDelete = { shopVm.deleteService(s.id) })
             }
 
         }
@@ -218,32 +221,32 @@ private fun InfoBox(title: String, body: String) {
 }
 
 @Composable
-private fun ServiceCard(s: Service, onEdit: () -> Unit, onDelete: () -> Unit) {
+private fun ServiceCard(s: Service, canDelete: Boolean, onEdit: () -> Unit, onDelete: () -> Unit) {
     Column(
         Modifier.fillMaxWidth().rounded(16.dp).background(Tokens.Card).border(1.dp, Tokens.CardBorder, RoundedCornerShape(16.dp)).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f)) {
-                Text(s.name, style = bric(20, FontWeight.Bold))
+                Text(s.name, style = bric(20, FontWeight.Bold), maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(modeLabel(s), style = fig(13, color = Tokens.Muted))
             }
             Row(
-                Modifier.height(44.dp).rounded(10.dp).background(Tokens.BlueLight).tap(onClick = onEdit).padding(horizontal = 14.dp),
+                Modifier.height(44.dp).rounded(10.dp).background(Tokens.BlueLight).tap(onClick = onEdit).padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Icon(Icons.Outlined.Edit, null, tint = Tokens.Blue, modifier = Modifier.size(18.dp))
                 Text("Edit", style = fig(15, FontWeight.Bold, Tokens.Blue))
             }
-            Box(
+            if (canDelete) Box(
                 Modifier.size(44.dp).rounded(10.dp).border(1.dp, Tokens.OrangeBorder, RoundedCornerShape(10.dp)).tap(onClick = onDelete),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Outlined.DeleteOutline, "Delete", tint = Tokens.DeleteRed, modifier = Modifier.size(20.dp))
+                Icon(Icons.Outlined.DeleteOutline, "Delete ${s.name}", tint = Tokens.DeleteRed, modifier = Modifier.size(20.dp))
             }
         }
         Box(Modifier.fillMaxWidth().rounded(10.dp).background(Tokens.NeutralFill).padding(horizontal = 12.dp, vertical = 10.dp)) {
-            Text(summaryLine(s), style = fig(14, color = Tokens.InkSecondary), maxLines = 1)
+            Text(summaryLine(s), style = fig(14, color = Tokens.InkSecondary), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -259,7 +262,7 @@ private fun AddServiceCard(onAdd: () -> Unit) {
             Icon(Icons.Filled.Add, null, tint = Tokens.OnDark, modifier = Modifier.size(24.dp))
         }
         Column(Modifier.weight(1f)) {
-            Text("Add a new service", style = fig(17, FontWeight.Bold, Tokens.BlueText))
+            Text("Add a new service", style = fig(16, FontWeight.Bold, Tokens.BlueText))
             Text("Steam press, curtains, shoes… anything else you do", style = fig(13, color = Tokens.BlueText))
         }
         Box(Modifier.rounded(10.dp).background(Tokens.Blue).padding(horizontal = 14.dp, vertical = 8.dp)) {
@@ -278,7 +281,7 @@ private fun EditServicePage(
     var draft by remember(original.id) { mutableStateOf(original) }
     BackHandler(onBack = onBack)
 
-    Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars)) {
+    Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars).imePadding()) {
         TopBar("Edit service", onBack = onBack)
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 16.dp),
@@ -326,7 +329,7 @@ private fun AddServicePage(existing: List<Service>, onAdd: (Service) -> Unit, on
     }
     BackHandler(onBack = onBack)
 
-    Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars)) {
+    Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars).imePadding()) {
         TopBar("Add new service", onBack = onBack)
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 16.dp),
@@ -387,14 +390,14 @@ private fun ChargeByCard(draft: Service, onChange: (Service) -> Unit) {
     SectionCard("How do you charge for this?") {
         if (draft.lockedToPiece) {
             Row(
-                Modifier.fillMaxWidth().height(48.dp).rounded(11.dp).background(Tokens.NeutralFill).padding(horizontal = 12.dp),
+                Modifier.fillMaxWidth().heightIn(min = 48.dp).rounded(11.dp).background(Tokens.NeutralFill).padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Icon(Icons.Outlined.Lock, null, tint = Tokens.InkSecondary, modifier = Modifier.size(16.dp))
                 Text("Dry cleaning is always per piece", style = fig(14, FontWeight.SemiBold, Tokens.InkSecondary))
             }
         } else {
-            Segmented(listOf("Per piece" to (draft.mode == PricingMode.PIECE), "By weight (kg)" to (draft.mode == PricingMode.WEIGHT))) { i ->
+            Segmented(listOf("Per piece" to (draft.mode == PricingMode.PIECE), "By weight" to (draft.mode == PricingMode.WEIGHT))) { i ->
                 onChange(draft.copy(mode = if (i == 0) PricingMode.PIECE else PricingMode.WEIGHT))
             }
         }
@@ -409,22 +412,27 @@ private fun PerPieceCard(draft: Service, emptyHint: Boolean = false, onChange: (
         else "Leave it empty if you don't take that cloth. Empty ones won't show in orders.",
     ) {
         draft.items.forEachIndexed { idx, item ->
+            if (idx > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Divider))
             Row(
-                Modifier.fillMaxWidth().height(56.dp).border(0.dp, Tokens.Divider),
+                Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(item.name, style = fig(16, FontWeight.SemiBold, if (item.price != null) Tokens.Ink else Tokens.Muted), modifier = Modifier.weight(1f))
+                Text(
+                    item.name, style = fig(16, FontWeight.SemiBold, if (item.price != null) Tokens.Ink else Tokens.Muted),
+                    maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+                )
                 FieldBox(
                     item.price?.toString() ?: "",
                     { v ->
                         val p = v.filter { c -> c.isDigit() }.toIntOrNull()
                         onChange(draft.copy(items = draft.items.mapIndexed { j, it -> if (j == idx) it.copy(price = p) else it }))
                     },
-                    prefix = "₹", placeholder = "—", modifier = Modifier.width(110.dp), height = 48.dp,
-                    keyboardType = KeyboardType.Number, textStyle = fig(17, FontWeight.Bold),
+                    prefix = "₹", placeholder = "—", modifier = Modifier.width(100.dp), height = 48.dp,
+                    keyboardType = KeyboardType.Number, textStyle = fig(16, FontWeight.Bold),
                 )
                 Box(
-                    Modifier.padding(start = 6.dp).size(44.dp).rounded(10.dp)
+                    Modifier.size(44.dp).rounded(10.dp)
                         .tap { onChange(draft.copy(items = draft.items.filterIndexed { j, _ -> j != idx })) },
                     contentAlignment = Alignment.Center,
                 ) {
@@ -476,16 +484,23 @@ private fun ByWeightCard(draft: Service, onChange: (Service) -> Unit) {
             keyboardType = KeyboardType.Number, textStyle = bric(28, FontWeight.Bold),
         )
         Spacer(Modifier.height(10.dp))
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        var minText by remember(draft.id) { mutableStateOf(draft.minKg?.takeIf { it > 0 }?.let(Selectors::trimKg) ?: "") }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Column(Modifier.weight(1f)) {
                 Text("Minimum weight (optional)", style = fig(15, FontWeight.Bold))
                 Text("Small bags are charged for this much", style = fig(13, color = Tokens.Muted))
             }
             FieldBox(
-                (draft.minKg ?: 0.0).let { if (it % 1.0 == 0.0) it.toInt().toString() else it.toString() },
-                { onChange(draft.copy(minKg = it.filter { c -> c.isDigit() || c == '.' }.toDoubleOrNull())) },
-                suffix = "kg", modifier = Modifier.width(100.dp), height = 52.dp,
-                keyboardType = KeyboardType.Decimal, textStyle = fig(17, FontWeight.Bold),
+                minText,
+                { v ->
+                    val digits = v.filter { c -> c.isDigit() || c == '.' }
+                    // one dot at most: "1.5", not "1.5.2"
+                    val clean = digits.substringBefore('.') + (if ('.' in digits) "." + digits.substringAfter('.').replace(".", "").take(2) else "")
+                    minText = clean.take(5)
+                    onChange(draft.copy(minKg = minText.toDoubleOrNull()))
+                },
+                placeholder = "0", suffix = "kg", modifier = Modifier.width(100.dp), height = 52.dp,
+                keyboardType = KeyboardType.Decimal, textStyle = fig(16, FontWeight.Bold),
             )
         }
     }
@@ -493,21 +508,23 @@ private fun ByWeightCard(draft: Service, onChange: (Service) -> Unit) {
 
 @Composable
 private fun ReadyInCard(current: Int?, onPick: (Int?) -> Unit) {
-    var moreOpen by remember(current) { mutableStateOf(current != null && current >= 4) }
+    var moreOpen by remember { mutableStateOf(current != null && current >= 4) }
+    var moreText by remember { mutableStateOf(if (current != null && current >= 4) current.toString() else "") }
     SectionCard("Ready in (optional)", "Fills the delivery date for you. Skip it if it changes every time.") {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             listOf(0 to "Same day", 1 to "1 day", 2 to "2 days", 3 to "3 days").forEach { (v, label) ->
-                PillChip(label, current == v && !moreOpen) { onPick(if (current == v) null else v); moreOpen = false }
+                PillChip(label, current == v && !moreOpen) { onPick(if (current == v && !moreOpen) null else v); moreOpen = false }
             }
-            PillChip("More", moreOpen || (current != null && current >= 4)) {
-                moreOpen = !moreOpen; if (!moreOpen) onPick(null)
+            PillChip("More", moreOpen) {
+                moreOpen = !moreOpen
+                onPick(if (moreOpen) moreText.toIntOrNull() else null)
             }
         }
-        if (moreOpen || (current != null && current >= 4)) {
+        if (moreOpen) {
             Spacer(Modifier.height(10.dp))
             FieldBox(
-                if (current != null && current >= 4) current.toString() else "",
-                { onPick(it.filter { c -> c.isDigit() }.take(2).toIntOrNull()) },
+                moreText,
+                { moreText = it.filter { c -> c.isDigit() }.take(2); onPick(moreText.toIntOrNull()) },
                 placeholder = "4", suffix = "days", modifier = Modifier.width(120.dp), height = 48.dp, keyboardType = KeyboardType.Number,
             )
         }

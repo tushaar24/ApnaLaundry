@@ -1,5 +1,11 @@
 package com.dailyworks.apnalaundry.ui.screens.home
 
+import com.dailyworks.apnalaundry.ui.components.FitText
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -124,6 +130,16 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
     // Search (all dates). The bottom nav clears it, so coming back starts empty.
     var query by rememberSaveable { mutableStateOf("") }
     val searching = query.isNotBlank()
+    // Tapping search on a short phone: the dashboard, dates and filters fold away
+    // while the keyboard is up, so the field (and the results) stay in sight.
+    var searchFocused by remember { mutableStateOf(false) }
+    @OptIn(ExperimentalLayoutApi::class)
+    val compact = searching || (searchFocused && WindowInsets.isImeVisible)
+    val listState = rememberLazyListState()
+    // All-dates search: once per change of the query or the data, not on every redraw.
+    val results = remember(state.orders, state.customers, query, tabPickup) {
+        if (query.isBlank()) emptyList() else searchResults(state, query, tabPickup)
+    }
     val typeQuery: (String) -> Unit = { v ->
         if (!searching && v.isNotBlank()) Analytics.orderSearchOpened()
         query = v
@@ -147,6 +163,15 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
             selDate = if (o.status == OrderStatus.CREATED && o.pickupDate < today) today else o.pickupDate
         }
     }
+    // ...and scroll to its card when it's off screen (the list shows ~1 card on a small phone).
+    LaunchedEffect(tourOrder?.id, tourOrder?.status, selDate, tabPickup, filter, searching) {
+        val o = tourOrder ?: return@LaunchedEffect
+        if (searching) return@LaunchedEffect
+        val i = cardIndex(state, o.id, selDate, tabPickup, filter) ?: return@LaunchedEffect
+        val info = listState.layoutInfo
+        val card = info.visibleItemsInfo.firstOrNull { it.index == i }
+        if (card == null || card.offset + card.size > info.viewportEndOffset) listState.animateScrollToItem(i)
+    }
     // Saved without opening its bill (or back from it): on to the order's status.
     LaunchedEffect(tour) { if (tour == TourStage.BILL) shopVm.setTour(TourStage.STATUS) }
     fun actTarget(o: Order): Modifier = if (o.id == tourOrder?.id) Modifier.spotlightTarget(targets, "tour_act") else Modifier
@@ -168,7 +193,7 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
             // Shop name ▾: the shops sheet — switch shop, edit this shop, add a shop (paid).
             Row(Modifier.weight(1f).tap { active = ActiveSheet.Shops("home") }, verticalAlignment = Alignment.CenterVertically) {
                 Text(state.shop.name, style = bric(22, FontWeight.Bold), modifier = Modifier.weight(1f, fill = false), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Icon(Icons.Filled.KeyboardArrowDown, "Switch shop", tint = Tokens.Ink, modifier = Modifier.size(26.dp))
+                Icon(Icons.Filled.KeyboardArrowDown, "Switch shop", tint = Tokens.Ink, modifier = Modifier.size(24.dp))
             }
             Box(Modifier.height(44.dp).rounded(999.dp).background(Tokens.Card).border(1.dp, Tokens.CardBorder, RoundedCornerShape(999.dp)).tap { navigator.openRates("home") }.padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
                 Text("Services", style = fig(14, FontWeight.Bold))
@@ -179,9 +204,9 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
 
         if (!noOrders) {
             // While searching only the tabs stay, so switching tab re-runs the search there.
-            if (!searching) DashboardStrip(state, selDate, hidden, onEye = shopVm::toggleHideAmounts, onOpen = { navigator.openEarnings() })
+            if (!compact) DashboardStrip(state, selDate, hidden, onEye = shopVm::toggleHideAmounts, onOpen = { navigator.openEarnings() })
             TabRow(state, tabPickup, selDate) { tabPickup = it; filter = "all" }
-            if (!searching) {
+            if (!compact) {
                 DateStrip(state, tabPickup, selDate) { selDate = it }
                 FilterTabs(state, tabPickup, selDate, filter) { filter = it }
             }
@@ -192,15 +217,14 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                 EmptyHome(Modifier.spotlightTarget(targets, "new_order")) { startNewOrder("empty_home") }
                 return@Box
             }
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, bottom = 170.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, bottom = 170.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 // Sticky: stays on screen while scrolling orders.
                 stickyHeader(key = "search") {
                     Box(Modifier.fillMaxWidth().background(Tokens.Bg).padding(top = 4.dp, bottom = 2.dp)) {
-                        SearchBar(query, typeQuery)
+                        SearchBar(query, typeQuery) { searchFocused = it }
                     }
                 }
                 if (searching) {
-                    val results = searchResults(state, query, tabPickup)
                     item(key = "count") {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(
@@ -214,7 +238,7 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                         item(key = "none") {
                             val q = query.trim()
                             Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 40.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Text("No order found for “$q”", style = fig(17, FontWeight.Bold), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                                Text("No order found for “$q”", style = fig(16, FontWeight.Bold), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                                 Text("Check the spelling, or take a new order for them.", style = fig(14, color = Tokens.Muted), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                                 Row(
                                     Modifier.padding(top = 4.dp).height(48.dp).rounded(12.dp).background(Tokens.Blue)
@@ -227,7 +251,7 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                             }
                         }
                     }
-                    items(results) { o -> OrderCard(state, o, tabPickup, false, { navigator.openOrder(o.id) }, { act(o) }, { active = ActiveSheet.Menu(o.id) }, { dial(context, o, state) }, showDate = true, actionModifier = actTarget(o)) }
+                    items(results, key = { "s${it.id}" }) { o -> OrderCard(state, o, tabPickup, false, { navigator.openOrder(o.id) }, { act(o) }, { active = ActiveSheet.Menu(o.id) }, { dial(context, o, state) }, showDate = true, actionModifier = actTarget(o)) }
                     return@LazyColumn
                 }
 
@@ -241,7 +265,7 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                                 SectionLabel((if (tabPickup) "Pending from earlier · " else "Late or no delivery date · ") + pending.size, color = Tokens.OrangeText)
                             }
                         }
-                        items(pending) { o -> OrderCard(state, o, tabPickup, true, { navigator.openOrder(o.id) }, { act(o) }, { active = ActiveSheet.Menu(o.id) }, { dial(context, o, state) }, actionModifier = actTarget(o)) }
+                        items(pending, key = { "p${it.id}" }) { o -> OrderCard(state, o, tabPickup, true, { navigator.openOrder(o.id) }, { act(o) }, { active = ActiveSheet.Menu(o.id) }, { dial(context, o, state) }, actionModifier = actTarget(o)) }
                     }
                 }
 
@@ -250,19 +274,19 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                 if (list.isEmpty()) {
                     item {
                         Column(Modifier.fillMaxWidth().padding(40.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(if (tabPickup) "No pickups" else "No deliveries", style = fig(17, FontWeight.Bold))
+                            Text(if (tabPickup) "No pickups" else "No deliveries", style = fig(16, FontWeight.Bold))
                             Text("Nothing here for ${AppDate.long(selDate)}.", style = fig(14, color = Tokens.Muted))
                         }
                     }
                 }
-                items(list) { o -> OrderCard(state, o, tabPickup, false, { navigator.openOrder(o.id) }, { act(o) }, { active = ActiveSheet.Menu(o.id) }, { dial(context, o, state) }, actionModifier = actTarget(o)) }
+                items(list, key = { "d${it.id}" }) { o -> OrderCard(state, o, tabPickup, false, { navigator.openOrder(o.id) }, { act(o) }, { active = ActiveSheet.Menu(o.id) }, { dial(context, o, state) }, actionModifier = actTarget(o)) }
             }
 
             // New order FAB
             run {
-                Row(Modifier.align(Alignment.BottomEnd).padding(16.dp).spotlightTarget(targets, "new_order").height(58.dp).rounded(999.dp).background(Tokens.Blue).tap { startNewOrder("home") }.padding(start = 18.dp, end = 22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.align(Alignment.BottomEnd).padding(16.dp).spotlightTarget(targets, "new_order").height(56.dp).rounded(999.dp).background(Tokens.Blue).tap { startNewOrder("home") }.padding(start = 18.dp, end = 22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(Icons.Filled.Add, null, tint = Tokens.OnDark, modifier = Modifier.size(22.dp))
-                    Text("New order", style = fig(17, FontWeight.Bold, Tokens.OnDark))
+                    Text("New order", style = fig(16, FontWeight.Bold, Tokens.OnDark))
                 }
             }
         }
@@ -299,7 +323,7 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
 // ---------- search ----------
 /** Search bar above the order cards: 48dp, white, blue border while a search is active. */
 @Composable
-private fun SearchBar(value: String, onChange: (String) -> Unit) {
+private fun SearchBar(value: String, onChange: (String) -> Unit, onFocus: (Boolean) -> Unit) {
     val on = value.isNotBlank()
     Row(
         Modifier.fillMaxWidth().height(48.dp).rounded(14.dp).background(Tokens.Card)
@@ -317,13 +341,13 @@ private fun SearchBar(value: String, onChange: (String) -> Unit) {
                 textStyle = fig(16, FontWeight.SemiBold),
                 cursorBrush = androidx.compose.ui.graphics.SolidColor(Tokens.Blue),
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().onFocusChanged { onFocus(it.isFocused) },
             )
         }
         if (value.isNotEmpty()) {
-            Box(Modifier.size(36.dp).tap { onChange("") }, contentAlignment = Alignment.Center) {
+            Box(Modifier.size(44.dp).tap { onChange("") }, contentAlignment = Alignment.Center) {
                 Box(Modifier.size(24.dp).rounded(999.dp).background(Tokens.NeutralFill), contentAlignment = Alignment.Center) {
-                    Text("✕", style = fig(13, FontWeight.Bold, Tokens.InkSecondary))
+                    Icon(Icons.Filled.Close, "Clear search", tint = Tokens.InkSecondary, modifier = Modifier.size(16.dp))
                 }
             }
         }
@@ -344,7 +368,7 @@ private fun EmptyHome(buttonModifier: Modifier = Modifier, onNewOrder: () -> Uni
             Box(Modifier.size(84.dp).rounded(999.dp).background(Tokens.BlueLight), contentAlignment = Alignment.Center) {
                 Icon(Icons.Outlined.Checkroom, null, tint = Tokens.Blue, modifier = Modifier.size(40.dp))
             }
-            Text("Your shop is ready!", style = bric(26, FontWeight.Bold))
+            Text("Your shop is ready!", style = bric(28, FontWeight.Bold))
             Text(
                 "No orders yet. Take your first one — it takes less than a minute.",
                 style = fig(15, color = Tokens.Muted), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -415,11 +439,11 @@ private fun DashboardStrip(state: LaundryState, selDate: String, hidden: Boolean
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Box(Modifier.size(34.dp).rounded(10.dp).background(Tokens.BlueLight), contentAlignment = Alignment.Center) {
-                Icon(Icons.AutoMirrored.Outlined.ReceiptLong, null, tint = Tokens.Blue, modifier = Modifier.size(19.dp))
+                Icon(Icons.AutoMirrored.Outlined.ReceiptLong, null, tint = Tokens.Blue, modifier = Modifier.size(20.dp))
             }
             Column {
                 Text("$newOrders", style = bric(28, FontWeight.Bold))
-                Text((if (newOrders == 1) "Order " else "Orders ") + whenText, style = fig(12, FontWeight.SemiBold, Tokens.Muted), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text((if (newOrders == 1) "Order " else "Orders ") + whenText, style = fig(12, FontWeight.SemiBold, Tokens.Muted), maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
         // Sales — solid blue card
@@ -437,8 +461,8 @@ private fun DashboardStrip(state: LaundryState, selDate: String, hidden: Boolean
                 }
             }
             Column {
-                Text(if (hidden) "₹ ••••" else Money.rupees(sales), style = bric(28, FontWeight.Bold, Tokens.OnDark), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("Sales $whenText", style = fig(12, FontWeight.SemiBold, Tokens.OnDark.copy(alpha = 0.8f)), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                FitText(if (hidden) "₹ ••••" else Money.rupees(sales), style = bric(28, FontWeight.Bold, Tokens.OnDark))
+                Text("Sales $whenText", style = fig(12, FontWeight.SemiBold, Tokens.OnDark.copy(alpha = 0.8f)), maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
     }
@@ -451,15 +475,22 @@ private fun TabRow(state: LaundryState, pickup: Boolean, selDate: String, onSele
             val on = pickup == pk
             val n = tabTodo(state, pk, selDate)
             Row(
-                Modifier.weight(1f).height(50.dp).rounded(14.dp).background(if (on) Tokens.Ink else Tokens.Card).border(1.5.dp, if (on) Tokens.Ink else Tokens.CardBorder, RoundedCornerShape(14.dp)).tap { onSelect(pk) },
+                Modifier.weight(1f).height(48.dp).rounded(14.dp).background(if (on) Tokens.Ink else Tokens.Card).border(1.5.dp, if (on) Tokens.Ink else Tokens.CardBorder, RoundedCornerShape(14.dp)).tap { onSelect(pk) }
+                    .padding(horizontal = 8.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
             ) {
-                Icon(if (pk) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward, null, tint = if (on) Tokens.OnDark else Tokens.Ink, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(if (pk) "Pickups" else "Deliveries", style = fig(16, FontWeight.Bold, if (on) Tokens.OnDark else Tokens.Ink))
-                Spacer(Modifier.width(8.dp))
-                Box(Modifier.height(22.dp).rounded(999.dp).background(if (n > 0) Tokens.Orange else if (on) Tokens.DarkChipTrack else Tokens.NeutralFill).padding(horizontal = 6.dp).width(if (n > 9) 26.dp else 22.dp), contentAlignment = Alignment.Center) {
-                    Text("$n", style = fig(12, FontWeight.Bold, if (n > 0) Tokens.OnDark else if (on) Tokens.OnDark else Tokens.InkSecondary))
+                Icon(if (pk) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward, null, tint = if (on) Tokens.OnDark else Tokens.Ink, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    if (pk) "Pickups" else "Deliveries", style = fig(16, FontWeight.Bold, if (on) Tokens.OnDark else Tokens.Ink),
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
+                )
+                Spacer(Modifier.width(6.dp))
+                Box(
+                    Modifier.height(22.dp).widthIn(min = 22.dp).rounded(999.dp).background(if (n > 0) Tokens.Orange else if (on) Tokens.DarkChipTrack else Tokens.NeutralFill).padding(horizontal = 6.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(if (n > 99) "99+" else "$n", style = fig(12, FontWeight.Bold, if (n > 0) Tokens.OnDark else if (on) Tokens.OnDark else Tokens.InkSecondary), maxLines = 1, softWrap = false)
                 }
             }
         }
@@ -506,7 +537,7 @@ private fun DateStrip(state: LaundryState, pickup: Boolean, selDate: String, onP
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
                 ) {
                     Text(if (i == 0) "Today" else if (AppDate.dayOfMonth(iso) == 1) AppDate.plain(iso).split(" ").last() else AppDate.dayName(iso), style = fig(11, FontWeight.Bold, if (on) Tokens.OnDarkMuted else if (i == 0) Tokens.Blue else Tokens.Muted))
-                    Text("${AppDate.dayOfMonth(iso)}", style = fig(17, FontWeight.Bold, if (on) Tokens.OnDark else Tokens.Ink))
+                    Text("${AppDate.dayOfMonth(iso)}", style = fig(16, FontWeight.Bold, if (on) Tokens.OnDark else Tokens.Ink))
                     Text(if (n > 0) "$n" else "", style = fig(11, FontWeight.Bold, if (on) Tokens.BlueBar else Tokens.Blue))
                 }
             }
@@ -591,9 +622,10 @@ private fun searchResults(state: LaundryState, query: String, pickup: Boolean): 
     if (qs.isEmpty()) return emptyList()
     val qd = qs.filter { it.isDigit() }
     val qn = qs.removePrefix("#").trim()
+    val byId = state.customers.associateBy { it.id }
     return state.orders.filter { o ->
         if (!pickup && o.status == OrderStatus.CANCELLED) return@filter false
-        val c = Selectors.customer(state, o.custId)
+        val c = byId[o.custId] ?: Selectors.customer(state, o.custId)
         c.name.lowercase().contains(qs) || (qd.length >= 3 && c.phone.contains(qd)) ||
             (qd.length >= 2 && (o.id.toString().contains(qn) || o.no().lowercase().contains(qn)))
     }.sortedWith(
@@ -607,6 +639,18 @@ private fun dial(context: android.content.Context, o: Order, state: LaundryState
     runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_DIAL, android.net.Uri.parse("tel:+91${c.phone}"))) }
 }
 
-private fun androidx.compose.foundation.lazy.LazyListScope.items(list: List<Order>, block: @Composable (Order) -> Unit) {
-    items(count = list.size, key = { list[it].id }) { block(list[it]) }
+/** Where [id]'s card sits in the list as Home builds it (search bar, pending, day), or null if it's not there. */
+private fun cardIndex(state: LaundryState, id: Int, selDate: String, pickup: Boolean, filter: String): Int? {
+    var i = 1 // the sticky search bar
+    if (selDate == AppDate.TODAY) {
+        val pending = pendingOf(state, pickup).filter { pass(state, it, pickup, filter) }.sortedWith(byTodo())
+        if (pending.isNotEmpty()) {
+            val p = pending.indexOfFirst { it.id == id }
+            if (p >= 0) return i + 1 + p
+            i += 1 + pending.size
+        }
+    }
+    i += 1 // the day's label
+    val d = dayOrders(state, selDate, pickup).filter { pass(state, it, pickup, filter) }.sortedWith(byTodo()).indexOfFirst { it.id == id }
+    return if (d >= 0) i + d else null
 }

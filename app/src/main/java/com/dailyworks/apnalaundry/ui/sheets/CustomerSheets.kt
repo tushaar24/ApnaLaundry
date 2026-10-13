@@ -1,5 +1,6 @@
 package com.dailyworks.apnalaundry.ui.sheets
 
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -120,12 +121,12 @@ fun CustomerFormSheet(state: LaundryState, form: ActiveSheet.CustomerForm, vm: S
                 }
             }
             Column {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Address", style = fig(14, FontWeight.SemiBold))
-                    Text(if (addrNeeded) "Needed for home pickup / delivery" else "Optional", style = fig(12, color = if (addrNeeded) Tokens.OrangeText else Tokens.Muted))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Address", style = fig(14, FontWeight.SemiBold), modifier = Modifier.weight(1f))
+                    Text(if (addrNeeded) "Needed for home pickup / delivery" else "Optional", style = fig(12, color = if (addrNeeded) Tokens.OrangeText else Tokens.Muted), textAlign = TextAlign.End)
                 }
                 Box(Modifier.height(6.dp))
-                FieldBox(address, { address = it }, placeholder = "House, area, landmark", height = 52.dp,
+                FieldBox(address, { address = it.replace('\n', ' ') }, placeholder = "House, area, landmark", height = 80.dp, singleLine = false,
                     borderColor = if (addrNeeded && address.isBlank()) Tokens.OrangeBorder else Tokens.FieldBorder)
             }
             if (form.ctx == "list" && !editing) {
@@ -217,8 +218,8 @@ fun ReceivePaymentSheet(state: LaundryState, custId: String, vm: ShopViewModel, 
             }
             Box(Modifier.fillMaxWidth().rounded(12.dp).background(bg).padding(14.dp)) { Text(text, style = fig(14, FontWeight.SemiBold, fg)) }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PrimaryButton("Got cash", Modifier.weight(1f), enabled = got > 0, height = 54.dp) { vm.receivePayment(custId, got, PayMethod.CASH); onDismiss() }
-                PrimaryButton("Got UPI", Modifier.weight(1f), enabled = got > 0, height = 54.dp) { vm.receivePayment(custId, got, PayMethod.UPI); onDismiss() }
+                PrimaryButton("Got cash", Modifier.weight(1f), enabled = got > 0, height = 56.dp) { vm.receivePayment(custId, got, PayMethod.CASH); onDismiss() }
+                PrimaryButton("Got UPI", Modifier.weight(1f), enabled = got > 0, height = 56.dp) { vm.receivePayment(custId, got, PayMethod.UPI); onDismiss() }
             }
         }
     }
@@ -236,7 +237,7 @@ fun AddOldBaakiSheet(state: LaundryState, custId: String, vm: ShopViewModel, onD
             Box(Modifier.fillMaxWidth().rounded(12.dp).background(Tokens.Bg).padding(14.dp)) {
                 Text(if (amt.isEmpty()) "Khata now: ${Money.rupees(bal)}" else "Khata will become ${Money.rupees(bal + got)}", style = fig(14, FontWeight.SemiBold, Tokens.InkSecondary))
             }
-            PrimaryButton("Add old khata", enabled = got > 0, height = 54.dp) { vm.addOldBaaki(custId, got); onDismiss() }
+            PrimaryButton("Add old khata", enabled = got > 0, height = 56.dp) { vm.addOldBaaki(custId, got); onDismiss() }
         }
     }
 }

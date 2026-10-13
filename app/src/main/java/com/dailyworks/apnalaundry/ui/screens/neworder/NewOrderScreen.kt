@@ -1,5 +1,9 @@
 package com.dailyworks.apnalaundry.ui.screens.neworder
 
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -321,7 +325,7 @@ fun NewOrderScreen(
         onDispose { if (!saved && activity?.isChangingConfigurations != true) abandon() }
     }
 
-    Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.statusBars)) {
+    Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.statusBars).imePadding()) {
         TopBar(
             title = if (editId != null) "Edit order" else "New order",
             onBack = { navigator.back() },
@@ -367,7 +371,7 @@ fun NewOrderScreen(
                     val results = if (q.isEmpty()) state.customers.sortedBy { it.agoRank }.take(3)
                     else state.customers.filter { it.name.contains(q, true) || (qd.length >= 3 && it.phone.contains(qd)) }.take(4)
                     Column(Modifier.fillMaxWidth().rounded(14.dp).background(Tokens.Card).border(2.dp, Tokens.Blue, RoundedCornerShape(14.dp))) {
-                        FieldBox(query, { query = it }, placeholder = "Search name or phone number", height = 54.dp, borderColor = Color.Transparent, borderWidth = 0.dp)
+                        FieldBox(query, { query = it }, placeholder = "Search name or phone number", height = 52.dp, borderColor = Color.Transparent, borderWidth = 0.dp)
                         if (q.isEmpty()) SectionLabel("Recent customers", Modifier.padding(start = 14.dp, top = 6.dp))
                         results.forEach { r ->
                             Row(Modifier.fillMaxWidth().tap { custId = r.id; query = "" }.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -382,7 +386,7 @@ fun NewOrderScreen(
                         Box(Modifier.padding(10.dp)) {
                             val label = if (q.isEmpty()) "Add new customer" else "Add “$q” as new customer"
                             Box(
-                                Modifier.fillMaxWidth().height(50.dp).rounded(12.dp).border(1.5.dp, Tokens.Blue, RoundedCornerShape(12.dp))
+                                Modifier.fillMaxWidth().heightIn(min = 48.dp).rounded(12.dp).border(1.5.dp, Tokens.Blue, RoundedCornerShape(12.dp))
                                     .tap {
                                         val isPhone = q.isNotEmpty() && q.all { it.isDigit() || it == ' ' || it == '+' }
                                         active = ActiveSheet.CustomerForm(
@@ -392,9 +396,10 @@ fun NewOrderScreen(
                                             needAddress = anyHome,
                                             onSaved = { id -> custId = id; query = ""; custAdded = true },
                                         )
-                                    },
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
                                 contentAlignment = Alignment.Center,
-                            ) { Text(label, style = fig(15, FontWeight.Bold, Tokens.Blue)) }
+                            ) { Text(label, style = fig(15, FontWeight.Bold, Tokens.Blue), textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis) }
                         }
                     }
                 }
@@ -468,7 +473,7 @@ fun NewOrderScreen(
                         Modifier.height(36.dp).rounded(999.dp).background(Tokens.BlueLight).tap { editingRates = true }.padding(horizontal = 14.dp),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        Icon(Icons.Outlined.Edit, null, tint = Tokens.Blue, modifier = Modifier.size(14.dp))
+                        Icon(Icons.Outlined.Edit, null, tint = Tokens.Blue, modifier = Modifier.size(16.dp))
                         Text("Edit services", style = fig(13, FontWeight.Bold, Tokens.Blue))
                     }
                 }
@@ -697,13 +702,14 @@ private fun RouteChoice(label: String, value: Route, shopLabel: String, homeLabe
 @Composable
 private fun RouteButton(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     Box(
-        modifier.height(54.dp).rounded(14.dp)
+        modifier.heightIn(min = 48.dp).rounded(14.dp)
             .background(if (selected) Tokens.BlueLight else Tokens.Card)
             .border(if (selected) 1.5.dp else 1.dp, if (selected) Tokens.Blue else Tokens.CardBorder, RoundedCornerShape(14.dp))
-            .tap(onClick = onClick),
+            .tap(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, style = fig(15, FontWeight.Bold, if (selected) Tokens.Blue else Tokens.Ink))
+        Text(label, style = fig(15, FontWeight.Bold, if (selected) Tokens.Blue else Tokens.Ink), textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -722,22 +728,39 @@ private fun DateRow(
     val context = LocalContext.current
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(label, style = fig(15, FontWeight.Bold))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        val date: @Composable (Modifier) -> Unit = { m ->
             DateTimeBox(
-                modifier = Modifier.weight(1.45f),
+                modifier = m,
                 icon = Icons.Outlined.CalendarMonth,
                 iconTint = Tokens.Blue,
                 text = dateText,
                 isSet = dateIsSet,
                 editIcon = dateEditIcon,
             ) { showDatePicker(context, seedIso, minIso, onPickDate) }
+        }
+        val time: @Composable (Modifier) -> Unit = { m ->
             DateTimeBox(
-                modifier = Modifier.weight(1f),
+                modifier = m,
                 icon = Icons.Outlined.Schedule,
                 iconTint = if (time24.isNotBlank()) Tokens.InkSecondary else Tokens.Muted,
-                text = if (time24.isNotBlank()) AppDate.to12h(time24) else "Time (optional)",
+                text = if (time24.isNotBlank()) AppDate.to12h(time24) else "Add time",
                 isSet = time24.isNotBlank(),
             ) { showTimePicker(context, time24, onPickTime) }
+        }
+        val fontScale = LocalDensity.current.fontScale
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            // "Tomorrow, 14 Oct" + "10:30 AM" need ~320dp side by side at normal text size.
+            if (maxWidth >= 320.dp * fontScale) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    date(Modifier.weight(1.7f))
+                    time(Modifier.weight(1f))
+                }
+            } else {
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    date(Modifier.fillMaxWidth())
+                    time(Modifier.fillMaxWidth())
+                }
+            }
         }
     }
 }
@@ -766,7 +789,7 @@ private fun DateTimeBox(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Icon(icon, null, tint = iconTint, modifier = Modifier.size(20.dp))
-        Text(text, style = fig(14, FontWeight.Bold, if (isSet) Tokens.Ink else Tokens.Muted), maxLines = 1, modifier = Modifier.weight(1f))
+        Text(text, style = fig(14, FontWeight.Bold, if (isSet) Tokens.Ink else Tokens.Muted), maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         if (editIcon) Icon(Icons.Outlined.Edit, null, tint = Tokens.Blue, modifier = Modifier.size(18.dp))
     }
 }
@@ -774,7 +797,7 @@ private fun DateTimeBox(
 /** Pencil at the right end of a field: says "you can change this". */
 @Composable
 private fun EditIcon(label: String, onClick: () -> Unit) {
-    Box(Modifier.size(36.dp).rounded(999.dp).tap(onClick = onClick), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(44.dp).rounded(999.dp).tap(onClick = onClick), contentAlignment = Alignment.Center) {
         Icon(Icons.Outlined.Edit, label, tint = Tokens.Blue, modifier = Modifier.size(18.dp))
     }
 }
@@ -789,9 +812,10 @@ private fun showTimePicker(context: Context, time24: String, onSet: (String) -> 
 
 @Composable
 private fun BillLine(label: String, value: String, color: Color = Tokens.Ink) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, style = fig(15, color = Tokens.InkSecondary))
-        Text(value, style = fig(15, FontWeight.SemiBold, color))
+    // The label takes the room left; the amount always stays whole.
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(label, style = fig(15, color = Tokens.InkSecondary), modifier = Modifier.weight(1f))
+        Text(value, style = fig(15, FontWeight.SemiBold, color), maxLines = 1, softWrap = false)
     }
 }
 

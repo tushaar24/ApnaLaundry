@@ -24,7 +24,8 @@ fun showDatePicker(context: Context, seedIso: String, minIso: String?, onSet: (S
     )
     if (minIso != null) runCatching {
         val minMillis = LocalDate.parse(minIso).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        dlg.datePicker.minDate = minMillis - 24L * 60 * 60 * 1000 // margin avoids a timezone off-by-one
+        // The start of the first allowed day (local time): the day before can't be picked.
+        dlg.datePicker.minDate = minMillis
     }
     dlg.show()
 }

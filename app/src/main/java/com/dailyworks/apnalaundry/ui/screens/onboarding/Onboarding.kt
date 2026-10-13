@@ -163,7 +163,7 @@ fun StepBar(step: Int, onBack: (() -> Unit)?) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Box(Modifier.fillMaxWidth().height(6.dp).rounded(999.dp).background(if (done || current) Tokens.Blue else StepGrey))
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                        if (done) Icon(Icons.Filled.Check, null, tint = Green, modifier = Modifier.size(13.dp))
+                        if (done) Icon(Icons.Filled.Check, null, tint = Green, modifier = Modifier.size(16.dp))
                         Text(
                             label,
                             style = fig(12, if (current) FontWeight.Bold else FontWeight.SemiBold, when {

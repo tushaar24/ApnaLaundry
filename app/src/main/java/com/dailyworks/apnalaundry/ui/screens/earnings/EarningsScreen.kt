@@ -1,5 +1,9 @@
 package com.dailyworks.apnalaundry.ui.screens.earnings
 
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
+import com.dailyworks.apnalaundry.ui.components.FitText
 import androidx.compose.foundation.background
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.foundation.border
@@ -191,7 +195,7 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                     PillChip("This shop", picked.isEmpty()) { pick(emptyList()) }
                     PillChip("All shops", picked.size == shops.size) { pick(shops.map { it.id }) }
                     shops.forEachIndexed { i, s ->
-                        PillChip(shopLabel(s, i), picked.isNotEmpty() && s.id in picked) {
+                        PillChip(shopLabel(s, i), picked.isNotEmpty() && s.id in picked, Modifier.widthIn(max = 180.dp)) {
                             val base = picked.ifEmpty { listOf(activeId) }
                             pick(if (s.id in base) base - s.id else base + s.id)
                         }
@@ -240,7 +244,7 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Text("Sales · $periodTitle", style = fig(13, FontWeight.SemiBold, Tokens.OnDark.copy(alpha = 0.8f)))
-                Text(m(sales), style = bric(34, FontWeight.Bold, Tokens.OnDark))
+                FitText(m(sales), style = bric(34, FontWeight.Bold, Tokens.OnDark))
                 Text("${counted.size} ${if (counted.size == 1) "order" else "orders"} · total of their bills", style = fig(13, FontWeight.SemiBold, Tokens.OnDark.copy(alpha = 0.8f)))
             }
 
@@ -275,7 +279,7 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
             AppCard(Modifier.bringIntoViewRequester(moneyInView).spotlightTarget(targets, "money"), bg = Tokens.Ink, borderColor = Tokens.Ink) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("Money received · $periodTitle", style = fig(13, FontWeight.SemiBold, Tokens.OnDarkMuted))
-                    Text(m(e.received), style = bric(34, FontWeight.Bold, Tokens.OnDark))
+                    FitText(m(e.received), style = bric(34, FontWeight.Bold, Tokens.OnDark))
                     Spacer(Modifier.height(6.dp))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         MoneySplit("Cash", m(e.cash), "Should be in your drawer", Modifier.weight(1f))
@@ -294,7 +298,7 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                     Line("Old baaki collected", m(e.oldIn), "+")
                     Line("Advance taken", m(e.advIn), "+")
                     Line(if (e.prepaid >= 0) "Paid before delivery" else "Paid on earlier days for these orders", m(e.prepaid), if (e.prepaid >= 0) "+" else "−")
-                    Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Divider).padding(vertical = 6.dp))
+                    Box(Modifier.padding(vertical = 6.dp).fillMaxWidth().height(1.dp).background(Tokens.Divider))
                     Line("Money received", m(e.received), null, bold = true)
                 }
             }
@@ -330,7 +334,7 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
             AppCard {
                 Row(Modifier.fillMaxWidth().padding(16.dp)) {
                     Stat("Orders", e.ordersDelivered.toString(), Modifier.weight(1f))
-                    Stat("Pieces", e.pieces.toString(), Modifier.weight(1f))
+                    Stat("Pieces", Money.grouping(e.pieces.toLong()), Modifier.weight(1f))
                     Stat("Weight", "${Selectors.trimKg(e.kg)} kg", Modifier.weight(1f))
                 }
             }
@@ -352,20 +356,30 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                 .map { it }
             val shown = pays.filter { payFilter == "all" || it.second.method.name.equals(payFilter, true) }
             Text("Payments received", style = fig(15, FontWeight.Bold))
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf("all" to "All", "cash" to "Cash", "upi" to "UPI").forEach { (v, label) ->
                     val count = if (v == "all") pays.size else pays.count { it.second.method.name.equals(v, true) }
                     PillChip("$label $count", payFilter == v) { payFilter = v }
                 }
             }
+            // A long period can hold thousands: the first 10, the rest on request.
+            var showAllPays by remember(period, payFilter, selected) { mutableStateOf(false) }
             AppCard {
                 Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp)) {
                     if (shown.isEmpty()) {
                         Text("No payments in this period.", style = fig(14, color = Tokens.Muted), modifier = Modifier.padding(vertical = 16.dp))
                     }
-                    shown.forEachIndexed { i, (v, entry) ->
+                    (if (showAllPays) shown else shown.take(10)).forEachIndexed { i, (v, entry) ->
                         if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Divider))
                         PaymentRow(v.state, entry, hidden) { if (v.id == activeId) navigator.openCustomer(entry.custId, "earnings") }
+                    }
+                    if (shown.size > 10) {
+                        Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Divider))
+                        Text(
+                            if (showAllPays) "Show less" else "Show all ${shown.size} payments",
+                            style = fig(14, FontWeight.Bold, Tokens.Blue), textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth().tap { showAllPays = !showAllPays }.padding(vertical = 14.dp),
+                        )
                     }
                 }
             }
@@ -402,7 +416,7 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
 
 @Composable
 private fun IconChip(icon: androidx.compose.ui.graphics.vector.ImageVector, cd: String, onClick: () -> Unit) {
-    Box(Modifier.size(44.dp).tap(onClick = onClick), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(48.dp).tap(onClick = onClick), contentAlignment = Alignment.Center) {
         Icon(icon, cd, tint = Tokens.InkSecondary, modifier = Modifier.size(22.dp))
     }
 }
@@ -411,24 +425,25 @@ private fun IconChip(icon: androidx.compose.ui.graphics.vector.ImageVector, cd: 
 private fun MoneySplit(label: String, value: String, note: String, modifier: Modifier) {
     Column(modifier) {
         Text(label, style = fig(12, FontWeight.SemiBold, Tokens.OnDarkMuted))
-        Text(value, style = fig(18, FontWeight.Bold, Tokens.OnDark))
+        FitText(value, style = fig(18, FontWeight.Bold, Tokens.OnDark))
         Text(note, style = fig(11, color = Tokens.OnDarkFaint))
     }
 }
 
 @Composable
 private fun Line(label: String, value: String, sign: String?, bold: Boolean = false) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text((if (sign != null) "$sign " else "") + label, style = fig(if (bold) 16 else 14, if (bold) FontWeight.Bold else FontWeight.Normal, if (bold) Tokens.Ink else Tokens.InkSecondary))
-        Text(value, style = fig(if (bold) 17 else 14, FontWeight.Bold, if (sign == "−") Tokens.OrangeText else Tokens.Ink))
+    // The label takes the room left; the amount always stays whole.
+    Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text((if (sign != null) "$sign " else "") + label, Modifier.weight(1f), style = fig(if (bold) 16 else 14, if (bold) FontWeight.Bold else FontWeight.Normal, if (bold) Tokens.Ink else Tokens.InkSecondary))
+        Text(value, style = fig(16.takeIf { bold } ?: 14, FontWeight.Bold, if (sign == "−") Tokens.OrangeText else Tokens.Ink), maxLines = 1, softWrap = false)
     }
 }
 
 @Composable
 private fun Stat(label: String, value: String, modifier: Modifier) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, style = bric(22, FontWeight.Bold))
-        Text(label, style = fig(12, color = Tokens.Muted))
+        FitText(value, style = bric(22, FontWeight.Bold))
+        Text(label, style = fig(12, color = Tokens.Muted), maxLines = 1)
     }
 }
 
@@ -455,17 +470,18 @@ private fun PaymentRow(state: com.dailyworks.apnalaundry.domain.LaundryState, e:
         }
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
-            Text(c.name, style = fig(15, FontWeight.Bold), maxLines = 1)
-            Text(what + (if (e.time.isNotBlank()) " · ${e.time}" else ""), style = fig(12, color = Tokens.Muted), maxLines = 1)
+            Text(c.name, style = fig(15, FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text((if (e.time.isNotBlank()) "${e.time} · " else "") + what, style = fig(12, color = Tokens.Muted), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Text(if (hidden) "₹ ••••" else Money.rupees(e.amt), style = fig(15, FontWeight.Bold))
+        Spacer(Modifier.width(8.dp))
+        Text(if (hidden) "₹ ••••" else Money.rupees(e.amt), style = fig(15, FontWeight.Bold), maxLines = 1, softWrap = false)
     }
 }
 
 /** One shop's data in Earnings (multi-shop). */
 private data class ShopView(val id: String, val name: String, val state: LaundryState)
 
-private fun OrderRowShop(shopName: String?) = if (shopName != null) "$shopName · " else ""
+private fun OrderRowShop(shopName: String?) = if (shopName != null) " · $shopName" else ""
 
 /** One order in the Earnings list: name, number · date, amount and status; [shopName] with several shops. */
 @Composable
@@ -474,8 +490,9 @@ private fun OrderRow(state: com.dailyworks.apnalaundry.domain.LaundryState, o: c
     val (label, bg, fg) = statusChip(o.status)
     Row(Modifier.fillMaxWidth().tap(onClick = onClick).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text(c.name, style = fig(15, FontWeight.Bold), maxLines = 1)
-            Text(OrderRowShop(shopName) + "#${o.no()} · ${AppDate.plain(o.pickupDate)}", style = fig(12, color = Tokens.Muted), maxLines = 1)
+            Text(c.name, style = fig(15, FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            // The number and date first: a long shop name is the part that gets cut.
+            Text("#${o.no()} · ${AppDate.plain(o.pickupDate)}" + OrderRowShop(shopName), style = fig(12, color = Tokens.Muted), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Spacer(Modifier.width(8.dp))
         Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -486,6 +503,7 @@ private fun OrderRow(state: com.dailyworks.apnalaundry.domain.LaundryState, o: c
                     else -> Money.rupees(LaundryMath.amtOf(o))
                 },
                 style = fig(if (o.lines.isEmpty()) 12 else 15, if (o.lines.isEmpty()) FontWeight.SemiBold else FontWeight.Bold, if (o.lines.isEmpty()) Tokens.Muted else Tokens.Ink),
+                maxLines = 1, softWrap = false,
             )
             Box(Modifier.rounded(999.dp).background(bg).padding(horizontal = 8.dp, vertical = 2.dp)) {
                 Text(label, style = fig(11, FontWeight.Bold, fg))
@@ -506,14 +524,14 @@ private fun statusChip(s: com.dailyworks.apnalaundry.domain.OrderStatus): Triple
 @Composable
 private fun DateBox(label: String, iso: String, modifier: Modifier, onClick: () -> Unit) {
     Row(
-        modifier.height(52.dp).rounded(12.dp).background(Tokens.Card)
-            .border(1.5.dp, Tokens.FieldBorder, RoundedCornerShape(12.dp)).tap(onClick = onClick).padding(horizontal = 12.dp),
+        modifier.heightIn(min = 52.dp).rounded(12.dp).background(Tokens.Card)
+            .border(1.5.dp, Tokens.FieldBorder, RoundedCornerShape(12.dp)).tap(onClick = onClick).padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Icon(Icons.Outlined.CalendarMonth, null, tint = Tokens.Blue, modifier = Modifier.size(20.dp))
-        Column {
+        Column(Modifier.weight(1f)) {
             Text(label, style = fig(11, FontWeight.SemiBold, Tokens.Muted))
-            Text(AppDate.plain(iso), style = fig(14, FontWeight.Bold), maxLines = 1)
+            Text(AppDate.plain(iso), style = fig(14, FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }

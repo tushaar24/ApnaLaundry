@@ -1,5 +1,11 @@
 package com.dailyworks.apnalaundry.ui.screens.customer
 
+import androidx.compose.foundation.layout.Spacer
+import com.dailyworks.apnalaundry.ui.components.FitText
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -96,9 +102,9 @@ fun CustomerScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: Strin
                     Text(Selectors.initials(c.name), style = fig(18, FontWeight.Bold, Tokens.InkSecondary))
                 }
                 Column(Modifier.weight(1f)) {
-                    Text(c.name, style = bric(24, FontWeight.Bold))
+                    Text(c.name, style = bric(24, FontWeight.Bold), maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Text("+91 ${Selectors.fmtPhone(c.phone)} · ${Selectors.countNoun(Selectors.orderCount(state, c), "order")}", style = fig(13, color = Tokens.Muted))
-                    if (c.address.isNotBlank()) Text(c.address, style = fig(13, color = Tokens.Muted))
+                    if (c.address.isNotBlank()) Text(c.address, style = fig(13, color = Tokens.Muted), maxLines = 3, overflow = TextOverflow.Ellipsis)
                 }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -114,7 +120,7 @@ fun CustomerScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: Strin
             val balFg = if (bal > 0) Tokens.OrangeDeep else if (bal < 0) Tokens.BlueText else Tokens.Ink
             Column(Modifier.fillMaxWidth().rounded(16.dp).background(balBg).border(1.dp, balBd, RoundedCornerShape(16.dp)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(if (bal > 0) "$nm has to pay you" else if (bal < 0) "$nm has paid extra (advance)" else "All clear", style = fig(14, FontWeight.SemiBold, balFg))
-                Text(Money.rupees(bal), style = bric(30, FontWeight.Bold, balFg))
+                FitText(Money.rupees(bal), style = bric(28, FontWeight.Bold, balFg))
                 Text(
                     if (bal > 0) "Includes orders in progress at their current total."
                     else if (bal < 0) "Used automatically on the next bill."
@@ -122,13 +128,12 @@ fun CustomerScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: Strin
                     style = fig(12, color = balFg),
                 )
                 if (bal > 0) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        PrimaryButton("Receive payment", Modifier.weight(1f), height = 46.dp) { active = ActiveSheet.Receive(custId) }
-                        OutlineButton("Remind", Modifier.weight(1f), height = 46.dp, border = Tokens.OrangeBorder, fg = Tokens.OrangeText) {
-                            Analytics.reminderSent(custId, bal)
-                            sendReminderOnWhatsApp(context, state, custId, bal)
-                            shopVm.showInfo("Opening WhatsApp · reminder to $nm for ${Money.rupees(bal)}")
-                        }
+                    Spacer(Modifier.height(2.dp))
+                    PrimaryButton("Receive payment", height = 48.dp) { active = ActiveSheet.Receive(custId) }
+                    OutlineButton("Remind on WhatsApp", Modifier.fillMaxWidth(), height = 48.dp, border = Tokens.OrangeBorder, fg = Tokens.OrangeText) {
+                        Analytics.reminderSent(custId, bal)
+                        sendReminderOnWhatsApp(context, state, custId, bal)
+                        shopVm.showInfo("Opening WhatsApp · reminder to $nm for ${Money.rupees(bal)}")
                     }
                 }
             }
@@ -151,7 +156,10 @@ fun CustomerScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: Strin
                     }
                 }
             }
-            Text("+ Add old khata from notebook", style = fig(14, FontWeight.Bold, Tokens.Blue), modifier = Modifier.tap { active = ActiveSheet.AddOld(custId) })
+            Text(
+                "+ Add old khata from notebook", style = fig(14, FontWeight.Bold, Tokens.Blue),
+                modifier = Modifier.tap { active = ActiveSheet.AddOld(custId) }.padding(vertical = 12.dp),
+            )
 
             if (inProgress.isNotEmpty()) {
                 Text("ORDERS IN PROGRESS", style = fig(12, FontWeight.Bold, Tokens.Muted))
@@ -161,7 +169,7 @@ fun CustomerScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: Strin
             Segmented(listOf("Khata" to (tab == "khata"), "Orders" to (tab == "orders"))) { tab = if (it == 0) "khata" else "orders" }
 
             if (tab == "khata") {
-                val rows = khataRows(state, custId)
+                val rows = remember(state, custId) { khataRows(state, custId) }
                 if (rows.isEmpty()) Text("No khata entries yet", style = fig(14, color = Tokens.Muted))
                 rows.forEach { KhataRowView(it) }
             } else {
@@ -233,7 +241,7 @@ private fun KhataRowView(r: KhataRow) {
                 Text(r.sub, style = fig(12, color = Tokens.Muted))
                 Text(r.after, style = fig(12, FontWeight.SemiBold, Tokens.Muted))
             }
-            Text(r.amount, style = fig(16, FontWeight.Bold, r.amtColor))
+            Text(r.amount, style = fig(16, FontWeight.Bold, r.amtColor), maxLines = 1, softWrap = false)
         }
     }
 }
@@ -245,12 +253,12 @@ private fun OrderMiniRow(state: com.dailyworks.apnalaundry.domain.LaundryState, 
         Row(Modifier.fillMaxWidth().tap(onClick = onClick).padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("#${o.no()}", style = fig(15, FontWeight.Bold))
-                    Text(if (o.lines.isNotEmpty()) Money.rupees(LaundryMath.amtOf(o)) else "Not counted", style = fig(14, FontWeight.SemiBold, Tokens.InkSecondary))
+                    Text("#${o.no()}", style = fig(15, FontWeight.Bold), maxLines = 1, softWrap = false)
+                    Text(if (o.lines.isNotEmpty()) Money.rupees(LaundryMath.amtOf(o)) else "Not counted", style = fig(14, FontWeight.SemiBold, Tokens.InkSecondary), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Text(
                     AppDate.plain(o.pickupDate).substringAfter(", ") + " · " + (if (o.lines.isNotEmpty()) "${Selectors.itemsLabel(o)} · ${Selectors.svcLabel(o)}" else "Clothes counted at pickup"),
-                    style = fig(12, color = Tokens.Muted), maxLines = 1,
+                    style = fig(12, color = Tokens.Muted), maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
             }
             StatusPill(label, bg, fg)

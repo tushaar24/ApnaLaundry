@@ -1,5 +1,7 @@
 package com.dailyworks.apnalaundry.ui.screens.order
 
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
@@ -156,7 +158,7 @@ fun OrderDetailScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: I
 
                 // action
                 if (actLabel.isNotEmpty()) {
-                    PrimaryButton(actLabel, height = 54.dp) { onAct() }
+                    PrimaryButton(actLabel, height = 56.dp) { onAct() }
                 } else if (o.status == OrderStatus.DELIVERED) {
                     Box(Modifier.fillMaxWidth().rounded(12.dp).background(Tokens.BlueLight).tap { active = ActiveSheet.ChangeStatus(o.id) }.padding(14.dp)) {
                         Text("Delivered" + (if (o.doneAt.isNotBlank()) " · ${o.doneAt}" else "") + " · tap to change", style = fig(14, FontWeight.SemiBold, Tokens.BlueText))
@@ -168,7 +170,7 @@ fun OrderDetailScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: I
                     AppCard {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             o.lines.forEach { l ->
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                     Column(Modifier.weight(1f)) {
                                         Text(if (l.kg > 0) Selectors.weightLabel(l) else "${l.itemName} × ${l.qty}", style = fig(15, FontWeight.SemiBold))
                                         Text(
@@ -176,7 +178,7 @@ fun OrderDetailScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: I
                                             style = fig(12, color = Tokens.Muted),
                                         )
                                     }
-                                    Text(Money.rupees(l.amt), style = fig(15, FontWeight.SemiBold))
+                                    Text(Money.rupees(l.amt), style = fig(15, FontWeight.SemiBold), maxLines = 1, softWrap = false)
                                 }
                             }
                             if (o.express && o.exAmt > 0) DetailRow("Express", "+ ${Money.rupees(o.exAmt)}")
@@ -190,11 +192,11 @@ fun OrderDetailScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: I
                         }
                     }
                     // bill actions
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlineButton("View bill", Modifier.weight(1f), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { active = ActiveSheet.BillView(o.id) }
-                        OutlineButton("Download", Modifier.weight(1f), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { Analytics.billDownloaded(o.id, "order_detail"); shareBillPdf(context, state, o) }
-                        if (o.billSent) OutlineButton("Sent ✓", Modifier.weight(1f), height = 48.dp, border = Tokens.BlueBorder, fg = Tokens.BlueText) { sendOnWhatsApp(o) }
-                        else PrimaryButton("WhatsApp", Modifier.weight(1f), height = 48.dp) { sendOnWhatsApp(o) }
+                    if (o.billSent) OutlineButton("Bill sent ✓ · Send again", Modifier.fillMaxWidth(), height = 48.dp, border = Tokens.BlueBorder, fg = Tokens.BlueText) { sendOnWhatsApp(o) }
+                    else PrimaryButton("Send bill on WhatsApp", height = 48.dp) { sendOnWhatsApp(o) }
+                    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlineButton("View bill", Modifier.weight(1f).fillMaxHeight(), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { active = ActiveSheet.BillView(o.id) }
+                        OutlineButton("Download", Modifier.weight(1f).fillMaxHeight(), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { Analytics.billDownloaded(o.id, "order_detail"); scope.launch { shareBillPdf(context, state, o) } }
                     }
                     // Tags for the clothes, on the Bluetooth printer.
                     if (!cancelled) {
@@ -219,8 +221,8 @@ fun OrderDetailScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: I
 
                 // manage
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlineButton("Edit", Modifier.weight(1f), height = 50.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { navigator.openNewOrder(editId = o.id, from = "order") }
-                    OutlineButton("More", Modifier.weight(1f), height = 50.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { active = ActiveSheet.Menu(o.id) }
+                    OutlineButton("Edit", Modifier.weight(1f), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { navigator.openNewOrder(editId = o.id, from = "order") }
+                    OutlineButton("More", Modifier.weight(1f), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { active = ActiveSheet.Menu(o.id) }
                 }
                 Spacer(Modifier.height(24.dp))
             }
@@ -245,9 +247,10 @@ private fun paymentText(o: com.dailyworks.apnalaundry.domain.Order, amt: Int): S
 
 @Composable
 private fun DetailRow(label: String, value: String, valueColor: Color = Tokens.Ink, bold: Boolean = false) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, style = fig(if (bold) 16 else 14, if (bold) FontWeight.Bold else FontWeight.Normal, if (bold) Tokens.Ink else Tokens.InkSecondary))
-        Text(value, style = fig(if (bold) 18 else 14, FontWeight.Bold, valueColor))
+    // The label takes the room left ("GST 18% (CGST + SGST) · rounded" wraps); the amount stays whole.
+    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(label, Modifier.weight(1f), style = fig(if (bold) 16 else 14, if (bold) FontWeight.Bold else FontWeight.Normal, if (bold) Tokens.Ink else Tokens.InkSecondary))
+        Text(value, style = fig(if (bold) 18 else 14, FontWeight.Bold, valueColor), maxLines = 1, softWrap = false)
     }
 }
 

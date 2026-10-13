@@ -1,5 +1,12 @@
 package com.dailyworks.apnalaundry.ui.screens.settings
 
+import com.dailyworks.apnalaundry.domain.BillDetails
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -64,8 +71,9 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
     val state by shopVm.state.collectAsStateWithLifecycle()
     val shop = state.shop
 
-    var name by remember(shop.name) { mutableStateOf(shop.name) }
-    LaunchedEffect(shop.name) { if (name.isBlank()) name = shop.name }
+    var name by rememberSaveable { mutableStateOf(shop.name) }
+    var nameFocused by remember { mutableStateOf(false) }
+    LaunchedEffect(shop.name) { if (!nameFocused) name = shop.name }
     LaunchedEffect(Unit) { Analytics.screen("settings") }
 
     Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars)) {
@@ -89,8 +97,13 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
                 SectionLabel("Shop name")
                 FieldBox(
                     value = name,
-                    onValueChange = { name = it; shopVm.updateShop(it, shop.expressPct) },
+                    onValueChange = {
+                        name = it.take(40)
+                        if (BillDetails.isNameOk(name)) shopVm.updateShop(BillDetails.cleanName(name), shop.expressPct)
+                    },
                     height = 52.dp,
+                    capitalization = KeyboardCapitalization.Words,
+                    fieldModifier = Modifier.onFocusChanged { nameFocused = it.isFocused },
                 )
             }
 
@@ -138,13 +151,14 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(Modifier.weight(1f)) {
-                            Row {
-                                Text(
-                                    if (billing.status?.subscription?.plan == "annual") "Yearly plan" else "Monthly plan",
-                                    style = fig(16, FontWeight.Bold),
-                                )
-                                if (billing.inGrace) Text(" · Cancelled", style = fig(16, FontWeight.Bold, Tokens.OrangeText))
-                            }
+                            // One text, so "Cancelled" wraps as a word, not letter by letter.
+                            Text(
+                                buildAnnotatedString {
+                                    append(if (billing.status?.subscription?.plan == "annual") "Yearly plan" else "Monthly plan")
+                                    if (billing.inGrace) withStyle(SpanStyle(color = Tokens.OrangeText)) { append(" · Cancelled") }
+                                },
+                                style = fig(16, FontWeight.Bold),
+                            )
                             Text(
                                 when {
                                     !billing.inGrace -> "Unlimited orders"
@@ -202,7 +216,7 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
             AppCard {
                 Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("Phone", style = fig(15, FontWeight.SemiBold, Tokens.Muted))
-                    Text("+91 ${shop.phone}", style = fig(15, FontWeight.Bold))
+                    Text("+91 ${shop.phone}", style = fig(15, FontWeight.Bold), maxLines = 1, softWrap = false)
                 }
             }
 
@@ -215,7 +229,7 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
             }
 
             Box(
-                Modifier.fillMaxWidth().height(52.dp).tap(enabled = !loggingOut) {
+                Modifier.fillMaxWidth().height(48.dp).tap(enabled = !loggingOut) {
                     loggingOut = true
                     onLogout { loggingOut = false }
                 },

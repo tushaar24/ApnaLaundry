@@ -103,7 +103,7 @@ fun ShareSummarySheet(text: String, vm: ShopViewModel, onDismiss: () -> Unit) {
             Box(Modifier.fillMaxWidth().rounded(14.dp).background(Tokens.Card).padding(14.dp)) {
                 Text(text, style = fig(14, FontWeight.SemiBold, Tokens.InkSecondary))
             }
-            PrimaryButton("Send on WhatsApp", height = 54.dp) {
+            PrimaryButton("Send on WhatsApp", height = 56.dp) {
                 vm.showInfo("Opening WhatsApp with this message…")
                 // No number: WhatsApp asks which chat to send the summary to.
                 openWhatsApp(context, "https://wa.me/?text=${Uri.encode(text)}")

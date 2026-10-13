@@ -1,5 +1,11 @@
 package com.dailyworks.apnalaundry.ui.components
 
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -114,17 +120,24 @@ fun OrderCard(
     val cardBorder = if (late) Tokens.OrangeBorder else Tokens.CardBorder
 
     AppCard(borderColor = cardBorder) {
-        Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            Row(Modifier.fillMaxWidth().tap(onClick = onOpen), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.fillMaxWidth().tap(onClick = onOpen).padding(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                // A long name gets "…" — the EXPRESS tag and the amount always show.
                 Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(c.name, style = fig(17, FontWeight.Bold), maxLines = 1)
+                    Text(c.name, Modifier.weight(1f, fill = false), style = fig(16, FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (o.express) ExpressTag()
                 }
-                if (counted) Text(Money.rupees(amt), style = fig(17, FontWeight.Bold))
+                if (counted) {
+                    Spacer(Modifier.width(8.dp))
+                    Text(Money.rupees(amt), style = fig(16, FontWeight.Bold), maxLines = 1, softWrap = false)
+                }
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
-                Text(meta, style = fig(13, color = Tokens.Muted), modifier = Modifier.weight(1f))
-                if (counted && o.status != OrderStatus.CANCELLED) Text(payLabel, style = fig(13, FontWeight.Bold, payFg))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
+                Text(meta, style = fig(13, color = Tokens.Muted), modifier = Modifier.weight(1f), maxLines = 3, overflow = TextOverflow.Ellipsis)
+                if (counted && o.status != OrderStatus.CANCELLED) {
+                    // Capped, so "₹1,250 more to collect" can't squeeze the order details into a thin strip.
+                    Text(payLabel, style = fig(13, FontWeight.Bold, payFg), textAlign = TextAlign.End, maxLines = 2, modifier = Modifier.widthIn(max = 120.dp))
+                }
             }
             if (o.note.isNotBlank()) {
                 Text(
@@ -138,23 +151,27 @@ fun OrderCard(
             if (showWhere) {
                 Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Icon(if (home) Icons.Outlined.Home else Icons.Outlined.Storefront, null, tint = Tokens.InkSecondary, modifier = Modifier.size(16.dp).padding(top = 2.dp))
-                    Text(where, style = fig(14, color = Tokens.InkSecondary))
+                    Text(where, style = fig(14, color = Tokens.InkSecondary), maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
             if (warn.isNotEmpty()) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Box(Modifier.size(7.dp).rounded(999.dp).background(Tokens.Orange))
-                    Text(warn, style = fig(13, FontWeight.Bold, Tokens.OrangeText))
+                    Text(warn, style = fig(13, FontWeight.Bold, Tokens.OrangeText), maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
             Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (canAct) {
-                    Box(Modifier.weight(1f).then(actionModifier).height(46.dp).rounded(12.dp).background(Tokens.BlueLight).tap(onClick = onAct), contentAlignment = Alignment.Center) {
-                        Text(actLabel, style = fig(15, FontWeight.Bold, Tokens.Blue))
+                    Box(
+                        Modifier.weight(1f).then(actionModifier).heightIn(min = 48.dp).rounded(12.dp).background(Tokens.BlueLight).tap(onClick = onAct)
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(actLabel, style = fig(15, FontWeight.Bold, Tokens.Blue), textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
                 } else {
-                    Box(Modifier.weight(1f).height(46.dp).rounded(12.dp).background(Tokens.Bg).padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) {
-                        Text(doneText, style = fig(14, FontWeight.SemiBold, Tokens.Muted))
+                    Box(Modifier.weight(1f).height(48.dp).rounded(12.dp).background(Tokens.Bg).padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) {
+                        Text(doneText, style = fig(14, FontWeight.SemiBold, Tokens.Muted), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
                 if (home && canAct) {
@@ -176,7 +193,7 @@ fun ExpressTag() {
 @Composable
 private fun IconSquare(icon: androidx.compose.ui.graphics.vector.ImageVector, cd: String, onClick: () -> Unit) {
     Box(
-        Modifier.size(46.dp).rounded(12.dp).background(Tokens.Card).border(1.dp, Tokens.CardBorder, RoundedCornerShape(12.dp)).tap(onClick = onClick),
+        Modifier.size(48.dp).rounded(12.dp).background(Tokens.Card).border(1.dp, Tokens.CardBorder, RoundedCornerShape(12.dp)).tap(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, cd, tint = Tokens.InkSecondary, modifier = Modifier.size(20.dp))
@@ -186,6 +203,6 @@ private fun IconSquare(icon: androidx.compose.ui.graphics.vector.ImageVector, cd
 @Composable
 fun StatusPill(label: String, bg: Color, fg: Color) {
     Box(Modifier.rounded(999.dp).background(bg).padding(horizontal = 10.dp, vertical = 4.dp)) {
-        Text(label, style = fig(12, FontWeight.Bold, fg))
+        Text(label, style = fig(12, FontWeight.Bold, fg), maxLines = 1, softWrap = false)
     }
 }

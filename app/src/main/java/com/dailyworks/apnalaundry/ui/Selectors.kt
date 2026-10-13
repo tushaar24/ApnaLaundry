@@ -68,7 +68,9 @@ object Selectors {
     /** "1 order" / "3 orders" — counted label with the right plural. */
     fun countNoun(n: Int, noun: String): String = "$n $noun${if (n == 1) "" else "s"}"
 
-    fun trimKg(kg: Double): String = if (kg % 1.0 == 0.0) kg.toInt().toString() else kg.toString()
+    /** "4", "4.5", "7.3" — sums of kg are doubles (3.1 + 4.2 = 7.300000000000001), so round to 2 places. */
+    fun trimKg(kg: Double): String =
+        java.math.BigDecimal.valueOf(kg).setScale(2, java.math.RoundingMode.HALF_UP).stripTrailingZeros().toPlainString()
 
     /** Orders for a customer that are not yet in khata (in progress). */
     fun orderCount(state: LaundryState, c: Customer): Int =

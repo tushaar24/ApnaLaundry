@@ -1,5 +1,10 @@
 package com.dailyworks.apnalaundry.ui.screens.customer
 
+import com.dailyworks.apnalaundry.ui.components.FitText
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material.icons.outlined.Download
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -84,6 +89,7 @@ private val BoxBorder = Color(0xFFB8B2A7)
 fun CombinedBillScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: String) {
     val state by shopVm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val c = Selectors.customer(state, custId)
     val nm = Selectors.firstName(c.name)
     val today = AppDate.TODAY
@@ -158,7 +164,7 @@ fun CombinedBillScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: S
                         if (picked.isEmpty()) "Nothing ticked" else "${Selectors.countNoun(picked.size, "order")} ticked",
                         style = fig(12, FontWeight.SemiBold, Tokens.Muted),
                     )
-                    Text(Money.rupees(totals.total), style = bric(22, FontWeight.Bold))
+                    FitText(Money.rupees(totals.total), style = bric(22, FontWeight.Bold))
                     Text(
                         when {
                             picked.isEmpty() -> "Tick at least one order"
@@ -172,7 +178,7 @@ fun CombinedBillScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: S
                         }),
                     )
                 }
-                PrimaryButton("See bill", Modifier.width(140.dp), enabled = picked.isNotEmpty(), height = 52.dp) { preview = true }
+                PrimaryButton("See bill", Modifier.width(128.dp), enabled = picked.isNotEmpty(), height = 56.dp) { preview = true }
             }
         } else {
             val receipt = remember(state, custId, selected, period, showItems) {
@@ -203,22 +209,30 @@ fun CombinedBillScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: S
                     )
                 }
                 Text(
-                    "Goes to $nm on WhatsApp as a PDF, in your ${BillDetails.templateLabel(state.shop.billTemplate)} bill design.",
+                    "Goes to $nm on WhatsApp as a picture, in your ${BillDetails.templateLabel(state.shop.billTemplate)} bill design.",
                     style = fig(13, color = Tokens.Muted),
                 )
             }
             BottomBar {
-                OutlineButton("Download", Modifier.weight(1f), height = 54.dp, border = Tokens.CardBorder, fg = Tokens.Ink) {
-                    shareCombinedBillPdf(context, receipt)
-                }
-                PrimaryButton("Send on WhatsApp", Modifier.weight(1f), height = 54.dp) {
-                    sendCombinedBillOnWhatsApp(context, state, custId, receipt)
-                    Analytics.combinedBillSent(custId, receipt.orders, receipt.totalAmount, receipt.dueAmount)
-                    shopVm.showInfo(
-                        "Opening WhatsApp · combined bill to $nm · ${Selectors.countNoun(receipt.orders, "order")}, " +
-                            if (receipt.fullyPaid) "all paid" else "${receipt.due} to pay",
-                    )
-                    navigator.back()
+                // Download as an icon, so "Send on WhatsApp" gets the width (no wrapping).
+                Box(
+                    Modifier.size(56.dp).rounded(14.dp).border(1.5.dp, Tokens.CardBorder, RoundedCornerShape(14.dp))
+                        .tap { scope.launch { shareCombinedBillPdf(context, receipt) } },
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Icons.Outlined.Download, "Download", tint = Tokens.Ink, modifier = Modifier.size(24.dp)) }
+                var sending by remember { mutableStateOf(false) }
+                PrimaryButton(if (sending) "Opening WhatsApp…" else "Send on WhatsApp", Modifier.weight(1f), enabled = !sending, height = 56.dp) {
+                    sending = true
+                    scope.launch {
+                        // Sent before leaving: leaving first would cancel it.
+                        try { sendCombinedBillOnWhatsApp(context, state, custId, receipt) } finally { sending = false }
+                        Analytics.combinedBillSent(custId, receipt.orders, receipt.totalAmount, receipt.dueAmount)
+                        shopVm.showInfo(
+                            "Opening WhatsApp · combined bill to $nm · ${Selectors.countNoun(receipt.orders, "order")}, " +
+                                if (receipt.fullyPaid) "all paid" else "${receipt.due} to pay",
+                        )
+                        navigator.back()
+                    }
                 }
             }
         }
@@ -317,14 +331,14 @@ private fun OrderTickRow(o: Order, on: Boolean, onToggle: () -> Unit) {
             ) {
                 if (on) Icon(Icons.Outlined.Check, null, tint = Tokens.OnDark, modifier = Modifier.size(16.dp))
             }
-            Column(Modifier.weight(1f)) {
-                Text("#${o.no()} · ${CombinedBill.dayMonth(o.pickupDate)}", style = fig(15, FontWeight.Bold))
+            // The status pill sits under the order (not beside the amount), so the
+            // order number keeps its width on a narrow phone.
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("#${o.no()} · ${CombinedBill.dayMonth(o.pickupDate)}", style = fig(15, FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text("${Selectors.itemsLabel(o)} · ${Selectors.svcLabel(o)}", style = fig(13, color = Tokens.Muted), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(Money.rupees(LaundryMath.amtOf(o)), style = fig(16, FontWeight.Bold))
                 StatusPill(tag.label, tagBg, tagFg)
             }
+            Text(Money.rupees(LaundryMath.amtOf(o)), style = fig(16, FontWeight.Bold), maxLines = 1, softWrap = false)
         }
     }
 }
@@ -332,12 +346,12 @@ private fun OrderTickRow(o: Order, on: Boolean, onToggle: () -> Unit) {
 @Composable
 private fun DateField(label: String, iso: String, modifier: Modifier = Modifier, onTap: () -> Unit) {
     Column(
-        modifier.height(56.dp).rounded(12.dp).background(Tokens.Card).border(1.5.dp, Tokens.FieldBorder, RoundedCornerShape(12.dp))
+        modifier.heightIn(min = 56.dp).rounded(12.dp).background(Tokens.Card).border(1.5.dp, Tokens.FieldBorder, RoundedCornerShape(12.dp))
             .tap(onClick = onTap).padding(horizontal = 14.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.Center,
     ) {
         Text(label, style = fig(11, FontWeight.SemiBold, Tokens.Muted))
-        Text(CombinedBill.dayMonthYear(iso), style = fig(15, FontWeight.SemiBold))
+        Text(CombinedBill.dayMonthYear(iso), style = fig(15, FontWeight.SemiBold), maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

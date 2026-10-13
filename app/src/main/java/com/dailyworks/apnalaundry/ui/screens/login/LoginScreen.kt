@@ -1,5 +1,8 @@
 package com.dailyworks.apnalaundry.ui.screens.login
 
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.ui.platform.LocalDensity
 import com.dailyworks.apnalaundry.push.AskNotificationPermission
 import android.app.Activity
 import android.content.Context
@@ -142,11 +145,13 @@ private fun ColumnScope.PhoneStep(ui: AuthUiState, vm: AuthViewModel) {
     // size and the hero gets what's left — the art shrinks into that space
     // (hidden when it would be a sliver), and on short heights the ticks, then
     // the headline, then the whole hero drop out.
+    val fs = LocalDensity.current.fontScale.coerceAtLeast(1f)
+    val imeUp = WindowInsets.isImeVisible
     BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
         val h = maxHeight
-        val compact = h < 720.dp
+        val compact = h < 720.dp * fs
         Column(Modifier.fillMaxSize()) {
-            if (h >= 420.dp) {
+            if (h >= 420.dp * fs) {
                 Hero(bottom = if (compact) 16 else 24, compact = compact, modifier = Modifier.weight(1f).clipToBounds()) {
                     BrandPill()
                     BoxWithConstraints(
@@ -162,10 +167,10 @@ private fun ColumnScope.PhoneStep(ui: AuthUiState, vm: AuthViewModel) {
                             )
                         }
                     }
-                    if (h >= 500.dp) {
+                    if (!imeUp && h >= 500.dp * fs) {
                         Text("Laundry Business Made Easy!", style = bric(34, FontWeight.Bold, Tokens.OnDark).copy(lineHeight = 36.sp))
                     }
-                    if (h >= 680.dp) {
+                    if (!imeUp && h >= 680.dp * fs) {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Perk("Bills on WhatsApp")
                             Perk("Pickup & delivery tracking")
@@ -206,7 +211,8 @@ private fun PhoneSheet(ui: AuthUiState, vm: AuthViewModel) {
 private fun ColumnScope.OtpStep(ui: AuthUiState, vm: AuthViewModel) {
     // Short screens drop the art and tighten the hero so the boxes stay in view
     // (Continue is pinned above the keyboard either way).
-    val compact = LocalConfiguration.current.screenHeightDp < 720
+    val compact = WindowInsets.isImeVisible ||
+        LocalConfiguration.current.screenHeightDp < 720 * LocalDensity.current.fontScale.coerceAtLeast(1f)
     val activity = LocalContext.current.findActivity()
     FullHeightScroll {
         Hero(bottom = if (compact) 20 else 28, compact = compact) {
@@ -318,12 +324,13 @@ private fun CtaButton(text: String, enabled: Boolean, onClick: () -> Unit) {
     Box(
         Modifier
             .fillMaxWidth()
-            .height(58.dp)
+            .heightIn(min = 58.dp)
             .background(if (enabled) Tokens.Blue else Tokens.CardBorder, RoundedCornerShape(14.dp))
-            .tap(enabled = enabled, onClick = onClick),
+            .tap(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text, style = fig(17, FontWeight.Bold, if (enabled) Tokens.OnDark else Tokens.DisabledFg))
+        Text(text, style = fig(16, FontWeight.Bold, if (enabled) Tokens.OnDark else Tokens.DisabledFg), textAlign = TextAlign.Center)
     }
 }
 
@@ -332,10 +339,11 @@ private fun ResendButton(text: String, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .height(48.dp)
+            .heightIn(min = 48.dp)
             .background(Tokens.Card, RoundedCornerShape(12.dp))
             .border(1.5.dp, Tokens.Blue, RoundedCornerShape(12.dp))
-            .tap(onClick = onClick),
+            .tap(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -350,7 +358,7 @@ private fun PhoneField(value: String, onChange: (String) -> Unit, onDone: () -> 
     val focus = remember { FocusRequester() }
     var focused by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { if (autoFocus) focus.requestFocus() }
-    val textStyle = fig(19, FontWeight.SemiBold).copy(letterSpacing = 0.02.em)
+    val textStyle = fig(18, FontWeight.SemiBold).copy(letterSpacing = 0.02.em)
     Row(
         Modifier
             .fillMaxWidth()
@@ -361,9 +369,9 @@ private fun PhoneField(value: String, onChange: (String) -> Unit, onDone: () -> 
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text("+91", style = fig(19, FontWeight.SemiBold, Tokens.Muted))
+        Text("+91", style = fig(18, FontWeight.SemiBold, Tokens.Muted))
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-            if (value.isEmpty()) Text("Mobile Number", style = textStyle.copy(color = Tokens.Placeholder), maxLines = 1)
+            if (value.isEmpty()) Text("Mobile Number", style = textStyle.copy(color = Tokens.Placeholder), maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
             BasicTextField(
                 value = value,
                 onValueChange = onChange,
@@ -405,7 +413,7 @@ private fun BrandPill(small: Boolean = false) {
             Modifier.size(if (small) 30.dp else 34.dp).background(Tokens.Blue, RoundedCornerShape(if (small) 9.dp else 10.dp)),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(painterResource(R.drawable.ic_login_drop), null, tint = Tokens.OnDark, modifier = Modifier.size(if (small) 17.dp else 19.dp))
+            Icon(painterResource(R.drawable.ic_login_drop), null, tint = Tokens.OnDark, modifier = Modifier.size(if (small) 16.dp else 20.dp))
         }
         Text(
             buildAnnotatedString {
@@ -498,11 +506,11 @@ private fun OtpStatus(ui: AuthUiState) {
         ui.error != null -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Icon(Icons.Outlined.ErrorOutline, null, tint = Tokens.ErrorRed, modifier = Modifier.size(18.dp))
             val attempts = ui.attemptsRemaining?.takeIf { it < 5 }?.let { " · $it attempts left" } ?: ""
-            Text(ui.error + attempts, style = fig(14, FontWeight.SemiBold, Tokens.ErrorRed))
+            Text(ui.error + attempts, style = fig(14, FontWeight.SemiBold, Tokens.ErrorRed), modifier = Modifier.weight(1f, fill = false))
         }
         ui.otpValid -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Box(Modifier.size(20.dp).background(Tokens.Green, CircleShape), contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.Check, null, tint = Tokens.OnDark, modifier = Modifier.size(14.dp))
+                Icon(Icons.Filled.Check, null, tint = Tokens.OnDark, modifier = Modifier.size(16.dp))
             }
             Text("OTP filled in", style = fig(14, FontWeight.SemiBold, Tokens.GreenText))
         }
