@@ -111,7 +111,8 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
                 shopVm = shopVm, from = from,
                 onDone = {
                     if (from == "setup") {
-                        scope.launch { prefs.setSetupDone(true) }
+                        // First-time setup of a new shop: the one time the guide starts by itself.
+                        scope.launch { prefs.setGuideNewShop(true); prefs.setSetupDone(true) }
                         navigator.toHomeAfterSetup()
                     } else navigator.back()
                 },

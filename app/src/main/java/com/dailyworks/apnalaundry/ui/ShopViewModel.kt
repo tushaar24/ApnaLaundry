@@ -76,15 +76,18 @@ class ShopViewModel(
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     /**
-     * Where the shop is in the guide. Until it starts, it runs for a shop with
-     * no orders yet — so a reinstall that syncs old orders never shows it.
+     * Where the shop is in the guide. It starts by itself only for a brand-new
+     * shop right after its first-time setup on this phone (and still no
+     * orders) — never after a reinstall / login on a new phone (old orders
+     * still syncing), for an old shop that happens to have no orders, or for
+     * an added shop. Otherwise only from Settings → How to use the app.
      * Off entirely for the no-guide group.
      */
     val tour: StateFlow<TourStage> =
-        combine(prefs.tourStage, state, loaded, guideOn) { saved, s, ready, on ->
+        combine(prefs.tourStage, state, loaded, guideOn, prefs.guideNewShop) { saved, s, ready, on, newShop ->
             if (!on) return@combine TourStage.DONE
             saved?.let { runCatching { TourStage.valueOf(it) }.getOrNull() }
-                ?: if (ready && s.orders.isEmpty()) TourStage.ORDER else TourStage.DONE
+                ?: if (newShop && ready && s.orders.isEmpty()) TourStage.ORDER else TourStage.DONE
         }.stateIn(viewModelScope, SharingStarted.Eagerly, TourStage.DONE)
 
     /** The order the guide follows from ready to delivered: the one saved during it. */

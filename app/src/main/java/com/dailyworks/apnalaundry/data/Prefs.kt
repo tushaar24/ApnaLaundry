@@ -29,6 +29,8 @@ class Prefs(private val context: Context) {
     private val GUIDE_MUTED = booleanPreferencesKey("guide_muted")
     // A/B: this user's guide group from the server ("guide" / "no_guide"); unset = no guide.
     private val GUIDE_VARIANT = stringPreferencesKey("guide_variant")
+    /** This phone just took a brand-new shop through first-time setup: the guide may start by itself. */
+    private val GUIDE_NEW_SHOP = booleanPreferencesKey("guide_new_shop")
 
     // Auth (opaque server tokens — see data/remote/TokenManager)
     private val ACCESS_TOKEN = stringPreferencesKey("access_token")
@@ -67,6 +69,7 @@ class Prefs(private val context: Context) {
     val tourOrder: Flow<Int?> = context.dataStore.data.map { it[GUIDE_ORDER] }
     val tourMuted: Flow<Boolean> = context.dataStore.data.map { it[GUIDE_MUTED] ?: false }
     val guideVariant: Flow<String?> = context.dataStore.data.map { it[GUIDE_VARIANT] }
+    val guideNewShop: Flow<Boolean> = context.dataStore.data.map { it[GUIDE_NEW_SHOP] ?: false }
     val userPhone: Flow<String?> = context.dataStore.data.map { it[USER_PHONE] }
     val lastSyncCheckpoint: Flow<Long> = context.dataStore.data.map { it[SYNC_CHECKPOINT] ?: 0L }
     val shopsJson: Flow<String?> = context.dataStore.data.map { it[SHOPS] }
@@ -79,6 +82,7 @@ class Prefs(private val context: Context) {
     suspend fun setTourOrder(id: Int) { context.dataStore.edit { it[GUIDE_ORDER] = id } }
     suspend fun setTourMuted(v: Boolean) { context.dataStore.edit { it[GUIDE_MUTED] = v } }
     suspend fun setGuideVariant(v: String) { context.dataStore.edit { it[GUIDE_VARIANT] = v } }
+    suspend fun setGuideNewShop(v: Boolean) { context.dataStore.edit { it[GUIDE_NEW_SHOP] = v } }
     suspend fun setLastSyncCheckpoint(v: Long) { context.dataStore.edit { it[SYNC_CHECKPOINT] = v } }
     suspend fun setShops(json: String) { context.dataStore.edit { it[SHOPS] = json } }
     suspend fun setActiveShop(id: String) { context.dataStore.edit { it[ACTIVE_SHOP] = id } }
@@ -162,7 +166,7 @@ class Prefs(private val context: Context) {
             it[SYNC_CHECKPOINT] = 0L
             it.remove(SHOPS); it.remove(ACTIVE_SHOP)
             it.asMap().keys.filter { k -> k.name.startsWith(SHOP_CHECKPOINT_PREFIX) }.forEach { k -> it.remove(k) }
-            it.remove(GUIDE_STAGE); it.remove(GUIDE_ORDER); it.remove(GUIDE_VARIANT)
+            it.remove(GUIDE_STAGE); it.remove(GUIDE_ORDER); it.remove(GUIDE_VARIANT); it.remove(GUIDE_NEW_SHOP)
             it.remove(ACCESS_TOKEN); it.remove(ACCESS_EXPIRES_AT); it.remove(REFRESH_TOKEN)
             it.remove(USER_ID); it.remove(USER_PHONE)
             it.remove(SUB_ACTIVE); it.remove(SUB_ACTIVE_USER); it.remove(SUB_ENDS_AT); it.remove(FREE_ORDERS)
