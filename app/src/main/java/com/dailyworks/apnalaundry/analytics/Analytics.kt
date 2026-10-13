@@ -253,6 +253,18 @@ object Analytics {
     fun earningsPeriodChanged(period: String) =
         track("Earnings Period Changed", mapOf("period" to period))
 
+    // ---- first-order tour ----
+
+    fun tourStepViewed(step: String, index: Int) =
+        track("Tour Step Viewed", mapOf("step" to step, "step_index" to index))
+
+    fun tourSkipped(step: String) = track("Tour Skipped", mapOf("step" to step))
+
+    /** The tour closed: [completed] = the first order was saved before it ended. */
+    fun tourEnded(completed: Boolean) = track("Tour Ended", mapOf("completed" to completed))
+
+    fun tourReplayed() = track("Tour Replayed")
+
     fun orderSearchOpened() = track("Order Search Opened")
 
     // ---- billing / paywall funnel (₹2 trial hard gate) ----
