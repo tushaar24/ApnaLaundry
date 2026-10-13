@@ -253,6 +253,36 @@ object Analytics {
     fun earningsPeriodChanged(period: String) =
         track("Earnings Period Changed", mapOf("period" to period))
 
+    // ---- the guide (first order → ready → delivered + money → khata → earnings) ----
+    // part: 1–5, part_name: new_order | ready | deliver | khata | earnings.
+
+    /** source: auto (a new shop's first Home) | settings (Settings → How to use the app). */
+    fun tourStarted(source: String) = track("Tour Started", mapOf("source" to source))
+
+    /** A guide card on screen (or a tip inside a sheet); sound = its voice is on. */
+    fun tourStepViewed(step: String, part: Int, partName: String, sound: Boolean) =
+        track("Tour Step Viewed", mapOf("step" to step, "part" to part, "part_name" to partName, "sound" to sound))
+
+    fun tourPartCompleted(part: Int, partName: String) =
+        track("Tour Part Completed", mapOf("part" to part, "part_name" to partName))
+
+    /** "Later" on the order's card: hidden until the app is opened again. */
+    fun tourLater(step: String, part: Int) = track("Tour Later", mapOf("step" to step, "part" to part))
+
+    fun tourSkipped(step: String, part: Int) = track("Tour Skipped", mapOf("step" to step, "part" to part))
+
+    /** The last card's Finish: all five parts seen. */
+    fun tourCompleted() = track("Tour Completed")
+
+    /** The guide's sound button: on = turned the voice back on. */
+    fun tourSound(on: Boolean, step: String) =
+        track(if (on) "Tour Sound On" else "Tour Sound Off", mapOf("step" to step))
+
+    // ---- support ----
+    /** method: call | whatsapp; from: settings | tour_end. */
+    fun supportContacted(method: String, from: String) =
+        track("Support Contacted", mapOf("method" to method, "from" to from))
+
     fun orderSearchOpened() = track("Order Search Opened")
 
     // ---- billing / paywall funnel (₹2 trial hard gate) ----

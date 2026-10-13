@@ -35,6 +35,10 @@ import com.dailyworks.apnalaundry.ui.components.fig
 import com.dailyworks.apnalaundry.ui.components.rounded
 import com.dailyworks.apnalaundry.ui.components.tap
 import com.dailyworks.apnalaundry.ui.theme.Tokens
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dailyworks.apnalaundry.ui.tour.TourStage
+import com.dailyworks.apnalaundry.ui.tour.TourSteps
+import com.dailyworks.apnalaundry.ui.tour.TourTip
 import kotlinx.coroutines.launch
 import com.dailyworks.apnalaundry.data.PhoneContacts
 import com.dailyworks.apnalaundry.data.PhoneContact
@@ -91,10 +95,12 @@ fun CustomerFormSheet(state: LaundryState, form: ActiveSheet.CustomerForm, vm: S
         return
     }
     val addrNeeded = form.needAddress && form.ctx == "order"
+    val tour by vm.tour.collectAsStateWithLifecycle()
     val valid = name.trim().isNotEmpty() && phone.length == 10 && dup == null && (!addrNeeded || address.trim().isNotEmpty())
 
     AppBottomSheet(title = if (editing) "Edit customer" else "New customer", onDismiss = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (!editing && form.ctx == "order" && tour == TourStage.ORDER) TourTip(TourSteps.customerForm)
             if (!editing) {
                 Row(
                     Modifier.fillMaxWidth().height(48.dp).rounded(14.dp).background(Tokens.BlueLight).tap { chooseFromContacts() },

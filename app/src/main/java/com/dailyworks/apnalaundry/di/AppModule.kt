@@ -18,6 +18,7 @@ import com.dailyworks.apnalaundry.data.sync.SyncScheduler
 import com.dailyworks.apnalaundry.ui.ShopViewModel
 import com.dailyworks.apnalaundry.ui.screens.login.AuthViewModel
 import com.dailyworks.apnalaundry.ui.screens.paywall.PaywallViewModel
+import com.dailyworks.apnalaundry.ui.tour.TourVoice
 import io.ktor.client.HttpClient
 import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.viewmodel.dsl.viewModel
@@ -45,6 +46,7 @@ val appModule = module {
     single { SyncManager(get(), get(), get(), get()) }
     single { SyncScheduler(get()) }
     single { FirebasePhoneAuth() }
+    single { TourVoice(androidContext(), get()) }
     single { AuthRepository(get(), get(), get(), get(), get()) }
 
     viewModel { ShopViewModel(get(), get(), get(), get(), get()) }

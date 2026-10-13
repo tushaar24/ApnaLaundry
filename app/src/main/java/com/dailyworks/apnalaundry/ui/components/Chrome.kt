@@ -82,7 +82,12 @@ enum class NavTab(val label: String, val icon: ImageVector) {
 }
 
 @Composable
-fun BottomNav(current: NavTab, onSelect: (NavTab) -> Unit) {
+fun BottomNav(
+    current: NavTab,
+    /** Per tab — e.g. the guide pointing at "Customers". */
+    itemModifier: (NavTab) -> Modifier = { Modifier },
+    onSelect: (NavTab) -> Unit,
+) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -98,6 +103,7 @@ fun BottomNav(current: NavTab, onSelect: (NavTab) -> Unit) {
             Column(
                 Modifier
                     .weight(1f)
+                    .then(itemModifier(tab))
                     .tap { onSelect(tab) }
                     .padding(vertical = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -133,7 +139,13 @@ fun ToastBar(text: String, hasUndo: Boolean, onUndo: () -> Unit, modifier: Modif
  * Send opens their WhatsApp chat with it typed in; Not now just closes.
  */
 @Composable
-fun WhatsAppPromptDialog(url: String, onSend: () -> Unit, onDismiss: () -> Unit) {
+fun WhatsAppPromptDialog(
+    url: String,
+    onSend: () -> Unit,
+    onDismiss: () -> Unit,
+    /** The guide's note above the buttons, while it's on. */
+    tip: com.dailyworks.apnalaundry.ui.tour.TourStep? = null,
+) {
     val text = remember(url) { runCatching { android.net.Uri.parse(url).getQueryParameter("text") }.getOrNull().orEmpty().replace("*", "") }
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
         Column(
@@ -147,6 +159,7 @@ fun WhatsAppPromptDialog(url: String, onSend: () -> Unit, onDismiss: () -> Unit)
                     .background(androidx.compose.ui.graphics.Color(0xFFE7F8EE))
                     .verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(14.dp),
             ) { Text(text, style = fig(14, FontWeight.SemiBold)) }
+            if (tip != null) com.dailyworks.apnalaundry.ui.tour.TourTip(tip)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(
                     Modifier.weight(1f).height(50.dp).rounded(14.dp).background(Tokens.NeutralFill).tap(onClick = onDismiss),

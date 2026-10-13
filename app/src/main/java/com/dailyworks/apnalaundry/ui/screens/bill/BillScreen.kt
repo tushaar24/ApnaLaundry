@@ -51,6 +51,13 @@ import com.dailyworks.apnalaundry.ui.nav.AppNavigator
 import com.dailyworks.apnalaundry.ui.sheets.ActiveSheet
 import com.dailyworks.apnalaundry.ui.sheets.SheetHost
 import com.dailyworks.apnalaundry.ui.theme.Tokens
+import com.dailyworks.apnalaundry.ui.tour.Spotlight
+import com.dailyworks.apnalaundry.ui.tour.TourStage
+import com.dailyworks.apnalaundry.ui.tour.TourSteps
+import com.dailyworks.apnalaundry.ui.tour.rememberSpotlightTargets
+import com.dailyworks.apnalaundry.ui.tour.spotlightTarget
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 
 @Composable
 fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, from: String) {
@@ -65,6 +72,12 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
     val due = amt - o.pre // still to collect before delivery
     val open = LaundryMath.isOpen(o)
     var active by remember { mutableStateOf<ActiveSheet?>(null) }
+    // The guide: the bill of the order just saved — send it, then on to Home.
+    val tour by shopVm.tour.collectAsStateWithLifecycle()
+    val tourOn = tour == TourStage.BILL && from == "new"
+    var sentInTour by rememberSaveable { mutableStateOf(false) }
+    val targets = rememberSpotlightTargets()
+    val sendInView = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
 
     LaunchedEffect(Unit) { Analytics.screen("bill") }
     // The bill page link for the WhatsApp message — fetched ahead, so Send is instant.
@@ -125,7 +138,8 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
                         OutlineButton("View bill", Modifier.weight(1f), height = 50.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { active = ActiveSheet.BillView(o.id) }
                         OutlineButton("Download", Modifier.weight(1f), height = 50.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { Analytics.billDownloaded(o.id, "bill"); shareBillPdf(context, state, o) }
                     }
-                    PrimaryButton(if (o.billSent) "Send again" else "Send on WhatsApp", height = 54.dp) {
+                    PrimaryButton(if (o.billSent) "Send again" else "Send on WhatsApp", Modifier.bringIntoViewRequester(sendInView).spotlightTarget(targets, "send"), height = 54.dp) {
+                        if (tourOn) { sentInTour = true; shopVm.setTour(TourStage.STATUS) }
                         scope.launch { sendBillOnWhatsApp(context, state, o, shopVm.billUrl(o.id)); shopVm.sendBill(o.id) }
                     }
                     Text(
@@ -163,6 +177,21 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
                 )
                 Spacer(Modifier.height(12.dp))
             }
+        }
+        if (tourOn && active == null) {
+            LaunchedEffect(Unit) { kotlinx.coroutines.delay(120); sendInView.bringIntoView() }
+            Spotlight(
+                targets, "send", TourSteps.billSend,
+                alt = "Later", onAlt = { shopVm.setTour(TourStage.STATUS); navigator.openHome() },
+                onSkip = { shopVm.tourSkip(TourSteps.billSend) },
+            )
+        } else if (sentInTour && tour == TourStage.STATUS && active == null) {
+            // Back from WhatsApp: on to the order's status, on Home.
+            Spotlight(
+                targets, null, TourSteps.billNext,
+                next = "Go to Home", onNext = { navigator.openHome() },
+                onSkip = { shopVm.tourSkip(TourSteps.billNext) },
+            )
         }
         SheetHost(active, state, shopVm, navigator, onOpen = { active = it }, onDismiss = { active = null })
     }

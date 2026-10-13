@@ -46,10 +46,20 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Icon
 import androidx.compose.foundation.layout.size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import com.dailyworks.apnalaundry.ui.components.OutlineButton
+import com.dailyworks.apnalaundry.ui.components.PrimaryButton
+import com.dailyworks.apnalaundry.ui.components.SUPPORT_PHONE_SHOWN
+import com.dailyworks.apnalaundry.ui.components.callSupport
+import com.dailyworks.apnalaundry.ui.components.whatsAppSupport
+
+private val WhatsAppGreen = Color(0xFF25D366)
 
 @Composable
 fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (onFailed: () -> Unit) -> Unit) {
     var loggingOut by remember { mutableStateOf(false) }
+    val context = LocalContext.current
     val paywallVm: PaywallViewModel = koinViewModel()
     val state by shopVm.state.collectAsStateWithLifecycle()
     val shop = state.shop
@@ -137,6 +147,43 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
                         }
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Tokens.Muted, modifier = Modifier.size(20.dp))
                     }
+                }
+            }
+
+            // Help: talk to us, or walk through the app again with the guide.
+            SectionLabel("Help")
+            AppCard {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column {
+                        Text("Need help? Talk to us", style = fig(16, FontWeight.Bold))
+                        Text(SUPPORT_PHONE_SHOWN, style = fig(14, color = Tokens.Muted))
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlineButton("Call us", Modifier.weight(1f), height = 48.dp) {
+                            Analytics.supportContacted("call", "settings")
+                            callSupport(context)
+                        }
+                        PrimaryButton("WhatsApp us", Modifier.weight(1f), height = 48.dp, bg = WhatsAppGreen) {
+                            Analytics.supportContacted("whatsapp", "settings")
+                            whatsAppSupport(context, shop.name)
+                        }
+                    }
+                }
+            }
+            AppCard {
+                Row(
+                    Modifier.fillMaxWidth().tap {
+                        shopVm.tourReplay()
+                        navigator.openHome()
+                    }.padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("How to use the app", style = fig(16, FontWeight.Bold))
+                        Text("Step by step, with sound: new order, ready, money, khata, earnings", style = fig(13, color = Tokens.Muted))
+                    }
+                    Text("Show me", style = fig(15, FontWeight.Bold, Tokens.Blue))
                 }
             }
 

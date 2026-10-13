@@ -93,6 +93,18 @@ import androidx.compose.material.icons.outlined.Edit
 import com.dailyworks.apnalaundry.domain.ServiceItem
 import com.dailyworks.apnalaundry.ui.screens.rates.RatesEditor
 import androidx.activity.compose.BackHandler
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.Dialog
+import com.dailyworks.apnalaundry.ui.tour.Spotlight
+import com.dailyworks.apnalaundry.ui.tour.SpotlightTargets
+import com.dailyworks.apnalaundry.ui.tour.TourStage
+import com.dailyworks.apnalaundry.ui.tour.TourSteps
+import com.dailyworks.apnalaundry.ui.tour.rememberSpotlightTargets
+import com.dailyworks.apnalaundry.ui.tour.spotlightTarget
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -153,11 +165,19 @@ fun NewOrderScreen(
         if (active is ActiveSheet.CustomerForm && (active as ActiveSheet.CustomerForm).editId == null) custFormOpened = true
     }
 
+    // The guide, part 1 on this screen: customer → shop/home → dates → clothes → save.
+    val tour by shopVm.tour.collectAsStateWithLifecycle()
+    val tourOn = tour == TourStage.ORDER && editId == null
+    var tourStep by rememberSaveable { mutableIntStateOf(TOUR_CUSTOMER) }
+    val targets = rememberSpotlightTargets()
+    val tourScroll = remember { List(TOUR_SAVE) { BringIntoViewRequester() } }
+
     // No customers yet: there's nobody to search, so open "Add customer" straight away.
     val vmLoaded by shopVm.loaded.collectAsStateWithLifecycle()
     var autoAdded by remember { mutableStateOf(false) }
     LaunchedEffect(vmLoaded) {
-        if (!vmLoaded || autoAdded || editId != null || presetCustId != null || state.customers.isNotEmpty()) return@LaunchedEffect
+        // The tour shows the "Add new customer" button instead.
+        if (!vmLoaded || autoAdded || editId != null || presetCustId != null || state.customers.isNotEmpty() || tourOn) return@LaunchedEffect
         autoAdded = true
         active = ActiveSheet.CustomerForm(
             editId = null, ctx = "order",
@@ -320,7 +340,7 @@ fun NewOrderScreen(
                 trailing = { EditIcon("Edit serial no.") { serialFocus.requestFocus() } },
             )
             // ---- customer ----
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.tourTarget(targets, tourScroll, TOUR_CUSTOMER), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SectionLabel("Customer")
                 if (cust != null) {
                     Row(
@@ -380,7 +400,7 @@ fun NewOrderScreen(
             }
 
             // ---- pickup / delivery ----
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Column(Modifier.tourTarget(targets, tourScroll, TOUR_ROUTE), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 RouteChoice("Pickup", pickup, "At shop", "From home") { pickup = it }
                 RouteChoice("Delivery", delivery, "At shop", "To home") { delivery = it }
                 if (anyHome) {
@@ -402,7 +422,7 @@ fun NewOrderScreen(
             }
 
             // ---- dates ----
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(Modifier.tourTarget(targets, tourScroll, TOUR_DATES), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 DateRow(
                     label = "Pickup",
                     seedIso = pickupDate,
@@ -440,7 +460,7 @@ fun NewOrderScreen(
             }
 
             // ---- clothes ----
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.tourTarget(targets, tourScroll, TOUR_CLOTHES), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(Modifier.fillMaxWidth().padding(end = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     SectionLabel("Clothes")
                     Row(
@@ -559,7 +579,7 @@ fun NewOrderScreen(
 
         // ---- sticky bottom bar ----
         Column(Modifier.fillMaxWidth().background(Tokens.Card).padding(16.dp).windowInsetsPadding(WindowInsets.navigationBars)) {
-            PrimaryButton(ctaLabel, enabled = ready, height = 56.dp) {
+            PrimaryButton(ctaLabel, Modifier.spotlightTarget(targets, "tour_$TOUR_SAVE"), enabled = ready, height = 56.dp) {
                 if (!ready) return@PrimaryButton
                 shopVm.saveOrder(
                     editId = editId, custId = cust!!.id, pickup = pickup, delivery = delivery,
@@ -573,11 +593,51 @@ fun NewOrderScreen(
                     note = note,
                 ) { result ->
                     saved = true
+                    if (tourOn) shopVm.tourOrderSaved(result.orderId)
                     if (editId != null) navigator.back()
                     else if (result.goToBill) navigator.openBill(result.orderId, "new")
                     else navigator.openHome()
                 }
             }
+        }
+    }
+
+    if (tourOn) {
+        LaunchedEffect(Unit) { shopVm.tourAutoStart() }
+        // A customer picked (or added) ends the customer step by itself.
+        LaunchedEffect(cust?.id) { if (tourStep == TOUR_CUSTOMER && cust != null) tourStep = TOUR_ROUTE }
+        LaunchedEffect(tourStep) {
+            if (tourStep < TOUR_SAVE) { kotlinx.coroutines.delay(120); tourScroll[tourStep].bringIntoView() }
+        }
+        if (vmLoaded && active == null && !editingRates) {
+            val step = when (tourStep) {
+                TOUR_CUSTOMER -> TourSteps.customer(hasCustomers = state.customers.isNotEmpty())
+                TOUR_ROUTE -> TourSteps.route
+                TOUR_DATES -> TourSteps.dates
+                TOUR_CLOTHES -> TourSteps.clothes
+                else -> TourSteps.save(
+                    ctaLabel, needsCustomer = cust == null, needsClothes = needsClothes,
+                    needsAddress = cust != null && anyHome && cust.address.isBlank(),
+                )
+            }
+            Spotlight(
+                targets, "tour_$tourStep", step,
+                next = when (tourStep) {
+                    TOUR_CUSTOMER -> null // the owner taps the real thing
+                    TOUR_SAVE -> if (ready) null else "Go back"
+                    TOUR_CLOTHES -> if (empty) null else "Done" // an order needs clothes
+                    else -> "Next"
+                },
+                onNext = {
+                    tourStep = when {
+                        tourStep != TOUR_SAVE -> tourStep + 1
+                        cust == null -> TOUR_CUSTOMER
+                        needsClothes -> TOUR_CLOTHES
+                        else -> TOUR_ROUTE
+                    }
+                },
+                onSkip = { shopVm.tourSkip(step) },
+            )
         }
     }
 
@@ -599,6 +659,18 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     is ContextWrapper -> baseContext.findActivity()
     else -> null
 }
+
+// The guide's steps on this screen.
+private const val TOUR_CUSTOMER = 0
+private const val TOUR_ROUTE = 1
+private const val TOUR_DATES = 2
+private const val TOUR_CLOTHES = 3
+private const val TOUR_SAVE = 4
+
+/** A tour target inside the form: the spotlight finds it, and the form scrolls to it. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+private fun Modifier.tourTarget(targets: SpotlightTargets, scroll: List<BringIntoViewRequester>, step: Int): Modifier =
+    bringIntoViewRequester(scroll[step]).spotlightTarget(targets, "tour_$step")
 
 private fun tatText(n: Int): String = when (n) { 0 -> "same day"; 1 -> "in 1 day"; else -> "in $n days" }
 

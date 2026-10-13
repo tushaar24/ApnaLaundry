@@ -31,6 +31,9 @@ import com.dailyworks.apnalaundry.ui.nav.AppNavGraph
 import com.dailyworks.apnalaundry.ui.nav.AppNavigator
 import com.dailyworks.apnalaundry.ui.theme.ApnaLaundryTheme
 import com.dailyworks.apnalaundry.ui.theme.Tokens
+import com.dailyworks.apnalaundry.ui.tour.TourPart
+import com.dailyworks.apnalaundry.ui.tour.TourStage
+import com.dailyworks.apnalaundry.ui.tour.TourSteps
 import com.razorpay.Checkout
 import com.razorpay.PaymentData
 import com.razorpay.PaymentResultWithDataListener
@@ -97,6 +100,7 @@ private fun AppRoot() {
     val navigator = AppNavigator(navController)
     val toast by shopVm.toast.collectAsStateWithLifecycle()
     val waPrompt by shopVm.waPrompt.collectAsStateWithLifecycle()
+    val tour by shopVm.tour.collectAsStateWithLifecycle()
     val context = androidx.compose.ui.platform.LocalContext.current
 
     Box(Modifier.fillMaxSize().background(Tokens.Bg)) {
@@ -120,6 +124,12 @@ private fun AppRoot() {
                 url = url,
                 onSend = { com.dailyworks.apnalaundry.ui.screens.bill.openWhatsApp(context, url); shopVm.dismissWaPrompt() },
                 onDismiss = shopVm::dismissWaPrompt,
+                // The guide: after marking ready (part 2) / delivered (part 3, already on khata).
+                tip = when (tour) {
+                    TourStage.STATUS -> TourSteps.whatsAppPrompt(TourPart.READY)
+                    TourStage.KHATA -> TourSteps.whatsAppPrompt(TourPart.DELIVER)
+                    else -> null
+                },
             )
         }
     }

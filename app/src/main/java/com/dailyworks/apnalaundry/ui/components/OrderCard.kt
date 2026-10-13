@@ -47,6 +47,8 @@ fun OrderCard(
     onCall: () -> Unit,
     /** Search results span all dates: say which day in the meta line. */
     showDate: Boolean = false,
+    /** On the action button ("Mark ready" …) — e.g. the guide pointing at it. */
+    actionModifier: Modifier = Modifier,
 ) {
     val o = order
     val c = Selectors.customer(state, o.custId)
@@ -147,7 +149,7 @@ fun OrderCard(
             }
             Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (canAct) {
-                    Box(Modifier.weight(1f).height(46.dp).rounded(12.dp).background(Tokens.BlueLight).tap(onClick = onAct), contentAlignment = Alignment.Center) {
+                    Box(Modifier.weight(1f).then(actionModifier).height(46.dp).rounded(12.dp).background(Tokens.BlueLight).tap(onClick = onAct), contentAlignment = Alignment.Center) {
                         Text(actLabel, style = fig(15, FontWeight.Bold, Tokens.Blue))
                     }
                 } else {

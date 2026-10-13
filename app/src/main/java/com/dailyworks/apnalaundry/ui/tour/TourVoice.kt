@@ -1,0 +1,104 @@
+package com.dailyworks.apnalaundry.ui.tour
+
+import android.content.Context
+import android.speech.tts.TextToSpeech
+import com.dailyworks.apnalaundry.data.Prefs
+import java.util.Locale
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+
+/**
+ * Reads the guide's cards out loud with the phone's own text-to-speech
+ * (Indian English voice when the phone has one). Sound is on by default; the
+ * owner's mute is remembered. No voice on the phone → the guide stays silent.
+ *
+ * Each card speaks as its [say] owner: a card leaving the screen stops only
+ * its own words, so the next card (or a sheet's tip) isn't cut off.
+ */
+class TourVoice(context: Context, private val prefs: Prefs) {
+    private val app = context.applicationContext
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    val muted: StateFlow<Boolean> = prefs.tourMuted.stateIn(scope, SharingStarted.Eagerly, false)
+
+    private var tts: TextToSpeech? = null
+    private var initOk = false // the engine answered SUCCESS (maybe before [tts] was set)
+    private var ready = false
+    private var pending: Pair<String, String>? = null // text, owner — said once the engine is up
+    private var speaking: String? = null // owner of the words being said
+
+    /** Says [text] (replacing anything being said), unless muted. */
+    fun say(text: String, owner: String) {
+        // Claimed now, so a stop(owner) before the words start still cancels them.
+        speaking = owner
+        scope.launch {
+            if (prefs.tourMuted.first() || speaking != owner) return@launch
+            val words = spoken(text)
+            if (words.isBlank()) return@launch
+            val engine = tts ?: create()
+            if (ready) engine.speak(words, TextToSpeech.QUEUE_FLUSH, null, owner) else pending = words to owner
+        }
+    }
+
+    /** Stops [owner]'s words; another card's words keep going. */
+    fun stop(owner: String) {
+        if (speaking != owner) return
+        stopAll()
+    }
+
+    fun stopAll() {
+        speaking = null
+        pending = null
+        tts?.stop()
+    }
+
+    /** [then] runs once the choice is saved — so a [say] in it already sees the sound on. */
+    fun setMuted(on: Boolean, then: () -> Unit = {}) {
+        if (on) stopAll()
+        scope.launch { prefs.setTourMuted(on); then() }
+    }
+
+    private fun create(): TextToSpeech {
+        val engine = TextToSpeech(app) { status ->
+            if (status != TextToSpeech.SUCCESS) return@TextToSpeech
+            initOk = true
+            tts?.let(::setUp) // else set up right after the constructor returns
+        }
+        tts = engine
+        if (initOk && !ready) setUp(engine)
+        return engine
+    }
+
+    /** Indian English (else UK / US), a little slower than normal talk; then any waiting words. */
+    private fun setUp(engine: TextToSpeech) {
+        val lang = listOf(Locale.forLanguageTag("en-IN"), Locale.UK, Locale.US)
+            .firstOrNull { engine.isLanguageAvailable(it) >= TextToSpeech.LANG_AVAILABLE }
+            ?: return
+        engine.language = lang
+        engine.setSpeechRate(0.9f)
+        ready = true
+        pending?.let { (words, owner) -> if (speaking == owner) engine.speak(words, TextToSpeech.QUEUE_FLUSH, null, owner) }
+        pending = null
+    }
+
+    /** The card's words as speech: no emoji, quotes or middle dots. */
+    private fun spoken(text: String): String = buildString {
+        text.codePoints().forEach { cp ->
+            when {
+                cp == '·'.code -> append(',')
+                cp in QUOTES -> Unit
+                cp < 0x2190 -> appendCodePoint(cp) // letters, digits, punctuation, ₹ — not ✓ 🎉
+            }
+        }
+    }.trim()
+
+    private companion object {
+        val QUOTES = setOf('‘'.code, '’'.code, '“'.code, '”'.code)
+    }
+}

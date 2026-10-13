@@ -12,9 +12,14 @@ import com.dailyworks.apnalaundry.data.Prefs
 import com.dailyworks.apnalaundry.data.Snapshot
 import com.dailyworks.apnalaundry.data.sync.SyncScheduler
 import com.dailyworks.apnalaundry.domain.*
+import com.dailyworks.apnalaundry.analytics.Analytics
+import com.dailyworks.apnalaundry.ui.tour.TourPart
+import com.dailyworks.apnalaundry.ui.tour.TourStage
+import com.dailyworks.apnalaundry.ui.tour.TourStep
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -56,6 +61,96 @@ class ShopViewModel(
 
     val hideAmounts: StateFlow<Boolean> =
         prefs.hideAmounts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    // ---- the guide (ui/tour): new order → ready → delivered + money → khata → earnings ----
+
+    /**
+     * Where the shop is in the guide. Until it starts, it runs for a shop with
+     * no orders yet — so a reinstall that syncs old orders never shows it.
+     */
+    val tour: StateFlow<TourStage> =
+        combine(prefs.tourStage, state, loaded) { saved, s, ready ->
+            saved?.let { runCatching { TourStage.valueOf(it) }.getOrNull() }
+                ?: if (ready && s.orders.isEmpty()) TourStage.ORDER else TourStage.DONE
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, TourStage.DONE)
+
+    /** The order the guide follows from ready to delivered: the one saved during it. */
+    val tourOrderId: StateFlow<Int?> = prefs.tourOrder.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** "Later" on the order's card: no guide on Home for the rest of this app session. */
+    private val _tourPaused = MutableStateFlow(false)
+    val tourPaused: StateFlow<Boolean> = _tourPaused
+
+    /** The guide's order, else the oldest order still open; null = none left to follow. */
+    fun tourOrder(s: LaundryState, id: Int? = tourOrderId.value): Order? =
+        s.orders.firstOrNull { it.id == id && it.status != OrderStatus.CANCELLED }
+            ?: s.orders.filter { LaundryMath.isOpen(it) }.minByOrNull { it.id }
+
+    init {
+        // Parts 2–3 follow the guide's order, however its status is changed:
+        // ready = part 2 done; delivered = part 3 done, on to khata. No order
+        // left to follow (cancelled / deleted) also moves on to khata.
+        viewModelScope.launch {
+            var last: OrderStatus? = null
+            combine(tour, state, tourOrderId, loaded) { t, s, id, ok ->
+                if (t != TourStage.STATUS || !ok) null else tourOrder(s, id)?.status ?: OrderStatus.CANCELLED
+            }.distinctUntilChanged().collect { st ->
+                when (st) {
+                    OrderStatus.READY ->
+                        if (last == OrderStatus.CREATED || last == OrderStatus.RECEIVED) partDone(TourPart.READY)
+                    OrderStatus.DELIVERED -> { partDone(TourPart.DELIVER); prefs.setTourStage(TourStage.KHATA.name) }
+                    OrderStatus.CANCELLED -> prefs.setTourStage(TourStage.KHATA.name)
+                    else -> Unit
+                }
+                last = st
+            }
+        }
+    }
+
+    fun setTour(stage: TourStage) = viewModelScope.launch { prefs.setTourStage(stage.name) }
+
+    /** A new shop's first look at the guide starts it (once). */
+    fun tourAutoStart() = viewModelScope.launch {
+        if (prefs.tourStage.first() != null) return@launch
+        prefs.setTourStage(TourStage.ORDER.name)
+        Analytics.tourStarted("auto")
+    }
+
+    /** Settings → How to use the app: the guide from the top. */
+    fun tourReplay() = viewModelScope.launch {
+        _tourPaused.value = false
+        prefs.setTourStage(TourStage.ORDER.name)
+        Analytics.tourStarted("settings")
+    }
+
+    /** The guide's order was saved: part 1 done, on to its bill. */
+    fun tourOrderSaved(orderId: Int) = viewModelScope.launch {
+        prefs.setTourOrder(orderId)
+        prefs.setTourStage(TourStage.BILL.name)
+        partDone(TourPart.ORDER)
+    }
+
+    fun tourLater(step: TourStep) {
+        Analytics.tourLater(step.id, step.part.n)
+        _tourPaused.value = true
+    }
+
+    fun tourSkip(step: TourStep) {
+        Analytics.tourSkipped(step.id, step.part.n)
+        setTour(TourStage.DONE)
+    }
+
+    /** Khata seen: part 4 done, on to earnings. */
+    fun tourKhataDone() { partDone(TourPart.KHATA); setTour(TourStage.EARNINGS) }
+
+    /** The last card's Finish. */
+    fun tourFinished() {
+        partDone(TourPart.EARNINGS)
+        Analytics.tourCompleted()
+        setTour(TourStage.DONE)
+    }
+
+    private fun partDone(part: TourPart) = Analytics.tourPartCompleted(part.n, part.key)
 
     /** Bumps when the shop logo finishes loading, so bills redraw with it. */
     private val _logoTick = MutableStateFlow(0)

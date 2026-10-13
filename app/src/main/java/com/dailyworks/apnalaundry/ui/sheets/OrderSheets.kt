@@ -61,6 +61,10 @@ import androidx.compose.ui.platform.LocalContext
 import com.dailyworks.apnalaundry.domain.LedgerKind
 import com.dailyworks.apnalaundry.ui.components.showDatePicker
 import com.dailyworks.apnalaundry.ui.theme.Tokens
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dailyworks.apnalaundry.ui.tour.TourStage
+import com.dailyworks.apnalaundry.ui.tour.TourSteps
+import com.dailyworks.apnalaundry.ui.tour.TourTip
 import kotlin.math.max
 
 @Composable
@@ -90,6 +94,7 @@ fun CollectPaymentSheet(state: LaundryState, orderId: Int, vm: ShopViewModel, on
     val upi = upiText.toIntOrNull() ?: 0
     val got = if (split) cash + upi else payAmt.toIntOrNull() ?: 0
     val left = due - got
+    val tour by vm.tour.collectAsStateWithLifecycle()
 
     AppBottomSheet(title = "Collect payment", subtitle = "From ${c.name} before handing over", onDismiss = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -148,6 +153,9 @@ fun CollectPaymentSheet(state: LaundryState, orderId: Int, vm: ShopViewModel, on
             Box(Modifier.fillMaxWidth().rounded(12.dp).background(prevBg).padding(14.dp)) {
                 Text(prevText, style = fig(14, FontWeight.SemiBold, prevFg))
             }
+
+            // The guide: what the three ways out mean, arrow at the buttons.
+            if (tour == TourStage.STATUS && !split) TourTip(TourSteps.paySheet)
 
             if (!split) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -220,8 +228,10 @@ fun ReadySheet(state: LaundryState, orderId: Int, vm: ShopViewModel, onDismiss: 
     val o = Selectors.order(state, orderId) ?: return onDismiss()
     val c = Selectors.customer(state, o.custId)
     var date by remember { mutableStateOf(o.deliveryDate) }
+    val tour by vm.tour.collectAsStateWithLifecycle()
     AppBottomSheet(title = "Mark ready", subtitle = "${c.name} · #${o.no()}", onDismiss = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            if (tour == TourStage.STATUS) TourTip(TourSteps.readySheet)
             DeliveryDateQuestion(o, date) { date = it }
             PrimaryButton(if (date.isBlank()) "Pick a delivery date" else "Mark ready", enabled = date.isNotBlank(), height = 56.dp) {
                 if (date.isNotBlank()) { vm.markReady(orderId, date); onDismiss() }

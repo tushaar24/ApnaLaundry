@@ -65,6 +65,16 @@ import com.dailyworks.apnalaundry.ui.nav.AppNavigator
 import com.dailyworks.apnalaundry.ui.sheets.ActiveSheet
 import com.dailyworks.apnalaundry.ui.sheets.SheetHost
 import com.dailyworks.apnalaundry.ui.theme.Tokens
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.dailyworks.apnalaundry.ui.components.callSupport
+import com.dailyworks.apnalaundry.ui.tour.Spotlight
+import com.dailyworks.apnalaundry.ui.tour.TourStage
+import com.dailyworks.apnalaundry.ui.tour.TourSteps
+import com.dailyworks.apnalaundry.ui.tour.rememberSpotlightTargets
+import com.dailyworks.apnalaundry.ui.tour.spotlightTarget
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import kotlin.math.max
 
@@ -80,6 +90,12 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
     var customTo by remember { mutableStateOf(AppDate.TODAY) }
     val context = androidx.compose.ui.platform.LocalContext.current
     var active by remember { mutableStateOf<ActiveSheet?>(null) }
+
+    // The guide, part 5: Sales, Money received, then the last card.
+    val tour by shopVm.tour.collectAsStateWithLifecycle()
+    val targets = rememberSpotlightTargets()
+    var earnStep by rememberSaveable { mutableIntStateOf(0) }
+    val moneyInView = remember { BringIntoViewRequester() }
 
     LaunchedEffect(Unit) { Analytics.screen("earnings") }
 
@@ -179,7 +195,7 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
 
             // Sales — same numbers as Home's tiles
             Column(
-                Modifier.fillMaxWidth().rounded(18.dp).background(Tokens.Blue).padding(16.dp),
+                Modifier.fillMaxWidth().spotlightTarget(targets, "sales").rounded(18.dp).background(Tokens.Blue).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Text("Sales · $periodTitle", style = fig(13, FontWeight.SemiBold, Tokens.OnDark.copy(alpha = 0.8f)))
@@ -212,7 +228,7 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
             }
 
             // Money received
-            AppCard(bg = Tokens.Ink, borderColor = Tokens.Ink) {
+            AppCard(Modifier.bringIntoViewRequester(moneyInView).spotlightTarget(targets, "money"), bg = Tokens.Ink, borderColor = Tokens.Ink) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("Money received · $periodTitle", style = fig(13, FontWeight.SemiBold, Tokens.OnDarkMuted))
                     Text(m(e.received), style = bric(34, FontWeight.Bold, Tokens.OnDark))
@@ -312,6 +328,29 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
         }
 
         BottomNav(current = NavTab.EARNINGS, onSelect = navigator::selectTab)
+    }
+
+    if (tour == TourStage.EARNINGS && active == null) {
+        // Nothing earned to show (orders deleted): straight to the last card.
+        val noEarnings = state.orders.isEmpty() && state.ledger.isEmpty()
+        when (if (noEarnings) 2 else earnStep) {
+            0 -> Spotlight(
+                targets, "sales", TourSteps.sales,
+                next = "Next", onNext = { earnStep = 1 }, onSkip = { shopVm.tourSkip(TourSteps.sales) },
+            )
+            1 -> {
+                LaunchedEffect(Unit) { kotlinx.coroutines.delay(120); moneyInView.bringIntoView() }
+                Spotlight(
+                    targets, "money", TourSteps.money,
+                    next = "Next", onNext = { earnStep = 2 }, onSkip = { shopVm.tourSkip(TourSteps.money) },
+                )
+            }
+            else -> Spotlight(
+                targets, null, TourSteps.done,
+                next = "Finish", onNext = { shopVm.tourFinished() },
+                alt = "Call us", onAlt = { Analytics.supportContacted("call", "tour_end"); callSupport(context) },
+            )
+        }
     }
 
     SheetHost(active, state, shopVm, navigator, onOpen = { active = it }, onDismiss = { active = null })

@@ -55,6 +55,13 @@ import com.dailyworks.apnalaundry.ui.nav.AppNavigator
 import com.dailyworks.apnalaundry.ui.sheets.ActiveSheet
 import com.dailyworks.apnalaundry.ui.sheets.SheetHost
 import com.dailyworks.apnalaundry.ui.theme.Tokens
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.dailyworks.apnalaundry.ui.tour.Spotlight
+import com.dailyworks.apnalaundry.ui.tour.TourStage
+import com.dailyworks.apnalaundry.ui.tour.TourSteps
+import com.dailyworks.apnalaundry.ui.tour.rememberSpotlightTargets
+import com.dailyworks.apnalaundry.ui.tour.spotlightTarget
 
 @Composable
 fun CustomersScreen(shopVm: ShopViewModel, navigator: AppNavigator, initialFilter: String) {
@@ -62,6 +69,13 @@ fun CustomersScreen(shopVm: ShopViewModel, navigator: AppNavigator, initialFilte
     var filter by remember { mutableStateOf(initialFilter.ifBlank { "all" }) }
     var query by remember { mutableStateOf("") }
     var active by remember { mutableStateOf<ActiveSheet?>(null) }
+
+    // The guide, part 4: the Khata tile, then a customer's row; then the Earnings tab.
+    val tour by shopVm.tour.collectAsStateWithLifecycle()
+    val targets = rememberSpotlightTargets()
+    var khataStep by rememberSaveable { mutableIntStateOf(0) }
+    val tourOrderId by shopVm.tourOrderId.collectAsStateWithLifecycle()
+    val tourCustId = state.orders.firstOrNull { it.id == tourOrderId }?.custId
 
     LaunchedEffect(Unit) { Analytics.screen("customers") }
 
@@ -97,7 +111,7 @@ fun CustomersScreen(shopVm: ShopViewModel, navigator: AppNavigator, initialFilte
                 })
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterTile("All", state.customers.size.toString(), "customers", Tokens.Ink, filter == "all", Modifier.weight(1f)) { filter = "all" }
-                    FilterTile("Khata", Money.rupees(sumOwe), "${owe.size} to collect", Tokens.OrangeText, filter == "baaki", Modifier.weight(1f)) { filter = if (filter == "baaki") "all" else "baaki" }
+                    FilterTile("Khata", Money.rupees(sumOwe), "${owe.size} to collect", Tokens.OrangeText, filter == "baaki", Modifier.weight(1f).spotlightTarget(targets, "khata_tile")) { filter = if (filter == "baaki") "all" else "baaki" }
                     FilterTile("Advance", Money.rupees(sumAdv), "${adv.size} paid extra", Tokens.BlueText, filter == "advance", Modifier.weight(1f)) { filter = if (filter == "advance") "all" else "advance" }
                 }
             }
@@ -110,7 +124,16 @@ fun CustomersScreen(shopVm: ShopViewModel, navigator: AppNavigator, initialFilte
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 96.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(list, key = { it.first.id }) { (c, bal) -> CustomerRow(state, c, bal) { navigator.openCustomer(c.id, "customers") } }
+                items(list, key = { it.first.id }) { (c, bal) ->
+                    // The guide points at the customer of its order (else the first row).
+                    val pointed = c.id == (tourCustId ?: list.firstOrNull()?.first?.id)
+                    Box(if (pointed) Modifier.spotlightTarget(targets, "khata_row") else Modifier) {
+                        CustomerRow(state, c, bal) {
+                            if (pointed && tour == TourStage.KHATA && khataStep == 1) shopVm.tourKhataDone()
+                            navigator.openCustomer(c.id, "customers")
+                        }
+                    }
+                }
                 if (list.isEmpty()) {
                     item {
                         Column(Modifier.fillMaxWidth().padding(top = 40.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -134,7 +157,24 @@ fun CustomersScreen(shopVm: ShopViewModel, navigator: AppNavigator, initialFilte
                 Text("Add customer", style = fig(16, FontWeight.Bold, Tokens.OnDark))
             }
         }
-        BottomNav(current = NavTab.CUSTOMERS, onSelect = navigator::selectTab)
+        BottomNav(current = NavTab.CUSTOMERS, itemModifier = { Modifier.spotlightTarget(targets, "nav_${it.name}") }, onSelect = navigator::selectTab)
+    }
+
+    if (active == null) when (tour) {
+        TourStage.KHATA -> when {
+            noCustomers || khataStep == 0 -> Spotlight(
+                targets, "khata_tile", TourSteps.khataTile,
+                next = "Next", onNext = { if (noCustomers) shopVm.tourKhataDone() else khataStep = 1 },
+                onSkip = { shopVm.tourSkip(TourSteps.khataTile) },
+            )
+            else -> Spotlight(
+                targets, "khata_row", TourSteps.khataCustomer,
+                next = "Next", onNext = { shopVm.tourKhataDone() },
+                onSkip = { shopVm.tourSkip(TourSteps.khataCustomer) },
+            )
+        }
+        TourStage.EARNINGS -> Spotlight(targets, "nav_EARNINGS", TourSteps.earningsTab, onSkip = { shopVm.tourSkip(TourSteps.earningsTab) })
+        else -> Unit
     }
 
     SheetHost(active, state, shopVm, navigator, onOpen = { active = it }, onDismiss = { active = null })

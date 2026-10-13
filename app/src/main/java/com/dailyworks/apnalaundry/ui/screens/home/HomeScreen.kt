@@ -82,6 +82,11 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.ui.platform.LocalDensity
 import com.dailyworks.apnalaundry.ui.components.showDatePicker
+import com.dailyworks.apnalaundry.ui.tour.Spotlight
+import com.dailyworks.apnalaundry.ui.tour.TourStage
+import com.dailyworks.apnalaundry.ui.tour.TourSteps
+import com.dailyworks.apnalaundry.ui.tour.rememberSpotlightTargets
+import com.dailyworks.apnalaundry.ui.tour.spotlightTarget
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -89,6 +94,10 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
     val state by shopVm.state.collectAsStateWithLifecycle()
     val hidden by shopVm.hideAmounts.collectAsStateWithLifecycle()
     val loaded by shopVm.loaded.collectAsStateWithLifecycle()
+    val tour by shopVm.tour.collectAsStateWithLifecycle()
+    val tourPaused by shopVm.tourPaused.collectAsStateWithLifecycle()
+    val waPrompt by shopVm.waPrompt.collectAsStateWithLifecycle()
+    val targets = rememberSpotlightTargets()
     val context = LocalContext.current
 
     // The database hasn't answered yet: the state is a placeholder, and its zero
@@ -121,6 +130,25 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
     var active by remember { mutableStateOf<ActiveSheet?>(null) }
 
     val startNewOrder: (String) -> Unit = { from -> navigator.openNewOrder(from = from) }
+
+    // The guide, parts 2–3: bring its order's card on screen (tab + day), so the
+    // arrow can point at the card's button.
+    val tourOrder = if (tour == TourStage.STATUS && !tourPaused) shopVm.tourOrder(state) else null
+    LaunchedEffect(tourOrder?.id, tourOrder?.status) {
+        val o = tourOrder ?: return@LaunchedEffect
+        val today = AppDate.TODAY
+        query = ""; filter = "all"
+        if (o.status == OrderStatus.READY) {
+            tabPickup = false
+            selDate = if (o.deliveryDate.isBlank() || o.deliveryDate < today) today else o.deliveryDate
+        } else {
+            tabPickup = true
+            selDate = if (o.status == OrderStatus.CREATED && o.pickupDate < today) today else o.pickupDate
+        }
+    }
+    // Saved without opening its bill (or back from it): on to the order's status.
+    LaunchedEffect(tour) { if (tour == TourStage.BILL) shopVm.setTour(TourStage.STATUS) }
+    fun actTarget(o: Order): Modifier = if (o.id == tourOrder?.id) Modifier.spotlightTarget(targets, "tour_act") else Modifier
 
     LaunchedEffect(Unit) { Analytics.screen("home") }
 
@@ -156,7 +184,7 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
 
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (noOrders) {
-                EmptyHome { startNewOrder("empty_home") }
+                EmptyHome(Modifier.spotlightTarget(targets, "new_order")) { startNewOrder("empty_home") }
                 return@Box
             }
             LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, bottom = 170.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -194,7 +222,7 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                             }
                         }
                     }
-                    items(results) { o -> OrderCard(state, o, tabPickup, false, { navigator.openOrder(o.id) }, { act(o) }, { active = ActiveSheet.Menu(o.id) }, { dial(context, o, state) }, showDate = true) }
+                    items(results) { o -> OrderCard(state, o, tabPickup, false, { navigator.openOrder(o.id) }, { act(o) }, { active = ActiveSheet.Menu(o.id) }, { dial(context, o, state) }, showDate = true, actionModifier = actTarget(o)) }
                     return@LazyColumn
                 }
 
@@ -208,7 +236,7 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                                 SectionLabel((if (tabPickup) "Pending from earlier · " else "Late or no delivery date · ") + pending.size, color = Tokens.OrangeText)
                             }
                         }
-                        items(pending) { o -> OrderCard(state, o, tabPickup, true, { navigator.openOrder(o.id) }, { act(o) }, { active = ActiveSheet.Menu(o.id) }, { dial(context, o, state) }) }
+                        items(pending) { o -> OrderCard(state, o, tabPickup, true, { navigator.openOrder(o.id) }, { act(o) }, { active = ActiveSheet.Menu(o.id) }, { dial(context, o, state) }, actionModifier = actTarget(o)) }
                     }
                 }
 
@@ -222,19 +250,42 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                         }
                     }
                 }
-                items(list) { o -> OrderCard(state, o, tabPickup, false, { navigator.openOrder(o.id) }, { act(o) }, { active = ActiveSheet.Menu(o.id) }, { dial(context, o, state) }) }
+                items(list) { o -> OrderCard(state, o, tabPickup, false, { navigator.openOrder(o.id) }, { act(o) }, { active = ActiveSheet.Menu(o.id) }, { dial(context, o, state) }, actionModifier = actTarget(o)) }
             }
 
             // New order FAB
             run {
-                Row(Modifier.align(Alignment.BottomEnd).padding(16.dp).height(58.dp).rounded(999.dp).background(Tokens.Blue).tap { startNewOrder("home") }.padding(start = 18.dp, end = 22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.align(Alignment.BottomEnd).padding(16.dp).spotlightTarget(targets, "new_order").height(58.dp).rounded(999.dp).background(Tokens.Blue).tap { startNewOrder("home") }.padding(start = 18.dp, end = 22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(Icons.Filled.Add, null, tint = Tokens.OnDark, modifier = Modifier.size(22.dp))
                     Text("New order", style = fig(17, FontWeight.Bold, Tokens.OnDark))
                 }
             }
         }
 
-        BottomNav(NavTab.ORDERS) { query = ""; navigator.selectTab(it) }
+        BottomNav(NavTab.ORDERS, itemModifier = { Modifier.spotlightTarget(targets, "nav_${it.name}") }) { query = ""; navigator.selectTab(it) }
+    }
+
+    // The guide on Home: New order (part 1), the order's card (2–3), then the
+    // Customers and Earnings tabs (4–5). Hidden while a sheet or the WhatsApp
+    // question is open — those carry their own tip.
+    if (active == null && waPrompt == null) when (tour) {
+        TourStage.ORDER -> {
+            LaunchedEffect(Unit) { shopVm.tourAutoStart() }
+            val first = state.orders.isEmpty()
+            val step = TourSteps.homeNewOrder(if (first) "Create New Order" else "New order", firstOrder = first)
+            Spotlight(targets, "new_order", step, onSkip = { shopVm.tourSkip(step) })
+        }
+        TourStage.STATUS -> tourOrder?.let { o ->
+            val step = when (o.status) {
+                OrderStatus.CREATED -> TourSteps.pickedUp
+                OrderStatus.RECEIVED -> TourSteps.markReady
+                else -> TourSteps.markDelivered
+            }
+            Spotlight(targets, "tour_act", step, alt = "Later", onAlt = { shopVm.tourLater(step) }, onSkip = { shopVm.tourSkip(step) })
+        }
+        TourStage.KHATA -> Spotlight(targets, "nav_CUSTOMERS", TourSteps.khataTab, onSkip = { shopVm.tourSkip(TourSteps.khataTab) })
+        TourStage.EARNINGS -> Spotlight(targets, "nav_EARNINGS", TourSteps.earningsTab, onSkip = { shopVm.tourSkip(TourSteps.earningsTab) })
+        else -> Unit
     }
 
     SheetHost(active, state, shopVm, navigator, onOpen = { active = it }, onDismiss = { active = null })
@@ -276,7 +327,7 @@ private fun SearchBar(value: String, onChange: (String) -> Unit) {
 
 // ---------- empty state (brand-new shop) ----------
 @Composable
-private fun EmptyHome(onNewOrder: () -> Unit) {
+private fun EmptyHome(buttonModifier: Modifier = Modifier, onNewOrder: () -> Unit) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -293,7 +344,7 @@ private fun EmptyHome(onNewOrder: () -> Unit) {
                 "No orders yet. Take your first one — it takes less than a minute.",
                 style = fig(15, color = Tokens.Muted), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
-            PrimaryButton("Create New Order", height = 56.dp, onClick = onNewOrder)
+            PrimaryButton("Create New Order", buttonModifier, height = 56.dp, onClick = onNewOrder)
         }
 
         Column(

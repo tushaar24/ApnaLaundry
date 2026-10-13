@@ -35,6 +35,12 @@ This ties every subsequent event to one shop owner across sessions and devices.
    `Old Baaki Added` (chase baaki) → `Reminder Sent`.
 5. **Revenue** — `Charged` (CleverTap's reserved revenue event) on every
    delivery, for LTV / revenue reports.
+6. **Guide** (Android) — `Tour Started {source}` →
+   `Tour Step Viewed {step, part}` → `Tour Part Completed {part}` ×5
+   (1 `new_order`, 2 `ready`, 3 `deliver`, 4 `khata`, 5 `earnings`) →
+   `Tour Completed`. Drop-off: `Tour Later` (paused on the order's card) /
+   `Tour Skipped {step}`. Voice: `sound` on every step view, plus
+   `Tour Sound Off` / `Tour Sound On`.
 
 ## Events
 
@@ -96,6 +102,25 @@ Custom property keys are `snake_case`. `Charged` uses CleverTap's reserved
 | `Screen Viewed` | `screen` | each main screen is shown (`login`, `setup`, `home`, `customers`, `earnings`, `settings`, `new_order`, `order_detail`, `customer_khata`, `combined_bill`, `bill`, `rates`) |
 | `Earnings Period Changed` | `period` (`today`\|`week`\|`month`) | period toggle on Earnings |
 | `Order Search Opened` | — | search opened on Home |
+
+### Guide & support (Android)
+
+The guide walks a new shop through its first order end to end: New order →
+Mark ready → Mark delivered + payment → Khata → Earnings, every card read out
+loud (sound on by default). Parts 2–3 follow that order's real status, so they
+can finish hours later; `Tour Part Completed` fires whichever way the status
+changed.
+
+| Event | Properties | Fired when |
+| ----- | ---------- | ---------- |
+| `Tour Started` | `source` (`auto`\|`settings`) | a new shop's first Home (no orders yet), or Settings → How to use the app |
+| `Tour Step Viewed` | `step`, `part` (1–5), `part_name`, `sound` | a guide card / in-sheet tip is shown. `step`: `home_new_order`, `order_customer`, `order_customer_form`, `order_route`, `order_dates`, `order_clothes`, `order_save`, `bill_send`, `bill_next`, `status_picked_up`, `status_ready`, `ready_sheet`, `whatsapp_update`, `status_deliver`, `pay_sheet`, `khata_tab`, `khata_tile`, `khata_customer`, `earnings_tab`, `earnings_sales`, `earnings_money`, `tour_done` |
+| `Tour Part Completed` | `part` (1–5), `part_name` (`new_order`\|`ready`\|`deliver`\|`khata`\|`earnings`) | order saved / order ready / order delivered / khata seen / Finish |
+| `Tour Later` | `step`, `part` | "Later" on the order's card — hidden until the app is opened again |
+| `Tour Skipped` | `step`, `part` | "Skip guide" — the guide ends (Settings can replay it) |
+| `Tour Completed` | — | Finish on the last card |
+| `Tour Sound Off` / `Tour Sound On` | `step` | the guide's sound button (remembered on the phone) |
+| `Support Contacted` | `method` (`call`\|`whatsapp`), `from` (`settings`\|`tour_end`) | Settings → Need help? Call us / WhatsApp us, or the guide's last card |
 
 ### Billing / paywall (A/B: `trial_2` \| `free_50`)
 
