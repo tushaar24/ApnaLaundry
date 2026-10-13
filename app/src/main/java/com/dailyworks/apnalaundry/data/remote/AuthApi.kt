@@ -135,13 +135,8 @@ class AuthApi(private val client: HttpClient = defaultClient()) {
             expectSuccess = false // 4xx bodies are parsed, not thrown
             // Tells the backend which client this is (stored as the shop's
             // signup/login platform and on each subscription). The website's
-            // proxy sends "web". The version code lets the server serve what
-            // this build understands (12+: Monthly-only ₹199 pricing); older
-            // builds send none and keep the old plans.
-            defaultRequest {
-                header("x-laundry-client", "android")
-                header("x-laundry-app-version", BuildConfig.VERSION_CODE.toString())
-            }
+            // proxy sends "web".
+            defaultRequest { header("x-laundry-client", "android") }
         }
     }
 }

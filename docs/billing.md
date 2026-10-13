@@ -27,15 +27,6 @@ cancellation grace). **Hard gate** — the app is unreachable until there's an a
 subscription. (The earlier `trial_2` / `free_<N>` A/B experiment and its Firebase Remote
 Config / `LAUNDRY_PAYWALL_VARIANTS` switch were removed on 2026-10-06.)
 
-**New Android shops on 1.0.12+ (from 2026-10-14): 1 free order, then Monthly
-only, ₹199.** Shops created from `LAUNDRY_NEW_USER_OFFER_START` whose app sends
-`x-laundry-app-version` ≥ 12 get `monthlyOnly: true` from `/status`, the dark
-video paywall (no Yearly) and the ₹199 Razorpay plan
-(`LAUNDRY_RAZORPAY_PLAN_MONTHLY_199`) — `services/laundry-free-orders.js`,
-`services/laundry-pricing.js`, `docs/deploy/2026-10-14-new-user-offer.md`.
-Everyone else (existing shops, older apps, the website) is unchanged; existing
-subscriptions keep their plan and price.
-
 **One trial per shop (2026-10-10):** once any subscription of the shop has got past
 checkout (status other than `created`/`abandoned`), `/status` returns
 `trialEligible: false` (and `plans.trial.amount: 0`), `/subscribe` drops the ₹2 addon and
@@ -76,8 +67,6 @@ shows until that check resolves** (no flash of the app or wrong screen).
 - Env (server `backend/.env`): `LAUNDRY_RAZORPAY_KEY_ID/_KEY_SECRET/_WEBHOOK_SECRET`,
   `LAUNDRY_RAZORPAY_PLAN_MONTHLY=plan_TjPqwdhxQR8qaP` (₹499),
   `LAUNDRY_RAZORPAY_PLAN_ANNUAL=plan_TjPrToEWhVmszL` (₹4999),
-  `LAUNDRY_RAZORPAY_PLAN_MONTHLY_199` (₹199, new shops on 1.0.12+),
-  `LAUNDRY_NEW_USER_OFFER_START`, `LAUNDRY_PAYWALL_VIDEO_URL`,
   `LAUNDRY_TRIAL_AMOUNT_PAISE=200`,
   `LAUNDRY_CLEVERTAP_*`.
 

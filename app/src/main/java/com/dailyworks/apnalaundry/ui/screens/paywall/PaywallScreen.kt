@@ -82,7 +82,7 @@ private const val WAS_ANNUAL = 8999
 private const val TRIAL_DAYS = 7
 
 /** "₹4,999" from paise. */
-internal fun rupees(paise: Int): String {
+private fun rupees(paise: Int): String {
     val whole = paise / 100
     val s = whole.toString()
     val sb = StringBuilder()
@@ -137,8 +137,7 @@ private fun offerFeatures(from: String): List<String> = buildList {
 
 /**
  * The paywall: Yearly (picked by default) or Monthly, charged in full today —
- * Android has no trial. When the server says `monthlyOnly` (new shops from
- * 2026-10-14 on 1.0.12+) it's [VideoOffer] instead: Monthly only, ₹199, video. Opens straight from New order when the free orders run
+ * Android has no trial. Opens straight from New order when the free orders run
  * out (OrderLimitGate: [from] free_orders, with [orders] / [freeOrders] for the
  * "50 of 50 free orders used" tag, or plan_ended), from adding a shop past the
  * free ones (add_shop), and from Settings → Subscription, which shows the
@@ -172,13 +171,7 @@ fun PaywallScreen(
         if (offer && known) vm.trackShown(from, laundry.liveOrderCount())
     }
 
-    // New shops' Monthly-only offer is the dark video design (VideoOffer), navy behind the status bar too.
-    val videoOffer = offer && ui.monthlyOnly
-    Box(
-        Modifier.fillMaxSize()
-            .then(if (videoOffer) Modifier.background(Pw.Bg) else Modifier.background(Tokens.Bg))
-            .windowInsetsPadding(WindowInsets.systemBars),
-    ) {
+    Box(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars)) {
         when {
             // No success screen — proceed straight through.
             ui.stage == PaywallStage.DONE -> LaunchedEffect(Unit) { onDone() }
@@ -194,15 +187,6 @@ fun PaywallScreen(
             // a Pay button — Checkout can't re-authorize an active subscription.
             // A cancelled plan still running shows here too (until when, no Cancel).
             ui.hasActive || ui.inGrace -> ActiveView(ui = ui, onClose = onClose, onCancel = { vm.cancel() })
-
-            // New shops (server: monthlyOnly): one plan, ₹199/month, with the intro video.
-            ui.monthlyOnly -> VideoOffer(
-                ui = ui,
-                tag = offerCopy(from, orders, freeOrders).tag,
-                hardGate = hardGate,
-                onClose = onClose,
-                onPay = { vm.pay(activity) },
-            )
 
             else -> Column(Modifier.fillMaxSize()) {
                 val copy = offerCopy(from, orders, freeOrders)
@@ -319,7 +303,7 @@ fun PaywallScreen(
 
     if (ui.retrySheet && ui.stage == PaywallStage.PLANS && !ui.hasActive) {
         RetrySheet(
-            plan = ui.effectivePlan,
+            plan = ui.plan,
             trialAmount = ui.trialAmount,
             hasTrial = ui.hasTrial,
             monthlyAmount = ui.monthlyAmount,

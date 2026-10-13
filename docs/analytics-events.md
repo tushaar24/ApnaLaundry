@@ -183,17 +183,14 @@ Yearly or Monthly 50/50, stable per shop (hash of the user id —
 (`annual`\|`monthly`); the profile carries `Default_Plan_Selected`, which also
 splits the server-side `Subscription Activated`.
 
-**New-user offer (Android, from 2026-10-14 00:00 IST).** New Android shops get
-the guide (always), and on app 1.0.12+ 1 free order, then a Monthly-only ₹199
-paywall (dark design with the intro video). The server sets profile property
-**`New_User_Offer`** = `free1_monthly199` at sign-up and on every app start;
-older shops don't have it. On 1.0.12+ `Paywall Shown` carries
-`default_plan: monthly`, `Checkout Started` `amount: 19900`, and the
-subscription row `amount = 19900` — split payments by amount and app version.
-Video: `Paywall Video Started {muted}` / `Paywall Video Unmuted` /
-`Paywall Video Completed`. Details: `docs/deploy/2026-10-14-new-user-offer.md`.
-(It replaced the 3 vs 5 free-orders test that ran 00:47–~02:00 IST; those
-shops carry a stale `Free_Orders_Variant`.)
+**Free-orders A/B (Android, from 2026-10-14).** New Android shops (created
+after the backend's `LAUNDRY_FREE_ORDERS_TEST_START`) get 3 or 5 free orders,
+50/50, stable per shop (hash of the user id, `free_orders_v1`). The server
+sets profile property **`Free_Orders_Variant`** = `free_3` | `free_5` at
+sign-up and on every app start; shops outside the test don't have it. Only
+1.0.10+ applies the number, so analyse shops first seen on 1.0.10+. The
+paywall is `Free Orders Over Shown {orders}` / `Paywall Shown {from: free_orders, order_count}`.
+Details and the analysis plan: `docs/deploy/2026-10-14-free-orders-ab.md`.
 
 Profile property `subscription_status` (+ `plan`, `paywall_variant`) is kept
 current from the webhook, for retention/win-back journeys.

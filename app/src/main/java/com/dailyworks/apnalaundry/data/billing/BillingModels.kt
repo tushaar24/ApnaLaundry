@@ -47,12 +47,6 @@ data class BillingStatus(
     // Free orders before a plan is needed (OrderLimitGate). 5, or more for shops
     // the server lists by phone; an older server leaves it out → 5.
     val freeOrders: Int = DEFAULT_FREE_ORDERS,
-    // Only the Monthly plan is offered (new shops from 2026-10-14 on 1.0.12+:
-    // ₹199, no Yearly). An older server leaves it out → both plans, as before.
-    val monthlyOnly: Boolean = false,
-    // The intro video on that Monthly-only paywall (server-set, so it can change
-    // without a release). None → the paywall shows no video.
-    val paywallVideoUrl: String? = null,
     val plans: BillingPlans = BillingPlans(),
     val subscription: BillingSubscriptionDto? = null,
 ) {
