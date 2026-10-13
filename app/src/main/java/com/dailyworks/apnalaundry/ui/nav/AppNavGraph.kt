@@ -31,6 +31,8 @@ import com.dailyworks.apnalaundry.ui.screens.settings.SettingsScreen
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import com.dailyworks.apnalaundry.data.billing.BillingRepository
+import com.dailyworks.apnalaundry.analytics.Analytics
+import com.dailyworks.apnalaundry.push.DeepLinks
 import org.koin.compose.koinInject
 
 @Composable
@@ -55,6 +57,21 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
     // If the session dies mid-use (refresh token revoked/expired — TokenManager
     // flips loggedIn off), return to login. Local data is kept; logging back
     // into the same account merges cleanly.
+    // A push deep link (mylaundry://…): open its screen once the owner is in.
+    val link by DeepLinks.pending.collectAsStateWithLifecycle()
+    LaunchedEffect(link, li, sd) {
+        if (link == null || !li || !sd) return@LaunchedEffect
+        val screen = DeepLinks.consume() ?: return@LaunchedEffect
+        Analytics.deepLinkOpened(screen)
+        when (screen) {
+            "new-order" -> navigator.openNewOrder(from = "push")
+            "customers" -> navigator.openCustomers()
+            "earnings" -> navigator.openEarnings()
+            "subscription" -> navigator.openSubscription()
+            else -> navigator.openHome()
+        }
+    }
+
     // Keep the saved subscription fresh in the background (app start / login):
     // the free-orders gate on New order reads it instead of waiting on the network.
     val billing: BillingRepository = koinInject()

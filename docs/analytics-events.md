@@ -61,6 +61,7 @@ Custom property keys are `snake_case`. `Charged` uses CleverTap's reserved
 | Event | Properties | Fired when |
 | ----- | ---------- | ---------- |
 | `New Order Started` | `source` (`home`\|`empty_home`\|`customer`), `is_edit` | New/Edit order screen opened |
+| `New Order Abandoned` | `entry_point`, `is_edit`, `stage` (`customer`\|`clothes`\|`save`), `customer_set`, `customer_added`, `customer_form_opened`, `clothes_added`, `pieces`, `kg`, `total`, `seconds_on_screen` | left New/Edit order without saving (Android); `stage` = furthest step: no customer → no clothes → never tapped save. Not sent on rotation or if the app is killed in the background |
 | `Order Saved` | `order_id`, `is_edit`, `has_bill`, `pickup`, `delivery`, `express`, `discount`, `fee`, `pieces`, `kg`, `services_count`, `total`, `quick_bill` | order created or edited |
 | `Order Picked Up` | `order_id` | mark picked up (already-counted order) |
 | `Clothes Counted` | `order_id`, `next_status`, `total` | Count-clothes sheet saved |

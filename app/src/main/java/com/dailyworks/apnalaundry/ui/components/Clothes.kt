@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -94,9 +95,21 @@ class ClothesState(services: List<Service>) {
     fun total(services: List<Service>): Int = lines(services).sumOf { it.amt }
 }
 
+/**
+ * One state for the screen's life: adding / removing a service (e.g. from the
+ * rate list opened over New order) must not wipe the clothes already counted.
+ * Only the selected tile moves on if its service is gone (or wasn't loaded yet).
+ */
 @Composable
-fun rememberClothesState(services: List<Service>): ClothesState =
-    remember(services.map { it.id }) { ClothesState(services) }
+fun rememberClothesState(services: List<Service>): ClothesState {
+    val state = remember { ClothesState(services) }
+    LaunchedEffect(services.map { it.id }) {
+        if (services.none { it.id == state.selected }) {
+            state.selected = (services.firstOrNull { it.mode == PricingMode.PIECE } ?: services.firstOrNull())?.id ?: ""
+        }
+    }
+    return state
+}
 
 private fun serviceStat(state: ClothesState, s: Service): Triple<Int, Double, Int> {
     return if (s.mode == PricingMode.WEIGHT) {

@@ -115,6 +115,23 @@ object Analytics {
     fun newOrderStarted(entryPoint: String, isEdit: Boolean) =
         track("New Order Started", mapOf("entry_point" to entryPoint, "is_edit" to isEdit))
 
+    /**
+     * Left New/Edit order without saving. `stage` is how far they got:
+     * customer (none chosen) → clothes (customer, no clothes) → save (both, never tapped save).
+     */
+    fun newOrderAbandoned(
+        entryPoint: String, isEdit: Boolean, stage: String, customerSet: Boolean, customerAdded: Boolean,
+        customerFormOpened: Boolean, clothesAdded: Boolean, pieces: Int, kg: Double, total: Int, seconds: Long,
+    ) = track(
+        "New Order Abandoned",
+        mapOf(
+            "entry_point" to entryPoint, "is_edit" to isEdit, "stage" to stage,
+            "customer_set" to customerSet, "customer_added" to customerAdded,
+            "customer_form_opened" to customerFormOpened, "clothes_added" to clothesAdded,
+            "pieces" to pieces, "kg" to kg, "total" to total, "seconds_on_screen" to seconds,
+        ),
+    )
+
     fun orderSaved(
         orderId: Int, isEdit: Boolean, hasBill: Boolean, pickup: String, delivery: String,
         express: Boolean, discount: Int, fee: Int, pieces: Int, kg: Double,
@@ -234,6 +251,20 @@ object Analytics {
     // events (Subscription Activated / Charged / Payment Failed / Halted /
     // Cancelled) from the Razorpay webhook.
     fun paywallShown() = track("Paywall Shown")
+
+    // ---- push ----
+    // A push tap's deep link opened a screen (mylaundry://<screen>).
+    fun deepLinkOpened(screen: String) = track("Deep Link Opened", mapOf("screen" to screen))
+
+    // Push permission on the login screen (where = "login"). prompted = false:
+    // no dialog was needed (Android 12 and older, or already allowed).
+    fun notificationPermissionAnswered(granted: Boolean, where: String, prompted: Boolean) =
+        track("Notification Permission Answered", mapOf("granted" to granted, "where" to where, "prompted" to prompted))
+
+    // Notifications switched on/off for the app (any Android version, incl. from
+    // phone Settings) — fired when the status differs from the last one seen.
+    fun notificationsStatusChanged(enabled: Boolean) =
+        track("Notifications Status Changed", mapOf("enabled" to enabled))
 
     // Free orders used up (Android): the notice before the paywall, and its "See plans" tap.
     fun freeOrdersOverShown(orders: Int) = track("Free Orders Over Shown", mapOf("orders" to orders))
