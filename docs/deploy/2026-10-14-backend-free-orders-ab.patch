@@ -1,0 +1,171 @@
+diff -ruN backend-orig/routes/laundry-auth.js backend-live/routes/laundry-auth.js
+--- backend-orig/routes/laundry-auth.js	2026-10-14 00:24:54
++++ backend-live/routes/laundry-auth.js	2026-10-14 00:27:58
+@@ -12,6 +12,7 @@
+ const { normalizePhone, isValidIndianMobile } = require('../utils/phone');
+ const laundryMeta = require('../services/laundry-meta');
+ const { clientPlatform } = require('../services/laundry-platform');
++const freeOrders = require('../services/laundry-free-orders');
+ const firebaseAuth = require('../services/laundry-firebase-auth');
+ 
+ // OTP login for the ApnaLaundry app (challenge-based OTP ported from the
+@@ -263,6 +264,7 @@
+ function sendLogin(req, res, result, deviceId) {
+   req.log.info({ userId: result.user.id, deviceId: deviceId.trim(), platform: result.platform }, 'laundry login verified');
+   laundryMeta.saveSignals(req, result.user); // Meta CAPI match data (website logins)
++  freeOrders.saveVariantToProfile(result.user); // 3 vs 5 free-orders test group → CleverTap, from sign-up
+   // isNewUser: the account was created just now, so it holds no server data
+   // yet — clients skip their initial pull and go straight to seeding.
+   return res.json({ ...credentialsResponse(result.user, result.token), isNewUser: result.isNewUser });
+diff -ruN backend-orig/routes/laundry-billing.js backend-live/routes/laundry-billing.js
+--- backend-orig/routes/laundry-billing.js	2026-10-14 00:24:52
++++ backend-live/routes/laundry-billing.js	2026-10-14 00:27:20
+@@ -7,6 +7,7 @@
+ const clevertap = require('../services/laundry-clevertap');
+ const laundryMeta = require('../services/laundry-meta');
+ const { clientPlatform } = require('../services/laundry-platform');
++const freeOrders = require('../services/laundry-free-orders');
+ 
+ // The subscription's client (web | android) on its server-side CleverTap events,
+ // under the same `platform` key the clients stamp on theirs.
+@@ -95,22 +96,12 @@
+ // ──────────────────────────── authed endpoints ────────────────────────────
+ router.use(requireLaundryAuth);
+ 
+-// Free orders an Android shop gets before it needs a plan (the app's own
+-// default is 5). Some shops get more, by their 10-digit login phone:
+-// LAUNDRY_FREE_ORDERS_BY_PHONE="8400042643:50,9876543210:20" (backend .env).
+-const DEFAULT_FREE_ORDERS = 5;
+-const FREE_ORDERS_BY_PHONE = new Map(
+-  String(process.env.LAUNDRY_FREE_ORDERS_BY_PHONE || '')
+-    .split(',')
+-    .map((pair) => pair.split(':').map((s) => s.trim()))
+-    .filter(([phone, n]) => /^\d{10}$/.test(phone || '') && Number.parseInt(n, 10) > 0)
+-    .map(([phone, n]) => [phone, Number.parseInt(n, 10)]),
+-);
+-const freeOrdersFor = (user) => FREE_ORDERS_BY_PHONE.get(String((user && user.phone) || '').slice(-10)) || DEFAULT_FREE_ORDERS;
+-
++// Free orders before a plan is needed: 5, per-phone overrides, and the
++// 3 vs 5 A/B test for new Android shops — see services/laundry-free-orders.js.
+ router.get('/status', async (req, res, next) => {
+   try {
+     const userId = req.laundryUserId;
++    freeOrders.saveVariantToProfile(req.laundryAuth.user);
+     const sub = await currentSubscription(userId);
+     const hasActive = Boolean(sub && HAS_ACCESS.includes(sub.status));
+     // Cancellation grace: a cancelled subscription keeps full
+@@ -139,7 +130,7 @@
+       paywallDue,
+       hasActiveSubscription: hasActive,
+       trialEligible,
+-      freeOrders: freeOrdersFor(req.laundryAuth.user),
++      freeOrders: freeOrders.freeOrdersFor(req.laundryAuth.user),
+       plans: {
+         monthly: { amount: rzp.amountFor('monthly') },
+         annual: { amount: rzp.amountFor('annual') },
+diff -ruN backend-orig/routes/laundry-experiments.js backend-live/routes/laundry-experiments.js
+--- backend-orig/routes/laundry-experiments.js	2026-10-14 00:24:53
++++ backend-live/routes/laundry-experiments.js	2026-10-14 00:27:34
+@@ -3,6 +3,7 @@
+ 
+ const { requireLaundryAuth } = require('../middleware/laundry-auth');
+ const clevertap = require('../services/laundry-clevertap');
++const freeOrders = require('../services/laundry-free-orders');
+ 
+ // A/B tests the app asks the server about, so a split can change without an
+ // app release:
+@@ -43,6 +44,9 @@
+     saved.set(userId, guide);
+     clevertap.setProfile(userId, { Guide_Variant: guide }).catch(() => {});
+   }
++  // The 3 vs 5 free-orders test is served by /billing/status (freeOrders); its
++  // group is also saved to CleverTap here, as the app calls this at every start.
++  freeOrders.saveVariantToProfile(req.laundryAuth.user);
+   res.json({ success: true, experiments: { guide } });
+ });
+ 
+diff -ruN backend-orig/services/laundry-free-orders.js backend-live/services/laundry-free-orders.js
+--- backend-orig/services/laundry-free-orders.js	1970-01-01 05:30:00
++++ backend-live/services/laundry-free-orders.js	2026-10-14 00:27:10
+@@ -0,0 +1,81 @@
++const crypto = require('crypto');
++
++const clevertap = require('./laundry-clevertap');
++
++// Free orders an Android shop gets before it needs a plan (the app's own
++// default is 5; only Android 1.0.10+ reads this number, older apps keep 5).
++//
++// Per phone: some shops get more, by their 10-digit login phone —
++// LAUNDRY_FREE_ORDERS_BY_PHONE="8400042643:50,9876543210:20" (backend .env).
++// That always wins.
++//
++// A/B test (2026-10-14): 3 vs 5 free orders for NEW Android shops — accounts
++// created from LAUNDRY_FREE_ORDERS_TEST_START (an ISO time, e.g.
++// "2026-10-14T10:00:00+05:30") and before LAUNDRY_FREE_ORDERS_TEST_END (optional;
++// set it to stop adding shops). A shop's bucket (0-99) is a hash of its user id
++// and never changes; bucket < LAUNDRY_FREE_ORDERS_TEST_PCT (default 50) gets 3,
++// the rest 5. No start set = no test: everyone gets the default, as before.
++// Shops created before the start, website sign-ups and per-phone shops are
++// never in it. The group is saved on the shop's CleverTap profile as
++// Free_Orders_Variant (free_3 | free_5).
++const DEFAULT_FREE_ORDERS = 5;
++const TEST_LOW_FREE_ORDERS = 3;
++// Changing this re-buckets everyone — bump it only to start a fresh test.
++const FREE_ORDERS_TEST = 'free_orders_v1';
++
++const FREE_ORDERS_BY_PHONE = new Map(
++  String(process.env.LAUNDRY_FREE_ORDERS_BY_PHONE || '')
++    .split(',')
++    .map((pair) => pair.split(':').map((s) => s.trim()))
++    .filter(([phone, n]) => /^\d{10}$/.test(phone || '') && Number.parseInt(n, 10) > 0)
++    .map(([phone, n]) => [phone, Number.parseInt(n, 10)]),
++);
++
++const timeFromEnv = (name) => {
++  const t = Date.parse(String(process.env[name] || '').trim());
++  return Number.isFinite(t) ? t : null;
++};
++const TEST_START = timeFromEnv('LAUNDRY_FREE_ORDERS_TEST_START');
++const TEST_END = timeFromEnv('LAUNDRY_FREE_ORDERS_TEST_END');
++
++function testPct() {
++  const n = parseInt(process.env.LAUNDRY_FREE_ORDERS_TEST_PCT, 10);
++  return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 50;
++}
++
++const phoneFreeOrders = (user) => FREE_ORDERS_BY_PHONE.get(String((user && user.phone) || '').slice(-10));
++
++/** 'free_3' | 'free_5' for a shop in the test, else null. */
++function variantFor(user) {
++  if (!user || TEST_START === null || user.signupPlatform !== 'android' || phoneFreeOrders(user)) return null;
++  const created = new Date(user.createdAt).getTime();
++  if (!(created >= TEST_START) || (TEST_END !== null && created >= TEST_END)) return null;
++  const bucket = crypto.createHash('sha256').update(`${FREE_ORDERS_TEST}:${user.id}`).digest().readUInt32BE(0) % 100;
++  return bucket < testPct() ? 'free_3' : 'free_5';
++}
++
++/** How many free orders this shop gets. */
++function freeOrdersFor(user) {
++  const byPhone = phoneFreeOrders(user);
++  if (byPhone) return byPhone;
++  return variantFor(user) === 'free_3' ? TEST_LOW_FREE_ORDERS : DEFAULT_FREE_ORDERS;
++}
++
++// When each shop's group was last sent to CleverTap. The upload can fail
++// silently, so it's re-sent at most once a day per shop (and once after a restart).
++const RESEND_MS = 24 * 3600 * 1000;
++const sentAt = new Map();
++
++/** Saves a test shop's group on its CleverTap profile (Free_Orders_Variant). Never throws. */
++function saveVariantToProfile(user) {
++  const variant = variantFor(user);
++  if (!variant) return;
++  const key = `${user.id}:${variant}`;
++  const last = sentAt.get(key);
++  if (last && Date.now() - last < RESEND_MS) return;
++  if (sentAt.size > 50000) sentAt.clear();
++  sentAt.set(key, Date.now());
++  clevertap.setProfile(user.id, { Free_Orders_Variant: variant }).catch(() => {});
++}
++
++module.exports = { DEFAULT_FREE_ORDERS, freeOrdersFor, variantFor, saveVariantToProfile };

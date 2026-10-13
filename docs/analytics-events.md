@@ -183,6 +183,15 @@ Yearly or Monthly 50/50, stable per shop (hash of the user id —
 (`annual`\|`monthly`); the profile carries `Default_Plan_Selected`, which also
 splits the server-side `Subscription Activated`.
 
+**Free-orders A/B (Android, from 2026-10-14).** New Android shops (created
+after the backend's `LAUNDRY_FREE_ORDERS_TEST_START`) get 3 or 5 free orders,
+50/50, stable per shop (hash of the user id, `free_orders_v1`). The server
+sets profile property **`Free_Orders_Variant`** = `free_3` | `free_5` at
+sign-up and on every app start; shops outside the test don't have it. Only
+1.0.10+ applies the number, so analyse shops first seen on 1.0.10+. The
+paywall is `Free Orders Over Shown {orders}` / `Paywall Shown {from: free_orders, order_count}`.
+Details and the analysis plan: `docs/deploy/2026-10-14-free-orders-ab.md`.
+
 Profile property `subscription_status` (+ `plan`, `paywall_variant`) is kept
 current from the webhook, for retention/win-back journeys.
 
