@@ -170,7 +170,9 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
                     }
                 }
             }
-            AppCard {
+            // The guide is an A/B test: only its group gets the replay.
+            val guideOn by shopVm.guideOn.collectAsStateWithLifecycle()
+            if (guideOn) AppCard {
                 Row(
                     Modifier.fillMaxWidth().tap {
                         shopVm.tourReplay()

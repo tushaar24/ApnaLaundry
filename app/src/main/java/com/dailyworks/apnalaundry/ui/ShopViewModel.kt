@@ -9,6 +9,7 @@ import com.dailyworks.apnalaundry.data.LogoStore
 import com.dailyworks.apnalaundry.data.sync.SyncApi
 import com.dailyworks.apnalaundry.ui.screens.bill.BILL_PAGE_URL
 import com.dailyworks.apnalaundry.data.Prefs
+import com.dailyworks.apnalaundry.data.experiments.ExperimentsRepository
 import com.dailyworks.apnalaundry.data.Snapshot
 import com.dailyworks.apnalaundry.data.sync.SyncScheduler
 import com.dailyworks.apnalaundry.domain.*
@@ -64,12 +65,18 @@ class ShopViewModel(
 
     // ---- the guide (ui/tour): new order → ready → delivered + money → khata → earnings ----
 
+    /** A/B (server-assigned, 50/50): this shop gets the guide at all. Unknown = no. */
+    val guideOn: StateFlow<Boolean> = prefs.guideVariant.map { it == ExperimentsRepository.GUIDE }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
     /**
      * Where the shop is in the guide. Until it starts, it runs for a shop with
      * no orders yet — so a reinstall that syncs old orders never shows it.
+     * Off entirely for the no-guide group.
      */
     val tour: StateFlow<TourStage> =
-        combine(prefs.tourStage, state, loaded) { saved, s, ready ->
+        combine(prefs.tourStage, state, loaded, guideOn) { saved, s, ready, on ->
+            if (!on) return@combine TourStage.DONE
             saved?.let { runCatching { TourStage.valueOf(it) }.getOrNull() }
                 ?: if (ready && s.orders.isEmpty()) TourStage.ORDER else TourStage.DONE
         }.stateIn(viewModelScope, SharingStarted.Eagerly, TourStage.DONE)

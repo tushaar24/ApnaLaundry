@@ -111,6 +111,12 @@ loud (sound on by default). Parts 2–3 follow that order's real status, so they
 can finish hours later; `Tour Part Completed` fires whichever way the status
 changed.
 
+**A/B (2026-10-13, Android 1.0.10):** the guide is a 50/50 test assigned by the
+backend (`GET /api/laundry/experiments`, `docs/deploy/2026-10-13-guide-ab.md`).
+Profile property **`Guide_Variant`** = `guide` | `no_guide` (set by the server
+and the app) — split activation funnels (Order Saved, Order Delivered,
+`orders_count`) by it. Only the `guide` group fires `Tour *` events.
+
 | Event | Properties | Fired when |
 | ----- | ---------- | ---------- |
 | `Tour Started` | `source` (`auto`\|`settings`) | a new shop's first Home (no orders yet), or Settings → How to use the app |

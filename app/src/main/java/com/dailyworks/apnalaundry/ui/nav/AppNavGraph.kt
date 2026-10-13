@@ -31,6 +31,7 @@ import com.dailyworks.apnalaundry.ui.screens.settings.SettingsScreen
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import com.dailyworks.apnalaundry.data.billing.BillingRepository
+import com.dailyworks.apnalaundry.data.experiments.ExperimentsRepository
 import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.push.DeepLinks
 import org.koin.compose.koinInject
@@ -76,6 +77,9 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
     // the free-orders gate on New order reads it instead of waiting on the network.
     val billing: BillingRepository = koinInject()
     LaunchedEffect(li) { if (li) billing.refreshSaved() }
+    // A/B groups (the guide): fetched at app start / right after login, while setup runs.
+    val experiments: ExperimentsRepository = koinInject()
+    LaunchedEffect(li) { if (li) experiments.refresh() }
 
     LaunchedEffect(li) {
         if (!li && navController.currentDestination?.route?.let { it != Routes.LOGIN } == true) {

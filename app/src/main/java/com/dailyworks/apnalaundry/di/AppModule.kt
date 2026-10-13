@@ -11,6 +11,7 @@ import com.dailyworks.apnalaundry.data.remote.FirebasePhoneAuth
 import com.dailyworks.apnalaundry.data.billing.BillingApi
 import com.dailyworks.apnalaundry.data.billing.BillingRepository
 import com.dailyworks.apnalaundry.data.billing.CheckoutBridge
+import com.dailyworks.apnalaundry.data.experiments.ExperimentsRepository
 import com.dailyworks.apnalaundry.data.remote.TokenManager
 import com.dailyworks.apnalaundry.data.sync.SyncApi
 import com.dailyworks.apnalaundry.data.sync.SyncManager
@@ -47,6 +48,7 @@ val appModule = module {
     single { SyncScheduler(get()) }
     single { FirebasePhoneAuth() }
     single { TourVoice(androidContext(), get()) }
+    single { ExperimentsRepository(get(), get(), get()) }
     single { AuthRepository(get(), get(), get(), get(), get()) }
 
     viewModel { ShopViewModel(get(), get(), get(), get(), get()) }

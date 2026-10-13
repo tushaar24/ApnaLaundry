@@ -1,0 +1,65 @@
+diff -ruN a/app.js b/app.js
+--- a/app.js	2026-10-13 10:24:27
++++ b/app.js	2026-10-13 10:24:49
+@@ -62,6 +62,8 @@
+ // Customer-service app (open, no auth — owner decision) — before the generic
+ // /api/laundry router, whose requireLaundryAuth would otherwise claim these paths.
+ app.use('/api/laundry/support', express.json({ limit: '200kb' }), require('./routes/laundry-support'));
++// A/B test groups for the app (logged-in; no body) — before the generic router.
++app.use('/api/laundry/experiments', require('./routes/laundry-experiments'));
+ app.use('/api/laundry', laundryJson, require('./routes/laundry'));
+ 
+ app.use(express.json({
+diff -ruN a/routes/laundry-experiments.js b/routes/laundry-experiments.js
+--- a/routes/laundry-experiments.js	1970-01-01 05:30:00
++++ b/routes/laundry-experiments.js	2026-10-13 10:24:47
+@@ -0,0 +1,49 @@
++const express = require('express');
++const crypto = require('crypto');
++
++const { requireLaundryAuth } = require('../middleware/laundry-auth');
++const clevertap = require('../services/laundry-clevertap');
++
++// A/B tests the app asks the server about, so a split can change without an
++// app release:
++//   GET /api/laundry/experiments -> { success, experiments: { guide: 'guide' | 'no_guide' } }
++//
++// guide (2026-10-13, Android 1.0.10): the step-by-step guide with voice for a
++// new shop (first order -> ready -> delivered + money -> khata -> earnings).
++// A shop's bucket (0-99) is a hash of its user id and never changes; it gets
++// the guide when bucket < LAUNDRY_GUIDE_PCT (default 50). So raising the %
++// only moves no_guide shops into guide, never back; 0 = nobody, 100 = all.
++// The group is saved on the shop's CleverTap profile as Guide_Variant (the
++// app sets it too), to split funnels by group.
++
++const router = express.Router();
++router.use(requireLaundryAuth);
++
++// Changing this re-buckets everyone — bump it only to start a fresh test.
++const GUIDE_TEST = 'guide_v1';
++
++function bucket(test, userId) {
++  return crypto.createHash('sha256').update(`${test}:${userId}`).digest().readUInt32BE(0) % 100;
++}
++
++function guidePct() {
++  const n = parseInt(process.env.LAUNDRY_GUIDE_PCT, 10);
++  return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 50;
++}
++
++// The group last saved to CleverTap per user, so an app start doesn't
++// re-send an unchanged one (resets on restart — then it's sent once again).
++const saved = new Map();
++
++router.get('/', (req, res) => {
++  const userId = req.laundryUserId;
++  const guide = bucket(GUIDE_TEST, userId) < guidePct() ? 'guide' : 'no_guide';
++  if (saved.get(userId) !== guide) {
++    if (saved.size > 50000) saved.clear();
++    saved.set(userId, guide);
++    clevertap.setProfile(userId, { Guide_Variant: guide }).catch(() => {});
++  }
++  res.json({ success: true, experiments: { guide } });
++});
++
++module.exports = router;
