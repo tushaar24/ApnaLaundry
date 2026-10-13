@@ -196,6 +196,12 @@ fun OrderDetailScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: I
                         if (o.billSent) OutlineButton("Sent ✓", Modifier.weight(1f), height = 48.dp, border = Tokens.BlueBorder, fg = Tokens.BlueText) { sendOnWhatsApp(o) }
                         else PrimaryButton("WhatsApp", Modifier.weight(1f), height = 48.dp) { sendOnWhatsApp(o) }
                     }
+                    // Tags for the clothes, on the Bluetooth printer.
+                    if (!cancelled) {
+                        OutlineButton("Print tags", Modifier.fillMaxWidth(), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) {
+                            active = ActiveSheet.PrintTags(o.id, "order_detail")
+                        }
+                    }
                 } else {
                     Box(Modifier.fillMaxWidth().rounded(12.dp).background(Tokens.Card).padding(14.dp)) {
                         Text("Bill after clothes are counted", style = fig(14, FontWeight.SemiBold, Tokens.Muted))

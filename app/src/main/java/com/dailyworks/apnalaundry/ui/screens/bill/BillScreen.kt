@@ -35,6 +35,7 @@ import com.dailyworks.apnalaundry.core.AppDate
 import com.dailyworks.apnalaundry.core.Money
 import com.dailyworks.apnalaundry.domain.Gst
 import com.dailyworks.apnalaundry.domain.LaundryMath
+import com.dailyworks.apnalaundry.domain.OrderStatus
 import com.dailyworks.apnalaundry.domain.PayMethod
 import com.dailyworks.apnalaundry.domain.Route
 import com.dailyworks.apnalaundry.ui.Selectors
@@ -147,6 +148,16 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
                         if (o.billSent) "Sent to ${Selectors.firstName(c.name)} ✓" else "Not sent yet",
                         style = fig(13, FontWeight.Bold, if (o.billSent) Tokens.BlueText else Tokens.OrangeText),
                     )
+                }
+
+                // tags for the clothes, on the Bluetooth printer
+                if (o.lines.isNotEmpty() && o.status != OrderStatus.CANCELLED) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Tags", style = fig(13, FontWeight.Bold, Tokens.Muted))
+                        OutlineButton("Print tags", Modifier.fillMaxWidth(), height = 50.dp, border = Tokens.CardBorder, fg = Tokens.Ink) {
+                            active = ActiveSheet.PrintTags(o.id, "bill")
+                        }
+                    }
                 }
 
                 // paying now

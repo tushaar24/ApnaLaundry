@@ -20,6 +20,7 @@ import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.LocalShipping
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Print
 import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.Icon
@@ -70,6 +71,9 @@ fun OrderMenuSheet(
         Column {
             MenuRow(Icons.Outlined.Visibility, "View order details") { onDismiss(); navigator.openOrder(o.id) }
             if (o.lines.isNotEmpty()) MenuRow(Icons.AutoMirrored.Outlined.ReceiptLong, "View / send bill") { onDismiss(); navigator.openBill(o.id) }
+            // Tags once the clothes are counted (a cancelled order has nothing to tag).
+            if (o.lines.isNotEmpty() && o.status != OrderStatus.CANCELLED)
+                MenuRow(Icons.Outlined.Print, "Print tags") { onOpen(ActiveSheet.PrintTags(o.id, "menu")) }
             MenuRow(Icons.Outlined.Edit, "Edit order / bill") { onDismiss(); navigator.openNewOrder(editId = o.id, from = "home") }
             // Any state to any state — forward, backward, delivered included.
             MenuRow(Icons.Outlined.SwapVert, "Change status") { onOpen(ActiveSheet.ChangeStatus(o.id)) }

@@ -25,6 +25,8 @@ sealed interface ActiveSheet {
     data class Receive(val custId: String) : ActiveSheet
     data class AddOld(val custId: String) : ActiveSheet
     data class BillView(val orderId: Int) : ActiveSheet
+    /** [from] = "bill" | "order_detail" | "menu" (analytics). */
+    data class PrintTags(val orderId: Int, val from: String) : ActiveSheet
     data class Share(val text: String) : ActiveSheet
 }
 
@@ -56,6 +58,7 @@ fun SheetHost(
         is ActiveSheet.Receive -> ReceivePaymentSheet(state, active.custId, vm, onDismiss)
         is ActiveSheet.AddOld -> AddOldBaakiSheet(state, active.custId, vm, onDismiss)
         is ActiveSheet.BillView -> BillViewSheet(state, active.orderId, vm, onDismiss)
+        is ActiveSheet.PrintTags -> PrintTagsSheet(state, active.orderId, active.from, vm, onDismiss)
         is ActiveSheet.Share -> ShareSummarySheet(active.text, vm, onDismiss)
     }
 }

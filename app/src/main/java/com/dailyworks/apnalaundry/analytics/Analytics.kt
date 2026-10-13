@@ -237,6 +237,17 @@ object Analytics {
     fun billDownloaded(orderId: Int, from: String) =
         track("Bill Downloaded", mapOf("order_id" to orderId, "from" to from))
 
+    /**
+     * Laundry tags sent to the Bluetooth printer (Android). [mode] = "piece" | "order",
+     * [paper] = "58mm" | "80mm", [from] = "bill" | "order_detail" | "menu".
+     */
+    fun tagsPrinted(orderId: Int, tags: Int, mode: String, paper: String, from: String) =
+        track("Tags Printed", mapOf("order_id" to orderId, "tags" to tags, "mode" to mode, "paper" to paper, "from" to from))
+
+    /** [reason] = "connect" | "write" | "bluetooth_off" | "permission" | "no_bluetooth". */
+    fun tagsPrintFailed(orderId: Int, reason: String, from: String) =
+        track("Tags Print Failed", mapOf("order_id" to orderId, "reason" to reason, "from" to from))
+
     fun combinedBillSent(customerId: String, orders: Int, total: Int, toPay: Int) =
         track("Combined Bill Sent", mapOf("customer_id" to customerId, "orders" to orders, "total" to total, "to_pay" to toPay, "channel" to "whatsapp"))
 

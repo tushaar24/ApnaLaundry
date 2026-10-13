@@ -103,8 +103,19 @@ uncounted order into a bill.
 
 ## Out of scope
 
-Going backwards a status (Ready → Received) from order detail; printing tags on thermal printers;
-a delivery-boy view.
+Going backwards a status (Ready → Received) from order detail; a delivery-boy view.
+
+## Laundry tags (Android)
+
+Once the clothes are counted, **Print tags** (order detail, the bill screen after saving, the order's ⋮ menu)
+prints a tag per cloth — or one for the whole order — on a Bluetooth thermal printer (58 / 80 mm,
+ESC/POS over classic Bluetooth). The tag, centred: shop name, CUSTOMER, big `#order no.`, order date
+(+ due date), a boxed service code (`DC`, `WI`: the service's initials) with a filled EXPRESS box on
+rush orders, the cloth, the note, big `2/5`, then a dashed tear line. Printed as a picture, so Hindi
+names print. The printer is paired in the phone's Bluetooth settings; the app lists paired devices
+only (Android 12+ asks for "Nearby devices"). Printer, paper size and per-cloth/per-order are
+remembered on the phone (`tag_printer` prefs), not synced. Code: `domain/LaundryTags.kt`,
+`print/` (TagRender, EscPos, TagPrinter), `ui/sheets/PrintTagsSheet.kt`. Web: not yet.
 
 ## Further notes
 
