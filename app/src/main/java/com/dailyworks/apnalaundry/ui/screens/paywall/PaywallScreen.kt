@@ -64,7 +64,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dailyworks.apnalaundry.data.LaundryRepository
-import com.dailyworks.apnalaundry.data.shops.FREE_SHOPS
 import com.dailyworks.apnalaundry.ui.components.PrimaryButton
 import com.dailyworks.apnalaundry.ui.components.bric
 import com.dailyworks.apnalaundry.ui.components.fig
@@ -116,9 +115,9 @@ private fun offerCopy(from: String, orders: Int?, freeOrders: Int?): OfferCopy =
         "Pick a plan to take new orders in your shops. Your old orders and khata are safe.",
     )
     "add_shop" -> OfferCopy(
-        "$FREE_SHOPS of $FREE_SHOPS free shops used",
+        null,
         "Add more shops",
-        "You can run $FREE_SHOPS shops for free. Pick a plan to add more — each shop keeps its own customers, khata and bills.",
+        "Pick a plan to add more shops — each shop keeps its own customers, khata and bills.",
     )
     else -> OfferCopy(null, "Pick your plan", "Unlimited orders and bills on WhatsApp for your shop.")
 }
