@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -55,14 +56,16 @@ import org.koin.compose.koinInject
 fun shopLabel(s: ShopRef, n: Int): String = s.name.ifBlank { if (n == 0) "My shop" else "Shop ${n + 1}" }
 
 /**
- * "Your shops": every shop, the one on screen ticked — tap one to switch to
- * it — and "Add a shop" (a paid feature: the add screen shows the paywall
- * first without a plan).
+ * "Your shops" (Home: tap the shop name ▾): every shop, the one on screen
+ * ticked — tap one to switch to it — then "Edit <this shop>" (name + bill
+ * details) and "Add a shop" (paid: the add screen shows the paywall first
+ * without a plan).
  */
 @Composable
 fun ShopsSheet(shopVm: ShopViewModel, navigator: AppNavigator, from: String, onDismiss: () -> Unit) {
     val shops by shopVm.shops.collectAsStateWithLifecycle()
     val activeId by shopVm.activeShopId.collectAsStateWithLifecycle()
+    val state by shopVm.state.collectAsStateWithLifecycle()
     AppBottomSheet(title = "Your shops", subtitle = "Each shop has its own customers, khata and bills", onDismiss = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             shops.forEachIndexed { i, s ->
@@ -81,15 +84,30 @@ fun ShopsSheet(shopVm: ShopViewModel, navigator: AppNavigator, from: String, onD
                     if (on) Icon(Icons.Filled.CheckCircle, "Open now", tint = Tokens.Blue, modifier = Modifier.size(22.dp))
                 }
             }
-            Row(
-                Modifier.fillMaxWidth().height(56.dp).rounded(14.dp).border(1.5.dp, Tokens.Blue, RoundedCornerShape(14.dp))
-                    .tap { onDismiss(); navigator.openAddShop(from) }.padding(horizontal = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Icon(Icons.Filled.Add, null, tint = Tokens.Blue, modifier = Modifier.size(22.dp))
-                Text("Add a shop", style = fig(16, FontWeight.Bold, Tokens.Blue))
+            Spacer(Modifier.height(4.dp))
+            SheetAction(Icons.Outlined.Edit, "Edit ${state.shop.name}", "Name, address, logo, UPI and bill design") {
+                onDismiss(); navigator.openBillDesign()
             }
+            SheetAction(Icons.Filled.Add, "Add a shop", "Its own customers, khata and bills") {
+                onDismiss(); navigator.openAddShop(from)
+            }
+        }
+    }
+}
+
+/** A blue action row at the bottom of the shops sheet. */
+@Composable
+private fun SheetAction(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, sub: String, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().rounded(14.dp).border(1.5.dp, Tokens.Blue, RoundedCornerShape(14.dp))
+            .tap(onClick = onClick).padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Icon(icon, null, tint = Tokens.Blue, modifier = Modifier.size(22.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = fig(16, FontWeight.Bold, Tokens.Blue), maxLines = 1)
+            Text(sub, style = fig(13, color = Tokens.Muted), maxLines = 1)
         }
     }
 }
