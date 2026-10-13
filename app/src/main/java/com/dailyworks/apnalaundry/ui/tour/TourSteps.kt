@@ -79,8 +79,10 @@ object TourSteps {
     val clothes = TourStep(
         "order_clothes", TourPart.ORDER,
         "Add the clothes",
-        "Tap a service like ‘Wash & Iron’. Then tap + for each cloth. The bill adds up by itself.",
-        say = "Add the clothes. Tap a service, like Wash and Iron. Then tap plus for each cloth. The bill adds up by itself.",
+        "Tap a service like ‘Wash & Iron’. Then tap + for each cloth. The bill adds up by itself.\n\n" +
+            "Want to change a price, or add or delete a service? Tap ‘Edit services’.",
+        say = "Add the clothes. Tap a service, like Wash and Iron. Then tap plus for each cloth. The bill adds up by itself. " +
+            "Want to change a price, or add or delete a service? Tap Edit services.",
     )
 
     fun save(button: String, needsCustomer: Boolean, needsClothes: Boolean, needsAddress: Boolean) = TourStep(
