@@ -19,7 +19,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
+import com.dailyworks.apnalaundry.data.MAIN_SHOP
 import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -66,6 +68,7 @@ fun shopLabel(s: ShopRef, n: Int): String = s.name.ifBlank { if (n == 0) "My sho
 fun ShopsSheet(shopVm: ShopViewModel, navigator: AppNavigator, from: String, onDismiss: () -> Unit) {
     val shops by shopVm.shops.collectAsStateWithLifecycle()
     val activeId by shopVm.activeShopId.collectAsStateWithLifecycle()
+    var deleting by remember { mutableStateOf<Pair<ShopRef, String>?>(null) } // shop, its label
     AppBottomSheet(title = "Your shops", subtitle = "Each shop has its own customers, khata and bills", onDismiss = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             shops.forEachIndexed { i, s ->
@@ -87,11 +90,56 @@ fun ShopsSheet(shopVm: ShopViewModel, navigator: AppNavigator, from: String, onD
                         Modifier.size(44.dp).rounded(999.dp).tap { shopVm.openShop(s.id) { onDismiss(); navigator.openBillDesign() } },
                         contentAlignment = Alignment.Center,
                     ) { Icon(Icons.Outlined.Edit, "Edit ${shopLabel(s, i)}", tint = Tokens.InkSecondary, modifier = Modifier.size(20.dp)) }
+                    // Delete — extra shops only; the main shop is the account itself.
+                    if (s.id != MAIN_SHOP) {
+                        Box(
+                            Modifier.size(44.dp).rounded(999.dp).tap { deleting = s to shopLabel(s, i) },
+                            contentAlignment = Alignment.Center,
+                        ) { Icon(Icons.Outlined.Delete, "Delete ${shopLabel(s, i)}", tint = Tokens.OrangeText, modifier = Modifier.size(20.dp)) }
+                    }
                 }
             }
             Spacer(Modifier.height(4.dp))
             SheetAction(Icons.Filled.Add, "Add a shop", "Its own customers, khata and bills") {
                 onDismiss(); navigator.openAddShop(from)
+            }
+        }
+    }
+    deleting?.let { (shop, label) ->
+        DeleteShopDialog(label, onKeep = { deleting = null }) {
+            deleting = null
+            shopVm.deleteShop(shop.id) { err ->
+                shopVm.showInfo(err ?: "$label deleted")
+                if (err == null) { onDismiss(); navigator.openHome() }
+            }
+        }
+    }
+}
+
+/** "Delete <shop>?" — what goes with it, Keep / Delete. */
+@Composable
+private fun DeleteShopDialog(label: String, onKeep: () -> Unit, onDelete: () -> Unit) {
+    var busy by remember { mutableStateOf(false) }
+    androidx.compose.ui.window.Dialog(onDismissRequest = onKeep) {
+        Column(
+            Modifier.fillMaxWidth().rounded(20.dp).background(Tokens.Card).padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text("Delete $label?", style = bric(22, FontWeight.Bold))
+            Text(
+                "Its customers, orders, khata and bills will be removed from the app on all your phones. Your other shops stay as they are.",
+                style = fig(15, color = Tokens.InkSecondary),
+            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(
+                    Modifier.weight(1f).height(50.dp).rounded(14.dp).background(Tokens.NeutralFill).tap(onClick = onKeep),
+                    contentAlignment = Alignment.Center,
+                ) { Text("Keep", style = fig(15, FontWeight.Bold, Tokens.InkSecondary)) }
+                Box(
+                    Modifier.weight(1f).height(50.dp).rounded(14.dp).background(Tokens.Orange)
+                        .tap(enabled = !busy) { busy = true; onDelete() },
+                    contentAlignment = Alignment.Center,
+                ) { Text(if (busy) "Deleting…" else "Delete shop", style = fig(15, FontWeight.Bold, Tokens.OnDark)) }
             }
         }
     }

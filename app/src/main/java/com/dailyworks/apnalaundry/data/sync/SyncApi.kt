@@ -8,6 +8,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.HttpRequestBuilder
+import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
@@ -121,6 +122,13 @@ class SyncApi(private val client: HttpClient, private val tokens: TokenManager) 
         if (res.status.value == 403 && body.code == "PLAN_REQUIRED") throw PlanRequiredException()
         if (res.status.value !in 200..299 || body.shop == null) throw SyncHttpException(res.status.value)
         return body.shop
+    }
+
+    /** Deletes an extra shop on the server (soft: hidden, its sync refused). Never the main shop. */
+    suspend fun deleteShop(id: String) {
+        val res = authed { token -> client.delete("$base/shops/$id") { bearerAuth(token) } }
+        // 404: already gone (deleted on another phone) — same end result.
+        if (res.status.value !in 200..299 && res.status.value != 404) throw SyncHttpException(res.status.value)
     }
 
     private fun HttpRequestBuilder.shop(id: String) {

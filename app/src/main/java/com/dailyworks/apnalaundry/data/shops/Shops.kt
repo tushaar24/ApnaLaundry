@@ -82,6 +82,19 @@ class ShopDirectory(private val context: Context, private val prefs: Prefs) {
     }
 
     /**
+     * A deleted shop leaves this phone: off the list (back to the main shop if
+     * it was open), its database file and sync checkpoint gone. Never the main one.
+     */
+    suspend fun remove(id: String) {
+        if (id == MAIN_SHOP) return
+        if (_active.value == id) switchTo(MAIN_SHOP)
+        save(list().filter { it.id != id })
+        dbs.remove(id)?.close()
+        context.deleteDatabase(fileOf(id))
+        prefs.setSyncCheckpoint(id, 0L)
+    }
+
+    /**
      * Logout / another account: back to the main shop and every extra shop's
      * database deleted (the main one is cleared by the repository).
      */

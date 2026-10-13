@@ -18,8 +18,21 @@ class ShopsRepository(
     suspend fun refresh() {
         val server = runCatching { api.listShops() }.getOrNull() ?: return
         val local = dir.list()
+        // Deleted on another phone: drop it here too (its data and file).
+        local.filter { l -> l.id != com.dailyworks.apnalaundry.data.MAIN_SHOP && server.none { it.id == l.id } }
+            .forEach { dir.remove(it.id) }
         // The main shop's name may be blank on the server before its first sync.
         dir.save(server.map { s -> s.copy(name = s.name.ifBlank { local.firstOrNull { it.id == s.id }?.name.orEmpty() }) })
+    }
+
+    /**
+     * Deletes an extra shop — on the server (soft; needs internet) and its data
+     * on this phone. The main shop can't be deleted.
+     */
+    suspend fun delete(id: String) {
+        api.deleteShop(id)
+        dir.remove(id)
+        repo.refreshTsCounter()
     }
 
     /**

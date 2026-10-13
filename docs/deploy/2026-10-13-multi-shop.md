@@ -66,3 +66,16 @@ created with one; every old-app check unchanged).
 ```sh
 cat docs/deploy/2026-10-13-backend-free-2nd-shop.patch | ssh courses-aws 'set -e; cd ~/shweta-makeup-monorepo/backend; B=~/backend-filebak/$(date -u +%Y%m%d-%H%M%S); mkdir -p $B; cp -a routes/laundry-shops.js $B/; cat > /tmp/free2.patch; patch -p1 --dry-run < /tmp/free2.patch && patch -p1 < /tmp/free2.patch; docker run --rm -v $PWD:/x shweta-makeup-monorepo-backend node --check /x/routes/laundry-shops.js; cd .. && git add backend/routes/laundry-shops.js && git commit -q -m "laundry: 2nd shop free, 3rd+ needs a plan"; nohup docker compose -f docker-compose.prod.yml up -d --build backend > /tmp/backend-build.log 2>&1 & echo started'
 ```
+
+## Follow-up (same day): delete a shop
+
+🗑 on an extra shop's card in the shops sheet → "Delete <shop>?" → Delete shop.
+The main shop can't be deleted (it's the account, and what older apps sync).
+Soft on the server: `laundry_shops.deleted_at` (migration
+`20261013150000_laundry_shop_deleted`, nullable — additive); a deleted shop is
+left out of `GET /shops`, `DELETE /api/laundry/shops/:id` sets it, sync with
+its header → 404, and it doesn't count toward the free shops. Its rows stay
+(support can bring it back). The phone drops the shop's database file; other
+phones drop it on their next shop refresh. Pull responses strip `deletedAt`.
+Local test 24/24. Patch `2026-10-13-backend-shop-delete.patch`, script
+`2026-10-13-shop-delete-deploy.sh` (same scp + nohup pattern as above).

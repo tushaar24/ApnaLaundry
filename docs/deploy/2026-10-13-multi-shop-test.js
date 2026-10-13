@@ -191,6 +191,29 @@ async function verify() {
     const r = await call('GET', '/api/laundry/shops');
     assert.deepStrictEqual(r.json.shops.map((x) => [x.id, x.name]), [['main', 'Shop One'], [shopId, 'Branch Two'], [thirdId, 'Branch Three']]);
   });
+  await check("DELETE the main shop -> 400 (can't)", async () => {
+    const r = await call('DELETE', '/api/laundry/shops/main');
+    assert.strictEqual(r.status, 400);
+    assert.strictEqual(r.json.code, 'MAIN_SHOP');
+  });
+  await check("DELETE another owner's shop -> 404", async () => {
+    const res = await fetch(`${base}/api/laundry/shops/${thirdId}`, { method: 'DELETE', headers: { Authorization: 'Bearer tok-other-0002' } });
+    assert.strictEqual(res.status, 404);
+  });
+  await check('DELETE an extra shop: gone from the list, its sync refused', async () => {
+    const r = await call('DELETE', `/api/laundry/shops/${thirdId}`);
+    assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+    const list = await call('GET', '/api/laundry/shops');
+    assert.deepStrictEqual(list.json.shops.map((x) => x.id), ['main', shopId]);
+    assert.strictEqual((await pull(thirdId)).status, 404);
+    assert.strictEqual((await call('DELETE', `/api/laundry/shops/${thirdId}`)).status, 404);
+  });
+  await check('after a delete: old app pull unchanged, the other shop intact', async () => {
+    const mainOrders = (await pull()).json.changes.orders;
+    assert.strictEqual(mainOrders.find((o) => o.id === 1).note, 'edited by old app');
+    assert.ok(!('deletedAt' in (await pull()).json.changes.shop));
+    assert.strictEqual((await pull(shopId)).json.changes.shop.name, 'Branch Two');
+  });
   await check('support list: one row per owner, main shop name', async () => {
     const support = require(path.resolve('services/laundry-support-shops'));
     const rows = await support.loadSummaryRows(s.userId);

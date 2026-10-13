@@ -144,6 +144,7 @@ Profile property **`Shop_Count`** = how many shops the owner has.
 | `Add Shop Tapped` | `from` (`home`\|`settings`), `has_plan`, `free` | shops sheet / Settings "Add another shop". `free` = the 2nd shop (2 shops are free); neither → paywall `from: add_shop` |
 | `Shop Added` | `shop_count` | a shop was created (server-checked plan) |
 | `Shop Switched` | `shop_count` | the owner moved to another shop |
+| `Shop Deleted` | `shop_count` (left after it) | 🗑 on an extra shop's card → Delete shop (the main shop can't be deleted) |
 | `Earnings Shops Changed` | `selection` (`this`\|`all`\|`some`), `shops` | Earnings shop chips |
 
 ### Billing / paywall (A/B: `trial_2` \| `free_50`)

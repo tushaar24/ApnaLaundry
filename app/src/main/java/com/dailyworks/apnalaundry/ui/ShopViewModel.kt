@@ -200,6 +200,16 @@ class ShopViewModel(
         sync.requestSync()
     }
 
+    /** Deletes an extra shop; [onDone]: null = deleted, else what went wrong. */
+    fun deleteShop(id: String, onDone: (String?) -> Unit) = viewModelScope.launch {
+        val r = runCatching { shopsRepo.delete(id) }
+        r.onSuccess {
+            invalidateUndo()
+            Analytics.shopDeleted(shopDir.shops.value.size)
+            onDone(null)
+        }.onFailure { onDone("Couldn't delete the shop — check internet and try again") }
+    }
+
     /**
      * Switches to [id] (if needed) and waits until the screen state shows that
      * shop, then [then] — e.g. opening its details, which read the shop once.

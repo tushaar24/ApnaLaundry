@@ -298,6 +298,9 @@ object Analytics {
 
     fun shopSwitched(shopCount: Int) = track("Shop Switched", mapOf("shop_count" to shopCount))
 
+    /** shop_count: shops left after the delete. */
+    fun shopDeleted(shopCount: Int) = track("Shop Deleted", mapOf("shop_count" to shopCount))
+
     /** Earnings: which shops are counted — this | all | some. */
     fun earningsShopsChanged(selection: String, shops: Int) =
         track("Earnings Shops Changed", mapOf("selection" to selection, "shops" to shops))
