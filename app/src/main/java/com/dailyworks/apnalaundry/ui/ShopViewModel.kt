@@ -26,12 +26,6 @@ import kotlinx.coroutines.launch
 
 data class ToastState(val text: String, val hasUndo: Boolean)
 
-/** Where the owner is in the first-order tour (Home → New order → Bill). */
-enum class TourStage { ORDER, SAVED, DONE }
-
-/** Tour steps: 1 on Home, 2–6 on New order, 7 on the bill. */
-const val TOUR_STEPS = 7
-
 /**
  * The single source of shared, authenticated-app state: the reactive [LaundryState],
  * a global toast with Undo, and the hide-amounts flag. Screens keep their own transient
@@ -62,25 +56,6 @@ class ShopViewModel(
 
     val hideAmounts: StateFlow<Boolean> =
         prefs.hideAmounts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
-
-    /**
-     * The first-order tour. Until the owner acts on it, it runs while the shop
-     * has no orders — so a reinstall that syncs old orders never shows it.
-     */
-    val tour: StateFlow<TourStage> =
-        kotlinx.coroutines.flow.combine(prefs.firstOrderTour, state, loaded) { saved, s, ready ->
-            when (saved) {
-                "order" -> TourStage.ORDER
-                "saved" -> TourStage.SAVED
-                "done" -> TourStage.DONE
-                else -> if (ready && s.orders.isEmpty()) TourStage.ORDER else TourStage.DONE
-            }
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), TourStage.DONE)
-
-    fun setTour(stage: TourStage) = viewModelScope.launch {
-        if (stage == TourStage.DONE && tour.value != TourStage.DONE) com.dailyworks.apnalaundry.analytics.Analytics.tourEnded(tour.value == TourStage.SAVED)
-        prefs.setFirstOrderTour(stage.name.lowercase())
-    }
 
     /** Bumps when the shop logo finishes loading, so bills redraw with it. */
     private val _logoTick = MutableStateFlow(0)

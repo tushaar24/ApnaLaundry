@@ -18,8 +18,6 @@ class Prefs(private val context: Context) {
     private val LOGGED_IN = booleanPreferencesKey("logged_in")
     private val SETUP_DONE = booleanPreferencesKey("setup_done")
     private val HIDE_AMOUNTS = booleanPreferencesKey("hide_amounts")
-    // First-order tour: "order" / "saved" / "done"; unset = not decided yet.
-    private val FIRST_ORDER_TOUR = stringPreferencesKey("first_order_tour")
 
     // Auth (opaque server tokens — see data/remote/TokenManager)
     private val ACCESS_TOKEN = stringPreferencesKey("access_token")
@@ -46,14 +44,12 @@ class Prefs(private val context: Context) {
     val accessExpiresAt: Flow<Long> = context.dataStore.data.map { it[ACCESS_EXPIRES_AT] ?: 0L }
     val refreshToken: Flow<String?> = context.dataStore.data.map { it[REFRESH_TOKEN] }
     val userId: Flow<String?> = context.dataStore.data.map { it[USER_ID] }
-    val firstOrderTour: Flow<String?> = context.dataStore.data.map { it[FIRST_ORDER_TOUR] }
     val userPhone: Flow<String?> = context.dataStore.data.map { it[USER_PHONE] }
     val lastSyncCheckpoint: Flow<Long> = context.dataStore.data.map { it[SYNC_CHECKPOINT] ?: 0L }
 
     suspend fun setLoggedIn(v: Boolean) { context.dataStore.edit { it[LOGGED_IN] = v } }
     suspend fun setSetupDone(v: Boolean) { context.dataStore.edit { it[SETUP_DONE] = v } }
     suspend fun setHideAmounts(v: Boolean) { context.dataStore.edit { it[HIDE_AMOUNTS] = v } }
-    suspend fun setFirstOrderTour(v: String) { context.dataStore.edit { it[FIRST_ORDER_TOUR] = v } }
     suspend fun setLastSyncCheckpoint(v: Long) { context.dataStore.edit { it[SYNC_CHECKPOINT] = v } }
 
     suspend fun setCredentials(access: String, accessExpiresAt: Long, refresh: String, userId: String, phone: String) {
@@ -121,7 +117,6 @@ class Prefs(private val context: Context) {
         context.dataStore.edit {
             it[LOGGED_IN] = false; it[SETUP_DONE] = false; it[HIDE_AMOUNTS] = false
             it[SYNC_CHECKPOINT] = 0L
-            it.remove(FIRST_ORDER_TOUR)
             it.remove(ACCESS_TOKEN); it.remove(ACCESS_EXPIRES_AT); it.remove(REFRESH_TOKEN)
             it.remove(USER_ID); it.remove(USER_PHONE)
             it.remove(SUB_ACTIVE); it.remove(SUB_ACTIVE_USER); it.remove(SUB_ENDS_AT)

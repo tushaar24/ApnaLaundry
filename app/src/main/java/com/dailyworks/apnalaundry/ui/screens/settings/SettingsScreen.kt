@@ -140,25 +140,6 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
                 }
             }
 
-            // Replay the first-order tour
-            AppCard {
-                Row(
-                    Modifier.fillMaxWidth().tap {
-                        Analytics.tourReplayed()
-                        shopVm.setTour(com.dailyworks.apnalaundry.ui.TourStage.ORDER)
-                        navigator.openHome()
-                    }.padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text("How to take an order", style = fig(16, FontWeight.Bold))
-                        Text("See the steps again, one by one", style = fig(13, color = Tokens.Muted))
-                    }
-                    Text("Show me", style = fig(15, FontWeight.Bold, Tokens.Blue))
-                }
-            }
-
             // Phone
             AppCard {
                 Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
