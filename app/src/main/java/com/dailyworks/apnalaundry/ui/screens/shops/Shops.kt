@@ -56,16 +56,15 @@ import org.koin.compose.koinInject
 fun shopLabel(s: ShopRef, n: Int): String = s.name.ifBlank { if (n == 0) "My shop" else "Shop ${n + 1}" }
 
 /**
- * "Your shops" (Home: tap the shop name ▾): every shop, the one on screen
- * ticked — tap one to switch to it — then "Edit <this shop>" (name + bill
- * details) and "Add a shop" (paid: the add screen shows the paywall first
- * without a plan).
+ * "Your shops" (Home: tap the shop name ▾): every shop as a card, the one on
+ * screen ticked — tap a card to switch to it, its ✏️ to edit that shop's name
+ * and bill details — then "Add a shop" (paid: the add screen shows the
+ * paywall first without a plan).
  */
 @Composable
 fun ShopsSheet(shopVm: ShopViewModel, navigator: AppNavigator, from: String, onDismiss: () -> Unit) {
     val shops by shopVm.shops.collectAsStateWithLifecycle()
     val activeId by shopVm.activeShopId.collectAsStateWithLifecycle()
-    val state by shopVm.state.collectAsStateWithLifecycle()
     AppBottomSheet(title = "Your shops", subtitle = "Each shop has its own customers, khata and bills", onDismiss = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             shops.forEachIndexed { i, s ->
@@ -75,19 +74,21 @@ fun ShopsSheet(shopVm: ShopViewModel, navigator: AppNavigator, from: String, onD
                         .background(if (on) Tokens.BlueLight else Tokens.Card)
                         .border(1.5.dp, if (on) Tokens.Blue else Tokens.CardBorder, RoundedCornerShape(14.dp))
                         .tap { shopVm.switchShop(s.id); onDismiss(); navigator.openHome() }
-                        .padding(horizontal = 14.dp),
+                        .padding(start = 14.dp, end = 4.dp), // the ✏️ button keeps its own space
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Icon(Icons.Outlined.Storefront, null, tint = if (on) Tokens.Blue else Tokens.InkSecondary, modifier = Modifier.size(22.dp))
                     Text(shopLabel(s, i), style = fig(16, FontWeight.Bold), maxLines = 1, modifier = Modifier.weight(1f))
                     if (on) Icon(Icons.Filled.CheckCircle, "Open now", tint = Tokens.Blue, modifier = Modifier.size(22.dp))
+                    // Edit this shop (switches to it first if it isn't open).
+                    Box(
+                        Modifier.size(44.dp).rounded(999.dp).tap { shopVm.openShop(s.id) { onDismiss(); navigator.openBillDesign() } },
+                        contentAlignment = Alignment.Center,
+                    ) { Icon(Icons.Outlined.Edit, "Edit ${shopLabel(s, i)}", tint = Tokens.InkSecondary, modifier = Modifier.size(20.dp)) }
                 }
             }
             Spacer(Modifier.height(4.dp))
-            SheetAction(Icons.Outlined.Edit, "Edit ${state.shop.name}", "Name, address, logo, UPI and bill design") {
-                onDismiss(); navigator.openBillDesign()
-            }
             SheetAction(Icons.Filled.Add, "Add a shop", "Its own customers, khata and bills") {
                 onDismiss(); navigator.openAddShop(from)
             }

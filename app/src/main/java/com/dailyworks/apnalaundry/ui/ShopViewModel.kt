@@ -201,6 +201,19 @@ class ShopViewModel(
     }
 
     /**
+     * Switches to [id] (if needed) and waits until the screen state shows that
+     * shop, then [then] — e.g. opening its details, which read the shop once.
+     */
+    fun openShop(id: String, then: () -> Unit) = viewModelScope.launch {
+        if (id != shopDir.activeId.value) {
+            switchShop(id).join()
+            val target = repo.stateOnce(id).shop
+            kotlinx.coroutines.withTimeoutOrNull(2_000) { state.first { it.shop == target } }
+        }
+        then()
+    }
+
+    /**
      * Adds a shop (the server refuses without a plan) and switches to it.
      * [onDone]: null = added; else what went wrong ("plan" = needs a plan).
      */
