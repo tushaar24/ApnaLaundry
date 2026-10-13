@@ -4,6 +4,7 @@ import androidx.room.withTransaction
 import com.dailyworks.apnalaundry.data.LaundryRepository
 import com.dailyworks.apnalaundry.data.Prefs
 import com.dailyworks.apnalaundry.data.local.AppDatabase
+import com.dailyworks.apnalaundry.data.shops.ShopDirectory
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -22,9 +23,13 @@ import kotlinx.coroutines.sync.withLock
  * Known limits (single-device-per-account assumption, documented in
  * docs/specs): shop counters merge last-write-wins, and two devices minting
  * ids concurrently can collide.
+ *
+ * Multi-shop: every shop syncs — the one on screen first — each with its own
+ * database, checkpoint and X-Laundry-Shop; one shop failing doesn't stop the
+ * others. A one-shop owner syncs exactly as before (main shop, no header).
  */
 class SyncManager(
-    private val db: AppDatabase,
+    private val shops: ShopDirectory,
     private val prefs: Prefs,
     private val api: SyncApi,
     private val repo: LaundryRepository,
@@ -39,15 +44,30 @@ class SyncManager(
     private val mutex = Mutex()
 
     suspend fun syncNow(): Result = runLocked {
-        pullOnce()
-        pushOnce()
+        forEachShop { pullOnce(it); pushOnce(it) }
     }
 
     /**
      * Push only — for a brand-new account right after seeding, where a pull
      * can't return anything and would only add a round trip.
      */
-    suspend fun pushNow(): Result = runLocked { pushOnce() }
+    suspend fun pushNow(): Result = runLocked { forEachShop { pushOnce(it) } }
+
+    /** The shop on screen first; a failing shop doesn't stop the rest (its error is reported). */
+    private suspend fun forEachShop(work: suspend (String) -> Unit) {
+        val ids = (listOf(shops.activeId.value) + shops.list().map { it.id }).distinct()
+        var failed: Exception? = null
+        for (id in ids) {
+            try {
+                work(id)
+            } catch (e: NotLoggedInException) {
+                throw e
+            } catch (e: Exception) {
+                if (failed == null) failed = e
+            }
+        }
+        failed?.let { throw it }
+    }
 
     private suspend fun runLocked(work: suspend () -> Unit): Result = mutex.withLock {
         if (!prefs.loggedIn.first()) return Result.Skipped
@@ -61,7 +81,9 @@ class SyncManager(
         }
     }
 
-    suspend fun hasPendingChanges(): Boolean {
+    suspend fun hasPendingChanges(): Boolean = shops.list().any { hasPendingChanges(shops.db(it.id)) }
+
+    private suspend fun hasPendingChanges(db: AppDatabase): Boolean {
         val shopDirty = db.shopDao().get()?.dirty == true
         return shopDirty
             || db.serviceDao().dirtyRows().isNotEmpty()
@@ -71,19 +93,19 @@ class SyncManager(
             || db.dayCloseDao().dirtyRows().isNotEmpty()
     }
 
-    private suspend fun pullOnce() {
-        val since = prefs.lastSyncCheckpoint.first()
-        val res = api.pull(since)
+    private suspend fun pullOnce(shop: String) {
+        val since = prefs.syncCheckpoint(shop)
+        val res = api.pull(since, shop)
         if (!res.success) throw IllegalStateException(res.message ?: "Pull failed")
-        applyPull(res.changes)
-        prefs.setLastSyncCheckpoint(res.checkpoint)
-        repo.refreshTsCounter() // pulled ledger rows may carry higher ts values
+        applyPull(shops.db(shop), res.changes, onScreen = shop == shops.activeId.value)
+        prefs.setSyncCheckpoint(shop, res.checkpoint)
+        if (shop == shops.activeId.value) repo.refreshTsCounter() // pulled ledger rows may carry higher ts values
     }
 
     /** Fires after a pull applies another device's changes (ends a pending Undo). */
     val remoteChanges = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
-    private suspend fun applyPull(ch: SyncChanges) {
+    private suspend fun applyPull(db: AppDatabase, ch: SyncChanges, onScreen: Boolean) {
         if (ch.isEmpty) return
         // Whether any pulled row was newer than ours — not just our own push echoed back.
         var newer = false
@@ -113,10 +135,11 @@ class SyncManager(
                 if (local == null || dto.updatedAt > local.updatedAt) { db.dayCloseDao().upsert(dto.toEntity()); newer = true }
             }
         }
-        if (newer) remoteChanges.tryEmit(Unit)
+        if (newer && onScreen) remoteChanges.tryEmit(Unit)
     }
 
-    private suspend fun pushOnce() {
+    private suspend fun pushOnce(shopId: String) {
+        val db = shops.db(shopId)
         val shop = db.shopDao().get()?.takeIf { it.dirty }
         val services = db.serviceDao().dirtyRows()
         val customers = db.customerDao().dirtyRows()
@@ -134,7 +157,7 @@ class SyncManager(
         )
         if (changes.isEmpty) return
 
-        val res = api.push(changes)
+        val res = api.push(changes, shopId)
         if (!res.success) throw IllegalStateException(res.message ?: "Push failed")
 
         // Clear dirty flags, each guarded by updatedAt so anything edited

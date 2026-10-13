@@ -130,6 +130,19 @@ and the app) — split activation funnels (Order Saved, Order Delivered,
 | `Tour Sound Off` / `Tour Sound On` | `step` | the guide's sound button (remembered on the phone) |
 | `Support Contacted` | `method` (`call`\|`whatsapp`), `from` (`settings`\|`tour_end`) | Settings → Need help? Call us / WhatsApp us, or the guide's last card |
 
+### Multi-shop (Android 1.0.11, paid)
+
+An owner can run several shops (plan needed to add one). Each shop has its own
+customers, khata, orders, bills and services; the app shows one at a time.
+Profile property **`Shop_Count`** = how many shops the owner has.
+
+| Event | Properties | Fired when |
+| ----- | ---------- | ---------- |
+| `Add Shop Tapped` | `from` (`home`\|`settings`), `has_plan` | Home ＋ / switch sheet / Settings "Add another shop" (no plan → paywall `from: add_shop`) |
+| `Shop Added` | `shop_count` | a shop was created (server-checked plan) |
+| `Shop Switched` | `shop_count` | the owner moved to another shop |
+| `Earnings Shops Changed` | `selection` (`this`\|`all`\|`some`), `shops` | Earnings shop chips |
+
 ### Billing / paywall (A/B: `trial_2` \| `free_50`)
 
 The variant is assigned by the backend (Firebase-weighted, stable per user) and

@@ -1,11 +1,11 @@
 package com.dailyworks.apnalaundry.di
 
-import androidx.room.Room
 import com.dailyworks.apnalaundry.data.AuthRepository
 import com.dailyworks.apnalaundry.data.LaundryRepository
 import com.dailyworks.apnalaundry.data.LogoStore
 import com.dailyworks.apnalaundry.data.Prefs
-import com.dailyworks.apnalaundry.data.local.AppDatabase
+import com.dailyworks.apnalaundry.data.shops.ShopDirectory
+import com.dailyworks.apnalaundry.data.shops.ShopsRepository
 import com.dailyworks.apnalaundry.data.remote.AuthApi
 import com.dailyworks.apnalaundry.data.remote.FirebasePhoneAuth
 import com.dailyworks.apnalaundry.data.billing.BillingApi
@@ -26,12 +26,9 @@ import org.koin.androidx.viewmodel.dsl.viewModel
 import org.koin.dsl.module
 
 val appModule = module {
-    single {
-        Room.databaseBuilder(androidContext(), AppDatabase::class.java, AppDatabase.NAME)
-            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4, AppDatabase.MIGRATION_4_5, AppDatabase.MIGRATION_5_6, AppDatabase.MIGRATION_6_7, AppDatabase.MIGRATION_7_8, AppDatabase.MIGRATION_8_9)
-            .build()
-    }
     single { Prefs(androidContext()) }
+    // One Room database per shop (multi-shop); the main shop keeps AppDatabase.NAME.
+    single { ShopDirectory(androidContext(), get()) }
 
     // One shared OkHttp-backed Ktor client for auth + sync.
     single<HttpClient> { AuthApi.defaultClient(androidContext()) }
@@ -43,15 +40,16 @@ val appModule = module {
     single { CheckoutBridge() }
 
     single { LaundryRepository(get()) }
-    single { LogoStore(androidContext(), get()) }
+    single { LogoStore(androidContext(), get(), get()) }
+    single { ShopsRepository(get(), get(), get()) }
     single { SyncManager(get(), get(), get(), get()) }
     single { SyncScheduler(get()) }
     single { FirebasePhoneAuth() }
     single { TourVoice(androidContext(), get()) }
     single { ExperimentsRepository(get(), get(), get()) }
-    single { AuthRepository(get(), get(), get(), get(), get()) }
+    single { AuthRepository(get(), get(), get(), get(), get(), get(), get()) }
 
-    viewModel { ShopViewModel(get(), get(), get(), get(), get()) }
+    viewModel { ShopViewModel(get(), get(), get(), get(), get(), get(), get()) }
     viewModel { AuthViewModel(get()) }
     viewModel { PaywallViewModel(get(), get(), get()) }
 }

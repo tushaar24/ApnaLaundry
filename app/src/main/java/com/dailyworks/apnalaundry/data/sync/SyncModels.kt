@@ -94,6 +94,15 @@ data class SyncChanges(
             && orders.isEmpty() && ledger.isEmpty() && dayCloses.isEmpty()
 }
 
+// Multi-shop: GET / POST /api/laundry/shops.
+@Serializable data class ShopsResponse(val success: Boolean = false, val shops: List<com.dailyworks.apnalaundry.data.shops.ShopRef> = emptyList())
+@Serializable data class AddShopRequest(val name: String)
+@Serializable data class AddShopResponse(
+    val success: Boolean = false,
+    val shop: com.dailyworks.apnalaundry.data.shops.ShopRef? = null,
+    val code: String? = null,
+)
+
 @Serializable data class PushRequest(val changes: SyncChanges)
 @Serializable data class PushResponse(val success: Boolean, val applied: Int = 0, val skipped: Int = 0, val message: String? = null)
 @Serializable data class PullResponse(val success: Boolean, val checkpoint: Long = 0, val changes: SyncChanges = SyncChanges(), val message: String? = null)

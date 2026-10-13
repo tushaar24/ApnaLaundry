@@ -27,6 +27,7 @@ import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.WarningAmber
@@ -77,12 +78,13 @@ private const val TRIAL_DAYS = 7
 
 private data class TrialFeature(val icon: ImageVector, val label: String)
 
-// Feature row under the headline — four icons, two-line labels.
+// Features under the headline — icons with two-line labels, three to a row.
 private val TRIAL_FEATURES = listOf(
     TrialFeature(Icons.AutoMirrored.Outlined.Chat, "Bills on WhatsApp"),
     TrialFeature(Icons.AutoMirrored.Outlined.MenuBook, "Khata for customers"),
     TrialFeature(Icons.AutoMirrored.Outlined.ReceiptLong, "Unlimited orders"),
     TrialFeature(Icons.Outlined.BarChart, "Daily earnings"),
+    TrialFeature(Icons.Outlined.Storefront, "Add unlimited shops"), // multi-shop (paid)
 )
 
 // UPI apps that support AutoPay mandates (text chips — no third-party logos).
@@ -235,10 +237,12 @@ fun PaywallScreen(
                     )
                     Spacer(Modifier.height(12.dp))
                     if (!ui.hasTrial) {
-                        Text("Take unlimited orders", style = fig(19, FontWeight.Bold, Tokens.OnDark))
+                        // From "Add a shop": the plan is what unlocks more shops.
+                        val addShop = from == "add_shop"
+                        Text(if (addShop) "Add unlimited shops" else "Take unlimited orders", style = fig(19, FontWeight.Bold, Tokens.OnDark))
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            "Pick a plan to keep your shop running on the app",
+                            if (addShop) "Pick a plan to run all your shops on the app" else "Pick a plan to keep your shop running on the app",
                             style = fig(14, FontWeight.Normal, Pw.Text),
                             textAlign = TextAlign.Center,
                         )
@@ -266,8 +270,10 @@ fun PaywallScreen(
                     }
 
                     Spacer(Modifier.height(24.dp))
+                    TRIAL_FEATURES.chunked(3).forEachIndexed { r, row ->
+                    if (r > 0) Spacer(Modifier.height(16.dp))
                     Row(Modifier.fillMaxWidth()) {
-                        TRIAL_FEATURES.forEach { f ->
+                        row.forEach { f ->
                             Column(
                                 Modifier.weight(1f),
                                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -284,6 +290,9 @@ fun PaywallScreen(
                                 )
                             }
                         }
+                        // A short last row keeps the same column widths.
+                        repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+                    }
                     }
 
                     Spacer(Modifier.height(28.dp))

@@ -14,6 +14,9 @@ import kotlinx.coroutines.flow.map
 
 private val Context.dataStore by preferencesDataStore(name = "apna_prefs")
 
+/** The shop from before multi-shop — its id in the app and over the API. */
+const val MAIN_SHOP = "main"
+
 /** Small app-level flags + auth credentials + sync cursor, kept out of the domain DB. */
 class Prefs(private val context: Context) {
     private val LOGGED_IN = booleanPreferencesKey("logged_in")
@@ -43,8 +46,15 @@ class Prefs(private val context: Context) {
     private val SUB_ENDS_AT = stringPreferencesKey("sub_ends_at") // ISO; paid / cancelled-grace period end
     private val FREE_ORDERS = intPreferencesKey("free_orders") // orders allowed without a plan (server)
 
-    // Sync cursor: the server checkpoint from the last successful pull.
+    // Sync cursor: the server checkpoint from the last successful pull — the
+    // main shop's; each extra shop has its own "sync_checkpoint_<shop id>".
     private val SYNC_CHECKPOINT = longPreferencesKey("sync_checkpoint")
+    private val SHOP_CHECKPOINT_PREFIX = "sync_checkpoint_"
+
+    // Multi-shop: the owner's shops (JSON list, data/shops) and the one the app
+    // is on; unset = "main", the shop from before multi-shop.
+    private val SHOPS = stringPreferencesKey("shops")
+    private val ACTIVE_SHOP = stringPreferencesKey("active_shop")
 
     val loggedIn: Flow<Boolean> = context.dataStore.data.map { it[LOGGED_IN] ?: false }
     val setupDone: Flow<Boolean> = context.dataStore.data.map { it[SETUP_DONE] ?: false }
@@ -59,6 +69,8 @@ class Prefs(private val context: Context) {
     val guideVariant: Flow<String?> = context.dataStore.data.map { it[GUIDE_VARIANT] }
     val userPhone: Flow<String?> = context.dataStore.data.map { it[USER_PHONE] }
     val lastSyncCheckpoint: Flow<Long> = context.dataStore.data.map { it[SYNC_CHECKPOINT] ?: 0L }
+    val shopsJson: Flow<String?> = context.dataStore.data.map { it[SHOPS] }
+    val activeShop: Flow<String> = context.dataStore.data.map { it[ACTIVE_SHOP] ?: MAIN_SHOP }
 
     suspend fun setLoggedIn(v: Boolean) { context.dataStore.edit { it[LOGGED_IN] = v } }
     suspend fun setSetupDone(v: Boolean) { context.dataStore.edit { it[SETUP_DONE] = v } }
@@ -68,6 +80,13 @@ class Prefs(private val context: Context) {
     suspend fun setTourMuted(v: Boolean) { context.dataStore.edit { it[GUIDE_MUTED] = v } }
     suspend fun setGuideVariant(v: String) { context.dataStore.edit { it[GUIDE_VARIANT] = v } }
     suspend fun setLastSyncCheckpoint(v: Long) { context.dataStore.edit { it[SYNC_CHECKPOINT] = v } }
+    suspend fun setShops(json: String) { context.dataStore.edit { it[SHOPS] = json } }
+    suspend fun setActiveShop(id: String) { context.dataStore.edit { it[ACTIVE_SHOP] = id } }
+
+    private fun checkpointKey(shop: String) =
+        if (shop == MAIN_SHOP) SYNC_CHECKPOINT else longPreferencesKey(SHOP_CHECKPOINT_PREFIX + shop)
+    suspend fun syncCheckpoint(shop: String): Long = context.dataStore.data.first()[checkpointKey(shop)] ?: 0L
+    suspend fun setSyncCheckpoint(shop: String, v: Long) { context.dataStore.edit { it[checkpointKey(shop)] = v } }
 
     suspend fun setCredentials(access: String, accessExpiresAt: Long, refresh: String, userId: String, phone: String) {
         context.dataStore.edit {
@@ -141,6 +160,8 @@ class Prefs(private val context: Context) {
         context.dataStore.edit {
             it[LOGGED_IN] = false; it[SETUP_DONE] = false; it[HIDE_AMOUNTS] = false
             it[SYNC_CHECKPOINT] = 0L
+            it.remove(SHOPS); it.remove(ACTIVE_SHOP)
+            it.asMap().keys.filter { k -> k.name.startsWith(SHOP_CHECKPOINT_PREFIX) }.forEach { k -> it.remove(k) }
             it.remove(GUIDE_STAGE); it.remove(GUIDE_ORDER); it.remove(GUIDE_VARIANT)
             it.remove(ACCESS_TOKEN); it.remove(ACCESS_EXPIRES_AT); it.remove(REFRESH_TOKEN)
             it.remove(USER_ID); it.remove(USER_PHONE)

@@ -26,6 +26,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Checkroom
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
@@ -164,7 +166,14 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars)) {
         // Header
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(state.shop.name, style = bric(22, FontWeight.Bold), modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            // Shop name ▾: switch shop / add a shop (multi-shop); ✏️ this shop's
+            // name + bill details; ＋ add a shop (paid).
+            Row(Modifier.weight(1f).tap { active = ActiveSheet.Shops("home") }, verticalAlignment = Alignment.CenterVertically) {
+                Text(state.shop.name, style = bric(22, FontWeight.Bold), modifier = Modifier.weight(1f, fill = false), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Icon(Icons.Filled.KeyboardArrowDown, "Switch shop", tint = Tokens.Ink, modifier = Modifier.size(26.dp))
+            }
+            RoundIcon(Icons.Outlined.Edit, "Edit shop") { navigator.openBillDesign() }
+            RoundIcon(Icons.Filled.Add, "Add a shop") { navigator.openAddShop("home") }
             Box(Modifier.height(44.dp).rounded(999.dp).background(Tokens.Card).border(1.dp, Tokens.CardBorder, RoundedCornerShape(999.dp)).tap { navigator.openRates("home") }.padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
                 Text("Services", style = fig(14, FontWeight.Bold))
             }

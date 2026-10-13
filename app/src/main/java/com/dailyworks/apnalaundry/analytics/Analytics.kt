@@ -289,6 +289,19 @@ object Analytics {
     fun tourSound(on: Boolean, step: String) =
         track(if (on) "Tour Sound On" else "Tour Sound Off", mapOf("step" to step))
 
+    // ---- multi-shop (paid) ----
+    /** from: home | settings | switcher; has_plan: went straight to naming the shop (else the paywall). */
+    fun addShopTapped(from: String, hasPlan: Boolean) =
+        track("Add Shop Tapped", mapOf("from" to from, "has_plan" to hasPlan))
+
+    fun shopAdded(shopCount: Int) = track("Shop Added", mapOf("shop_count" to shopCount))
+
+    fun shopSwitched(shopCount: Int) = track("Shop Switched", mapOf("shop_count" to shopCount))
+
+    /** Earnings: which shops are counted — this | all | some. */
+    fun earningsShopsChanged(selection: String, shops: Int) =
+        track("Earnings Shops Changed", mapOf("selection" to selection, "shops" to shops))
+
     // ---- support ----
     /** method: call | whatsapp; from: settings | tour_end. */
     fun supportContacted(method: String, from: String) =

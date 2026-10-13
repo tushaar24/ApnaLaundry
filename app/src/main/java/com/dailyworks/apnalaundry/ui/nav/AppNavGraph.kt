@@ -80,6 +80,8 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
     // A/B groups (the guide): fetched at app start / right after login, while setup runs.
     val experiments: ExperimentsRepository = koinInject()
     LaunchedEffect(li) { if (li) experiments.refresh() }
+    // The owner's shops (multi-shop): a shop added on another phone shows up here.
+    LaunchedEffect(li) { if (li) shopVm.refreshShops() }
 
     LaunchedEffect(li) {
         if (!li && navController.currentDestination?.route?.let { it != Routes.LOGIN } == true) {
@@ -204,6 +206,13 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
         // Settings → Bill design & details: onboarding "Your bill" in edit mode.
         composable(Routes.BILL_DESIGN) {
             BillDesignScreen(shopVm, editing = true, onBack = { navigator.back() }, onDone = { navigator.back() })
+        }
+
+        composable(
+            Routes.ADD_SHOP,
+            arguments = listOf(navArgument("from") { type = NavType.StringType; defaultValue = "home" }),
+        ) { entry ->
+            com.dailyworks.apnalaundry.ui.screens.shops.AddShopScreen(shopVm, navigator, entry.arguments?.getString("from") ?: "home")
         }
 
         composable(Routes.SUBSCRIPTION) {

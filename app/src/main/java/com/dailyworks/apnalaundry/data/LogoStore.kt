@@ -22,7 +22,11 @@ import java.util.concurrent.ConcurrentHashMap
  * bill renderer or the server. Logos are immutable per id, so they're cached
  * in memory and on disk once fetched.
  */
-class LogoStore(private val context: Context, private val api: SyncApi) {
+class LogoStore(
+    private val context: Context,
+    private val api: SyncApi,
+    private val shops: com.dailyworks.apnalaundry.data.shops.ShopDirectory,
+) {
     private val mem = ConcurrentHashMap<String, Bitmap>()
     private val dir get() = File(context.filesDir, "logos").apply { mkdirs() }
 
@@ -44,7 +48,7 @@ class LogoStore(private val context: Context, private val api: SyncApi) {
         val out = ByteArrayOutputStream()
         bmp.compress(Bitmap.CompressFormat.JPEG, 85, out)
         val bytes = out.toByteArray()
-        val id = api.uploadLogo(Base64.encodeToString(bytes, Base64.NO_WRAP))
+        val id = api.uploadLogo(Base64.encodeToString(bytes, Base64.NO_WRAP), shops.activeId.value)
         File(dir, "$id.jpg").writeBytes(bytes)
         mem[id] = bmp
         id

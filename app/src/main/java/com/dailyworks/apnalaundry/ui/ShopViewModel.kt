@@ -9,6 +9,10 @@ import com.dailyworks.apnalaundry.data.LogoStore
 import com.dailyworks.apnalaundry.data.sync.SyncApi
 import com.dailyworks.apnalaundry.ui.screens.bill.BILL_PAGE_URL
 import com.dailyworks.apnalaundry.data.Prefs
+import com.dailyworks.apnalaundry.data.shops.ShopDirectory
+import com.dailyworks.apnalaundry.data.shops.ShopRef
+import com.dailyworks.apnalaundry.data.shops.ShopsRepository
+import kotlinx.coroutines.flow.flatMapLatest
 import com.dailyworks.apnalaundry.data.experiments.ExperimentsRepository
 import com.dailyworks.apnalaundry.data.Snapshot
 import com.dailyworks.apnalaundry.data.sync.SyncScheduler
@@ -43,6 +47,8 @@ class ShopViewModel(
     private val sync: SyncScheduler,
     val logos: LogoStore,
     private val api: SyncApi,
+    private val shopDir: ShopDirectory,
+    private val shopsRepo: ShopsRepository,
 ) : ViewModel() {
 
     private val empty = LaundryState(
@@ -159,6 +165,57 @@ class ShopViewModel(
 
     private fun partDone(part: TourPart) = Analytics.tourPartCompleted(part.n, part.key)
 
+    // ---- multi-shop (paid): each shop its own data; the app shows one at a time ----
+
+    /** Every shop, the main one first. */
+    val shops: StateFlow<List<ShopRef>> = shopDir.shops
+
+    /** The shop on screen. */
+    val activeShopId: StateFlow<String> = shopDir.activeId
+
+    init {
+        // Keep the shop list's names in step with each shop's own name (renamed
+        // in Settings / bill details, or pulled from another phone).
+        viewModelScope.launch {
+            @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+            shopDir.activeId.flatMapLatest { id -> shopDir.db(id).shopDao().observe().map { id to it?.name } }
+                .collect { (id, name) -> if (!name.isNullOrBlank()) shopDir.rename(id, name) }
+        }
+        viewModelScope.launch {
+            shopDir.shops.map { it.size }.distinctUntilChanged().collect { Analytics.updateProfile(mapOf("Shop_Count" to it)) }
+        }
+    }
+
+    /** The owner's shops from the server (app start / login). */
+    fun refreshShops() = viewModelScope.launch { shopsRepo.refresh() }
+
+    fun switchShop(id: String) = viewModelScope.launch {
+        if (id == shopDir.activeId.value) return@launch
+        invalidateUndo()
+        dismissToast()
+        dismissWaPrompt()
+        shopDir.switchTo(id)
+        repo.refreshTsCounter()
+        Analytics.shopSwitched(shopDir.shops.value.size)
+        sync.requestSync()
+    }
+
+    /**
+     * Adds a shop (the server refuses without a plan) and switches to it.
+     * [onDone]: null = added; else what went wrong ("plan" = needs a plan).
+     */
+    fun addShop(name: String, onDone: (String?) -> Unit) = viewModelScope.launch {
+        val r = runCatching { shopsRepo.add(name) }
+        r.onSuccess {
+            invalidateUndo()
+            Analytics.shopAdded(shopDir.shops.value.size)
+            sync.requestSync()
+            onDone(null)
+        }.onFailure { e ->
+            onDone(if (e is com.dailyworks.apnalaundry.data.sync.PlanRequiredException) "plan" else "Couldn't add the shop — check internet and try again")
+        }
+    }
+
     /** Bumps when the shop logo finishes loading, so bills redraw with it. */
     private val _logoTick = MutableStateFlow(0)
     val logoTick: StateFlow<Int> = _logoTick
@@ -260,23 +317,28 @@ class ShopViewModel(
     suspend fun uploadLogo(uri: Uri): Result<String> =
         runCatching { logos.upload(uri) }.onSuccess { _logoTick.value++; com.dailyworks.apnalaundry.analytics.Analytics.logoUploaded() }
 
-    private val billUrls = mutableMapOf<Int, String>()
+    private val billUrls = mutableMapOf<String, String>()
 
     /**
      * An order's public bill page, for the WhatsApp message ("Download PDF:").
      * Cached once fetched; a failure (offline, order not synced yet) isn't
      * cached, so the next try asks again. Never waits more than 3 s.
      */
-    suspend fun billUrl(orderId: Int): String? = billUrls[orderId]
-        ?: kotlinx.coroutines.withTimeoutOrNull(3_000) {
-            runCatching { "$BILL_PAGE_URL${api.billLink(orderId)}" }.getOrNull()
-        }?.also { billUrls[orderId] = it }
+    suspend fun billUrl(orderId: Int): String? {
+        val shop = shopDir.activeId.value
+        val key = "$shop:$orderId" // order ids repeat across shops
+        return billUrls[key] ?: kotlinx.coroutines.withTimeoutOrNull(3_000) {
+            runCatching { "$BILL_PAGE_URL${api.billLink(orderId, shop)}" }.getOrNull()
+        }?.also { billUrls[key] = it }
+    }
 
-    private var sampleUrl: String? = null
+    private val sampleUrls = mutableMapOf<String, String>()
 
     /** The shop's sample-bill page (onboarding "Test on WhatsApp"); null offline. */
-    suspend fun sampleBillUrl(): String? = sampleUrl
-        ?: runCatching { "$BILL_PAGE_URL${api.sampleBillLink()}" }.getOrNull()?.also { sampleUrl = it }
+    suspend fun sampleBillUrl(): String? {
+        val shop = shopDir.activeId.value
+        return sampleUrls[shop] ?: runCatching { "$BILL_PAGE_URL${api.sampleBillLink(shop)}" }.getOrNull()?.also { sampleUrls[shop] = it }
+    }
 
     /** The login number (bill phone default, "Test on WhatsApp" target). */
     suspend fun loginPhone(): String = prefs.userPhone.first() ?: state.value.shop.phone

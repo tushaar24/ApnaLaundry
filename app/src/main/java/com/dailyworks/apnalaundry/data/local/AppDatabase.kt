@@ -26,7 +26,14 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun dayCloseDao(): DayCloseDao
 
     companion object {
+        /** The main shop's file — the only one before multi-shop, so existing installs keep it as is. */
         const val NAME = "apnalaundry.db"
+
+        /** Opens a shop's database ([name] = its file) with every migration. */
+        fun build(context: android.content.Context, name: String): AppDatabase =
+            androidx.room.Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, name)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+                .build()
 
         /**
          * v1 -> v2: sync metadata on every table. Existing rows get

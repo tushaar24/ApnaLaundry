@@ -75,6 +75,15 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
         ) {
             Text("Settings", style = bric(28, FontWeight.Bold))
 
+            // Your shops (multi-shop): switch / add another (paid)
+            val planUi by paywallVm.ui.collectAsStateWithLifecycle()
+            var shopsOpen by remember { mutableStateOf(false) }
+            com.dailyworks.apnalaundry.ui.screens.shops.ShopsCard(
+                shopVm, hasPlan = planUi.hasActive || planUi.inGrace,
+                onSwitch = { shopsOpen = true }, onAdd = { navigator.openAddShop("settings") },
+            )
+            if (shopsOpen) com.dailyworks.apnalaundry.ui.screens.shops.ShopsSheet(shopVm, navigator, "settings") { shopsOpen = false }
+
             // Shop name
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SectionLabel("Shop name")

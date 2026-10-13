@@ -11,8 +11,11 @@ import com.dailyworks.apnalaundry.data.local.OrderEntity
 import com.dailyworks.apnalaundry.data.local.ServiceEntity
 import com.dailyworks.apnalaundry.data.local.ShopEntity
 import com.dailyworks.apnalaundry.domain.*
+import com.dailyworks.apnalaundry.data.shops.ShopDirectory
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 
 /** Snapshot of the mutable tables, used to power Undo. */
@@ -28,34 +31,80 @@ data class Snapshot(
 /** [wa]: a wa.me link with a status update for the customer — a dialog offers to send it. */
 data class CmdResult(val toast: String, val undo: Snapshot? = null, val wa: String? = null)
 
-class LaundryRepository(private val db: AppDatabase) {
-    private val shopDao = db.shopDao()
-    private val serviceDao = db.serviceDao()
-    private val customerDao = db.customerDao()
-    private val orderDao = db.orderDao()
-    private val ledgerDao = db.ledgerDao()
-    private val dayCloseDao = db.dayCloseDao()
+/**
+ * Reads and writes the shop on screen ([ShopDirectory.current]): each shop
+ * has its own database, so every command below stays the one-shop code it
+ * always was, and switching shops just points it at another file.
+ */
+class LaundryRepository(private val shops: ShopDirectory) {
+    private val db: AppDatabase get() = shops.current
+    private val shopDao get() = db.shopDao()
+    private val serviceDao get() = db.serviceDao()
+    private val customerDao get() = db.customerDao()
+    private val orderDao get() = db.orderDao()
+    private val ledgerDao get() = db.ledgerDao()
+    private val dayCloseDao get() = db.dayCloseDao()
 
     @Volatile private var tsCounter = 100_000L
 
-    val state: Flow<LaundryState> = run {
-        val shopDays = combine(shopDao.observe(), dayCloseDao.observe()) { s, d -> s to d }
+    /** The shop on screen, live; follows a shop switch. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val state: Flow<LaundryState> = shops.currentFlow.flatMapLatest { d ->
+        val shopDays = combine(d.shopDao().observe(), d.dayCloseDao().observe()) { s, days -> s to days }
         combine(
-            serviceDao.observe(), customerDao.observe(), orderDao.observe(), ledgerDao.observe(), shopDays,
+            d.serviceDao().observe(), d.customerDao().observe(), d.orderDao().observe(), d.ledgerDao().observe(), shopDays,
         ) { services, customers, orders, ledger, sd ->
             val (shopE, daysE) = sd
-            LaundryState(
-                shop = shopE?.toDomain() ?: SeedData.shop,
-                services = services.map { it.toDomain() }.sortedBy { it.sortOrder },
-                customers = customers.map { it.toDomain() },
-                orders = orders.map { it.toDomain() },
-                ledger = ledger.map { it.toDomain() },
-                closedDays = daysE.map { it.date }.toSet(),
-            )
+            stateOf(shopE, services, customers, orders, ledger, daysE)
         }
     }
 
-    val shopFlow: Flow<Shop?> = shopDao.observe().map { it?.toDomain() }
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val shopFlow: Flow<Shop?> = shops.currentFlow.flatMapLatest { d -> d.shopDao().observe().map { it?.toDomain() } }
+
+    /** Any shop's data, read once (Earnings across shops). */
+    suspend fun stateOnce(shopId: String): LaundryState {
+        val d = shops.db(shopId)
+        return stateOf(
+            d.shopDao().get(), d.serviceDao().getAll(), d.customerDao().getAll(),
+            d.orderDao().getAll(), d.ledgerDao().getAll(), d.dayCloseDao().getAll(),
+        )
+    }
+
+    private fun stateOf(
+        shopE: ShopEntity?, services: List<ServiceEntity>, customers: List<CustomerEntity>,
+        orders: List<OrderEntity>, ledger: List<LedgerEntity>, days: List<com.dailyworks.apnalaundry.data.local.DayCloseEntity>,
+    ) = LaundryState(
+        shop = shopE?.toDomain() ?: SeedData.shop,
+        services = services.filter { !it.deleted }.map { it.toDomain() }.sortedBy { it.sortOrder },
+        customers = customers.filter { !it.deleted }.map { it.toDomain() },
+        orders = orders.filter { !it.deleted }.map { it.toDomain() },
+        ledger = ledger.filter { !it.deleted }.map { it.toDomain() },
+        closedDays = days.filter { !it.deleted }.map { it.date }.toSet(),
+    )
+
+    /**
+     * A new shop's first data, in its own database: the name, the bill
+     * details of the shop on screen (not its address — another place), and a
+     * copy of its services to start from. Onboarding is skipped (the owner
+     * already did it once). Everything is dirty, so the next sync sends it up.
+     */
+    suspend fun seedShop(shopId: String, name: String) {
+        val from = shopDao.get()
+        val services = serviceDao.getAll().filter { !it.deleted }
+        val now = SyncClock.now()
+        val target = shops.db(shopId)
+        target.withTransaction {
+            val base = from ?: ShopEntity(1, name, "", SeedData.shop.expressPct, 1001, 1)
+            target.shopDao().upsert(
+                base.copy(
+                    name = name, address = "", nextOrder = 1001, nextCust = 1,
+                    onboardingStep = "done", updatedAt = now, dirty = true,
+                )
+            )
+            target.serviceDao().upsertAll(services.map { it.copy(updatedAt = now, dirty = true) })
+        }
+    }
 
     // ---------------- seeding / lifecycle ----------------
     /**

@@ -28,6 +28,8 @@ sealed interface ActiveSheet {
     /** [from] = "bill" | "order_detail" | "menu" (analytics). */
     data class PrintTags(val orderId: Int, val from: String) : ActiveSheet
     data class Share(val text: String) : ActiveSheet
+    /** Multi-shop: switch shop / add a shop. */
+    data class Shops(val from: String) : ActiveSheet
 }
 
 /** Renders whichever sheet is active. Screens just set/clear [active]. */
@@ -60,5 +62,6 @@ fun SheetHost(
         is ActiveSheet.BillView -> BillViewSheet(state, active.orderId, vm, onDismiss)
         is ActiveSheet.PrintTags -> PrintTagsSheet(state, active.orderId, active.from, vm, onDismiss)
         is ActiveSheet.Share -> ShareSummarySheet(active.text, vm, onDismiss)
+        is ActiveSheet.Shops -> com.dailyworks.apnalaundry.ui.screens.shops.ShopsSheet(vm, navigator, active.from, onDismiss)
     }
 }

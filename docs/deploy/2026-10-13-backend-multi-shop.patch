@@ -1,0 +1,724 @@
+diff -ruN a/app.js b/app.js
+--- a/app.js	2026-10-13 11:15:20
++++ b/app.js	2026-10-13 11:17:16
+@@ -64,6 +64,8 @@
+ app.use('/api/laundry/support', express.json({ limit: '200kb' }), require('./routes/laundry-support'));
+ // A/B test groups for the app (logged-in; no body) — before the generic router.
+ app.use('/api/laundry/experiments', require('./routes/laundry-experiments'));
++// Multi-shop: list / add shops (logged-in) — before the generic router.
++app.use('/api/laundry/shops', require('./routes/laundry-shops'));
+ app.use('/api/laundry', laundryJson, require('./routes/laundry'));
+ 
+ app.use(express.json({
+diff -ruN a/prisma/migrations/20261013120000_laundry_multi_shop/migration.sql b/prisma/migrations/20261013120000_laundry_multi_shop/migration.sql
+--- a/prisma/migrations/20261013120000_laundry_multi_shop/migration.sql	1970-01-01 05:30:00
++++ b/prisma/migrations/20261013120000_laundry_multi_shop/migration.sql	2026-10-13 11:15:55
+@@ -0,0 +1,57 @@
++-- Multi-shop (2026-10-13): an owner can run several shops. Every shop-data
++-- row gets shop_id; '' = the owner's main shop. Every existing row becomes
++-- the main shop's, and every request without the X-Laundry-Shop header
++-- (older Android builds, the website) keeps reading and writing exactly the
++-- rows it does today. ADD COLUMN with a constant default doesn't rewrite the
++-- table; the keys gain shop_id so two shops can both have order #1.
++
++BEGIN;
++
++-- shops: one row per (owner, shop)
++ALTER TABLE "laundry_shops" ADD COLUMN "shop_id" TEXT NOT NULL DEFAULT '';
++ALTER TABLE "laundry_shops" ADD COLUMN "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP;
++ALTER TABLE "laundry_shops" DROP CONSTRAINT "laundry_shops_pkey";
++ALTER TABLE "laundry_shops" ADD CONSTRAINT "laundry_shops_pkey" PRIMARY KEY ("user_id", "shop_id");
++
++-- synced shop data: key (user, shop, client id)
++ALTER TABLE "laundry_services" ADD COLUMN "shop_id" TEXT NOT NULL DEFAULT '';
++ALTER TABLE "laundry_services" DROP CONSTRAINT "laundry_services_pkey";
++ALTER TABLE "laundry_services" ADD CONSTRAINT "laundry_services_pkey" PRIMARY KEY ("user_id", "shop_id", "id");
++DROP INDEX "laundry_services_user_id_server_updated_at_idx";
++CREATE INDEX "laundry_services_user_id_shop_id_server_updated_at_idx" ON "laundry_services"("user_id", "shop_id", "server_updated_at");
++
++ALTER TABLE "laundry_customers" ADD COLUMN "shop_id" TEXT NOT NULL DEFAULT '';
++ALTER TABLE "laundry_customers" DROP CONSTRAINT "laundry_customers_pkey";
++ALTER TABLE "laundry_customers" ADD CONSTRAINT "laundry_customers_pkey" PRIMARY KEY ("user_id", "shop_id", "id");
++DROP INDEX "laundry_customers_user_id_server_updated_at_idx";
++CREATE INDEX "laundry_customers_user_id_shop_id_server_updated_at_idx" ON "laundry_customers"("user_id", "shop_id", "server_updated_at");
++
++ALTER TABLE "laundry_orders" ADD COLUMN "shop_id" TEXT NOT NULL DEFAULT '';
++ALTER TABLE "laundry_orders" DROP CONSTRAINT "laundry_orders_pkey";
++ALTER TABLE "laundry_orders" ADD CONSTRAINT "laundry_orders_pkey" PRIMARY KEY ("user_id", "shop_id", "id");
++DROP INDEX "laundry_orders_user_id_server_updated_at_idx";
++CREATE INDEX "laundry_orders_user_id_shop_id_server_updated_at_idx" ON "laundry_orders"("user_id", "shop_id", "server_updated_at");
++
++ALTER TABLE "laundry_ledger" ADD COLUMN "shop_id" TEXT NOT NULL DEFAULT '';
++ALTER TABLE "laundry_ledger" DROP CONSTRAINT "laundry_ledger_pkey";
++ALTER TABLE "laundry_ledger" ADD CONSTRAINT "laundry_ledger_pkey" PRIMARY KEY ("user_id", "shop_id", "id");
++DROP INDEX "laundry_ledger_user_id_server_updated_at_idx";
++CREATE INDEX "laundry_ledger_user_id_shop_id_server_updated_at_idx" ON "laundry_ledger"("user_id", "shop_id", "server_updated_at");
++
++ALTER TABLE "laundry_day_close" ADD COLUMN "shop_id" TEXT NOT NULL DEFAULT '';
++ALTER TABLE "laundry_day_close" DROP CONSTRAINT "laundry_day_close_pkey";
++ALTER TABLE "laundry_day_close" ADD CONSTRAINT "laundry_day_close_pkey" PRIMARY KEY ("user_id", "shop_id", "date");
++DROP INDEX "laundry_day_close_user_id_server_updated_at_idx";
++CREATE INDEX "laundry_day_close_user_id_shop_id_server_updated_at_idx" ON "laundry_day_close"("user_id", "shop_id", "server_updated_at");
++
++-- public bill links: one per (owner, shop, order); existing tokens keep working
++ALTER TABLE "laundry_bill_links" ADD COLUMN "shop_id" TEXT NOT NULL DEFAULT '';
++DROP INDEX "laundry_bill_links_user_id_order_id_key";
++CREATE UNIQUE INDEX "laundry_bill_links_user_id_shop_id_order_id_key" ON "laundry_bill_links"("user_id", "shop_id", "order_id");
++
++-- logos: the last few kept per shop
++ALTER TABLE "laundry_shop_logos" ADD COLUMN "shop_id" TEXT NOT NULL DEFAULT '';
++DROP INDEX "laundry_shop_logos_user_id_idx";
++CREATE INDEX "laundry_shop_logos_user_id_shop_id_idx" ON "laundry_shop_logos"("user_id", "shop_id");
++
++COMMIT;
+diff -ruN a/prisma/schema.prisma b/prisma/schema.prisma
+--- a/prisma/schema.prisma	2026-10-13 11:15:20
++++ b/prisma/schema.prisma	2026-10-13 11:15:38
+@@ -173,7 +173,7 @@
+   signupPlatform    String? @map("signup_platform")
+   lastLoginPlatform String? @map("last_login_platform")
+ 
+-  shop          LaundryShop?
++  shops         LaundryShop[] // main shop = shopId ""
+   shopLogos     LaundryShopLogo[]
+   services      LaundryService[]
+   customers     LaundryCustomer[]
+@@ -247,8 +247,12 @@
+ // nextCust). Counter sync is last-write-wins — fine while each account is one
+ // device; a multi-device future needs id reservation instead.
+ model LaundryShop {
+-  userId          String      @id @map("user_id")
++  userId          String      @map("user_id")
+   user            LaundryUser @relation(fields: [userId], references: [id])
++  // Multi-shop (2026-10-13): '' = the owner's main shop — every row from
++  // before multi-shop and every request without X-Laundry-Shop (older apps,
++  // the website) — else the id of an extra shop (laundry_shops.shop_id).
++  shopId          String      @default("") @map("shop_id")
+   name            String
+   phone           String
+   closeTime       String      @map("close_time")
+@@ -271,9 +275,11 @@
+   gstOn           Boolean     @default(false) @map("gst_on")
+   gstPct          Float       @default(18) @map("gst_pct")
+   gstMode         String      @default("excl") @map("gst_mode")
++  createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+   updatedAt       BigInt      @map("updated_at")
+   serverUpdatedAt DateTime    @default(now()) @updatedAt @map("server_updated_at") @db.Timestamptz(6)
+ 
++  @@id([userId, shopId])
+   @@map("laundry_shops")
+ }
+ 
+@@ -283,17 +289,25 @@
+   id          String      @id
+   userId      String      @map("user_id")
+   user        LaundryUser @relation(fields: [userId], references: [id])
++  // Multi-shop (2026-10-13): '' = the owner's main shop — every row from
++  // before multi-shop and every request without X-Laundry-Shop (older apps,
++  // the website) — else the id of an extra shop (laundry_shops.shop_id).
++  shopId          String      @default("") @map("shop_id")
+   contentType String      @map("content_type")
+   data        Bytes
+   createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+ 
+-  @@index([userId])
++  @@index([userId, shopId])
+   @@map("laundry_shop_logos")
+ }
+ 
+ model LaundryService {
+   userId          String      @map("user_id")
+   user            LaundryUser @relation(fields: [userId], references: [id])
++  // Multi-shop (2026-10-13): '' = the owner's main shop — every row from
++  // before multi-shop and every request without X-Laundry-Shop (older apps,
++  // the website) — else the id of an extra shop (laundry_shops.shop_id).
++  shopId          String      @default("") @map("shop_id")
+   id              String // client-minted id
+   name            String
+   mode            String // PIECE | WEIGHT
+@@ -307,14 +321,18 @@
+   updatedAt       BigInt      @map("updated_at")
+   serverUpdatedAt DateTime    @default(now()) @updatedAt @map("server_updated_at") @db.Timestamptz(6)
+ 
+-  @@id([userId, id])
+-  @@index([userId, serverUpdatedAt])
++  @@id([userId, shopId, id])
++  @@index([userId, shopId, serverUpdatedAt])
+   @@map("laundry_services")
+ }
+ 
+ model LaundryCustomer {
+   userId          String      @map("user_id")
+   user            LaundryUser @relation(fields: [userId], references: [id])
++  // Multi-shop (2026-10-13): '' = the owner's main shop — every row from
++  // before multi-shop and every request without X-Laundry-Shop (older apps,
++  // the website) — else the id of an extra shop (laundry_shops.shop_id).
++  shopId          String      @default("") @map("shop_id")
+   id              String // client-minted id (from the shop.nextCust counter)
+   name            String
+   phone           String
+@@ -326,14 +344,18 @@
+   updatedAt       BigInt      @map("updated_at")
+   serverUpdatedAt DateTime    @default(now()) @updatedAt @map("server_updated_at") @db.Timestamptz(6)
+ 
+-  @@id([userId, id])
+-  @@index([userId, serverUpdatedAt])
++  @@id([userId, shopId, id])
++  @@index([userId, shopId, serverUpdatedAt])
+   @@map("laundry_customers")
+ }
+ 
+ model LaundryOrder {
+   userId          String      @map("user_id")
+   user            LaundryUser @relation(fields: [userId], references: [id])
++  // Multi-shop (2026-10-13): '' = the owner's main shop — every row from
++  // before multi-shop and every request without X-Laundry-Shop (older apps,
++  // the website) — else the id of an extra shop (laundry_shops.shop_id).
++  shopId          String      @default("") @map("shop_id")
+   id              Int // client-minted id (from the shop.nextOrder counter)
+   custId          String      @map("cust_id")
+   pickup          String // SHOP | HOME
+@@ -370,8 +392,8 @@
+   updatedAt       BigInt      @map("updated_at")
+   serverUpdatedAt DateTime    @default(now()) @updatedAt @map("server_updated_at") @db.Timestamptz(6)
+ 
+-  @@id([userId, id])
+-  @@index([userId, serverUpdatedAt])
++  @@id([userId, shopId, id])
++  @@index([userId, shopId, serverUpdatedAt])
+   @@map("laundry_orders")
+ }
+ 
+@@ -383,16 +405,24 @@
+   token     String      @id
+   userId    String      @map("user_id")
+   user      LaundryUser @relation(fields: [userId], references: [id])
++  // Multi-shop (2026-10-13): '' = the owner's main shop — every row from
++  // before multi-shop and every request without X-Laundry-Shop (older apps,
++  // the website) — else the id of an extra shop (laundry_shops.shop_id).
++  shopId          String      @default("") @map("shop_id")
+   orderId   Int         @map("order_id")
+   createdAt DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+ 
+-  @@unique([userId, orderId])
++  @@unique([userId, shopId, orderId])
+   @@map("laundry_bill_links")
+ }
+ 
+ model LaundryLedgerEntry {
+   userId          String      @map("user_id")
+   user            LaundryUser @relation(fields: [userId], references: [id])
++  // Multi-shop (2026-10-13): '' = the owner's main shop — every row from
++  // before multi-shop and every request without X-Laundry-Shop (older apps,
++  // the website) — else the id of an extra shop (laundry_shops.shop_id).
++  shopId          String      @default("") @map("shop_id")
+   id              String // client-minted id
+   custId          String      @map("cust_id")
+   date            String
+@@ -411,14 +441,18 @@
+   updatedAt       BigInt      @map("updated_at")
+   serverUpdatedAt DateTime    @default(now()) @updatedAt @map("server_updated_at") @db.Timestamptz(6)
+ 
+-  @@id([userId, id])
+-  @@index([userId, serverUpdatedAt])
++  @@id([userId, shopId, id])
++  @@index([userId, shopId, serverUpdatedAt])
+   @@map("laundry_ledger")
+ }
+ 
+ model LaundryDayClose {
+   userId          String      @map("user_id")
+   user            LaundryUser @relation(fields: [userId], references: [id])
++  // Multi-shop (2026-10-13): '' = the owner's main shop — every row from
++  // before multi-shop and every request without X-Laundry-Shop (older apps,
++  // the website) — else the id of an extra shop (laundry_shops.shop_id).
++  shopId          String      @default("") @map("shop_id")
+   date            String // ISO yyyy-MM-dd, client PK
+   closedAt        BigInt      @map("closed_at") // epoch ms
+   cashCounted     Int?        @map("cash_counted")
+@@ -426,8 +460,8 @@
+   updatedAt       BigInt      @map("updated_at")
+   serverUpdatedAt DateTime    @default(now()) @updatedAt @map("server_updated_at") @db.Timestamptz(6)
+ 
+-  @@id([userId, date])
+-  @@index([userId, serverUpdatedAt])
++  @@id([userId, shopId, date])
++  @@index([userId, shopId, serverUpdatedAt])
+   @@map("laundry_day_close")
+ }
+ 
+diff -ruN a/routes/laundry-shops.js b/routes/laundry-shops.js
+--- a/routes/laundry-shops.js	1970-01-01 05:30:00
++++ b/routes/laundry-shops.js	2026-10-13 11:16:40
+@@ -0,0 +1,74 @@
++const crypto = require('crypto');
++const express = require('express');
++
++const prisma = require('../db');
++const { requireLaundryAuth } = require('../middleware/laundry-auth');
++const shops = require('../services/laundry-shops');
++
++// Multi-shop (2026-10-13, Android 1.0.11+):
++//   GET  /api/laundry/shops          -> { shops: [{ id, name, createdAt }] } — "main" first
++//   POST /api/laundry/shops { name } -> { shop: { id, name, createdAt } } — needs a plan
++//
++// Adding a shop is a paid feature: without a plan the server refuses
++// (403 PLAN_REQUIRED), whatever the app shows. The new shop's details,
++// services, customers and orders then arrive by the usual sync, sent with
++// X-Laundry-Shop: <id> (services/laundry-shops.js).
++
++const router = express.Router();
++router.use(requireLaundryAuth);
++
++// "Unlimited shops" in the app — this only stops a runaway client.
++const MAX_SHOPS = 50;
++
++router.get('/', async (req, res, next) => {
++  try {
++    const rows = await prisma.laundryShop.findMany({
++      where: { userId: req.laundryUserId },
++      select: { shopId: true, name: true, createdAt: true },
++      orderBy: { createdAt: 'asc' },
++    });
++    const main = rows.find((r) => r.shopId === shops.MAIN);
++    // The main shop is listed even before its first sync (name '' — the app has it).
++    const list = [
++      { id: shops.API_MAIN, name: main ? main.name : '', createdAt: main ? main.createdAt : null },
++      ...rows.filter((r) => r.shopId !== shops.MAIN).map((r) => ({ id: r.shopId, name: r.name, createdAt: r.createdAt })),
++    ];
++    return res.json({ success: true, shops: list });
++  } catch (error) {
++    return next(error);
++  }
++});
++
++router.post('/', express.json({ limit: '10kb' }), async (req, res, next) => {
++  try {
++    const userId = req.laundryUserId;
++    const name = String((req.body && req.body.name) || '').trim().replace(/\s+/g, ' ').slice(0, 60);
++    if (!name) return res.status(400).json({ success: false, message: 'Shop name is required' });
++    if (!(await shops.hasPlan(userId))) {
++      return res.status(403).json({ success: false, code: 'PLAN_REQUIRED', message: 'Adding a shop needs a plan' });
++    }
++    if ((await prisma.laundryShop.count({ where: { userId } })) >= MAX_SHOPS) {
++      return res.status(400).json({ success: false, code: 'TOO_MANY_SHOPS', message: 'Too many shops' });
++    }
++    const row = await prisma.laundryShop.create({
++      data: {
++        userId,
++        shopId: crypto.randomUUID(),
++        name,
++        phone: req.laundryAuth.user.phone,
++        closeTime: '',
++        expressPct: 0,
++        nextOrder: 1,
++        nextCust: 1,
++        // 0: the app's first push of this shop's details always wins (last-write-wins).
++        updatedAt: BigInt(0),
++      },
++    });
++    req.log.info({ userId, shopId: row.shopId }, 'laundry shop added');
++    return res.json({ success: true, shop: { id: row.shopId, name: row.name, createdAt: row.createdAt } });
++  } catch (error) {
++    return next(error);
++  }
++});
++
++module.exports = router;
+diff -ruN a/routes/laundry-support.js b/routes/laundry-support.js
+--- a/routes/laundry-support.js	2026-10-13 11:15:20
++++ b/routes/laundry-support.js	2026-10-13 11:17:16
+@@ -50,7 +50,7 @@
+       bytes: c.recordingBytes,
+       uploadedAt: c.recordingUploadedAt,
+     },
+-    ...(c.user ? { shopName: c.user.shop ? c.user.shop.name : null, ownerName: c.user.name } : {}),
++    ...(c.user ? { shopName: c.user.shops && c.user.shops[0] ? c.user.shops[0].name : null, ownerName: c.user.name } : {}),
+   };
+ }
+ 
+@@ -74,7 +74,7 @@
+     if (!row || shops.isHiddenPhone(row.phone)) return bad(res, 'Shop owner not found', 404);
+ 
+     const [shop, subscriptions, payments, orderStatus, services, calls] = await Promise.all([
+-      prisma.laundryShop.findUnique({ where: { userId } }),
++      prisma.laundryShop.findUnique({ where: { userId_shopId: { userId, shopId: '' } } }), // main shop
+       prisma.laundrySubscription.findMany({ where: { userId }, orderBy: { createdAt: 'desc' } }),
+       prisma.laundryPayment.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: 20 }),
+       prisma.laundryOrder.groupBy({ by: ['status'], where: { userId, deleted: false }, _count: { _all: true } }),
+@@ -240,7 +240,7 @@
+         orderBy: { startedAt: 'desc' },
+         skip: (page - 1) * pageSize,
+         take: pageSize,
+-        include: { ...callInclude, user: { include: { shop: true } } },
++        include: { ...callInclude, user: { include: { shops: { where: { shopId: '' } } } } },
+       }),
+     ]);
+     return res.json({ success: true, items: calls.map(callOut), total, page, pageSize });
+@@ -253,7 +253,7 @@
+   try {
+     const call = await prisma.laundrySupportCall.findUnique({
+       where: { id: String(req.params.id) },
+-      include: { ...callInclude, user: { include: { shop: true } } },
++      include: { ...callInclude, user: { include: { shops: { where: { shopId: '' } } } } },
+     });
+     if (!call) return bad(res, 'Call not found', 404);
+     return res.json({ success: true, call: callOut(call) });
+diff -ruN a/routes/laundry.js b/routes/laundry.js
+--- a/routes/laundry.js	2026-10-13 11:15:20
++++ b/routes/laundry.js	2026-10-13 11:17:16
+@@ -5,6 +5,7 @@
+ const { requireLaundryAuth } = require('../middleware/laundry-auth');
+ const billLinks = require('../services/laundry-bill-links');
+ const shopDetails = require('../services/laundry-shop-details');
++const { shopScope } = require('../services/laundry-shops');
+ 
+ // Sync API for the ApnaLaundry Android app (offline-first Room DB).
+ //
+@@ -18,11 +19,14 @@
+ // (epoch ms): a pushed row is applied unless the server already holds a newer
+ // updatedAt for the same key. Deletes are tombstones (`deleted: true`), never
+ // hard deletes, so every device learns about them on pull. All rows are scoped
+-// to req.laundryUserId — the authenticated shop owner.
++// to req.laundryUserId — the authenticated shop owner — and req.laundryShopId,
++// the shop in X-Laundry-Shop ('' = the main shop: older apps and the website
++// never send it, so they keep exactly today's rows).
+ 
+ const router = express.Router();
+ 
+ router.use(requireLaundryAuth);
++router.use(shopScope);
+ 
+ // Rows written up to this long before `since` are re-sent on pull, so a row
+ // committed concurrently with a previous pull is never missed. Re-applying is
+@@ -43,7 +47,7 @@
+   services: {
+     delegate: 'laundryService',
+     key: 'id',
+-    where: (userId, r) => ({ userId_id: { userId, id: String(r.id) } }),
++    where: (userId, shopId, r) => ({ userId_shopId_id: { userId, shopId, id: String(r.id) } }),
+     fields: (r) => ({
+       id: String(r.id),
+       name: asStr(r.name),
+@@ -60,7 +64,7 @@
+   customers: {
+     delegate: 'laundryCustomer',
+     key: 'id',
+-    where: (userId, r) => ({ userId_id: { userId, id: String(r.id) } }),
++    where: (userId, shopId, r) => ({ userId_shopId_id: { userId, shopId, id: String(r.id) } }),
+     fields: (r) => ({
+       id: String(r.id),
+       name: asStr(r.name),
+@@ -75,7 +79,7 @@
+   orders: {
+     delegate: 'laundryOrder',
+     key: 'id',
+-    where: (userId, r) => ({ userId_id: { userId, id: asInt(r.id) } }),
++    where: (userId, shopId, r) => ({ userId_shopId_id: { userId, shopId, id: asInt(r.id) } }),
+     fields: (r) => ({
+       id: asInt(r.id),
+       custId: asStr(r.custId),
+@@ -118,7 +122,7 @@
+   ledger: {
+     delegate: 'laundryLedgerEntry',
+     key: 'id',
+-    where: (userId, r) => ({ userId_id: { userId, id: String(r.id) } }),
++    where: (userId, shopId, r) => ({ userId_shopId_id: { userId, shopId, id: String(r.id) } }),
+     fields: (r) => ({
+       id: String(r.id),
+       custId: asStr(r.custId),
+@@ -140,7 +144,7 @@
+   dayCloses: {
+     delegate: 'laundryDayClose',
+     key: 'date',
+-    where: (userId, r) => ({ userId_date: { userId, date: String(r.date) } }),
++    where: (userId, shopId, r) => ({ userId_shopId_date: { userId, shopId, date: String(r.date) } }),
+     fields: (r) => ({
+       date: String(r.date),
+       closedAt: BigInt(asInt(r.closedAt)),
+@@ -152,9 +156,10 @@
+ 
+ // Strip server-only columns and surface BigInt (updatedAt/ts/closedAt) as
+ // plain numbers — epoch ms fits safely below 2^53, and res.json cannot
+-// serialize BigInt.
++// serialize BigInt. shopId / createdAt stay server-side, so a pull looks
++// exactly as it did before multi-shop.
+ function toClient(row) {
+-  const { userId, serverUpdatedAt, ...rest } = row;
++  const { userId, shopId, createdAt, serverUpdatedAt, ...rest } = row;
+   for (const k of Object.keys(rest)) {
+     if (typeof rest[k] === 'bigint') rest[k] = Number(rest[k]);
+   }
+@@ -172,6 +177,7 @@
+ router.post('/shop/logo', async (req, res, next) => {
+   try {
+     const userId = req.laundryUserId;
++    const shopId = req.laundryShopId;
+     const contentType = String((req.body && req.body.contentType) || '');
+     const b64 = String((req.body && req.body.dataBase64) || '');
+     if (!LOGO_TYPES.includes(contentType)) {
+@@ -182,9 +188,9 @@
+       return res.status(400).json({ success: false, message: 'Logo image is empty or too large' });
+     }
+     const id = crypto.randomBytes(12).toString('base64url');
+-    await prisma.laundryShopLogo.create({ data: { id, userId, contentType, data } });
++    await prisma.laundryShopLogo.create({ data: { id, userId, shopId, contentType, data } });
+     const old = await prisma.laundryShopLogo.findMany({
+-      where: { userId },
++      where: { userId, shopId },
+       orderBy: { createdAt: 'desc' },
+       skip: LOGOS_KEPT,
+       select: { id: true },
+@@ -199,6 +205,7 @@
+ router.post('/sync/push', async (req, res, next) => {
+   try {
+     const userId = req.laundryUserId;
++    const shopId = req.laundryShopId;
+     const changes = req.body && req.body.changes;
+     if (!changes || typeof changes !== 'object') {
+       return res.status(400).json({ success: false, message: 'changes object is required' });
+@@ -211,7 +218,7 @@
+       const shop = changes.shop;
+       if (shop && Number.isFinite(Number(shop.updatedAt))) {
+         const updatedAt = BigInt(asInt(shop.updatedAt));
+-        const existing = await tx.laundryShop.findUnique({ where: { userId } });
++        const existing = await tx.laundryShop.findUnique({ where: { userId_shopId: { userId, shopId } } });
+         if (existing && existing.updatedAt > updatedAt) {
+           skipped += 1;
+         } else {
+@@ -226,8 +233,8 @@
+             updatedAt,
+           };
+           await tx.laundryShop.upsert({
+-            where: { userId },
+-            create: { userId, ...data },
++            where: { userId_shopId: { userId, shopId } },
++            create: { userId, shopId, ...data },
+             update: data,
+           });
+           applied += 1;
+@@ -243,16 +250,16 @@
+ 
+         // One query for every row's current server updatedAt instead of a
+         // findUnique per row — each is a DB round trip inside the transaction.
+-        const keyOf = (r) => spec.where(userId, r)[`userId_${spec.key}`][spec.key];
++        const keyOf = (r) => spec.where(userId, shopId, r)[`userId_shopId_${spec.key}`][spec.key];
+         const existingRows = await tx[spec.delegate].findMany({
+-          where: { userId, [spec.key]: { in: rows.map(keyOf) } },
++          where: { userId, shopId, [spec.key]: { in: rows.map(keyOf) } },
+           select: { [spec.key]: true, updatedAt: true },
+         });
+         const serverUpdatedAt = new Map(existingRows.map((e) => [e[spec.key], e.updatedAt]));
+ 
+         for (const raw of rows) {
+           const updatedAt = BigInt(asInt(raw.updatedAt));
+-          const where = spec.where(userId, raw);
++          const where = spec.where(userId, shopId, raw);
+           const existing = serverUpdatedAt.get(keyOf(raw));
+           if (existing !== undefined && existing > updatedAt) {
+             skipped += 1;
+@@ -261,7 +268,7 @@
+           const data = { ...spec.fields(raw), updatedAt };
+           await tx[spec.delegate].upsert({
+             where,
+-            create: { userId, ...data },
++            create: { userId, shopId, ...data },
+             update: data,
+           });
+           serverUpdatedAt.set(keyOf(raw), updatedAt); // a repeated key in one batch sees this write
+@@ -270,7 +277,7 @@
+       }
+     }, { timeout: 60_000, maxWait: 10_000 }); // initial device push can be large
+ 
+-    req.log.info({ userId, applied, skipped }, 'laundry sync push');
++    req.log.info({ userId, shopId, applied, skipped }, 'laundry sync push');
+     return res.json({ success: true, applied, skipped });
+   } catch (error) {
+     return next(error);
+@@ -280,6 +287,7 @@
+ router.get('/sync/pull', async (req, res, next) => {
+   try {
+     const userId = req.laundryUserId;
++    const shopId = req.laundryShopId;
+     const since = Number(req.query.since || 0);
+     if (!Number.isFinite(since) || since < 0) {
+       return res.status(400).json({ success: false, message: 'since must be a non-negative epoch-ms number' });
+@@ -291,12 +299,12 @@
+     const cutoff = new Date(Math.max(0, since - PULL_OVERLAP_MS));
+ 
+     const [shop, services, customers, orders, ledger, dayCloses] = await Promise.all([
+-      prisma.laundryShop.findUnique({ where: { userId } }),
+-      prisma.laundryService.findMany({ where: { userId, serverUpdatedAt: { gt: cutoff } } }),
+-      prisma.laundryCustomer.findMany({ where: { userId, serverUpdatedAt: { gt: cutoff } } }),
+-      prisma.laundryOrder.findMany({ where: { userId, serverUpdatedAt: { gt: cutoff } } }),
+-      prisma.laundryLedgerEntry.findMany({ where: { userId, serverUpdatedAt: { gt: cutoff } } }),
+-      prisma.laundryDayClose.findMany({ where: { userId, serverUpdatedAt: { gt: cutoff } } }),
++      prisma.laundryShop.findUnique({ where: { userId_shopId: { userId, shopId } } }),
++      prisma.laundryService.findMany({ where: { userId, shopId, serverUpdatedAt: { gt: cutoff } } }),
++      prisma.laundryCustomer.findMany({ where: { userId, shopId, serverUpdatedAt: { gt: cutoff } } }),
++      prisma.laundryOrder.findMany({ where: { userId, shopId, serverUpdatedAt: { gt: cutoff } } }),
++      prisma.laundryLedgerEntry.findMany({ where: { userId, shopId, serverUpdatedAt: { gt: cutoff } } }),
++      prisma.laundryDayClose.findMany({ where: { userId, shopId, serverUpdatedAt: { gt: cutoff } } }),
+     ]);
+ 
+     return res.json({
+@@ -321,7 +329,7 @@
+ // before /bills/:orderId/link so "sample" isn't read as an order id.
+ router.post('/bills/sample/link', async (req, res, next) => {
+   try {
+-    const token = await billLinks.getOrCreateToken(req.laundryUserId, billLinks.SAMPLE_ORDER_ID);
++    const token = await billLinks.getOrCreateToken(req.laundryUserId, req.laundryShopId, billLinks.SAMPLE_ORDER_ID);
+     return res.json({ success: true, token });
+   } catch (error) {
+     return next(error);
+@@ -337,7 +345,7 @@
+     if (!Number.isSafeInteger(orderId) || orderId <= 0) {
+       return res.status(400).json({ success: false, message: 'orderId must be a positive integer' });
+     }
+-    const token = await billLinks.getOrCreateToken(req.laundryUserId, orderId);
++    const token = await billLinks.getOrCreateToken(req.laundryUserId, req.laundryShopId, orderId);
+     return res.json({ success: true, token });
+   } catch (error) {
+     return next(error);
+diff -ruN a/services/laundry-bill-links.js b/services/laundry-bill-links.js
+--- a/services/laundry-bill-links.js	2026-10-13 11:15:20
++++ b/services/laundry-bill-links.js	2026-10-13 11:17:16
+@@ -17,20 +17,20 @@
+ // Shape-checks the opaque link token before it reaches the DB.
+ const TOKEN_RE = /^[A-Za-z0-9_-]{12}$/;
+ 
+-/** Returns the order's link token, minting it on first use. */
+-async function getOrCreateToken(userId, orderId) {
++/** Returns the order's link token, minting it on first use. shopId '' = the main shop. */
++async function getOrCreateToken(userId, shopId, orderId) {
+   const existing = await prisma.laundryBillLink.findUnique({
+-    where: { userId_orderId: { userId, orderId } },
++    where: { userId_shopId_orderId: { userId, shopId, orderId } },
+   });
+   if (existing) return existing.token;
+   try {
+-    const row = await prisma.laundryBillLink.create({ data: { token: newToken(), userId, orderId } });
++    const row = await prisma.laundryBillLink.create({ data: { token: newToken(), userId, shopId, orderId } });
+     return row.token;
+   } catch (err) {
+     // Two taps raced: the other request created the link first.
+     if (err.code !== 'P2002') throw err;
+     const row = await prisma.laundryBillLink.findUnique({
+-      where: { userId_orderId: { userId, orderId } },
++      where: { userId_shopId_orderId: { userId, shopId, orderId } },
+     });
+     if (!row) throw err;
+     return row.token;
+@@ -55,16 +55,18 @@
+   if (!TOKEN_RE.test(token)) return null;
+   const link = await prisma.laundryBillLink.findUnique({ where: { token } });
+   if (!link) return null;
+-  if (link.orderId === SAMPLE_ORDER_ID) return readSample(link.userId);
++  // Links from before multi-shop have shopId '' — the main shop, where their order is.
++  const { userId, shopId } = link;
++  if (link.orderId === SAMPLE_ORDER_ID) return readSample(userId, shopId);
+ 
+   const order = await prisma.laundryOrder.findUnique({
+-    where: { userId_id: { userId: link.userId, id: link.orderId } },
++    where: { userId_shopId_id: { userId, shopId, id: link.orderId } },
+   });
+   if (!order || order.deleted) return null;
+ 
+   const [shop, customer] = await Promise.all([
+-    prisma.laundryShop.findUnique({ where: { userId: link.userId } }),
+-    prisma.laundryCustomer.findUnique({ where: { userId_id: { userId: link.userId, id: order.custId } } }),
++    prisma.laundryShop.findUnique({ where: { userId_shopId: { userId, shopId } } }),
++    prisma.laundryCustomer.findUnique({ where: { userId_shopId_id: { userId, shopId, id: order.custId } } }),
+   ]);
+ 
+   return {
+@@ -94,10 +96,10 @@
+ const SAMPLE_ORDER_ID = 0;
+ 
+ /** The shop's sample bill: its bill details + rate card (no customer data). */
+-async function readSample(userId) {
++async function readSample(userId, shopId) {
+   const [shop, services] = await Promise.all([
+-    prisma.laundryShop.findUnique({ where: { userId } }),
+-    prisma.laundryService.findMany({ where: { userId, deleted: false }, orderBy: { sortOrder: 'asc' } }),
++    prisma.laundryShop.findUnique({ where: { userId_shopId: { userId, shopId } } }),
++    prisma.laundryService.findMany({ where: { userId, shopId, deleted: false }, orderBy: { sortOrder: 'asc' } }),
+   ]);
+   if (!shop) return null;
+   return {
+diff -ruN a/services/laundry-shops.js b/services/laundry-shops.js
+--- a/services/laundry-shops.js	1970-01-01 05:30:00
++++ b/services/laundry-shops.js	2026-10-13 11:16:30
+@@ -0,0 +1,60 @@
++const prisma = require('../db');
++const rzp = require('./laundry-razorpay');
++
++// Multi-shop (2026-10-13). An owner's main shop is shop_id '' — every row from
++// before multi-shop. The app names the shop it's working on in the
++// X-Laundry-Shop header; no header (older Android builds, the website) = the
++// main shop, so those clients read and write exactly what they did before.
++// Over the API the main shop's id is "main".
++
++const MAIN = '';
++const API_MAIN = 'main';
++const HEADER = 'x-laundry-shop';
++
++const toApiId = (shopId) => (shopId === MAIN ? API_MAIN : shopId);
++const fromApiId = (id) => {
++  const v = String(id || '').trim();
++  return !v || v === API_MAIN ? MAIN : v;
++};
++
++/**
++ * Router middleware: sets req.laundryShopId from X-Laundry-Shop ('' = main).
++ * An extra shop must exist and belong to the logged-in owner — otherwise 404,
++ * never a quiet fallback to the main shop (that would mix two shops' data).
++ */
++function shopScope(req, res, next) {
++  const shopId = fromApiId(req.get(HEADER));
++  if (shopId === MAIN) {
++    req.laundryShopId = MAIN;
++    return next();
++  }
++  if (shopId.length > 64) {
++    return res.status(400).json({ success: false, code: 'SHOP_NOT_FOUND', message: 'Unknown shop' });
++  }
++  return prisma.laundryShop
++    .findUnique({ where: { userId_shopId: { userId: req.laundryUserId, shopId } }, select: { shopId: true } })
++    .then((row) => {
++      if (!row) return res.status(404).json({ success: false, code: 'SHOP_NOT_FOUND', message: 'Unknown shop' });
++      req.laundryShopId = shopId;
++      return next();
++    })
++    .catch(next);
++}
++
++/**
++ * Whether the owner has a plan now — the same rule as GET /billing/status:
++ * the latest subscription is active, or cancelled but still inside the
++ * period it paid for.
++ */
++async function hasPlan(userId) {
++  const sub = await prisma.laundrySubscription.findFirst({ where: { userId }, orderBy: { createdAt: 'desc' } });
++  if (!sub) return false;
++  if (['authenticated', 'active', 'pending'].includes(sub.status)) return true;
++  if (sub.status !== 'cancelled') return false;
++  const until = (sub.trialAmount || 0) > 0 && (sub.paidCount || 0) === 0
++    ? new Date(sub.createdAt).getTime() + rzp.TRIAL_DAYS * 24 * 3600 * 1000
++    : (sub.currentEnd ? new Date(sub.currentEnd).getTime() : 0);
++  return until > Date.now();
++}
++
++module.exports = { MAIN, API_MAIN, HEADER, toApiId, fromApiId, shopScope, hasPlan };
+diff -ruN a/services/laundry-support-shops.js b/services/laundry-support-shops.js
+--- a/services/laundry-support-shops.js	2026-10-13 11:15:20
++++ b/services/laundry-support-shops.js	2026-10-13 11:17:16
+@@ -54,7 +54,7 @@
+       COALESCE(k.agents, '{}') AS "callAgents",
+       COALESCE(t.tag_ids, '{}') AS "tagIds"
+     FROM laundry_users u
+-    LEFT JOIN laundry_shops s ON s.user_id = u.id
++    LEFT JOIN laundry_shops s ON s.user_id = u.id AND s.shop_id = '' -- main shop (multi-shop 2026-10-13)
+     LEFT JOIN LATERAL (
+       SELECT status, plan, paid_count, current_end, created_at
+       FROM laundry_subscriptions WHERE user_id = u.id

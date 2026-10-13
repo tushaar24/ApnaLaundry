@@ -30,6 +30,20 @@ object EarningsMath {
         val baakiCustomers: Int,
     )
 
+    /** Several shops' earnings added up (Earnings → All shops); one = itself. */
+    fun sum(list: List<Earnings>): Earnings = list.singleOrNull() ?: Earnings(
+        received = list.sumOf { it.received }, cash = list.sumOf { it.cash }, upi = list.sumOf { it.upi },
+        work = list.sumOf { it.work }, baakiAdded = list.sumOf { it.baakiAdded }, oldIn = list.sumOf { it.oldIn },
+        advIn = list.sumOf { it.advIn }, prepaid = list.sumOf { it.prepaid },
+        ordersDelivered = list.sumOf { it.ordersDelivered }, pieces = list.sumOf { it.pieces }, kg = list.sumOf { it.kg },
+        // Same service name across shops = one bar; services first, extras last.
+        byService = list.flatMap { it.byService }.groupBy { it.label to it.isExtra }
+            .map { (k, v) -> ServiceShare(k.first, v.sumOf { it.amount }, k.second) }
+            .sortedWith(compareBy<ServiceShare> { it.isExtra }.thenByDescending { it.amount }),
+        discounts = list.sumOf { it.discounts }, baakiMarket = list.sumOf { it.baakiMarket },
+        baakiCustomers = list.sumOf { it.baakiCustomers },
+    )
+
     fun compute(
         state: LaundryState,
         inRange: (String) -> Boolean,

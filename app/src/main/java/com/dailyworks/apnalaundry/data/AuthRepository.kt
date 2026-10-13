@@ -35,6 +35,8 @@ class AuthRepository(
     private val prefs: Prefs,
     private val syncManager: SyncManager,
     private val repo: LaundryRepository,
+    private val shops: com.dailyworks.apnalaundry.data.shops.ShopDirectory,
+    private val shopsRepo: com.dailyworks.apnalaundry.data.shops.ShopsRepository,
 ) {
     /** In-flight OTP; held by the ViewModel between the two steps. */
     sealed interface Challenge {
@@ -184,6 +186,7 @@ class AuthRepository(
         // into this one.
         val prevPhone = prefs.userPhone.first()
         if (prevPhone != null && prevPhone != user.phone) {
+            shops.forgetExtraShops() // back on the main shop, extra shops' data gone
             repo.clearAll()
             prefs.setLastSyncCheckpoint(0)
             prefs.setSetupDone(false)
@@ -200,8 +203,12 @@ class AuthRepository(
 
         // Initial sync: pull this account's data if it exists. Failures are
         // non-fatal — the app works offline and syncs later. A just-created
-        // account has nothing to pull, so it skips straight to seeding.
-        if (!body.isNewUser) syncManager.syncNow()
+        // account has nothing to pull, so it skips straight to seeding. The
+        // shop list comes first, so a new phone pulls every shop.
+        if (!body.isNewUser) {
+            shopsRepo.refresh()
+            syncManager.syncNow()
+        }
         val existingAccount = repo.hasShop()
         if (!existingAccount) {
             repo.ensureSeeded(shopPhone = user.phone)
@@ -250,6 +257,7 @@ class AuthRepository(
         Analytics.loggedOut()
         CrashReporting.setUser(null)
         MetaEvents.clearIdentity()
+        shops.forgetExtraShops() // before the prefs reset: it needs the shop list
         prefs.logoutAndReset()
         repo.clearAll()
     }

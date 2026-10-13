@@ -18,6 +18,7 @@ object Routes {
     const val COMBINED_BILL = "combined-bill/{custId}"
     const val SUBSCRIPTION = "subscription"
     const val BILL_DESIGN = "bill-design"
+    const val ADD_SHOP = "add-shop/{from}"
 }
 
 /** Thin typed wrapper over the NavController used by every screen. */
@@ -42,6 +43,8 @@ class AppNavigator(val nav: NavHostController) {
     fun openSettings() = navigateTab(Routes.SETTINGS)
     fun openSubscription() = nav.navigate(Routes.SUBSCRIPTION) { launchSingleTop = true }
     fun openBillDesign() = nav.navigate(Routes.BILL_DESIGN) { launchSingleTop = true }
+    /** Add a shop (paid — the screen shows the paywall first without a plan). */
+    fun openAddShop(from: String) = nav.navigate("add-shop/$from") { launchSingleTop = true }
 
     fun selectTab(tab: NavTab) = when (tab) {
         NavTab.ORDERS -> navigateTab(Routes.HOME)

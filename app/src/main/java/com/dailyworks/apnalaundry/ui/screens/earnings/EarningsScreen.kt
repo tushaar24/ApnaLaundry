@@ -69,6 +69,10 @@ import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import com.dailyworks.apnalaundry.data.LaundryRepository
+import com.dailyworks.apnalaundry.domain.LaundryState
+import com.dailyworks.apnalaundry.ui.screens.shops.shopLabel
+import org.koin.compose.koinInject
 import com.dailyworks.apnalaundry.ui.components.callSupport
 import com.dailyworks.apnalaundry.ui.tour.Spotlight
 import com.dailyworks.apnalaundry.ui.tour.TourStage
@@ -81,6 +85,24 @@ import kotlin.math.max
 @Composable
 fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
     val state by shopVm.state.collectAsStateWithLifecycle()
+
+    // Multi-shop: this shop (default), all shops, or the ones picked. Other
+    // shops are read from their own databases, once per pick.
+    val shops by shopVm.shops.collectAsStateWithLifecycle()
+    val activeId by shopVm.activeShopId.collectAsStateWithLifecycle()
+    var picked by rememberSaveable { mutableStateOf(listOf<String>()) } // empty = this shop
+    val selected = picked.filter { id -> shops.any { it.id == id } }.ifEmpty { listOf(activeId) }
+    val repo: LaundryRepository = koinInject()
+    var others by remember { mutableStateOf<Map<String, LaundryState>>(emptyMap()) }
+    LaunchedEffect(selected, activeId) {
+        others = selected.filter { it != activeId }.associateWith { repo.stateOnce(it) }
+    }
+    val views = selected.mapNotNull { id ->
+        val i = shops.indexOfFirst { it.id == id }
+        val st = if (id == activeId) state else others[id] ?: return@mapNotNull null
+        ShopView(id, if (id == activeId) state.shop.name else shopLabel(shops[i], i), st)
+    }
+    val multi = views.size > 1
     val hidden by shopVm.hideAmounts.collectAsStateWithLifecycle()
     var period by remember { mutableStateOf("today") }
     var payFilter by remember { mutableStateOf("all") }
@@ -110,7 +132,7 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
         "custom" -> { iso -> iso in customFrom..customTo }
         else -> { iso -> iso == today }
     }
-    val e = EarningsMath.compute(state, inRange)
+    val e = EarningsMath.sum(views.map { EarningsMath.compute(it.state, inRange) })
     fun m(n: Int): String = if (hidden) "₹ ••••" else Money.rupees(n)
 
     val periodLabel = when (period) {
@@ -126,13 +148,13 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
 
     // Orders in the period by their own date (same as Home's Orders / Sales
     // tiles); live orders only — a cancelled one is listed but never counted.
-    val periodOrders = state.orders.filter { inRange(it.pickupDate) }
-        .sortedWith(compareByDescending<com.dailyworks.apnalaundry.domain.Order> { it.pickupDate }.thenByDescending { it.id })
-    val counted = periodOrders.filter { it.status != com.dailyworks.apnalaundry.domain.OrderStatus.CANCELLED }
-    val sales = counted.sumOf { LaundryMath.amtOf(it) }
+    val periodOrders = views.flatMap { v -> v.state.orders.filter { inRange(it.pickupDate) }.map { v to it } }
+        .sortedWith(compareByDescending<Pair<ShopView, com.dailyworks.apnalaundry.domain.Order>> { it.second.pickupDate }.thenByDescending { it.second.id })
+    val counted = periodOrders.filter { it.second.status != com.dailyworks.apnalaundry.domain.OrderStatus.CANCELLED }
+    val sales = counted.sumOf { LaundryMath.amtOf(it.second) }
 
     val shareText = buildString {
-        append("${state.shop.name} — $periodLabel\n")
+        append("${views.joinToString(" + ") { it.name }} — $periodLabel\n")
         append("Money received: ₹${Money.grouping(e.received.toLong())}\n")
         append("  Cash ₹${Money.grouping(e.cash.toLong())} · UPI ₹${Money.grouping(e.upi.toLong())}\n")
         append("Orders delivered: ${e.ordersDelivered} (work ₹${Money.grouping(e.work.toLong())})\n")
@@ -158,7 +180,26 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            if (state.orders.isEmpty() && state.ledger.isEmpty()) {
+            // Which shops (only with more than one).
+            if (shops.size > 1) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    fun pick(next: List<String>) {
+                        picked = if (next.isEmpty() || next == listOf(activeId)) emptyList() else next
+                        val n = picked.size.coerceAtLeast(1)
+                        Analytics.earningsShopsChanged(if (picked.isEmpty()) "this" else if (n == shops.size) "all" else "some", n)
+                    }
+                    PillChip("This shop", picked.isEmpty()) { pick(emptyList()) }
+                    PillChip("All shops", picked.size == shops.size) { pick(shops.map { it.id }) }
+                    shops.forEachIndexed { i, s ->
+                        PillChip(shopLabel(s, i), picked.isNotEmpty() && s.id in picked) {
+                            val base = picked.ifEmpty { listOf(activeId) }
+                            pick(if (s.id in base) base - s.id else base + s.id)
+                        }
+                    }
+                }
+            }
+
+            if (views.all { it.state.orders.isEmpty() && it.state.ledger.isEmpty() }) {
                 Column(
                     Modifier.fillMaxWidth().padding(top = 56.dp), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -211,9 +252,12 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                         Text("No orders in this period.", style = fig(14, color = Tokens.Muted), modifier = Modifier.padding(vertical = 16.dp))
                     }
                     val list = if (showAllOrders) periodOrders else periodOrders.take(5)
-                    list.forEachIndexed { i, o ->
+                    list.forEachIndexed { i, (v, o) ->
                         if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Divider))
-                        OrderRow(state, o, hidden) { navigator.openOrder(o.id, "earnings") }
+                        // Another shop's order opens from that shop (switch first).
+                        OrderRow(v.state, o, hidden, shopName = if (multi) v.name else null) {
+                            if (v.id == activeId) navigator.openOrder(o.id, "earnings")
+                        }
                     }
                     if (periodOrders.size > 5) {
                         Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Divider))
@@ -303,14 +347,14 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
             }
 
             // payments received
-            val pays = state.ledger
-                .filter { it.kind == LedgerKind.GOT && inRange(it.date) }
-                .sortedWith(compareByDescending<LedgerEntry> { it.date }.thenByDescending { it.ts })
-            val shown = pays.filter { payFilter == "all" || it.method.name.equals(payFilter, true) }
+            val pays = views.flatMap { v -> v.state.ledger.filter { it.kind == LedgerKind.GOT && inRange(it.date) }.map { v to it } }
+                .sortedWith(compareByDescending<Pair<ShopView, LedgerEntry>> { it.second.date }.thenByDescending { it.second.ts })
+                .map { it }
+            val shown = pays.filter { payFilter == "all" || it.second.method.name.equals(payFilter, true) }
             Text("Payments received", style = fig(15, FontWeight.Bold))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf("all" to "All", "cash" to "Cash", "upi" to "UPI").forEach { (v, label) ->
-                    val count = if (v == "all") pays.size else pays.count { it.method.name.equals(v, true) }
+                    val count = if (v == "all") pays.size else pays.count { it.second.method.name.equals(v, true) }
                     PillChip("$label $count", payFilter == v) { payFilter = v }
                 }
             }
@@ -319,9 +363,9 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                     if (shown.isEmpty()) {
                         Text("No payments in this period.", style = fig(14, color = Tokens.Muted), modifier = Modifier.padding(vertical = 16.dp))
                     }
-                    shown.forEachIndexed { i, entry ->
+                    shown.forEachIndexed { i, (v, entry) ->
                         if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Divider))
-                        PaymentRow(state, entry, hidden) { navigator.openCustomer(entry.custId, "earnings") }
+                        PaymentRow(v.state, entry, hidden) { if (v.id == activeId) navigator.openCustomer(entry.custId, "earnings") }
                     }
                 }
             }
@@ -418,15 +462,20 @@ private fun PaymentRow(state: com.dailyworks.apnalaundry.domain.LaundryState, e:
     }
 }
 
-/** One order in the Earnings list: name, number · date, amount and status. */
+/** One shop's data in Earnings (multi-shop). */
+private data class ShopView(val id: String, val name: String, val state: LaundryState)
+
+private fun OrderRowShop(shopName: String?) = if (shopName != null) "$shopName · " else ""
+
+/** One order in the Earnings list: name, number · date, amount and status; [shopName] with several shops. */
 @Composable
-private fun OrderRow(state: com.dailyworks.apnalaundry.domain.LaundryState, o: com.dailyworks.apnalaundry.domain.Order, hidden: Boolean, onClick: () -> Unit) {
+private fun OrderRow(state: com.dailyworks.apnalaundry.domain.LaundryState, o: com.dailyworks.apnalaundry.domain.Order, hidden: Boolean, shopName: String? = null, onClick: () -> Unit) {
     val c = Selectors.customer(state, o.custId)
     val (label, bg, fg) = statusChip(o.status)
     Row(Modifier.fillMaxWidth().tap(onClick = onClick).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(c.name, style = fig(15, FontWeight.Bold), maxLines = 1)
-            Text("#${o.no()} · ${AppDate.plain(o.pickupDate)}", style = fig(12, color = Tokens.Muted), maxLines = 1)
+            Text(OrderRowShop(shopName) + "#${o.no()} · ${AppDate.plain(o.pickupDate)}", style = fig(12, color = Tokens.Muted), maxLines = 1)
         }
         Spacer(Modifier.width(8.dp))
         Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {

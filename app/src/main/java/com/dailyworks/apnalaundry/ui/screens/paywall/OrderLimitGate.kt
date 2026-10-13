@@ -58,6 +58,11 @@ private enum class Access { OPEN, FREE_OVER }
 fun OrderLimitGate(onBack: () -> Unit, content: @Composable () -> Unit) {
     val repo: LaundryRepository = koinInject()
     val billing: BillingRepository = koinInject()
+    val shopDir: com.dailyworks.apnalaundry.data.shops.ShopDirectory = koinInject()
+    // Several shops are a paid feature: once the plan ends, no new order in
+    // any shop (the shops and their data stay open to see). The free orders
+    // are only for a one-shop owner.
+    var planEnded by remember { mutableStateOf(false) }
     var access by remember { mutableStateOf<Access?>(null) }
     var plans by remember { mutableStateOf(false) }
 
@@ -66,15 +71,17 @@ fun OrderLimitGate(onBack: () -> Unit, content: @Composable () -> Unit) {
         // status). Never shown in the app — the owner only learns of it when it
         // runs out. Counts orders not deleted, so deleting one frees a slot.
         val made = repo.liveOrderCount()
-        if (made < billing.savedFreeOrders() || billing.savedActive()) {
+        val manyShops = shopDir.list().size > 1
+        if (billing.savedActive() || (!manyShops && made < billing.savedFreeOrders())) {
             access = Access.OPEN
             return@LaunchedEffect
         }
         access = Access.FREE_OVER
+        planEnded = manyShops
         Analytics.freeOrdersOverShown(made)
         // Paid elsewhere (website, another phone) since the last save? Let them through.
         billing.refreshSaved()
-        if ((billing.savedActive() || made < billing.savedFreeOrders()) && !plans) access = Access.OPEN
+        if ((billing.savedActive() || (!manyShops && made < billing.savedFreeOrders())) && !plans) access = Access.OPEN
     }
 
     when (access) {
@@ -85,6 +92,7 @@ fun OrderLimitGate(onBack: () -> Unit, content: @Composable () -> Unit) {
             PaywallScreen(onClose = onBack, onDone = { access = Access.OPEN }, from = "free_orders")
         } else {
             FreeOrdersOver(
+                planEnded = planEnded,
                 onSeePlans = {
                     Analytics.freeOrdersOverPlansTapped()
                     plans = true
@@ -97,7 +105,7 @@ fun OrderLimitGate(onBack: () -> Unit, content: @Composable () -> Unit) {
 
 /** The notice before the paywall: short, plain words, one big button. */
 @Composable
-private fun FreeOrdersOver(onSeePlans: () -> Unit, onBack: () -> Unit) {
+private fun FreeOrdersOver(planEnded: Boolean = false, onSeePlans: () -> Unit, onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars)) {
         Box(Modifier.padding(start = 4.dp, top = 4.dp).size(48.dp).rounded(999.dp).tap(onClick = onBack), contentAlignment = Alignment.Center) {
             Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Tokens.Ink, modifier = Modifier.size(24.dp))
@@ -110,10 +118,11 @@ private fun FreeOrdersOver(onSeePlans: () -> Unit, onBack: () -> Unit) {
                 Icon(Icons.Outlined.Celebration, null, tint = Tokens.Orange, modifier = Modifier.size(48.dp))
             }
             Spacer(Modifier.height(24.dp))
-            Text("Your free orders are over", style = bric(26, FontWeight.Bold), textAlign = TextAlign.Center)
+            Text(if (planEnded) "Your plan has ended" else "Your free orders are over", style = bric(26, FontWeight.Bold), textAlign = TextAlign.Center)
             Spacer(Modifier.height(10.dp))
             Text(
-                "Good start! To keep taking orders and sending bills on WhatsApp, choose a plan.",
+                if (planEnded) "You have more than one shop. To take new orders in any of them, choose a plan again. You can still open every shop and see its orders, khata and earnings."
+                else "Good start! To keep taking orders and sending bills on WhatsApp, choose a plan.",
                 style = fig(16, color = Tokens.Muted), textAlign = TextAlign.Center,
             )
             Spacer(Modifier.height(24.dp))
