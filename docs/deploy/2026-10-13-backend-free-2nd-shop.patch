@@ -1,0 +1,41 @@
+diff -ruN a2/routes/laundry-shops.js b2/routes/laundry-shops.js
+--- a2/routes/laundry-shops.js	2026-10-13 12:33:36
++++ b2/routes/laundry-shops.js	2026-10-13 12:33:36
+@@ -7,10 +7,10 @@
+ 
+ // Multi-shop (2026-10-13, Android 1.0.11+):
+ //   GET  /api/laundry/shops          -> { shops: [{ id, name, createdAt }] } — "main" first
+-//   POST /api/laundry/shops { name } -> { shop: { id, name, createdAt } } — needs a plan
++//   POST /api/laundry/shops { name } -> { shop: { id, name, createdAt } }
+ //
+-// Adding a shop is a paid feature: without a plan the server refuses
+-// (403 PLAN_REQUIRED), whatever the app shows. The new shop's details,
++// The first shop + one more are free; a 3rd shop and more need a plan — the
++// server refuses (403 PLAN_REQUIRED), whatever the app shows. The new shop's details,
+ // services, customers and orders then arrive by the usual sync, sent with
+ // X-Laundry-Shop: <id> (services/laundry-shops.js).
+ 
+@@ -19,6 +19,8 @@
+ 
+ // "Unlimited shops" in the app — this only stops a runaway client.
+ const MAX_SHOPS = 50;
++// Shops an owner can run without a plan (the main one counts, even before its first sync).
++const FREE_SHOPS = 2;
+ 
+ router.get('/', async (req, res, next) => {
+   try {
+@@ -44,10 +46,11 @@
+     const userId = req.laundryUserId;
+     const name = String((req.body && req.body.name) || '').trim().replace(/\s+/g, ' ').slice(0, 60);
+     if (!name) return res.status(400).json({ success: false, message: 'Shop name is required' });
+-    if (!(await shops.hasPlan(userId))) {
+-      return res.status(403).json({ success: false, code: 'PLAN_REQUIRED', message: 'Adding a shop needs a plan' });
++    const owned = 1 + (await prisma.laundryShop.count({ where: { userId, shopId: { not: shops.MAIN } } }));
++    if (owned >= FREE_SHOPS && !(await shops.hasPlan(userId))) {
++      return res.status(403).json({ success: false, code: 'PLAN_REQUIRED', message: 'More than 2 shops need a plan' });
+     }
+-    if ((await prisma.laundryShop.count({ where: { userId } })) >= MAX_SHOPS) {
++    if (owned >= MAX_SHOPS) {
+       return res.status(400).json({ success: false, code: 'TOO_MANY_SHOPS', message: 'Too many shops' });
+     }
+     const row = await prisma.laundryShop.create({

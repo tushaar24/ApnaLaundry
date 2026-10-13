@@ -20,6 +20,12 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 
+/**
+ * Shops an owner can run without a plan: their first shop + one more. A 3rd
+ * shop and more need a plan (the server checks too: POST /shops).
+ */
+const val FREE_SHOPS = 2
+
 /** One of the owner's shops. [id] [MAIN_SHOP] = the shop from before multi-shop. */
 @Serializable
 data class ShopRef(val id: String, val name: String = "")

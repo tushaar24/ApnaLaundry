@@ -54,3 +54,15 @@ Roll back: restore the files from the backup folder and rebuild the backend;
 the extra columns are harmless to the old code only while no second shop
 exists — after that, restore the tables from the dump
 (`pg_restore --clean --table=...`) before going back.
+
+## Follow-up (same day): the 2nd shop is free
+
+Owner: 2 shops free, a 3rd and more need a plan. `routes/laundry-shops.js`
+counts the owner's extra shops (+ the main one) and asks for a plan only from
+the 3rd — `2026-10-13-backend-free-2nd-shop.patch` (that file only, no
+migration). Local test 20/20 (2nd shop free, 3rd refused without a plan,
+created with one; every old-app check unchanged).
+
+```sh
+cat docs/deploy/2026-10-13-backend-free-2nd-shop.patch | ssh courses-aws 'set -e; cd ~/shweta-makeup-monorepo/backend; B=~/backend-filebak/$(date -u +%Y%m%d-%H%M%S); mkdir -p $B; cp -a routes/laundry-shops.js $B/; cat > /tmp/free2.patch; patch -p1 --dry-run < /tmp/free2.patch && patch -p1 < /tmp/free2.patch; docker run --rm -v $PWD:/x shweta-makeup-monorepo-backend node --check /x/routes/laundry-shops.js; cd .. && git add backend/routes/laundry-shops.js && git commit -q -m "laundry: 2nd shop free, 3rd+ needs a plan"; nohup docker compose -f docker-compose.prod.yml up -d --build backend > /tmp/backend-build.log 2>&1 & echo started'
+```

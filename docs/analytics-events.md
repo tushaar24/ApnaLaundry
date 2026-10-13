@@ -132,13 +132,16 @@ and the app) — split activation funnels (Order Saved, Order Delivered,
 
 ### Multi-shop (Android 1.0.11, paid)
 
-An owner can run several shops (plan needed to add one). Each shop has its own
+An owner can run several shops: 2 are free, a 3rd and more need a plan. The
+paywall opens straight from New order when the free orders (counted across all
+shops) run out — `Paywall Shown {from}`: `free_orders` | `plan_ended` (more
+than 2 shops, no plan) | `add_shop` | `settings`. Each shop has its own
 customers, khata, orders, bills and services; the app shows one at a time.
 Profile property **`Shop_Count`** = how many shops the owner has.
 
 | Event | Properties | Fired when |
 | ----- | ---------- | ---------- |
-| `Add Shop Tapped` | `from` (`home`\|`settings`), `has_plan` | Home ＋ / switch sheet / Settings "Add another shop" (no plan → paywall `from: add_shop`) |
+| `Add Shop Tapped` | `from` (`home`\|`settings`), `has_plan`, `free` | shops sheet / Settings "Add another shop". `free` = the 2nd shop (2 shops are free); neither → paywall `from: add_shop` |
 | `Shop Added` | `shop_count` | a shop was created (server-checked plan) |
 | `Shop Switched` | `shop_count` | the owner moved to another shop |
 | `Earnings Shops Changed` | `selection` (`this`\|`all`\|`some`), `shops` | Earnings shop chips |

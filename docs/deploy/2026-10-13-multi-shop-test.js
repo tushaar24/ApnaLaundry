@@ -109,20 +109,26 @@ async function verify() {
     assert.strictEqual(r.status, 200);
     assert.deepStrictEqual(r.json.shops.map((x) => [x.id, x.name]), [['main', 'Shop One']]);
   });
-  await check('POST /shops without a plan is refused (403 PLAN_REQUIRED)', async () => {
-    const r = await call('POST', '/api/laundry/shops', { body: { name: 'Branch Two' } });
-    assert.strictEqual(r.status, 403);
-    assert.strictEqual(r.json.code, 'PLAN_REQUIRED');
-    assert.strictEqual(await prisma.laundryShop.count({ where: { userId: s.userId } }), 1);
-  });
-  await prisma.laundrySubscription.create({ data: { userId: s.userId, plan: 'monthly', status: 'active', amount: 49900 } });
   let shopId = null;
-  await check('POST /shops with a plan creates the shop', async () => {
+  await check('POST /shops: the 2nd shop is free (no plan)', async () => {
     const r = await call('POST', '/api/laundry/shops', { body: { name: '  Branch   Two ' } });
     assert.strictEqual(r.status, 200, JSON.stringify(r.json));
     assert.strictEqual(r.json.shop.name, 'Branch Two');
     shopId = r.json.shop.id;
     assert.ok(/^[0-9a-f-]{36}$/.test(shopId));
+  });
+  await check('POST /shops: a 3rd shop without a plan is refused (403 PLAN_REQUIRED)', async () => {
+    const r = await call('POST', '/api/laundry/shops', { body: { name: 'Branch Three' } });
+    assert.strictEqual(r.status, 403);
+    assert.strictEqual(r.json.code, 'PLAN_REQUIRED');
+    assert.strictEqual(await prisma.laundryShop.count({ where: { userId: s.userId } }), 2);
+  });
+  await prisma.laundrySubscription.create({ data: { userId: s.userId, plan: 'monthly', status: 'active', amount: 49900 } });
+  let thirdId = null;
+  await check('POST /shops: a 3rd shop with a plan is created', async () => {
+    const r = await call('POST', '/api/laundry/shops', { body: { name: 'Branch Three' } });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+    thirdId = r.json.shop.id;
   });
 
   // ---- the new shop: same client ids as the main shop, fully separate ----
@@ -183,7 +189,7 @@ async function verify() {
   });
   await check('GET /shops lists main first, then the new shop', async () => {
     const r = await call('GET', '/api/laundry/shops');
-    assert.deepStrictEqual(r.json.shops.map((x) => [x.id, x.name]), [['main', 'Shop One'], [shopId, 'Branch Two']]);
+    assert.deepStrictEqual(r.json.shops.map((x) => [x.id, x.name]), [['main', 'Shop One'], [shopId, 'Branch Two'], [thirdId, 'Branch Three']]);
   });
   await check('support list: one row per owner, main shop name', async () => {
     const support = require(path.resolve('services/laundry-support-shops'));

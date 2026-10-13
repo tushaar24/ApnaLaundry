@@ -290,9 +290,9 @@ object Analytics {
         track(if (on) "Tour Sound On" else "Tour Sound Off", mapOf("step" to step))
 
     // ---- multi-shop (paid) ----
-    /** from: home | settings | switcher; has_plan: went straight to naming the shop (else the paywall). */
-    fun addShopTapped(from: String, hasPlan: Boolean) =
-        track("Add Shop Tapped", mapOf("from" to from, "has_plan" to hasPlan))
+    /** from: home | settings; has_plan; free = the 2nd shop (no plan needed). Neither = the paywall. */
+    fun addShopTapped(from: String, hasPlan: Boolean, free: Boolean) =
+        track("Add Shop Tapped", mapOf("from" to from, "has_plan" to hasPlan, "free" to free))
 
     fun shopAdded(shopCount: Int) = track("Shop Added", mapOf("shop_count" to shopCount))
 

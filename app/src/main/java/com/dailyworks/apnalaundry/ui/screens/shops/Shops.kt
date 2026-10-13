@@ -37,7 +37,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.data.billing.BillingRepository
+import com.dailyworks.apnalaundry.data.shops.FREE_SHOPS
 import com.dailyworks.apnalaundry.data.shops.ShopRef
+import androidx.compose.runtime.produceState
 import com.dailyworks.apnalaundry.ui.ShopViewModel
 import com.dailyworks.apnalaundry.ui.components.AppBottomSheet
 import com.dailyworks.apnalaundry.ui.components.FieldBox
@@ -89,7 +91,16 @@ fun ShopsSheet(shopVm: ShopViewModel, navigator: AppNavigator, from: String, onD
                 }
             }
             Spacer(Modifier.height(4.dp))
-            SheetAction(Icons.Filled.Add, "Add a shop", "Its own customers, khata and bills") {
+            val billing: BillingRepository = koinInject()
+            val plan by produceState(false) { value = billing.savedActive() }
+            SheetAction(
+                Icons.Filled.Add, "Add a shop",
+                when {
+                    shops.size < FREE_SHOPS -> "Your 2nd shop is free"
+                    plan -> "Unlimited shops on your plan"
+                    else -> "$FREE_SHOPS shops are free · more need a plan"
+                },
+            ) {
                 onDismiss(); navigator.openAddShop(from)
             }
         }
@@ -114,21 +125,24 @@ private fun SheetAction(icon: androidx.compose.ui.graphics.vector.ImageVector, t
 }
 
 /**
- * Add a shop (paid). No plan: the paywall first ("Add unlimited shops"),
- * then the name. The new shop starts with the current shop's services and
- * bill details (not its address), and opens on Home.
+ * Add a shop. The 2nd shop is free ([FREE_SHOPS]); from the 3rd, no plan =
+ * the paywall first ("2 of 2 free shops used"), then the name. The new shop
+ * starts with the current shop's services and bill details (not its
+ * address), and opens on Home. The server enforces the same rule.
  */
 @Composable
 fun AddShopScreen(shopVm: ShopViewModel, navigator: AppNavigator, from: String) {
     val billing: BillingRepository = koinInject()
     val state by shopVm.state.collectAsStateWithLifecycle()
+    val shops by shopVm.shops.collectAsStateWithLifecycle()
+    val free = shops.size < FREE_SHOPS
     // null = checking; the saved plan decides instantly, a refresh catches a plan bought elsewhere.
     var hasPlan by remember { mutableStateOf<Boolean?>(null) }
     LaunchedEffect(Unit) {
         var plan = billing.savedActive()
-        if (!plan) { billing.refreshSaved(); plan = billing.savedActive() }
-        Analytics.addShopTapped(from, plan)
-        hasPlan = plan
+        if (!plan && !free) { billing.refreshSaved(); plan = billing.savedActive() }
+        Analytics.addShopTapped(from, plan, free)
+        hasPlan = plan || free
     }
 
     when (hasPlan) {
@@ -152,6 +166,12 @@ fun AddShopScreen(shopVm: ShopViewModel, navigator: AppNavigator, from: String) 
                             .border(1.dp, Tokens.CardBorder, RoundedCornerShape(14.dp)).padding(14.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
+                        Text(
+                            if (free) "Your 2nd shop is free" else "Unlimited shops on your plan",
+                            style = fig(15, FontWeight.Bold, if (free) Tokens.GreenText else Tokens.BlueText),
+                        )
+                        if (free) Text("To add a 3rd shop or more, you'll need a plan.", style = fig(14, color = Tokens.InkSecondary))
+                        Spacer(Modifier.height(6.dp))
                         Text("How it works", style = fig(14, FontWeight.Bold))
                         Text("• The new shop has its own customers, khata, orders and bills.", style = fig(14, color = Tokens.InkSecondary))
                         Text("• Your services and prices are copied from ${state.shop.name}. You can change them later.", style = fig(14, color = Tokens.InkSecondary))
@@ -202,7 +222,10 @@ fun ShopsCard(shopVm: ShopViewModel, hasPlan: Boolean, onSwitch: () -> Unit, onA
         ) {
             Icon(Icons.Filled.Add, null, tint = Tokens.Blue, modifier = Modifier.size(20.dp))
             Text("Add another shop", style = fig(15, FontWeight.Bold, Tokens.Blue), modifier = Modifier.weight(1f))
-            if (!hasPlan) Text("PLAN", style = fig(11, FontWeight.ExtraBold, Tokens.OrangeText))
+            when {
+                shops.size < FREE_SHOPS -> Text("FREE", style = fig(11, FontWeight.ExtraBold, Tokens.GreenText))
+                !hasPlan -> Text("PLAN", style = fig(11, FontWeight.ExtraBold, Tokens.OrangeText))
+            }
         }
     }
 }
