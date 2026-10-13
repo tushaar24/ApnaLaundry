@@ -1,5 +1,11 @@
 # Deploy: 3 vs 5 free orders A/B test (2026-10-14)
 
+> **Ended the same night.** Live from 00:47 IST on 14 Oct, then replaced by the
+> new-user offer (guide, 1 free order, Monthly-only ₹199 on 1.0.12+) —
+> `2026-10-14-new-user-offer.md`. Shops assigned in that hour went back to 5
+> (or the offer, once on 1.0.12); their `Free_Orders_Variant` CleverTap
+> property is stale.
+
 New Android shops get **3 or 5 free orders**, 50/50, before the paywall. The
 test runs entirely on the backend: Android 1.0.10+ already reads `freeOrders`
 from `GET /api/laundry/billing/status`, and its paywall already says
