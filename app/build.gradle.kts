@@ -6,6 +6,8 @@ plugins {
     alias(libs.plugins.ksp)
     // Reads app/google-services.json (Firebase project shweta-makeover).
     alias(libs.plugins.google.services)
+    // Crash reports in the Firebase console; uploads the R8 mapping on release builds.
+    alias(libs.plugins.firebase.crashlytics)
 }
 
 android {
@@ -109,6 +111,7 @@ dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
     implementation(libs.firebase.messaging) // push (FCM) — also CleverTap's push transport
+    implementation(libs.firebase.crashlytics) // crash reports (collection off in debug builds)
     implementation(libs.kotlinx.coroutines.play.services)
 
     // Chucker: in-app HTTP inspector (notification) on debug builds; no-op in release.
@@ -120,10 +123,6 @@ dependencies {
 
     // Meta (Facebook) SDK — app events only (no Login/Share), for Meta ads.
     implementation(libs.facebook.core)
-
-    // Media3 — the paywall intro video.
-    implementation(libs.androidx.media3.exoplayer)
-    implementation(libs.androidx.media3.ui.compose)
 
     // Room
     implementation(libs.androidx.room.runtime)

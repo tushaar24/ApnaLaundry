@@ -9,7 +9,7 @@ import { defaultPlanVariant } from "@/data/paywallExperiment";
 import { Analytics } from "@/analytics/events";
 import { MetaPixel } from "@/analytics/metaPixel";
 import { cls, PrimaryButton } from "@/ui/basics";
-import { IcBook, IcChart, IcChat, IcCheck, IcPlay, IcReceipt, IcVolume, IcVolumeOff, IcWarning } from "@/ui/icons";
+import { IcBook, IcChart, IcChat, IcCheck, IcReceipt, IcWarning } from "@/ui/icons";
 import { AppSheet } from "@/ui/sheet";
 
 /**
@@ -33,10 +33,7 @@ const WAS_ANNUAL = 8999;
 // backend TRIAL_DAYS (laundry-razorpay.js)
 const TRIAL_DAYS = 7;
 
-// Paywall intro video — 720p faststart MP4 (~3.7 MB) served from public/.
-const PAYWALL_VIDEO_URL = "/paywall-intro.mp4";
-
-// Feature row under the video — four icons, two-line labels.
+// Feature row under the headline — four icons, two-line labels.
 const TRIAL_FEATURES: { Icon: typeof IcReceipt; label: string }[] = [
   { Icon: IcChat, label: "Bills on WhatsApp" },
   { Icon: IcBook, label: "Khata for customers" },
@@ -239,10 +236,6 @@ export function PaywallScreen({ onDone }: {
             </>
           )}
 
-          <div className="mt-5">
-            <PaywallVideo paused={busy || faq} />
-          </div>
-
           <div className="mt-6 grid grid-cols-4 gap-2">
             {TRIAL_FEATURES.map((f) => (
               <div key={f.label} className="flex flex-col items-center gap-2 text-center">
@@ -422,123 +415,6 @@ export function PaywallScreen({ onDone }: {
           )}
         </AppSheet>
       ) : null}
-    </div>
-  );
-}
-
-/**
- * Paywall intro video. Tries to autoplay WITH sound; browsers only allow that
- * after a tap on the page (Chrome carries the OTP "Verify" tap over, since the
- * Gate reaches the paywall by client-side navigation — a reload or iOS Safari
- * blocks it). If blocked it plays muted with a "Tap for sound" pill, which
- * unmutes and restarts from the beginning. Loops; paused while Checkout is open
- * or the tab is hidden; hidden entirely if the video fails to load.
- */
-function PaywallVideo({ paused }: { paused: boolean }) {
-  const ref = useRef<HTMLVideoElement>(null);
-  const startedRef = useRef(false);
-  const completedRef = useRef(false);
-  const [muted, setMuted] = useState(false);
-  const [playing, setPlaying] = useState(false);
-  const [failed, setFailed] = useState(false);
-
-  function started(wasMuted: boolean) {
-    if (startedRef.current) return;
-    startedRef.current = true;
-    Analytics.paywallVideoStarted(wasMuted);
-  }
-
-  useEffect(() => {
-    const v = ref.current;
-    if (!v) return;
-    let cancelled = false;
-    v.muted = false;
-    v.play().then(
-      () => { if (!cancelled) started(false); },
-      (e: unknown) => {
-        // AbortError = paused/unmounted mid-start; only NotAllowedError means
-        // "sound not allowed yet" → fall back to muted autoplay.
-        if (cancelled || (e as Error)?.name !== "NotAllowedError") return;
-        v.muted = true;
-        setMuted(true);
-        v.play().then(() => { if (!cancelled) started(true); }, () => {});
-      },
-    );
-    const onVisibility = () => { if (document.hidden) v.pause(); };
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      cancelled = true;
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => { if (paused) ref.current?.pause(); }, [paused]);
-
-  function play(fromStart: boolean) {
-    const v = ref.current;
-    if (!v) return;
-    if (fromStart) v.currentTime = 0;
-    void v.play().catch(() => {});
-  }
-
-  function setSound(on: boolean) {
-    const v = ref.current;
-    if (!v) return;
-    v.muted = !on;
-    setMuted(!on);
-    if (on) Analytics.paywallVideoUnmuted();
-  }
-
-  // Tapping the video: first tap on a muted video turns sound on and restarts
-  // it (they missed the audio); otherwise resume / pause.
-  function onTap() {
-    if (muted) { setSound(true); play(true); }
-    else if (!playing) play(false);
-    else ref.current?.pause();
-  }
-
-  if (failed) return null;
-
-  return (
-    <div className="relative aspect-video w-full overflow-hidden rounded-2xl bg-black">
-      <video
-        ref={ref}
-        src={PAYWALL_VIDEO_URL}
-        playsInline
-        preload="auto"
-        className="size-full object-cover"
-        onClick={onTap}
-        onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
-        loop
-        // A looping video never fires "ended" — count the first time it reaches the end.
-        onTimeUpdate={(e) => {
-          const v = e.currentTarget;
-          if (!completedRef.current && v.duration && v.currentTime >= v.duration - 0.5) {
-            completedRef.current = true;
-            Analytics.paywallVideoCompleted();
-          }
-        }}
-        onError={() => setFailed(true)}
-      />
-      {muted ? (
-        <button type="button" onClick={onTap} className="absolute left-2.5 top-2.5 flex items-center gap-1.5 rounded-full bg-black/70 px-3 py-1.5 text-[13px] font-bold text-white">
-          <IcVolume size={16} />
-          Tap for sound
-        </button>
-      ) : (
-        <>
-          {!playing ? (
-            <button type="button" onClick={() => play(false)} aria-label="Play" className="absolute inset-0 flex items-center justify-center text-white">
-              <span className="flex size-14 items-center justify-center rounded-full bg-black/60"><IcPlay size={26} /></span>
-            </button>
-          ) : null}
-          <button type="button" onClick={() => setSound(false)} aria-label="Mute" className="absolute bottom-2 right-2 flex size-9 items-center justify-center rounded-full bg-black/60 text-white">
-            <IcVolumeOff size={18} />
-          </button>
-        </>
-      )}
     </div>
   );
 }

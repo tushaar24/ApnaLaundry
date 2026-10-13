@@ -2,6 +2,7 @@ package com.dailyworks.apnalaundry
 
 import android.app.Application
 import com.dailyworks.apnalaundry.analytics.Analytics
+import com.dailyworks.apnalaundry.analytics.CrashReporting
 import com.dailyworks.apnalaundry.analytics.MetaEvents
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -28,6 +29,7 @@ class ApnaLaundryApp : Application() {
         // (no-ops until the manifest account id/token are set).
         Analytics.registerLifecycle(this)
         super.onCreate()
+        CrashReporting.init()
         Analytics.init(this)
         MetaEvents.init(this)
         Push.init(this)
@@ -51,7 +53,10 @@ class ApnaLaundryApp : Application() {
         val prefs: Prefs = get()
         val scheduler: SyncScheduler = get()
         CoroutineScope(Dispatchers.IO).launch {
-            if (prefs.loggedIn.first()) scheduler.requestSync()
+            if (prefs.loggedIn.first()) {
+                CrashReporting.setUser(prefs.userId.first())
+                scheduler.requestSync()
+            }
         }
     }
 }

@@ -51,6 +51,9 @@ object Analytics {
             "Phone" to if (phone.startsWith("+")) phone else "+91$phone",
         )
         if (!name.isNullOrBlank()) profile["Name"] = name
+        // Agreed on the login screen ("…and to get updates on WhatsApp"); CleverTap
+        // sends WhatsApp only to profiles with this set.
+        profile["MSG-whatsapp"] = true
         ct?.onUserLogin(profile)
     }
 
@@ -90,8 +93,11 @@ object Analytics {
     fun otpVerificationFailed(reason: String, attemptsRemaining: Int?) =
         track("OTP Verification Failed", mapOf("reason" to reason, "attempts_remaining" to attemptsRemaining))
 
-    fun loggedIn(isNewUser: Boolean, needsSetup: Boolean) =
+    fun loggedIn(isNewUser: Boolean, needsSetup: Boolean) {
+        // A date property, for "signed up in the last 7 days" segments and journeys.
+        if (isNewUser) updateProfile(mapOf("signup_date" to java.util.Date()))
         track("Logged In", mapOf("is_new_user" to isNewUser, "needs_setup" to needsSetup))
+    }
 
     fun setupCompleted(servicesCount: Int, expressPct: Int) =
         track("Setup Completed", mapOf("services_count" to servicesCount, "express_pct" to expressPct))
@@ -135,7 +141,7 @@ object Analytics {
     fun orderSaved(
         orderId: Int, isEdit: Boolean, hasBill: Boolean, pickup: String, delivery: String,
         express: Boolean, discount: Int, fee: Int, pieces: Int, kg: Double,
-        servicesCount: Int, total: Int, quickBill: Boolean,
+        servicesCount: Int, total: Int, quickBill: Boolean, ordersCount: Int? = null,
     ) = track(
         "Order Saved",
         mapOf(
@@ -143,6 +149,9 @@ object Analytics {
             "delivery" to delivery, "express" to express, "discount" to discount, "fee" to fee,
             "pieces" to pieces, "kg" to kg, "services_count" to servicesCount, "total" to total,
             "quick_bill" to quickBill,
+            // New orders only: the shop's orders after this one, deleted ones not
+            // counted — CleverTap journeys trigger on it (1st, 2nd, 3rd order).
+            "orders_count" to ordersCount,
         ),
     )
 
@@ -250,7 +259,10 @@ object Analytics {
     // The client fires the UI funnel; the backend fires the money-confirmed
     // events (Subscription Activated / Charged / Payment Failed / Halted /
     // Cancelled) from the Razorpay webhook.
-    fun paywallShown() = track("Paywall Shown")
+    // from: free_orders (the gate after the free orders) | settings (Settings → Subscription,
+    // or a mylaundry://subscription push). order_count: the shop's orders, deleted ones not counted.
+    fun paywallShown(from: String, defaultPlan: String, orderCount: Int) =
+        track("Paywall Shown", mapOf("from" to from, "default_plan" to defaultPlan, "order_count" to orderCount))
 
     // ---- push ----
     // A push tap's deep link opened a screen (mylaundry://<screen>).
@@ -270,13 +282,6 @@ object Analytics {
     fun freeOrdersOverShown(orders: Int) = track("Free Orders Over Shown", mapOf("orders" to orders))
     fun freeOrdersOverPlansTapped() = track("Free Orders Over Plans Tapped")
 
-    // Paywall intro video (autoplays with sound; muted = the user muted it).
-    fun paywallVideoStarted(muted: Boolean) =
-        track("Paywall Video Started", mapOf("muted" to muted))
-
-    fun paywallVideoUnmuted() = track("Paywall Video Unmuted")
-
-    fun paywallVideoCompleted() = track("Paywall Video Completed")
 
     fun paywallFaqOpened() = track("Paywall FAQ Opened")
 

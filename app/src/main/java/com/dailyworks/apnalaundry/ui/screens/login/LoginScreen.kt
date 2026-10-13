@@ -436,6 +436,8 @@ private fun TermsLine() {
             withLink(LinkAnnotation.Url("$SITE/terms", link)) { append("Terms") }
             append(" and ")
             withLink(LinkAnnotation.Url("$SITE/privacy", link)) { append("Privacy Policy") }
+            // The WhatsApp opt-in Analytics.identify records (MSG-whatsapp).
+            append(", and to get updates on WhatsApp")
         },
         style = fig(13, color = Tokens.Muted).copy(textAlign = TextAlign.Center),
         modifier = Modifier.fillMaxWidth(),

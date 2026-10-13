@@ -43,9 +43,9 @@ import com.dailyworks.apnalaundry.ui.theme.Tokens
 import org.koin.compose.koinInject
 
 /**
- * Orders a shop can make before it needs a plan. Never shown in the app — the
- * owner only learns of it when it runs out. Counts every order ever made, so
- * deleting orders doesn't give more free ones.
+ * Orders a shop can have before it needs a plan. Never shown in the app — the
+ * owner only learns of it when it runs out. Counts orders not deleted, so
+ * deleting one frees a slot: at most 5 live orders without a plan.
  */
 private const val FREE_ORDERS = 5
 
@@ -69,7 +69,7 @@ fun OrderLimitGate(onBack: () -> Unit, content: @Composable () -> Unit) {
     var plans by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        val made = repo.ordersEverMade()
+        val made = repo.liveOrderCount()
         if (made < FREE_ORDERS || billing.savedActive()) {
             access = Access.OPEN
             return@LaunchedEffect
@@ -86,7 +86,7 @@ fun OrderLimitGate(onBack: () -> Unit, content: @Composable () -> Unit) {
         null -> Box(Modifier.fillMaxSize().background(Tokens.Bg))
         Access.OPEN -> content()
         Access.FREE_OVER -> if (plans) {
-            PaywallScreen(onClose = onBack, onDone = { access = Access.OPEN })
+            PaywallScreen(onClose = onBack, onDone = { access = Access.OPEN }, from = "free_orders")
         } else {
             FreeOrdersOver(
                 onSeePlans = {

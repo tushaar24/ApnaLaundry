@@ -60,12 +60,14 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dailyworks.apnalaundry.data.LaundryRepository
 import com.dailyworks.apnalaundry.ui.components.PrimaryButton
 import com.dailyworks.apnalaundry.ui.components.bric
 import com.dailyworks.apnalaundry.ui.components.fig
 import com.dailyworks.apnalaundry.ui.components.tap
 import com.dailyworks.apnalaundry.ui.theme.Tokens
 import org.koin.androidx.compose.koinViewModel
+import org.koin.compose.koinInject
 
 private const val WAS_MONTHLY = 799
 private const val WAS_ANNUAL = 8999
@@ -75,7 +77,7 @@ private const val TRIAL_DAYS = 7
 
 private data class TrialFeature(val icon: ImageVector, val label: String)
 
-// Feature row under the video — four icons, two-line labels.
+// Feature row under the headline — four icons, two-line labels.
 private val TRIAL_FEATURES = listOf(
     TrialFeature(Icons.AutoMirrored.Outlined.Chat, "Bills on WhatsApp"),
     TrialFeature(Icons.AutoMirrored.Outlined.MenuBook, "Khata for customers"),
@@ -127,12 +129,14 @@ private fun rupees(paise: Int): String {
  * Android has no trial. Shown when the free orders run out (OrderLimitGate) and
  * from Settings → Subscription, which shows the active plan (with cancel)
  * instead when there is one. [hardGate] hides the close button and eats Back.
- * [onDone] fires once the subscription is confirmed active.
+ * [onDone] fires once the subscription is confirmed active. [from] is where it
+ * was opened (free_orders | settings), for "Paywall Shown".
  */
 @Composable
 fun PaywallScreen(
     onClose: () -> Unit,
     onDone: () -> Unit,
+    from: String,
     hardGate: Boolean = false,
     vm: PaywallViewModel = koinViewModel(),
 ) {
@@ -151,6 +155,13 @@ fun PaywallScreen(
     val offer = ui.stage != PaywallStage.DONE && ui.stage != PaywallStage.WAITING && !ui.hasActive
     var faq by remember { mutableStateOf(false) }
     val trialEnd = remember { trialEndLabel() }
+
+    // "Paywall Shown" once the plans are on screen: status known, no active plan.
+    val laundry: LaundryRepository = koinInject()
+    val known = ui.status != null
+    LaunchedEffect(offer, known) {
+        if (offer && known) vm.trackShown(from, laundry.liveOrderCount())
+    }
 
     // Light status-bar icons over the navy offer; restore on leave.
     val view = LocalView.current
@@ -254,9 +265,6 @@ fun PaywallScreen(
                         )
                     }
 
-                    Spacer(Modifier.height(20.dp))
-                    PaywallVideo(paused = ui.busy || faq)
-
                     Spacer(Modifier.height(24.dp))
                     Row(Modifier.fillMaxWidth()) {
                         TRIAL_FEATURES.forEach { f ->
@@ -328,7 +336,7 @@ fun PaywallScreen(
                     Spacer(Modifier.height(20.dp))
                 }
 
-                // Fixed bottom bar so the video never pushes the CTA off-screen.
+                // Fixed bottom bar so the plans never push the CTA off-screen.
                 Column(
                     Modifier
                         .fillMaxWidth()

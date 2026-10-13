@@ -62,7 +62,7 @@ Custom property keys are `snake_case`. `Charged` uses CleverTap's reserved
 | ----- | ---------- | ---------- |
 | `New Order Started` | `source` (`home`\|`empty_home`\|`customer`), `is_edit` | New/Edit order screen opened |
 | `New Order Abandoned` | `entry_point`, `is_edit`, `stage` (`customer`\|`clothes`\|`save`), `customer_set`, `customer_added`, `customer_form_opened`, `clothes_added`, `pieces`, `kg`, `total`, `seconds_on_screen` | left New/Edit order without saving (Android); `stage` = furthest step: no customer → no clothes → never tapped save. Not sent on rotation or if the app is killed in the background |
-| `Order Saved` | `order_id`, `is_edit`, `has_bill`, `pickup`, `delivery`, `express`, `discount`, `fee`, `pieces`, `kg`, `services_count`, `total`, `quick_bill` | order created or edited |
+| `Order Saved` | `order_id`, `is_edit`, `has_bill`, `pickup`, `delivery`, `express`, `discount`, `fee`, `pieces`, `kg`, `services_count`, `total`, `quick_bill`, `orders_count` (Android, new orders only: orders after this one, deleted not counted) | order created or edited |
 | `Order Picked Up` | `order_id` | mark picked up (already-counted order) |
 | `Clothes Counted` | `order_id`, `next_status`, `total` | Count-clothes sheet saved |
 | `Order Marked Ready` | `order_id` | mark ready (already-counted order) |
@@ -107,7 +107,7 @@ revenue events can't be spoofed or lost if the app closes.
 
 | Event | Source | Properties | Fired when |
 | ----- | ------ | ---------- | ---------- |
-| `Paywall Shown` | client | `variant`, `order_count` | paywall/trial screen shown |
+| `Paywall Shown` | client | web: `default_plan`; Android: `from` (`free_orders`\|`settings`), `default_plan`, `order_count` (orders not deleted) | paywall/trial screen shown with its plans (not the Settings status row) |
 | `Plan Selected` | client | `variant`, `plan` | user taps a plan |
 | `Checkout Started` | client | `variant`, `plan`, `amount`, `trial_amount` | UPI intent opened |
 | `Checkout Succeeded` | client | `variant`, `plan` | returned from UPI app as success (optimistic) |
@@ -121,7 +121,10 @@ revenue events can't be spoofed or lost if the app closes.
 | `Subscription Cancelled` | server | `plan`, `variant` | `subscription.cancelled` |
 
 Android also keeps profile properties `orders_count`, `last_order_date` and
-`first_order_date` (ISO dates) current on every new order.
+`first_order_date` (ISO dates) current on every new order. On login it sets
+`MSG-whatsapp` = true (the login screen's terms line includes "and to get
+updates on WhatsApp"), and on a new account's first login `signup_date` (a
+CleverTap date) — both for the activation journeys.
 
 **Default-plan A/B (web, since 2026-10-11).** The web paywall pre-selects
 Yearly or Monthly 50/50, stable per shop (hash of the user id —

@@ -265,13 +265,15 @@ fun NewOrderScreen(
     val dropIso = if (cleared) "" else if (manual) nDD else autoDrop
     val ddAuto = !cleared && !manual && autoDrop.isNotBlank()
 
-    val ready = cust != null && (!anyHome || (cust.address.isNotBlank()))
+    // A new order needs at least one service (or a quick-bill amount). Edits of older
+    // orders saved empty ("count the clothes later") still go through.
+    val needsClothes = editId == null && empty
+    val ready = cust != null && (!anyHome || (cust.address.isNotBlank())) && !needsClothes
     val ctaLabel = when {
         cust == null -> "Choose a customer"
         anyHome && cust.address.isBlank() -> "Add address first"
         editId != null -> "Save changes"
-        empty && pickup == Route.HOME -> "Schedule pickup"
-        empty -> "Save order"
+        needsClothes -> "Add clothes first"
         else -> "Save & make bill"
     }
 

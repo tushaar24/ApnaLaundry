@@ -117,13 +117,17 @@ class PaywallViewModel(
             if (_ui.value.status == null) _ui.value = _ui.value.copy(loaded = false, failed = false)
             val status = repo.statusWithRetry()
             _ui.value = _ui.value.copy(status = status ?: _ui.value.status, loaded = true, failed = status == null)
-            // Only count it when the plans are actually on screen (not for a
-            // subscribed user passing through the gate).
-            if (status != null && !status.hasActiveSubscription && !shownTracked) {
-                shownTracked = true
-                Analytics.paywallShown()
-            }
         }
+    }
+
+    /**
+     * "Paywall Shown", once per paywall. Called by [PaywallScreen] when the plans
+     * are on screen — not from [refresh], which also runs for Settings' status row.
+     */
+    fun trackShown(from: String, orderCount: Int) {
+        if (shownTracked) return
+        shownTracked = true
+        Analytics.paywallShown(from = from, defaultPlan = _ui.value.plan.arg, orderCount = orderCount)
     }
 
     fun selectPlan(plan: PaywallPlan) { _ui.value = _ui.value.copy(plan = plan) }

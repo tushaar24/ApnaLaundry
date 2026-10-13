@@ -553,8 +553,8 @@ class LaundryRepository(private val db: AppDatabase) {
 
     suspend fun onboardingStep(): String = shopDao.get()?.onboardingStep ?: ""
 
-    /** Every order the shop has ever made, deleted ones included (for the free-orders limit). */
-    suspend fun ordersEverMade(): Int = orderDao.countAll()
+    /** Orders the shop has now, deleted ones not counted (for the free-orders limit). */
+    suspend fun liveOrderCount(): Int = orderDao.countLive()
 
     // ---------------- new / edit order ----------------
     data class SaveOrderResult(val orderId: Int, val goToBill: Boolean, val toast: String?, val undo: Snapshot?, val edited: Boolean)
@@ -635,8 +635,9 @@ class LaundryRepository(private val db: AppDatabase) {
             order
         }
         val id = order.id
-        trackOrderSaved(order, isEdit = false)
-        trackOrderMilestone()
+        val count = orderDao.countLive()
+        trackOrderSaved(order, isEdit = false, ordersCount = count)
+        trackOrderMilestone(count)
         return if (fields.lines.isEmpty()) {
             val toast = if (pickup == Route.HOME)
                 "Pickup scheduled for $nm" + (if (order.pickupTime.isNotBlank()) " · ${order.pickupTime}" else "")
@@ -654,22 +655,21 @@ class LaundryRepository(private val db: AppDatabase) {
     }
 
     /** Profile props for segments/journeys, e.g. "paid but no order after 2 days". */
-    private suspend fun trackOrderMilestone() {
-        val count = orderDao.observeOnce().size
+    private fun trackOrderMilestone(count: Int) {
         val today = java.time.LocalDate.now().toString()
         val props = mutableMapOf<String, Any>("orders_count" to count, "last_order_date" to today)
         if (count == 1) props["first_order_date"] = today
         Analytics.updateProfile(props)
     }
 
-    private fun trackOrderSaved(o: Order, isEdit: Boolean) {
+    private fun trackOrderSaved(o: Order, isEdit: Boolean, ordersCount: Int? = null) {
         var pieces = 0; var kg = 0.0
         o.lines.forEach { if (it.kg > 0) kg += it.kg else pieces += it.qty }
         Analytics.orderSaved(
             orderId = o.id, isEdit = isEdit, hasBill = o.lines.isNotEmpty(), pickup = o.pickup.name,
             delivery = o.delivery.name, express = o.express, discount = o.discount, fee = o.fee,
             pieces = pieces, kg = kg, servicesCount = o.lines.map { it.serviceId }.distinct().size,
-            total = LaundryMath.amtOf(o), quickBill = o.lines.any { it.isQuick },
+            total = LaundryMath.amtOf(o), quickBill = o.lines.any { it.isQuick }, ordersCount = ordersCount,
         )
     }
 

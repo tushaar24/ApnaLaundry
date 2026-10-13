@@ -43,6 +43,7 @@ class Prefs(private val context: Context) {
     val accessToken: Flow<String?> = context.dataStore.data.map { it[ACCESS_TOKEN] }
     val accessExpiresAt: Flow<Long> = context.dataStore.data.map { it[ACCESS_EXPIRES_AT] ?: 0L }
     val refreshToken: Flow<String?> = context.dataStore.data.map { it[REFRESH_TOKEN] }
+    val userId: Flow<String?> = context.dataStore.data.map { it[USER_ID] }
     val userPhone: Flow<String?> = context.dataStore.data.map { it[USER_PHONE] }
     val lastSyncCheckpoint: Flow<Long> = context.dataStore.data.map { it[SYNC_CHECKPOINT] ?: 0L }
 

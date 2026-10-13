@@ -206,6 +206,7 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
             PaywallScreen(
                 onClose = { navigator.back() },
                 onDone = { navigator.openHome() },
+                from = "settings",
             )
         }
     }

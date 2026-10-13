@@ -2,6 +2,7 @@ package com.dailyworks.apnalaundry.data
 
 import android.app.Activity
 import com.dailyworks.apnalaundry.analytics.Analytics
+import com.dailyworks.apnalaundry.analytics.CrashReporting
 import com.dailyworks.apnalaundry.analytics.MetaEvents
 import com.dailyworks.apnalaundry.data.remote.AuthApi
 import com.dailyworks.apnalaundry.data.remote.CredentialsResponse
@@ -216,6 +217,7 @@ class AuthRepository(
         // Identify the owner so every event attributes to this shop, then the
         // funnel event. is_new_user / needs_setup = this account had no shop yet.
         Analytics.identify(user.id, user.phone, repo.currentShopName())
+        CrashReporting.setUser(user.id)
         Analytics.loggedIn(isNewUser = !existingAccount, needsSetup = !onboarded)
         MetaEvents.identify(user.id, user.phone)
         MetaEvents.loginSuccess(isNewUser = !existingAccount)
@@ -246,6 +248,7 @@ class AuthRepository(
             runCatching { api.logout(token) } // best-effort server-side revoke
         }
         Analytics.loggedOut()
+        CrashReporting.setUser(null)
         MetaEvents.clearIdentity()
         prefs.logoutAndReset()
         repo.clearAll()
