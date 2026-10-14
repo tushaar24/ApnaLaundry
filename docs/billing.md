@@ -27,6 +27,14 @@ cancellation grace). **Hard gate** — the app is unreachable until there's an a
 subscription. (The earlier `trial_2` / `free_<N>` A/B experiment and its Firebase Remote
 Config / `LAUNDRY_PAYWALL_VARIANTS` switch were removed on 2026-10-06.)
 
+**Paywall test (2026-10-14, brand-new accounts created from Android 1.0.12+).**
+50/50 `hard_trial` (paywall right after login, 1-day trial: ₹2 today, ₹199 one
+day later) vs `free1` (1 free order, then ₹199 charged on approval). Both Monthly
+only on the ₹199 plan (`LAUNDRY_RAZORPAY_PLAN_MONTHLY_199`). Eligibility is
+decided from `laundry_users.signup_app_version` (stored at account creation),
+so existing accounts never enter it — `services/laundry-paywall-test.js`,
+`docs/deploy/2026-10-14-paywall-test.md`.
+
 **One trial per shop (2026-10-10):** once any subscription of the shop has got past
 checkout (status other than `created`/`abandoned`), `/status` returns
 `trialEligible: false` (and `plans.trial.amount: 0`), `/subscribe` drops the ₹2 addon and

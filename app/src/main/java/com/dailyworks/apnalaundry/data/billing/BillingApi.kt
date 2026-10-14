@@ -30,12 +30,12 @@ class BillingApi(private val client: HttpClient, private val tokens: TokenManage
         return res.body()
     }
 
-    suspend fun subscribe(plan: String): SubscribeResponse {
+    suspend fun subscribe(plan: String, trial: Boolean = false): SubscribeResponse {
         val res = authed { token ->
             client.post("$base/billing/subscribe") {
                 contentType(ContentType.Application.Json)
                 bearerAuth(token)
-                setBody(SubscribeRequest(plan))
+                setBody(SubscribeRequest(plan, trial))
             }
         }
         return res.body()

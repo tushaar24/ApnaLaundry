@@ -199,6 +199,9 @@ class AuthRepository(
             userId = user.id,
             phone = user.phone,
         )
+        // A brand-new account may be in the hard-paywall test: PaywallGate waits
+        // for the first billing check before showing setup (set before loggedIn flips).
+        if (body.isNewUser) prefs.setPaywallCheckPending(true)
         prefs.setLoggedIn(true)
 
         // Initial sync: pull this account's data if it exists. Failures are

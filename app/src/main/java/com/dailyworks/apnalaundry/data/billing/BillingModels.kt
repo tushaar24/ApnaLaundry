@@ -47,6 +47,19 @@ data class BillingStatus(
     // Free orders before a plan is needed (OrderLimitGate). 5, or more for shops
     // the server lists by phone; an older server leaves it out → 5.
     val freeOrders: Int = DEFAULT_FREE_ORDERS,
+    // Paywall test (2026-10-14): brand-new accounts that first logged in on
+    // 1.0.12+ are "hard_trial" (paywall right after login, 1-day ₹2 trial, then
+    // ₹199/month) or "free1" (1 free order, paywall after it + the guide).
+    // Everyone else: null, and nothing below changes for them.
+    val paywallGroup: String? = null,
+    // Only the Monthly plan is offered (₹199, no Yearly) — the video paywall.
+    val monthlyOnly: Boolean = false,
+    // This shop's paywall starts a trial (hard_trial): ₹2 today, plan after [trialDays].
+    val trialOffered: Boolean = false,
+    val trialDays: Int = 7,
+    // The intro video on the Monthly-only paywall (server-set, so it can change
+    // without a release). None → the paywall shows no video.
+    val paywallVideoUrl: String? = null,
     val plans: BillingPlans = BillingPlans(),
     val subscription: BillingSubscriptionDto? = null,
 ) {

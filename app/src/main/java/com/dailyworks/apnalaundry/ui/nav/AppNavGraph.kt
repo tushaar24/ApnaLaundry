@@ -1,10 +1,21 @@
 package com.dailyworks.apnalaundry.ui.nav
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.navigation.compose.currentBackStackEntryAsState
+import com.dailyworks.apnalaundry.ui.screens.paywall.FirstOrderPaywall
+import com.dailyworks.apnalaundry.ui.screens.paywall.HardTrialGate
+import com.dailyworks.apnalaundry.ui.screens.paywall.PAYWALL_FREE1
+import com.dailyworks.apnalaundry.ui.screens.paywall.PAYWALL_HARD_TRIAL
+import com.dailyworks.apnalaundry.ui.tour.TourStage
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -89,16 +100,29 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
         }
     }
 
-    // No paywall after login: login -> setup -> app. A shop pays only when its
-    // free orders run out — OrderLimitGate on New order.
+    // Paywall test (2026-10-14): only brand-new accounts whose first login was on
+    // 1.0.12+ (server-decided, /billing/status paywallGroup). Everyone else: no
+    // paywall after login (login -> setup -> app), and a shop pays only when its
+    // free orders run out — OrderLimitGate on New order. Both gates draw over the
+    // NavHost and draw nothing outside the test.
+    val paywallGroup by prefs.paywallGroup.collectAsStateWithLifecycle(initialValue = null)
+    val paywallPending by prefs.paywallCheckPending.collectAsStateWithLifecycle(initialValue = false)
+    val tourStage by shopVm.tour.collectAsStateWithLifecycle()
+    val shopState by shopVm.state.collectAsStateWithLifecycle()
+    val route = navController.currentBackStackEntryAsState().value?.destination?.route
+    // A brand-new login waits for the hard-trial check before moving on to setup.
+    var navAfterGate by remember { mutableStateOf(false) }
+    val afterLogin = {
+        // An existing account restored from the server skips setup
+        // (AuthRepository set setupDone after the initial pull).
+        scope.launch { if (prefs.setupDone.first()) navigator.toHomeAfterSetup() else navigator.toRatesSetup() }
+    }
+
+    Box(Modifier.fillMaxSize()) {
     NavHost(navController = navController, startDestination = start) {
         composable(Routes.LOGIN) {
             LoginScreen(onLoggedIn = {
-                // An existing account restored from the server skips setup
-                // (AuthRepository set setupDone after the initial pull).
-                scope.launch {
-                    if (prefs.setupDone.first()) navigator.toHomeAfterSetup() else navigator.toRatesSetup()
-                }
+                scope.launch { if (prefs.paywallCheckPending.first()) navAfterGate = true else afterLogin() }
             })
         }
 
@@ -223,5 +247,18 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
                 from = "settings",
             )
         }
+    }
+
+    // hard_trial: the no-close paywall right after login (before setup) until the trial is active.
+    HardTrialGate(
+        active = li && (paywallPending || paywallGroup == PAYWALL_HARD_TRIAL),
+        pending = paywallPending,
+        onUnblocked = { if (navAfterGate) { navAfterGate = false; afterLogin() } },
+    )
+    // free1: the paywall once, after the first order + the guide finished or skipped.
+    FirstOrderPaywall(
+        eligible = li && paywallGroup == PAYWALL_FREE1 && tourStage == TourStage.DONE && shopState.orders.isNotEmpty(),
+        onMainScreen = route == Routes.HOME || route == Routes.CUSTOMERS || route == Routes.EARNINGS || route == Routes.SETTINGS,
+    )
     }
 }

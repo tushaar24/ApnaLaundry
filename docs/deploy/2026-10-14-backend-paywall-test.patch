@@ -1,0 +1,387 @@
+diff -ruN pt-orig/prisma/migrations/20261014120000_laundry_signup_app_version/migration.sql pt-live/prisma/migrations/20261014120000_laundry_signup_app_version/migration.sql
+--- pt-orig/prisma/migrations/20261014120000_laundry_signup_app_version/migration.sql	1970-01-01 05:30:00
++++ pt-live/prisma/migrations/20261014120000_laundry_signup_app_version/migration.sql	2026-10-14 11:02:34
+@@ -0,0 +1,6 @@
++-- The Android app version (versionCode) an account was created from — sent by
++-- 1.0.12+ as x-laundry-app-version on its first login. Null = an older app, the
++-- website, or an account from before 2026-10-14. Decides the paywall test, which
++-- is only for accounts whose first login was on 1.0.12+ (services/laundry-paywall-test.js).
++-- AlterTable
++ALTER TABLE "laundry_users" ADD COLUMN "signup_app_version" INTEGER;
+diff -ruN pt-orig/prisma/schema.prisma pt-live/prisma/schema.prisma
+--- pt-orig/prisma/schema.prisma	2026-10-14 11:01:46
++++ pt-live/prisma/schema.prisma	2026-10-14 11:02:39
+@@ -172,6 +172,9 @@
+   // (services/laundry-platform.js). Null = unknown (before 2026-10-12, not backfilled).
+   signupPlatform    String? @map("signup_platform")
+   lastLoginPlatform String? @map("last_login_platform")
++  // Android versionCode the account was created from (1.0.12+ sends it on its
++  // first login). Null = older app / website / before 2026-10-14. Paywall test.
++  signupAppVersion  Int?    @map("signup_app_version")
+ 
+   shops         LaundryShop[] // main shop = shopId ""
+   shopLogos     LaundryShopLogo[]
+diff -ruN pt-orig/routes/laundry-auth.js pt-live/routes/laundry-auth.js
+--- pt-orig/routes/laundry-auth.js	2026-10-14 11:01:36
++++ pt-live/routes/laundry-auth.js	2026-10-14 11:04:25
+@@ -13,6 +13,7 @@
+ const laundryMeta = require('../services/laundry-meta');
+ const { clientPlatform } = require('../services/laundry-platform');
+ const freeOrders = require('../services/laundry-free-orders');
++const paywallTest = require('../services/laundry-paywall-test');
+ const firebaseAuth = require('../services/laundry-firebase-auth');
+ 
+ // OTP login for the ApnaLaundry app (challenge-based OTP ported from the
+@@ -199,7 +200,7 @@
+     }
+ 
+     const result = await prisma.$transaction(async (tx) => {
+-      const login = await loginPhone(tx, challenge.phone, now, clientPlatform(req));
++      const login = await loginPhone(tx, challenge.phone, now, clientPlatform(req), paywallTest.appVersion(req));
+       await tx.laundryOtpChallenge.update({
+         where: { id: challenge.id },
+         data: { state: 'verified' },
+@@ -232,7 +233,7 @@
+     if (!claims.phone.startsWith('+91') || !isValidIndianMobile(phone)) {
+       return res.status(400).json({ success: false, message: 'Only Indian mobile numbers can log in' });
+     }
+-    const result = await prisma.$transaction((tx) => loginPhone(tx, phone, new Date(), clientPlatform(req)));
++    const result = await prisma.$transaction((tx) => loginPhone(tx, phone, new Date(), clientPlatform(req), paywallTest.appVersion(req)));
+     return sendLogin(req, res, result, deviceId);
+   } catch (error) {
+     return next(error);
+@@ -241,7 +242,9 @@
+ 
+ // Creates or touches the user for a verified phone and returns its permanent
+ // token. platform: web | android | null (older clients send no header).
+-async function loginPhone(tx, phone, now, platform) {
++// appVersion: the Android versionCode (1.0.12+ sends it; else 0) — stored only
++// when the account is created (the paywall test is for accounts born on 1.0.12+).
++async function loginPhone(tx, phone, now, platform, appVersion = 0) {
+   // Every query here is a DB round trip on the login critical path, so
+   // create/touch the user in one statement either way.
+   let user = await tx.laundryUser.findUnique({ where: { phone } });
+@@ -251,6 +254,7 @@
+       data: {
+         phone, lastLoginAt: now, apiToken: newToken(),
+         signupPlatform: platform, lastLoginPlatform: platform,
++        signupAppVersion: appVersion > 0 ? appVersion : null,
+       },
+     })
+     : await tx.laundryUser.update({
+@@ -265,6 +269,7 @@
+   req.log.info({ userId: result.user.id, deviceId: deviceId.trim(), platform: result.platform }, 'laundry login verified');
+   laundryMeta.saveSignals(req, result.user); // Meta CAPI match data (website logins)
+   freeOrders.saveVariantToProfile(result.user); // 3 vs 5 free-orders test group → CleverTap, from sign-up
++  paywallTest.saveToProfile(result.user); // paywall test group (brand-new 1.0.12+ accounts) → CleverTap
+   // isNewUser: the account was created just now, so it holds no server data
+   // yet — clients skip their initial pull and go straight to seeding.
+   return res.json({ ...credentialsResponse(result.user, result.token), isNewUser: result.isNewUser });
+diff -ruN pt-orig/routes/laundry-billing.js pt-live/routes/laundry-billing.js
+--- pt-orig/routes/laundry-billing.js	2026-10-14 11:01:28
++++ pt-live/routes/laundry-billing.js	2026-10-14 11:03:53
+@@ -8,7 +8,13 @@
+ const laundryMeta = require('../services/laundry-meta');
+ const { clientPlatform } = require('../services/laundry-platform');
+ const freeOrders = require('../services/laundry-free-orders');
++const paywallTest = require('../services/laundry-paywall-test');
+ 
++// The trial length a subscription was created with (paywall test: 1 day; else TRIAL_DAYS).
++const trialDaysOf = (sub) => {
++  try { return Number(JSON.parse(sub.notes || '{}').trialDays) || rzp.TRIAL_DAYS; } catch { return rzp.TRIAL_DAYS; }
++};
++
+ // The subscription's client (web | android) on its server-side CleverTap events,
+ // under the same `platform` key the clients stamp on theirs.
+ const platformProp = (sub) => (sub && sub.platform ? { platform: sub.platform } : {});
+@@ -101,7 +107,11 @@
+ router.get('/status', async (req, res, next) => {
+   try {
+     const userId = req.laundryUserId;
+-    freeOrders.saveVariantToProfile(req.laundryAuth.user);
++    const user = req.laundryAuth.user;
++    freeOrders.saveVariantToProfile(user);
++    // Paywall test: brand-new accounts whose first login was on 1.0.12+ (else null → as before).
++    const pt = paywallTest.offer(user);
++    paywallTest.saveToProfile(user);
+     const sub = await currentSubscription(userId);
+     const hasActive = Boolean(sub && HAS_ACCESS.includes(sub.status));
+     // Cancellation grace: a cancelled subscription keeps full
+@@ -109,13 +119,12 @@
+     // returns. The owner paid for that period, so cancelling only stops renewal.
+     //  - paid plan (monthly/annual, or a converted trial): until currentEnd.
+     //  - a ₹2 trial cancelled before the first real charge (paidCount 0): until
+-    //    the trial ends (createdAt + TRIAL_DAYS), since currentEnd may not yet
++    //    the trial ends (createdAt + its trial days), since currentEnd may not yet
+     //    reflect the trial window.
+-    const trialMs = rzp.TRIAL_DAYS * 24 * 3600 * 1000;
+     let graceUntilMs = null;
+     if (sub && sub.status === 'cancelled') {
+       if ((sub.trialAmount || 0) > 0 && (sub.paidCount || 0) === 0) {
+-        graceUntilMs = new Date(sub.createdAt).getTime() + trialMs;
++        graceUntilMs = new Date(sub.createdAt).getTime() + trialDaysOf(sub) * 24 * 3600 * 1000;
+       } else if (sub.currentEnd) {
+         graceUntilMs = new Date(sub.currentEnd).getTime();
+       }
+@@ -130,9 +139,16 @@
+       paywallDue,
+       hasActiveSubscription: hasActive,
+       trialEligible,
+-      freeOrders: freeOrders.freeOrdersFor(req.laundryAuth.user),
++      freeOrders: pt ? pt.freeOrders : freeOrders.freeOrdersFor(user),
++      // Paywall test only (additive; older apps ignore them): the group, Monthly-only
++      // ₹199, the trial (hard_trial, while the shop can still take one), the video.
++      paywallGroup: pt ? pt.group : null,
++      monthlyOnly: Boolean(pt),
++      trialOffered: Boolean(pt && pt.trial && trialEligible),
++      trialDays: pt && pt.trial ? pt.trialDays : rzp.TRIAL_DAYS,
++      paywallVideoUrl: pt ? pt.videoUrl : null,
+       plans: {
+-        monthly: { amount: rzp.amountFor('monthly') },
++        monthly: { amount: pt ? pt.monthlyAmount : rzp.amountFor('monthly') },
+         annual: { amount: rzp.amountFor('annual') },
+         // 0 once the shop has used its trial: the plan is charged in full today.
+         trial: { amount: trialEligible ? env.laundryTrialAmountPaise : 0 },
+@@ -159,16 +175,22 @@
+     // ₹2 now, then ₹4,999/yr after TRIAL_DAYS). One trial per shop: once a
+     // subscription has got past checkout, the next one bills the plan in full
+     // on approval.
++    // Paywall test accounts: always Monthly ₹199 on its own plan; hard_trial adds
++    // the 1-day ₹2 trial, free1 none — whatever the app asks for.
++    const pt = paywallTest.offer(user);
+     let plan = String((req.body && req.body.plan) || '').toLowerCase();
+     if (!['monthly', 'annual'].includes(plan)) plan = 'monthly';
++    if (pt) plan = pt.plan;
+     // `trial: false` asks for no trial at all (the Android app's free-orders
+     // model: the plan is charged in full on approval). Anything else keeps the
+     // one-per-shop ₹2 trial, so the website is unchanged.
+-    const wantsTrial = !(req.body && req.body.trial === false);
++    const wantsTrial = pt ? pt.trial : !(req.body && req.body.trial === false);
+     const trialAmount = wantsTrial && (await isTrialEligible(userId)) ? env.laundryTrialAmountPaise : 0;
++    const trialDays = pt && trialAmount ? pt.trialDays : undefined;
+ 
+-    const amount = rzp.amountFor(plan);
+-    const planId = rzp.planIdFor(plan);
++    const amount = pt ? pt.monthlyAmount : rzp.amountFor(plan);
++    const planId = pt ? pt.planId : rzp.planIdFor(plan);
++    const totalCount = pt ? pt.totalCount : rzp.totalCountFor(plan);
+ 
+     const existing = await currentSubscription(userId);
+ 
+@@ -183,8 +205,9 @@
+     // they didn't pick. A created sub has no mandate, so abandoning it is free.
+     if (existing && existing.status === 'created' && existing.razorpaySubscriptionId) {
+       // ...and the same trial terms (a pre-existing ₹2 attempt isn't reused
+-      // once the shop has used its trial).
+-      if (existing.plan === plan && (existing.trialAmount || 0) === trialAmount) {
++      // once the shop has used its trial), and the same Razorpay plan (a ₹499
++      // Monthly attempt isn't reused for ₹199 Monthly).
++      if (existing.plan === plan && existing.planId === planId && (existing.trialAmount || 0) === trialAmount) {
+         return res.json({
+           success: true,
+           reused: true,
+@@ -208,8 +231,10 @@
+       data: {
+         userId, razorpayCustomerId: customerId, plan, planId,
+         status: 'created', amount, trialAmount: trialAmount || null,
+-        totalCount: rzp.totalCountFor(plan),
++        totalCount,
+         platform: clientPlatform(req),
++        // Paywall test: which group, and a 1-day trial's length (for the cancel grace).
++        ...(pt ? { notes: JSON.stringify({ paywallTest: pt.group, ...(trialDays ? { trialDays } : {}) }) } : {}),
+       },
+     });
+ 
+@@ -218,8 +243,8 @@
+       ...laundryMeta.metaSignals(req), // read back by the webhook for Meta CAPI
+     };
+     const sub = await rzp.createSubscription({
+-      planId, totalCount: rzp.totalCountFor(plan), customerId,
+-      trialAmountPaise: trialAmount, notes,
++      planId, totalCount, customerId,
++      trialAmountPaise: trialAmount, trialDays, notes,
+     });
+ 
+     await prisma.laundrySubscription.update({
+diff -ruN pt-orig/routes/laundry-experiments.js pt-live/routes/laundry-experiments.js
+--- pt-orig/routes/laundry-experiments.js	2026-10-14 11:01:32
++++ pt-live/routes/laundry-experiments.js	2026-10-14 11:04:09
+@@ -4,6 +4,7 @@
+ const { requireLaundryAuth } = require('../middleware/laundry-auth');
+ const clevertap = require('../services/laundry-clevertap');
+ const freeOrders = require('../services/laundry-free-orders');
++const paywallTest = require('../services/laundry-paywall-test');
+ 
+ // A/B tests the app asks the server about, so a split can change without an
+ // app release:
+@@ -38,7 +39,10 @@
+ 
+ router.get('/', (req, res) => {
+   const userId = req.laundryUserId;
+-  const guide = bucket(GUIDE_TEST, userId) < guidePct() ? 'guide' : 'no_guide';
++  const user = req.laundryAuth.user;
++  // Paywall-test accounts (brand-new, first login on 1.0.12+) always get the guide;
++  // everyone else keeps their 50/50 group.
++  const guide = paywallTest.groupFor(user) || bucket(GUIDE_TEST, userId) < guidePct() ? 'guide' : 'no_guide';
+   if (saved.get(userId) !== guide) {
+     if (saved.size > 50000) saved.clear();
+     saved.set(userId, guide);
+@@ -46,7 +50,8 @@
+   }
+   // The 3 vs 5 free-orders test is served by /billing/status (freeOrders); its
+   // group is also saved to CleverTap here, as the app calls this at every start.
+-  freeOrders.saveVariantToProfile(req.laundryAuth.user);
++  freeOrders.saveVariantToProfile(user);
++  paywallTest.saveToProfile(user);
+   res.json({ success: true, experiments: { guide } });
+ });
+ 
+diff -ruN pt-orig/services/laundry-free-orders.js pt-live/services/laundry-free-orders.js
+--- pt-orig/services/laundry-free-orders.js	2026-10-14 11:01:40
++++ pt-live/services/laundry-free-orders.js	2026-10-14 11:03:17
+@@ -1,6 +1,7 @@
+ const crypto = require('crypto');
+ 
+ const clevertap = require('./laundry-clevertap');
++const paywallTest = require('./laundry-paywall-test');
+ 
+ // Free orders an Android shop gets before it needs a plan (the app's own
+ // default is 5; only Android 1.0.10+ reads this number, older apps keep 5).
+@@ -48,6 +49,8 @@
+ /** 'free_3' | 'free_5' for a shop in the test, else null. */
+ function variantFor(user) {
+   if (!user || TEST_START === null || user.signupPlatform !== 'android' || phoneFreeOrders(user)) return null;
++  // Accounts in the paywall test (first login on 1.0.12+) are only in that test.
++  if (paywallTest.groupFor(user)) return null;
+   const created = new Date(user.createdAt).getTime();
+   if (!(created >= TEST_START) || (TEST_END !== null && created >= TEST_END)) return null;
+   const bucket = crypto.createHash('sha256').update(`${FREE_ORDERS_TEST}:${user.id}`).digest().readUInt32BE(0) % 100;
+diff -ruN pt-orig/services/laundry-paywall-test.js pt-live/services/laundry-paywall-test.js
+--- pt-orig/services/laundry-paywall-test.js	1970-01-01 05:30:00
++++ pt-live/services/laundry-paywall-test.js	2026-10-14 11:06:07
+@@ -0,0 +1,98 @@
++const crypto = require('crypto');
++
++const clevertap = require('./laundry-clevertap');
++
++// Paywall test (2026-10-14) — BRAND-NEW accounts only.
++//
++// In it: an Android account created at or after LAUNDRY_PAYWALL_TEST_START
++// whose FIRST login came from app 1.0.12+ (laundry_users.signup_app_version ≥ 12,
++// recorded when the account is created). An account that existed before the
++// start, or was created from an older app or the website, is never in it —
++// whatever app it uses later — and keeps exactly what it had. No start set, or
++// no ₹199 plan id, = no test.
++//
++// Split 50/50 by a hash of the user id (`paywall_v1`; LAUNDRY_PAYWALL_TEST_PCT =
++// % in hard_trial, default 50):
++//   hard_trial — the app shows the paywall right after login, no close button:
++//                a 1-day trial (₹2 today, LAUNDRY_TRIAL_AMOUNT_PAISE) then ₹199/month.
++//                0 free orders.
++//   free1      — 1 free order; the app shows the paywall after it and the guide
++//                (finished or skipped). ₹199/month, charged on approval, no trial.
++// Both: Monthly only at ₹199 (LAUNDRY_RAZORPAY_PLAN_MONTHLY_199), the video
++// paywall (LAUNDRY_PAYWALL_VIDEO_URL), the guide always on.
++// CleverTap profile: Paywall_Variant = hard_trial | free1.
++
++const TEST = 'paywall_v1';
++const MIN_APP_VERSION = 12;
++const MONTHLY_199 = { amount: 19900, totalCount: 120 }; // ₹199 × up to 10y
++const TRIAL_DAYS = 1;
++const FREE_ORDERS = { hard_trial: 0, free1: 1 };
++
++const timeFromEnv = (name) => {
++  const t = Date.parse(String(process.env[name] || '').trim());
++  return Number.isFinite(t) ? t : null;
++};
++const START = timeFromEnv('LAUNDRY_PAYWALL_TEST_START');
++// Optional: accounts created from here on are no longer added (existing ones keep their group).
++const END = timeFromEnv('LAUNDRY_PAYWALL_TEST_END');
++const plan199 = () => String(process.env.LAUNDRY_RAZORPAY_PLAN_MONTHLY_199 || '').trim();
++function hardTrialPct() {
++  const n = parseInt(process.env.LAUNDRY_PAYWALL_TEST_PCT, 10);
++  return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 50;
++}
++// Per-phone free-order shops (LAUNDRY_FREE_ORDERS_BY_PHONE) are never in a test.
++const OVERRIDE_PHONES = new Set(
++  String(process.env.LAUNDRY_FREE_ORDERS_BY_PHONE || '').split(',').map((p) => p.split(':')[0].trim()).filter(Boolean),
++);
++
++/** The Android app's version code from its header, else 0 (older apps, the website). */
++function appVersion(req) {
++  const n = Number.parseInt(String((req && req.headers && req.headers['x-laundry-app-version']) || '').trim(), 10);
++  return Number.isFinite(n) ? n : 0;
++}
++
++/** 'hard_trial' | 'free1' for an account in the test, else null. Never changes for an account. */
++function groupFor(user) {
++  if (!user || START === null || !plan199()) return null;
++  if (user.signupPlatform !== 'android' || !(Number(user.signupAppVersion) >= MIN_APP_VERSION)) return null;
++  if (OVERRIDE_PHONES.has(String(user.phone || '').slice(-10))) return null;
++  const created = new Date(user.createdAt).getTime();
++  if (!(created >= START) || (END !== null && created >= END)) return null;
++  const bucket = crypto.createHash('sha256').update(`${TEST}:${user.id}`).digest().readUInt32BE(0) % 100;
++  return bucket < hardTrialPct() ? 'hard_trial' : 'free1';
++}
++
++/** What a test account is offered, or null (not in the test → everything as before). */
++function offer(user) {
++  const group = groupFor(user);
++  if (!group) return null;
++  return {
++    group,
++    freeOrders: FREE_ORDERS[group],
++    plan: 'monthly',
++    monthlyAmount: MONTHLY_199.amount,
++    planId: plan199(),
++    totalCount: MONTHLY_199.totalCount,
++    trial: group === 'hard_trial',
++    trialDays: TRIAL_DAYS,
++    videoUrl: String(process.env.LAUNDRY_PAYWALL_VIDEO_URL || '').trim() || null,
++  };
++}
++
++// When each test account was last tagged in CleverTap (uploads can fail silently,
++// so it's re-sent at most once a day per account, and once after a restart).
++const RESEND_MS = 24 * 3600 * 1000;
++const sentAt = new Map();
++
++/** Tags a test account's CleverTap profile with Paywall_Variant. Never throws. */
++function saveToProfile(user) {
++  const group = groupFor(user);
++  if (!group) return;
++  const last = sentAt.get(user.id);
++  if (last && Date.now() - last < RESEND_MS) return;
++  if (sentAt.size > 50000) sentAt.clear();
++  sentAt.set(user.id, Date.now());
++  clevertap.setProfile(user.id, { Paywall_Variant: group }).catch(() => {});
++}
++
++module.exports = { appVersion, groupFor, offer, saveToProfile, TRIAL_DAYS };
+diff -ruN pt-orig/services/laundry-razorpay.js pt-live/services/laundry-razorpay.js
+--- pt-orig/services/laundry-razorpay.js	2026-10-14 11:01:43
++++ pt-live/services/laundry-razorpay.js	2026-10-14 11:02:48
+@@ -69,10 +69,11 @@
+  * bills the plan automatically.
+  *
+  * trialAmountPaise > 0: charge ₹2 upfront as an addon and delay the first plan
+- * charge by TRIAL_DAYS via `start_at`. Without a trial the plan bills from the
+- * first cycle (charged on authorisation).
++ * charge by `trialDays` (default TRIAL_DAYS) via `start_at`. Without a trial the
++ * plan bills from the first cycle (charged on authorisation).
+  */
+-async function createSubscription({ planId, totalCount, customerId, trialAmountPaise, notes }) {
++async function createSubscription({ planId, totalCount, customerId, trialAmountPaise, trialDays, notes }) {
++  const days = Number.isFinite(trialDays) && trialDays > 0 ? trialDays : TRIAL_DAYS;
+   const body = {
+     plan_id: planId,
+     total_count: totalCount,
+@@ -81,7 +82,7 @@
+     notes: notes || {},
+   };
+   if (trialAmountPaise && trialAmountPaise > 0) {
+-    body.start_at = Math.floor(Date.now() / 1000) + TRIAL_DAYS * 24 * 3600;
++    body.start_at = Math.floor(Date.now() / 1000) + days * 24 * 3600;
+     body.addons = [{ item: { name: 'Trial', amount: trialAmountPaise, currency: 'INR' } }];
+   }
+   return api('/subscriptions', body);

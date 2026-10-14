@@ -183,6 +183,16 @@ Yearly or Monthly 50/50, stable per shop (hash of the user id —
 (`annual`\|`monthly`); the profile carries `Default_Plan_Selected`, which also
 splits the server-side `Subscription Activated`.
 
+**Paywall test (Android 1.0.12+, from 2026-10-14).** Brand-new accounts only
+(created after `LAUNDRY_PAYWALL_TEST_START` from app 1.0.12+; anyone who logged
+in before never). Profile property **`Paywall_Variant`** = `hard_trial` (paywall
+right after login, no close, 1-day ₹2 trial then ₹199/month) | `free1` (1 free
+order, paywall after it + the guide). Both: guide on, Monthly-only ₹199, dark
+video paywall. `Paywall Shown {from}`: `hard_trial` | `first_order` (free1's
+paywall after the first order) | `free_orders` (New order blocked).
+Paywall video: `Paywall Video Started {muted}` / `Paywall Video Unmuted` /
+`Paywall Video Completed`. Details: `docs/deploy/2026-10-14-paywall-test.md`.
+
 **Free-orders A/B (Android, from 2026-10-14).** New Android shops (created
 after the backend's `LAUNDRY_FREE_ORDERS_TEST_START`) get 3 or 5 free orders,
 50/50, stable per shop (hash of the user id, `free_orders_v1`). The server

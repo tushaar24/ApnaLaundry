@@ -47,6 +47,12 @@ class Prefs(private val context: Context) {
     private val SUB_ACTIVE_USER = stringPreferencesKey("sub_active_user") // whose status it is
     private val SUB_ENDS_AT = stringPreferencesKey("sub_ends_at") // ISO; paid / cancelled-grace period end
     private val FREE_ORDERS = intPreferencesKey("free_orders") // orders allowed without a plan (server)
+    // Paywall test (2026-10-14, new shops on 1.0.12+): "hard_trial" | "free1" from the server.
+    private val PAYWALL_GROUP = stringPreferencesKey("paywall_group")
+    // A brand-new account just logged in: PaywallGate waits for the first billing check.
+    private val PAYWALL_CHECK_PENDING = booleanPreferencesKey("paywall_check_pending")
+    // "free1": the paywall after the first order + guide has been shown once.
+    private val FIRST_ORDER_PAYWALL_SHOWN = booleanPreferencesKey("first_order_paywall_shown")
 
     // Sync cursor: the server checkpoint from the last successful pull — the
     // main shop's; each extra shop has its own "sync_checkpoint_<shop id>".
@@ -122,15 +128,26 @@ class Prefs(private val context: Context) {
     }
 
     /** Save what the server just said about the logged-in user's subscription. */
-    suspend fun saveSubscription(active: Boolean, endsAtIso: String?, freeOrders: Int) {
+    suspend fun saveSubscription(active: Boolean, endsAtIso: String?, freeOrders: Int, paywallGroup: String? = null) {
         context.dataStore.edit { p ->
             val u = p[USER_ID] ?: return@edit
             p[SUB_ACTIVE] = active
             p[SUB_ACTIVE_USER] = u
             if (active && !endsAtIso.isNullOrBlank()) p[SUB_ENDS_AT] = endsAtIso else p.remove(SUB_ENDS_AT)
             p[FREE_ORDERS] = freeOrders
+            if (paywallGroup.isNullOrBlank()) p.remove(PAYWALL_GROUP) else p[PAYWALL_GROUP] = paywallGroup
+            p.remove(PAYWALL_CHECK_PENDING) // a check has answered
         }
     }
+
+    /** The paywall-test group for the logged-in user, as the server last said (null = not in it). */
+    val paywallGroup: Flow<String?> = context.dataStore.data.map { p ->
+        if (p[SUB_ACTIVE_USER] != null && p[SUB_ACTIVE_USER] == p[USER_ID]) p[PAYWALL_GROUP] else null
+    }
+    val paywallCheckPending: Flow<Boolean> = context.dataStore.data.map { it[PAYWALL_CHECK_PENDING] ?: false }
+    suspend fun setPaywallCheckPending(v: Boolean) { context.dataStore.edit { if (v) it[PAYWALL_CHECK_PENDING] = true else it.remove(PAYWALL_CHECK_PENDING) } }
+    val firstOrderPaywallShown: Flow<Boolean> = context.dataStore.data.map { it[FIRST_ORDER_PAYWALL_SHOWN] ?: false }
+    suspend fun setFirstOrderPaywallShown() { context.dataStore.edit { it[FIRST_ORDER_PAYWALL_SHOWN] = true } }
 
     /** Free orders for the logged-in user, as the server last said; [default] until it has. */
     suspend fun freeOrders(default: Int): Int {
@@ -170,6 +187,7 @@ class Prefs(private val context: Context) {
             it.remove(ACCESS_TOKEN); it.remove(ACCESS_EXPIRES_AT); it.remove(REFRESH_TOKEN)
             it.remove(USER_ID); it.remove(USER_PHONE)
             it.remove(SUB_ACTIVE); it.remove(SUB_ACTIVE_USER); it.remove(SUB_ENDS_AT); it.remove(FREE_ORDERS)
+            it.remove(PAYWALL_GROUP); it.remove(PAYWALL_CHECK_PENDING); it.remove(FIRST_ORDER_PAYWALL_SHOWN)
             // DEVICE_ID survives — it identifies the installation, not the user.
         }
     }

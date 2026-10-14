@@ -42,10 +42,17 @@ data class PaywallUiState(
     val monthlyAmount: Int get() = status?.plans?.monthly?.amount ?: 49900
     val trialAmount: Int get() = status?.plans?.trial?.amount ?: 200
 
-    // The Android app has no ₹2 trial — a shop gets free orders, then the plan
-    // is charged in full today (see OrderLimitGate). The trial UI stays for now
-    // in case it comes back, but is never shown.
-    val hasTrial: Boolean get() = false
+    // The server offers Monthly only (new shops on 1.0.12+: ₹199, no Yearly).
+    val monthlyOnly: Boolean get() = status?.monthlyOnly == true
+    val videoUrl: String? get() = status?.paywallVideoUrl?.takeIf { it.isNotBlank() }
+    /** The plan Pay buys: Monthly when it's the only one offered, else the owner's pick. */
+    val effectivePlan: PaywallPlan get() = if (monthlyOnly) PaywallPlan.MONTHLY else plan
+
+    // No ₹2 trial on Android, except the paywall test's "hard_trial" group: the
+    // server offers it (₹2 today, the plan after [trialDays]). Everyone else is
+    // charged the plan in full today (see OrderLimitGate).
+    val hasTrial: Boolean get() = status?.trialOffered == true && (status.plans.trial.amount) > 0
+    val trialDays: Int get() = status?.trialDays ?: 7
 
     // Only an active subscription, or a cancelled one still in the period it
     // paid for, gets in: not "unconfigured", not "not due".
@@ -101,7 +108,7 @@ class PaywallViewModel(
                         onCheckoutFailed(result.code, result.description)
                         if (!_ui.value.retrySheet) {
                             // Razorpay's cancel code is 0 (Checkout.PAYMENT_CANCELED).
-                            Analytics.paymentRetryShown(_ui.value.plan.arg, if (result.code == 0) "cancelled" else "failed")
+                            Analytics.paymentRetryShown(_ui.value.effectivePlan.arg, if (result.code == 0) "cancelled" else "failed")
                         }
                         _ui.value = _ui.value.copy(error = null, retrySheet = true)
                     }
@@ -127,7 +134,7 @@ class PaywallViewModel(
     fun trackShown(from: String, orderCount: Int) {
         if (shownTracked) return
         shownTracked = true
-        Analytics.paywallShown(from = from, defaultPlan = _ui.value.plan.arg, orderCount = orderCount)
+        Analytics.paywallShown(from = from, defaultPlan = _ui.value.effectivePlan.arg, orderCount = orderCount)
     }
 
     fun selectPlan(plan: PaywallPlan) { _ui.value = _ui.value.copy(plan = plan) }
@@ -139,18 +146,18 @@ class PaywallViewModel(
         _ui.value = s.copy(busy = true, error = null, retrySheet = false)
         // The user's chosen plan; the ₹2 trial is layered on top of it. The
         // server prices it from its own table (never trusts the client for money).
-        val planArg = if (s.plan == PaywallPlan.ANNUAL) "annual" else "monthly"
+        val planArg = s.effectivePlan.arg
         Analytics.planSelected(planArg)
         viewModelScope.launch {
             try {
-                val res = repo.subscribe(planArg)
+                val res = repo.subscribe(planArg, trial = s.hasTrial)
                 if (!res.success || res.subscriptionId == null || res.keyId == null) {
                     throw IllegalStateException(res.message ?: "Could not start subscription")
                 }
-                // We asked for no trial. A server without the no-trial change would
-                // still add the ₹2 one, which this screen doesn't describe — don't
-                // open Checkout on terms the owner hasn't seen.
-                if (res.trialAmount > 0) throw IllegalStateException("Could not start your plan. Please try again later.")
+                // Checkout must match what the screen showed: no ₹2 trial unless this
+                // screen offered one (a server without the no-trial change would still
+                // add it), and a trial screen needs the server to have added it.
+                if ((res.trialAmount > 0) != s.hasTrial) throw IllegalStateException("Could not start your plan. Please try again later.")
                 // The server decides the real plan (never trust the client for money).
                 _ui.value = _ui.value.copy(purchasedPlan = res.plan)
                 Analytics.checkoutStarted(res.plan, res.amount, res.trialAmount)
@@ -172,14 +179,14 @@ class PaywallViewModel(
 
     /** Retry sheet CTA: open Checkout again — on [plan] (a failed Yearly may switch to Monthly). */
     fun retry(activity: Activity, plan: PaywallPlan) {
-        val from = _ui.value.plan
+        val from = _ui.value.effectivePlan
         Analytics.paymentRetryTapped(plan.arg, switchedFrom = if (plan != from) from.arg else null)
         _ui.value = _ui.value.copy(retrySheet = false, plan = plan)
         pay(activity)
     }
 
     fun dismissRetry() {
-        Analytics.paymentRetryDismissed(_ui.value.plan.arg)
+        Analytics.paymentRetryDismissed(_ui.value.effectivePlan.arg)
         _ui.value = _ui.value.copy(retrySheet = false)
     }
 
@@ -203,7 +210,7 @@ class PaywallViewModel(
     }
 
     private fun purchasedOrSelected(): String =
-        _ui.value.purchasedPlan ?: _ui.value.plan.name.lowercase()
+        _ui.value.purchasedPlan ?: _ui.value.effectivePlan.name.lowercase()
 
     private var pollJob: kotlinx.coroutines.Job? = null
 
