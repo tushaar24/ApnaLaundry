@@ -62,10 +62,27 @@ object Analytics {
         ct?.pushProfile(HashMap(fields))
     }
 
+    // ---- the paywall test (2026-10-14) ----
+    // The shop's group (hard_trial | free1) from /billing/status: saved on the
+    // CleverTap profile as Paywall_Variant (the server saves it too) and stamped
+    // on every event as paywall_variant, so any funnel or export splits by it.
+    // null = not in the test: nothing saved, nothing stamped.
+    @Volatile private var paywallVariant: String? = null
+    @Volatile private var paywallVariantSaved: String? = null
+
+    fun setPaywallVariant(group: String?) {
+        val g = group?.takeIf { it.isNotBlank() }
+        paywallVariant = g
+        if (g == null || g == paywallVariantSaved) return
+        paywallVariantSaved = g
+        updateProfile(mapOf("Paywall_Variant" to g))
+    }
+
     private fun track(name: String, props: Map<String, Any?> = emptyMap()) {
         if (!enabled) return
         val clean = HashMap<String, Any>()
         for ((k, v) in props) if (v != null) clean[k] = v
+        paywallVariant?.let { clean["paywall_variant"] = it }
         // Stamped last so no event prop can override them.
         clean["platform"] = "android"
         clean["source"] = "android"
@@ -102,7 +119,11 @@ object Analytics {
     fun setupCompleted(servicesCount: Int, expressPct: Int) =
         track("Setup Completed", mapOf("services_count" to servicesCount, "express_pct" to expressPct))
 
-    fun loggedOut() = track("Logged Out")
+    fun loggedOut() {
+        track("Logged Out")
+        paywallVariant = null
+        paywallVariantSaved = null
+    }
 
     // ---- onboarding (after the paywall: intro -> name -> services -> bill) ----
 
@@ -316,10 +337,26 @@ object Analytics {
     // The client fires the UI funnel; the backend fires the money-confirmed
     // events (Subscription Activated / Charged / Payment Failed / Halted /
     // Cancelled) from the Razorpay webhook.
-    // from: free_orders (the gate after the free orders) | settings (Settings → Subscription,
-    // or a mylaundry://subscription push). order_count: the shop's orders, deleted ones not counted.
-    fun paywallShown(from: String, defaultPlan: String, orderCount: Int) =
-        track("Paywall Shown", mapOf("from" to from, "default_plan" to defaultPlan, "order_count" to orderCount))
+    // from: free_orders (the gate after the free orders) | plan_ended | add_shop | settings
+    // (Settings → Subscription, or a mylaundry://subscription push) | hard_trial (the paywall
+    // test's no-close paywall after login) | first_order (the test's paywall after the first
+    // order + guide). order_count: the shop's orders, deleted ones not counted.
+    // amount: the default plan's price (paise); trial: the ₹2 trial is offered; video: the intro video is on it.
+    fun paywallShown(from: String, defaultPlan: String, orderCount: Int, amount: Int, trial: Boolean, video: Boolean) =
+        track(
+            "Paywall Shown",
+            mapOf(
+                "from" to from, "default_plan" to defaultPlan, "order_count" to orderCount,
+                "amount" to amount, "trial" to trial, "video" to video,
+            ),
+        )
+
+    /** Left a shown paywall without paying. how: close_button | back; seconds: since it was shown. */
+    fun paywallClosed(from: String, how: String, seconds: Long) =
+        track("Paywall Closed", mapOf("from" to from, "how" to how, "seconds_on_screen" to seconds))
+
+    /** The billing check before a paywall failed even after retries (offline); the owner sees "Try again". */
+    fun paywallCheckFailed(from: String) = track("Paywall Check Failed", mapOf("from" to from))
 
     // ---- push ----
     // A push tap's deep link opened a screen (mylaundry://<screen>).

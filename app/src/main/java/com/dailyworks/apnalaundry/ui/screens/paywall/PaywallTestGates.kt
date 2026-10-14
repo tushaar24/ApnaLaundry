@@ -11,6 +11,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.data.Prefs
 import com.dailyworks.apnalaundry.data.billing.BillingRepository
 import com.dailyworks.apnalaundry.ui.theme.Tokens
@@ -60,6 +61,7 @@ fun HardTrialGate(active: Boolean, pending: Boolean, onUnblocked: () -> Unit) {
         }
     }
     LaunchedEffect(decided, gated) { if (decided && !gated) onUnblocked() }
+    LaunchedEffect(offline) { if (offline) Analytics.paywallCheckFailed("hard_trial") }
 
     when {
         !decided && offline -> Box(Modifier.fillMaxSize().background(Tokens.Bg)) { CheckFailed(onRetry = vm::refresh) }

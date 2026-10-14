@@ -18,7 +18,11 @@ On a successful login both clients call CleverTap's `onUserLogin` with:
 | `Name`     | the shop name (once known)         |
 
 This ties every subsequent event to one shop owner across sessions and devices.
-`Name` is refreshed when the shop name is set or edited.
+`Name` is refreshed when the shop name is set or edited. Android calls it as
+soon as the login's credentials are saved — before the app counts as logged
+in, so the billing check, the experiments fetch and the paywall test never
+fire on the profile of whoever was logged in on the phone before — and again
+with the shop name after the first sync.
 
 ## Core funnels
 
@@ -150,14 +154,18 @@ Profile property **`Shop_Count`** = how many shops the owner has.
 ### Billing / paywall (A/B: `trial_2` \| `free_50`)
 
 The variant is assigned by the backend (Firebase-weighted, stable per user) and
-returned by `GET /billing/status`. The **client** fires the UI funnel below and
-sets the `paywall_variant` profile property. The **backend** fires the
+returned by `GET /billing/status`. The **client** fires the UI funnel below. The **backend** fires the
 money-confirmed events from the Razorpay webhook (server-side CleverTap), so
 revenue events can't be spoofed or lost if the app closes.
 
 | Event | Source | Properties | Fired when |
 | ----- | ------ | ---------- | ---------- |
-| `Paywall Shown` | client | web: `default_plan`; Android: `from` (`free_orders`\|`settings`), `default_plan`, `order_count` (orders not deleted) | paywall/trial screen shown with its plans (not the Settings status row) |
+| `Paywall Shown` | client | web: `default_plan`; Android: `from` (`free_orders`\|`plan_ended`\|`add_shop`\|`settings`\|`hard_trial`\|`first_order`), `default_plan`, `order_count` (orders not deleted), `amount` (default plan, paise), `trial` (₹2 trial offered), `video` (intro video on it) | paywall/trial screen shown with its plans (not the Settings status row) |
+| `Paywall Closed` | client | `from`, `how` (`close_button`\|`back`), `seconds_on_screen` | Android: left a shown paywall without paying (✕ or Back), once per paywall |
+| `Paywall Check Failed` | client | `from` (`hard_trial`) | Android: the billing check before the hard-trial paywall failed after retries (offline) — the owner sees "Try again" |
+| `Paywall FAQ Opened` | client | — | Android: the paywall's FAQ opened |
+| `Paywall Video Started` | client | `muted` | Android: the paywall video started playing (first time) |
+| `Paywall Video Unmuted` / `Paywall Video Completed` | client | — | Android: sound turned on / the video played to the end once |
 | `Plan Selected` | client | `variant`, `plan` | user taps a plan |
 | `Checkout Started` | client | `variant`, `plan`, `amount`, `trial_amount` | UPI intent opened |
 | `Checkout Succeeded` | client | `variant`, `plan` | returned from UPI app as success (optimistic) |
@@ -188,10 +196,19 @@ splits the server-side `Subscription Activated`.
 in before never). Profile property **`Paywall_Variant`** = `hard_trial` (paywall
 right after login, no close, 1-day ₹2 trial then ₹199/month) | `free1` (1 free
 order, paywall after it + the guide). Both: guide on, Monthly-only ₹199, dark
-video paywall. `Paywall Shown {from}`: `hard_trial` | `first_order` (free1's
-paywall after the first order) | `free_orders` (New order blocked).
-Paywall video: `Paywall Video Started {muted}` / `Paywall Video Unmuted` /
-`Paywall Video Completed`. Details: `docs/deploy/2026-10-14-paywall-test.md`.
+video paywall. `Paywall_Variant` is set by the server (at login and every app
+start) and by the app (from `/billing/status`), and every Android event of a
+test account carries **`paywall_variant`** (`hard_trial` | `free1`), so event
+exports split without a profile lookup. Test accounts get `Guide_Variant =
+guide` (forced) — leave them out of the guide A/B. Funnels:
+- hard_trial: `Logged In {is_new_user}` → `Paywall Shown {from: hard_trial, trial: true}`
+  (`Paywall Check Failed` if offline) → `Checkout Started {trial_amount: 200}` →
+  `Checkout Succeeded` / `Payment Retry Shown` → `Setup Completed` → `Order Saved`.
+- free1: `Logged In` → `Setup Completed` → `Order Saved {orders_count: 1}` →
+  `Tour Completed` / `Tour Skipped` → `Paywall Shown {from: first_order}` →
+  `Checkout Started` or `Paywall Closed` → later `Free Orders Over Shown` →
+  `Paywall Shown {from: free_orders}`.
+Details: `docs/deploy/2026-10-14-paywall-test.md`.
 
 **Free-orders A/B (Android, from 2026-10-14).** New Android shops (created
 after the backend's `LAUNDRY_FREE_ORDERS_TEST_START`) get 3 or 5 free orders,
@@ -202,8 +219,8 @@ sign-up and on every app start; shops outside the test don't have it. Only
 paywall is `Free Orders Over Shown {orders}` / `Paywall Shown {from: free_orders, order_count}`.
 Details and the analysis plan: `docs/deploy/2026-10-14-free-orders-ab.md`.
 
-Profile property `subscription_status` (+ `plan`, `paywall_variant`) is kept
-current from the webhook, for retention/win-back journeys.
+Profile property `subscription_status` (+ `plan`) is kept current from the
+webhook, for retention/win-back journeys.
 
 ## Where it lives
 

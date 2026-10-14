@@ -158,8 +158,19 @@ fun PaywallScreen(
     val ui by vm.ui.collectAsStateWithLifecycle()
     val activity = LocalContext.current as Activity
 
-    // Hard gate: the back button cannot dismiss the paywall.
-    BackHandler(enabled = hardGate) { /* consume — no escape until subscribed */ }
+    // Hard gate: the back button cannot dismiss the paywall. Otherwise Back = the ✕
+    // (what Back did anyway on a screen of its own; on the first-order paywall,
+    // drawn over the app, it closes the paywall instead of the screen behind it).
+    BackHandler {
+        if (hardGate) return@BackHandler // consume — no escape until subscribed
+        vm.trackClosed(from, "back")
+        onClose()
+    }
+    // The ✕ on the plans ("Paywall Closed"; the active-plan view's ✕ isn't one).
+    val closeOffer = {
+        vm.trackClosed(from, "close_button")
+        onClose()
+    }
 
     val perMonth = ui.annualAmount / 12
     val saveVsMonthly = ui.monthlyAmount * 12 - ui.annualAmount
@@ -200,7 +211,7 @@ fun PaywallScreen(
                 ui = ui,
                 tag = offerCopy(from, orders, freeOrders).tag,
                 hardGate = hardGate,
-                onClose = onClose,
+                onClose = closeOffer,
                 onPay = { vm.pay(activity) },
             )
 
@@ -213,7 +224,7 @@ fun PaywallScreen(
                     // ✕ (hidden on the non-cancellable hard gate)
                     if (!hardGate) {
                         Box(
-                            Modifier.padding(top = 6.dp).offset(x = (-12).dp).size(44.dp).tap(onClick = onClose),
+                            Modifier.padding(top = 6.dp).offset(x = (-12).dp).size(44.dp).tap(onClick = closeOffer),
                             contentAlignment = Alignment.Center,
                         ) { Icon(Icons.Filled.Close, "Close", tint = Tokens.Ink, modifier = Modifier.size(24.dp)) }
                     } else {

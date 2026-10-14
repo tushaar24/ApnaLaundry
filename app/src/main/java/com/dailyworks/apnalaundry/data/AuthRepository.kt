@@ -199,6 +199,13 @@ class AuthRepository(
             userId = user.id,
             phone = user.phone,
         )
+        // CleverTap: this account from here on — before loggedIn flips, which starts
+        // the billing check, the experiments fetch and the paywall-test gate, so
+        // their events and profile properties (Paywall_Variant, Guide_Variant)
+        // never land on the profile of whoever was logged in on this phone before.
+        // Again below, with the shop name.
+        Analytics.identify(user.id, user.phone, null)
+
         // A brand-new account may be in the hard-paywall test: PaywallGate waits
         // for the first billing check before showing setup (set before loggedIn flips).
         if (body.isNewUser) prefs.setPaywallCheckPending(true)

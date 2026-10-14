@@ -1,7 +1,9 @@
 package com.dailyworks.apnalaundry.data.billing
 
+import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.data.Prefs
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 
 /**
  * Billing data access for the paywall: create the subscription, read status, and
@@ -16,10 +18,16 @@ class BillingRepository(private val api: BillingApi, private val prefs: Prefs) {
             active = s.hasAccess, endsAtIso = s.subscription?.accessUntil, freeOrders = s.freeOrders,
             paywallGroup = s.paywallGroup,
         )
+        // Paywall test group -> CleverTap (Paywall_Variant + paywall_variant on events).
+        Analytics.setPaywallVariant(s.paywallGroup)
     }
 
     /** Refresh the saved subscription; failures keep the last saved one. */
-    suspend fun refreshSaved() { runCatching { status() } }
+    suspend fun refreshSaved() {
+        // App start: the saved paywall-test group stamps events even before (or without) the network.
+        Analytics.setPaywallVariant(prefs.paywallGroup.first())
+        runCatching { status() }
+    }
 
     /** [status], retrying a failed call [retries] more times with backoff; null if all fail. */
     suspend fun statusWithRetry(retries: Int = 2): BillingStatus? {

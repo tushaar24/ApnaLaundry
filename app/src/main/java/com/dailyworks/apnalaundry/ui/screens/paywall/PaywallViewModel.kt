@@ -77,6 +77,8 @@ class PaywallViewModel(
     val ui: StateFlow<PaywallUiState> = _ui
 
     private var shownTracked = false
+    private var shownAt = 0L
+    private var closedTracked = false
 
     // More than one PaywallViewModel can exist (gate, Settings → Subscription)
     // and all collect the shared CheckoutBridge — only the instance that
@@ -134,7 +136,20 @@ class PaywallViewModel(
     fun trackShown(from: String, orderCount: Int) {
         if (shownTracked) return
         shownTracked = true
-        Analytics.paywallShown(from = from, defaultPlan = _ui.value.effectivePlan.arg, orderCount = orderCount)
+        shownAt = System.currentTimeMillis()
+        val s = _ui.value
+        Analytics.paywallShown(
+            from = from, defaultPlan = s.effectivePlan.arg, orderCount = orderCount,
+            amount = if (s.effectivePlan == PaywallPlan.ANNUAL) s.annualAmount else s.monthlyAmount,
+            trial = s.hasTrial, video = s.monthlyOnly && s.videoUrl != null,
+        )
+    }
+
+    /** "Paywall Closed", once: the ✕ or Back on a paywall whose plans were shown. how: close_button | back. */
+    fun trackClosed(from: String, how: String) {
+        if (!shownTracked || closedTracked) return
+        closedTracked = true
+        Analytics.paywallClosed(from, how, (System.currentTimeMillis() - shownAt) / 1000)
     }
 
     fun selectPlan(plan: PaywallPlan) { _ui.value = _ui.value.copy(plan = plan) }
