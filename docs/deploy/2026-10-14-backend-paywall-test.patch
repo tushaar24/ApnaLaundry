@@ -258,8 +258,8 @@ diff -ruN pt-orig/services/laundry-free-orders.js pt-live/services/laundry-free-
    const bucket = crypto.createHash('sha256').update(`${FREE_ORDERS_TEST}:${user.id}`).digest().readUInt32BE(0) % 100;
 diff -ruN pt-orig/services/laundry-paywall-test.js pt-live/services/laundry-paywall-test.js
 --- pt-orig/services/laundry-paywall-test.js	1970-01-01 05:30:00
-+++ pt-live/services/laundry-paywall-test.js	2026-10-14 11:06:07
-@@ -0,0 +1,98 @@
++++ pt-live/services/laundry-paywall-test.js	2026-10-14 11:12:26
+@@ -0,0 +1,106 @@
 +const crypto = require('crypto');
 +
 +const clevertap = require('./laundry-clevertap');
@@ -281,7 +281,7 @@ diff -ruN pt-orig/services/laundry-paywall-test.js pt-live/services/laundry-payw
 +//   free1      — 1 free order; the app shows the paywall after it and the guide
 +//                (finished or skipped). ₹199/month, charged on approval, no trial.
 +// Both: Monthly only at ₹199 (LAUNDRY_RAZORPAY_PLAN_MONTHLY_199), the video
-+// paywall (LAUNDRY_PAYWALL_VIDEO_URL), the guide always on.
++// paywall (a video per group, see videoFor), the guide always on.
 +// CleverTap profile: Paywall_Variant = hard_trial | free1.
 +
 +const TEST = 'paywall_v1';
@@ -337,8 +337,16 @@ diff -ruN pt-orig/services/laundry-paywall-test.js pt-live/services/laundry-payw
 +    totalCount: MONTHLY_199.totalCount,
 +    trial: group === 'hard_trial',
 +    trialDays: TRIAL_DAYS,
-+    videoUrl: String(process.env.LAUNDRY_PAYWALL_VIDEO_URL || '').trim() || null,
++    videoUrl: videoFor(group),
 +  };
++}
++
++// The paywall video per group (each set in backend .env, no app release):
++//   hard_trial → LAUNDRY_PAYWALL_VIDEO_URL_TRIAL, free1 → LAUNDRY_PAYWALL_VIDEO_URL_DIRECT;
++// LAUNDRY_PAYWALL_VIDEO_URL is the fallback for both. None → no video.
++function videoFor(group) {
++  const specific = group === 'hard_trial' ? process.env.LAUNDRY_PAYWALL_VIDEO_URL_TRIAL : process.env.LAUNDRY_PAYWALL_VIDEO_URL_DIRECT;
++  return String(specific || process.env.LAUNDRY_PAYWALL_VIDEO_URL || '').trim() || null;
 +}
 +
 +// When each test account was last tagged in CleverTap (uploads can fail silently,

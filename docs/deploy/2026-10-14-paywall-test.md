@@ -76,7 +76,8 @@ cd backend
 START=$(date -u -d "+15 min" +%Y-%m-%dT%H:%M:%SZ)
 grep -q "^LAUNDRY_PAYWALL_TEST_START=" .env || printf "\nLAUNDRY_PAYWALL_TEST_START=%s\nLAUNDRY_PAYWALL_TEST_PCT=50\n" "$START" >> .env
 grep -q "^LAUNDRY_RAZORPAY_PLAN_MONTHLY_199=" .env || printf "LAUNDRY_RAZORPAY_PLAN_MONTHLY_199=plan_TnWwZMQsOCML47\n" >> .env
-grep -q "^LAUNDRY_PAYWALL_VIDEO_URL=" .env || printf "LAUNDRY_PAYWALL_VIDEO_URL=\n" >> .env
+grep -q "^LAUNDRY_PAYWALL_VIDEO_URL_TRIAL=" .env || printf "LAUNDRY_PAYWALL_VIDEO_URL_TRIAL=https://d2ol7oe51mr4n9.cloudfront.net/user_3ESV0PHoaONgMaS1Oeue2wCtXlS/c6ee8c53-a0c9-499d-af07-65687e720f9a.mp4\n" >> .env
+grep -q "^LAUNDRY_PAYWALL_VIDEO_URL_DIRECT=" .env || printf "LAUNDRY_PAYWALL_VIDEO_URL_DIRECT=\n" >> .env
 grep "^LAUNDRY_PAYWALL\|^LAUNDRY_RAZORPAY_PLAN_MONTHLY_199" .env
 cd .. && git add backend/prisma backend/services/laundry-paywall-test.js backend/services/laundry-free-orders.js backend/routes/laundry-billing.js backend/routes/laundry-experiments.js && git commit -q -m "laundry: paywall test (hard 1-day trial vs 1 free order) for brand-new 1.0.12+ accounts" && git log --oneline -1
 nohup docker compose -f docker-compose.prod.yml up -d --build backend > /tmp/backend-build.log 2>&1 &
@@ -90,9 +91,14 @@ plan `plan_TnWwZMQsOCML47` was created on 2026-10-14 and still exists.
 Safe to deploy before the app: until 1.0.12 is out no account is created with
 version ≥ 12, so nobody is in the test.
 
-Then release **Android 1.0.12** from `prod`. To add the video: host a 720p
-faststart MP4, set `LAUNDRY_PAYWALL_VIDEO_URL=https://…/file.mp4` in
-`backend/.env`, restart the backend (no app release).
+Then release **Android 1.0.12** from `prod`.
+
+Videos, one per group, set in `backend/.env` (restart the backend; no app release):
+- `LAUNDRY_PAYWALL_VIDEO_URL_TRIAL` — hard_trial's trial paywall (set 2026-10-14,
+  CloudFront MP4, 18.7 MB, faststart).
+- `LAUNDRY_PAYWALL_VIDEO_URL_DIRECT` — free1's direct-payment paywall (pending).
+- `LAUNDRY_PAYWALL_VIDEO_URL` — fallback for both. None set → no video.
+Use a faststart MP4 (index first) so playback starts while it downloads.
 
 ## Check it works (after 1.0.12 is out)
 
