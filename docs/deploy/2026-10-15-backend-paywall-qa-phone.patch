@@ -1,0 +1,20 @@
+--- pt-orig/services/laundry-paywall-test.js
++++ pt-live/services/laundry-paywall-test.js
+@@ -44,6 +44,8 @@
+ const OVERRIDE_PHONES = new Set(
+   String(process.env.LAUNDRY_FREE_ORDERS_BY_PHONE || '').split(',').map((p) => p.split(':')[0].trim()).filter(Boolean),
+ );
++// QA phones pinned to a group (2026-10-15) — whatever their age, platform or app version.
++const FORCED_GROUP = { '1000000028': 'hard_trial' };
+ 
+ /** The Android app's version code from its header, else 0 (older apps, the website). */
+ function appVersion(req) {
+@@ -54,6 +56,8 @@
+ /** 'hard_trial' | 'free1' for an account in the test, else null. Never changes for an account. */
+ function groupFor(user) {
+   if (!user || START === null || !plan199()) return null;
++  const forced = FORCED_GROUP[String(user.phone || '').slice(-10)];
++  if (forced) return forced;
+   if (user.signupPlatform !== 'android' || !(Number(user.signupAppVersion) >= MIN_APP_VERSION)) return null;
+   if (OVERRIDE_PHONES.has(String(user.phone || '').slice(-10))) return null;
+   const created = new Date(user.createdAt).getTime();
