@@ -32,6 +32,22 @@ data class BillingSubscriptionDto(
         get() = if (trialAmount > 0 && paidCount == 0) chargeAt ?: currentEnd else currentEnd ?: chargeAt
 }
 
+/**
+ * The paywall as the server sets it (2026-10-18, app 1.0.13+) — so plans, the
+ * pre-selected one and trial-or-upfront change from the backend, no release:
+ * [plans] shown ("annual", "monthly"; one = no choice), [defaultPlan] pre-selected
+ * of two, [trialDays] free days after ₹2 today (0 = paid in full on approval).
+ * Prices come in [BillingStatus.plans]; when it shows comes from paywallGroup and
+ * freeOrders. Null (older server, or not in the test) = the app's own paywall.
+ */
+@Serializable
+data class PaywallConfig(
+    val variant: String = "",
+    val plans: List<String> = emptyList(),
+    val defaultPlan: String = "annual",
+    val trialDays: Int = 0,
+)
+
 /** Orders a shop can have without a plan, unless the server says more. */
 const val DEFAULT_FREE_ORDERS = 5
 
@@ -54,9 +70,8 @@ data class BillingStatus(
     val paywallGroup: String? = null,
     // Only the Monthly plan is offered (₹199, no Yearly) — the video paywall.
     val monthlyOnly: Boolean = false,
-    // Only the Yearly plan is offered (₹4,999, no Monthly) — the video paywall
-    // (hard_trial from 2026-10-18, app 1.0.13+). Older servers leave it out.
-    val yearlyOnly: Boolean = false,
+    // The server-set paywall (1.0.13+): plans, pre-selected plan, trial days.
+    val paywall: PaywallConfig? = null,
     // This shop's paywall starts a trial (hard_trial): ₹2 today, plan after [trialDays].
     val trialOffered: Boolean = false,
     val trialDays: Int = 7,

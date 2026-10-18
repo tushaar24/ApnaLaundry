@@ -18,8 +18,9 @@ class BillingRepository(private val api: BillingApi, private val prefs: Prefs) {
             active = s.hasAccess, endsAtIso = s.subscription?.accessUntil, freeOrders = s.freeOrders,
             paywallGroup = s.paywallGroup,
         )
-        // Paywall test group -> CleverTap (Paywall_Variant + paywall_variant on events).
-        Analytics.setPaywallVariant(s.paywallGroup)
+        // Paywall test variant -> CleverTap (Paywall_Variant + paywall_variant on events):
+        // the server-set variant's name, else the legacy group.
+        Analytics.setPaywallVariant(s.paywall?.variant?.takeIf { it.isNotBlank() } ?: s.paywallGroup)
     }
 
     /** Refresh the saved subscription; failures keep the last saved one. */

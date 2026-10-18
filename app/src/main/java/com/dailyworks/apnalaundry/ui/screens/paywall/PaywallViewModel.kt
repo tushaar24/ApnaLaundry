@@ -10,6 +10,7 @@ import com.dailyworks.apnalaundry.data.billing.BillingRepository
 import com.dailyworks.apnalaundry.data.billing.BillingStatus
 import com.dailyworks.apnalaundry.data.billing.CheckoutBridge
 import com.dailyworks.apnalaundry.data.billing.CheckoutResult
+import com.dailyworks.apnalaundry.data.billing.PaywallConfig
 import com.dailyworks.apnalaundry.data.billing.RazorpayCheckout
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,6 +20,12 @@ import kotlinx.coroutines.launch
 enum class PaywallStage { PLANS, WAITING, DONE }
 enum class PaywallPlan { ANNUAL, MONTHLY }
 
+internal fun String.toPaywallPlan(): PaywallPlan? = when (lowercase()) {
+    "annual", "yearly" -> PaywallPlan.ANNUAL
+    "monthly" -> PaywallPlan.MONTHLY
+    else -> null
+}
+
 data class PaywallUiState(
     val status: BillingStatus? = null,
     val loaded: Boolean = false, // true once a /status attempt resolves (ok or failed)
@@ -26,6 +33,8 @@ data class PaywallUiState(
     val failed: Boolean = false,
     val stage: PaywallStage = PaywallStage.PLANS,
     val plan: PaywallPlan = PaywallPlan.ANNUAL,
+    // The owner tapped a plan card — the server's default no longer overrides it.
+    val planPicked: Boolean = false,
     // The plan the SERVER put on the subscription — analytics use this, never
     // the local pick.
     val purchasedPlan: String? = null,
@@ -44,23 +53,22 @@ data class PaywallUiState(
 
     // The server offers Monthly only (new shops on 1.0.12+: ₹199, no Yearly).
     val monthlyOnly: Boolean get() = status?.monthlyOnly == true
-    // The server offers Yearly only (hard_trial from 2026-10-18: ₹4,999, no Monthly).
-    val yearlyOnly: Boolean get() = status?.yearlyOnly == true
-    // One plan only → the dark video paywall (VideoOffer).
-    val singlePlan: Boolean get() = monthlyOnly || yearlyOnly
+    // The server-set paywall (1.0.13+): plans, pre-selected plan, trial days.
+    val config: PaywallConfig? get() = status?.paywall?.takeIf { it.plans.isNotEmpty() }
+    /** The plans on offer, in the server's order: its config, else Monthly-only, else both. */
+    val offeredPlans: List<PaywallPlan> get() = config?.plans?.mapNotNull { it.toPaywallPlan() }?.takeIf { it.isNotEmpty() }
+        ?: if (monthlyOnly) listOf(PaywallPlan.MONTHLY) else listOf(PaywallPlan.ANNUAL, PaywallPlan.MONTHLY)
+    // The dark video paywall: the server's config, or the legacy Monthly-only offer.
+    val videoDesign: Boolean get() = config != null || monthlyOnly
     val videoUrl: String? get() = status?.paywallVideoUrl?.takeIf { it.isNotBlank() }
     /** The plan Pay buys: the only one offered, else the owner's pick. */
-    val effectivePlan: PaywallPlan get() = when {
-        yearlyOnly -> PaywallPlan.ANNUAL
-        monthlyOnly -> PaywallPlan.MONTHLY
-        else -> plan
-    }
+    val effectivePlan: PaywallPlan get() = offeredPlans.singleOrNull() ?: plan
 
-    // No ₹2 trial on Android, except the paywall test's "hard_trial" group: the
-    // server offers it (₹2 today, the plan after [trialDays]). Everyone else is
-    // charged the plan in full today (see OrderLimitGate).
-    val hasTrial: Boolean get() = status?.trialOffered == true && (status.plans.trial.amount) > 0
-    val trialDays: Int get() = status?.trialDays ?: 7
+    // No ₹2 trial on Android, except where the server offers it (the paywall
+    // test: ₹2 today, the plan after [trialDays]). Everyone else is charged the
+    // plan in full today (see OrderLimitGate). A config with 0 trial days = upfront.
+    val hasTrial: Boolean get() = status?.trialOffered == true && (status.plans.trial.amount) > 0 && config?.trialDays != 0
+    val trialDays: Int get() = config?.trialDays?.takeIf { it > 0 } ?: status?.trialDays ?: 7
 
     // Only an active subscription, or a cancelled one still in the period it
     // paid for, gets in: not "unconfigured", not "not due".
@@ -133,8 +141,14 @@ class PaywallViewModel(
             // shows its loader while this attempt (with retries) is in flight.
             if (_ui.value.status == null) _ui.value = _ui.value.copy(loaded = false, failed = false)
             val status = repo.statusWithRetry()
-            _ui.value = _ui.value.copy(status = status ?: _ui.value.status, loaded = true, failed = status == null)
+            _ui.value = withServerDefault(_ui.value.copy(status = status ?: _ui.value.status, loaded = true, failed = status == null))
         }
+    }
+
+    /** Pre-selects the server's default plan (its config) until the owner taps one. */
+    private fun withServerDefault(s: PaywallUiState): PaywallUiState {
+        val default = s.config?.defaultPlan?.toPaywallPlan() ?: return s
+        return if (s.planPicked || default !in s.offeredPlans) s else s.copy(plan = default)
     }
 
     /**
@@ -149,7 +163,7 @@ class PaywallViewModel(
         Analytics.paywallShown(
             from = from, defaultPlan = s.effectivePlan.arg, orderCount = orderCount,
             amount = if (s.effectivePlan == PaywallPlan.ANNUAL) s.annualAmount else s.monthlyAmount,
-            trial = s.hasTrial, video = s.singlePlan && s.videoUrl != null,
+            trial = s.hasTrial, video = s.videoDesign && s.videoUrl != null,
         )
     }
 
@@ -160,7 +174,7 @@ class PaywallViewModel(
         Analytics.paywallClosed(from, how, (System.currentTimeMillis() - shownAt) / 1000)
     }
 
-    fun selectPlan(plan: PaywallPlan) { _ui.value = _ui.value.copy(plan = plan) }
+    fun selectPlan(plan: PaywallPlan) { _ui.value = _ui.value.copy(plan = plan, planPicked = true) }
 
     /** Create the subscription and open Razorpay Checkout for the mandate. */
     fun pay(activity: Activity) {

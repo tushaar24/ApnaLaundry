@@ -1,0 +1,345 @@
+--- pt-orig/services/laundry-paywall-test.js
++++ pt-live/services/laundry-paywall-test.js
+@@ -11,31 +11,47 @@
+ // whatever app it uses later — and keeps exactly what it had. No start set, or
+ // no ₹199 plan id, = no test.
+ //
+-// Split 50/50 by a hash of the user id (`paywall_v1`; LAUNDRY_PAYWALL_TEST_PCT =
+-// % in hard_trial, default 50):
+-//   hard_trial — the app shows the paywall right after login, no close button:
+-//                a 1-day trial (₹2 today, LAUNDRY_TRIAL_AMOUNT_PAISE) then ₹199/month.
+-//                0 free orders.
+-//   free1      — 1 free order; the app shows the paywall after it and the guide
+-//                (finished or skipped). ₹199/month, charged on approval, no trial.
+-// Both: Monthly only at ₹199 (LAUNDRY_RAZORPAY_PLAN_MONTHLY_199), the video
+-// paywall (a video per group, see videoFor), the guide always on.
+-// CleverTap profile: Paywall_Variant = hard_trial | free1, Paywall_Offer = monthly_199 | yearly_4999.
++// Legacy split (accounts created before the first LAUNDRY_PAYWALL_CONFIG split):
++// 50/50 by a hash of the user id (`paywall_v1`; LAUNDRY_PAYWALL_TEST_PCT = % in
++// hard_trial, default 50):
++//   hard_trial — paywall right after login, no close: 1-day trial (₹2 today) then ₹199/month.
++//   free1      — 1 free order; the paywall after it and the guide. ₹199/month, upfront.
+ //
+-// From LAUNDRY_PAYWALL_HARD_ALL_FROM (owner, 2026-10-18): every new test account
+-// is hard_trial — no more 50/50; accounts created before keep their group. Those
+-// created on app 1.0.13+ get Yearly only: ₹2 today, then ₹4,999/yr
+-// (LAUNDRY_RAZORPAY_PLAN_ANNUAL) after LAUNDRY_PAYWALL_YEARLY_TRIAL_DAYS (default
+-// 7). On 1.0.12 the app can only show Monthly, so ₹199/month as before.
++// Server-driven variants (owner, 2026-10-18) — LAUNDRY_PAYWALL_CONFIG, JSON:
++//   {
++//     "splits":   [{ "from": "<ISO>", "split": { "<variant>": <pct>, … } }, …],
++//     "variants": { "<variant>": {
++//        "gate": "login" | "first_order" | "free_orders",  // when the paywall shows
++//        "plans": ["annual"] | ["monthly"] | ["annual","monthly"],
++//        "default": "annual" | "monthly",                   // pre-selected of two
++//        "trialDays": 1,                                    // 0 = paid upfront on approval
++//        "freeOrders": 0,                                   // orders before New order asks for a plan
++//        "prices": { "annual": 4999, "monthly": 499 },      // ₹; a known plan id per price,
++//        "planIds": { "annual": "plan_…" }                  //   or planIds for other prices
++//     } },
++//     "force": { "<phone>": "<variant>" }                   // QA phones
++//   }
++// An account created at or after a split's `from` (the latest one that applies)
++// gets a variant by its hash; adding a split only moves NEW accounts, while
++// editing a variant changes it for everyone in it. Variants are drawn by app
++// 1.0.13+ (BillingStatus.paywall); accounts created on 1.0.12 fall back to the
++// legacy group with the same gate, and an older app gets the plan paid upfront
++// (its paywall has no trial wording). Restart the backend after an edit.
++// CleverTap profile: Paywall_Variant = the variant (or legacy group).
+ 
+ const TEST = 'paywall_v1';
+ const MIN_APP_VERSION = 12;
+-const YEARLY_MIN_APP_VERSION = 13;
+-const MONTHLY_199 = { amount: 19900, totalCount: 120 }; // ₹199 × up to 10y
+-const YEARLY_4999 = { amount: 499900, totalCount: 10 }; // ₹4,999 × up to 10y
+-const TRIAL_DAYS = 1;
+-const FREE_ORDERS = { hard_trial: 0, free1: 1 };
++const CONFIG_MIN_APP_VERSION = 13;
++const TRIAL_DAYS = 1; // legacy hard_trial
++const TOTAL_COUNT = { annual: 10, monthly: 120 }; // ≈ 10 years of charges
++const GATE_GROUP = { login: 'hard_trial', first_order: 'free1', free_orders: null }; // what the app's gates key on
+ 
++// The legacy groups, as variants.
++const LEGACY = {
++  hard_trial: { gate: 'login', plans: ['monthly'], default: 'monthly', trialDays: 1, freeOrders: 0, prices: { monthly: 199 } },
++  free1: { gate: 'first_order', plans: ['monthly'], default: 'monthly', trialDays: 0, freeOrders: 1, prices: { monthly: 199 } },
++};
++
+ const timeFromEnv = (name) => {
+   const t = Date.parse(String(process.env[name] || '').trim());
+   return Number.isFinite(t) ? t : null;
+@@ -43,14 +59,7 @@
+ const START = timeFromEnv('LAUNDRY_PAYWALL_TEST_START');
+ // Optional: accounts created from here on are no longer added (existing ones keep their group).
+ const END = timeFromEnv('LAUNDRY_PAYWALL_TEST_END');
+-// Every account created from here on is hard_trial (null = the 50/50 split).
+-const HARD_ALL_FROM = timeFromEnv('LAUNDRY_PAYWALL_HARD_ALL_FROM');
+ const plan199 = () => String(process.env.LAUNDRY_RAZORPAY_PLAN_MONTHLY_199 || '').trim();
+-const planAnnual = () => String(process.env.LAUNDRY_RAZORPAY_PLAN_ANNUAL || '').trim();
+-function yearlyTrialDays() {
+-  const n = parseInt(process.env.LAUNDRY_PAYWALL_YEARLY_TRIAL_DAYS, 10);
+-  return Number.isFinite(n) && n > 0 ? n : 7;
+-}
+ function hardTrialPct() {
+   const n = parseInt(process.env.LAUNDRY_PAYWALL_TEST_PCT, 10);
+   return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 50;
+@@ -59,57 +68,138 @@
+ const OVERRIDE_PHONES = new Set(
+   String(process.env.LAUNDRY_FREE_ORDERS_BY_PHONE || '').split(',').map((p) => p.split(':')[0].trim()).filter(Boolean),
+ );
+-// QA phones pinned to a group (2026-10-15) — whatever their age, platform or app version.
++// QA phones pinned to a legacy group (2026-10-15) — whatever their age, platform or app version.
+ const FORCED_GROUP = { '1000000028': 'hard_trial' };
+ 
++// The Razorpay plan for a price we already have one for (₹4,999/yr, ₹499 or ₹199 a month).
++function knownPlanId(plan, rupees) {
++  if (plan === 'annual' && rupees === 4999) return String(process.env.LAUNDRY_RAZORPAY_PLAN_ANNUAL || '').trim();
++  if (plan === 'monthly' && rupees === 499) return String(process.env.LAUNDRY_RAZORPAY_PLAN_MONTHLY || '').trim();
++  if (plan === 'monthly' && rupees === 199) return plan199();
++  return '';
++}
++
++/** A variant made safe: known gate, 1–2 plans each with a price and a plan id; else null. */
++function normaliseVariant(name, v) {
++  if (!v || typeof v !== 'object') return null;
++  const gate = ['login', 'first_order', 'free_orders'].includes(v.gate) ? v.gate : null;
++  const plans = Array.isArray(v.plans) ? [...new Set(v.plans.filter((p) => p === 'annual' || p === 'monthly'))] : [];
++  if (!gate || !plans.length) return null;
++  const prices = {};
++  const planIds = {};
++  for (const p of plans) {
++    const rupees = Number(v.prices && v.prices[p]);
++    const id = String((v.planIds && v.planIds[p]) || knownPlanId(p, rupees)).trim();
++    if (!(rupees > 0) || !id) return null;
++    prices[p] = Math.round(rupees * 100);
++    planIds[p] = id;
++  }
++  const trialDays = Math.max(0, Math.min(30, parseInt(v.trialDays, 10) || 0));
++  const freeOrders = Math.max(0, parseInt(v.freeOrders, 10) || 0);
++  return {
++    variant: name, gate, plans, default: plans.includes(v.default) ? v.default : plans[0],
++    trialDays, freeOrders, prices, planIds,
++  };
++}
++
++// LAUNDRY_PAYWALL_CONFIG, read once at start; a broken one is logged and ignored (legacy only).
++const CONFIG = (() => {
++  const raw = String(process.env.LAUNDRY_PAYWALL_CONFIG || '').trim();
++  if (!raw) return { splits: [], variants: {}, force: {} };
++  try {
++    const c = JSON.parse(raw);
++    const variants = {};
++    for (const [name, v] of Object.entries(c.variants || {})) {
++      const n = normaliseVariant(name, v);
++      if (n) variants[name] = n;
++      else console.error(`[paywall] variant "${name}" ignored: needs gate, plans, prices (and plan ids for new prices)`);
++    }
++    const splits = (c.splits || [])
++      .map((s) => ({ from: Date.parse(s.from), split: Object.entries(s.split || {}).filter(([k, pct]) => variants[k] && pct > 0) }))
++      .filter((s) => Number.isFinite(s.from) && s.split.length)
++      .sort((a, b) => a.from - b.from);
++    const force = Object.fromEntries(Object.entries(c.force || {}).filter(([, v]) => variants[v] || LEGACY[v]));
++    return { splits, variants, force };
++  } catch (e) {
++    console.error(`[paywall] LAUNDRY_PAYWALL_CONFIG is not valid JSON — ignored: ${e.message}`);
++    return { splits: [], variants: {}, force: {} };
++  }
++})();
++const FIRST_SPLIT = CONFIG.splits.length ? CONFIG.splits[0].from : null;
++
+ /** The Android app's version code from its header, else 0 (older apps, the website). */
+ function appVersion(req) {
+   const n = Number.parseInt(String((req && req.headers && req.headers['x-laundry-app-version']) || '').trim(), 10);
+   return Number.isFinite(n) ? n : 0;
+ }
+ 
+-/** 'hard_trial' | 'free1' for an account in the test, else null. Never changes for an account. */
++const bucketOf = (salt, id) => crypto.createHash('sha256').update(`${salt}:${id}`).digest().readUInt32BE(0) % 100;
++
++/**
++ * The account's variant name — a legacy group (hard_trial | free1) or a config
++ * variant — or null when it isn't in the test. Never changes for an account
++ * unless the owner edits the split it was created under.
++ */
+ function groupFor(user) {
+   if (!user || START === null || !plan199()) return null;
+-  const forced = FORCED_GROUP[String(user.phone || '').slice(-10)];
+-  if (forced) return forced;
++  const phone = String(user.phone || '').slice(-10);
++  if (CONFIG.force[phone]) return CONFIG.force[phone];
++  if (FORCED_GROUP[phone]) return FORCED_GROUP[phone];
+   if (user.signupPlatform !== 'android' || !(Number(user.signupAppVersion) >= MIN_APP_VERSION)) return null;
+-  if (OVERRIDE_PHONES.has(String(user.phone || '').slice(-10))) return null;
++  if (OVERRIDE_PHONES.has(phone)) return null;
+   const created = new Date(user.createdAt).getTime();
+   if (!(created >= START) || (END !== null && created >= END)) return null;
+-  if (HARD_ALL_FROM !== null && created >= HARD_ALL_FROM) return 'hard_trial';
+-  const bucket = crypto.createHash('sha256').update(`${TEST}:${user.id}`).digest().readUInt32BE(0) % 100;
+-  return bucket < hardTrialPct() ? 'hard_trial' : 'free1';
++  if (FIRST_SPLIT === null || created < FIRST_SPLIT) {
++    return bucketOf(TEST, user.id) < hardTrialPct() ? 'hard_trial' : 'free1';
++  }
++  const s = [...CONFIG.splits].reverse().find((x) => created >= x.from);
++  const total = s.split.reduce((a, [, pct]) => a + pct, 0);
++  let b = (bucketOf(`${TEST}:${s.from}`, user.id) * total) / 100;
++  let picked = s.split[s.split.length - 1][0];
++  for (const [name, pct] of s.split) { if (b < pct) { picked = name; break; } b -= pct; }
++  // Variants need app 1.0.13+ to draw; an account created on 1.0.12 gets the legacy group with the same gate.
++  if (!(Number(user.signupAppVersion) >= CONFIG_MIN_APP_VERSION)) return GATE_GROUP[CONFIG.variants[picked].gate] || 'free1';
++  return picked;
+ }
+ 
+-/** True when a hard_trial account gets the Yearly-only offer (created after the switch, on 1.0.13+). */
+-function yearlyOffer(user, group) {
+-  if (group !== 'hard_trial' || HARD_ALL_FROM === null || !planAnnual()) return false;
+-  return new Date(user.createdAt).getTime() >= HARD_ALL_FROM && Number(user.signupAppVersion) >= YEARLY_MIN_APP_VERSION;
+-}
+-
+-/** What a test account is offered, or null (not in the test → everything as before). */
+-function offer(user) {
+-  const group = groupFor(user);
+-  if (!group) return null;
+-  const yearly = yearlyOffer(user, group);
+-  const p = yearly ? YEARLY_4999 : MONTHLY_199;
++/**
++ * What a test account is offered (null = not in the test → everything as before).
++ * [clientVersion] is the app asking: below 1.0.13 a config variant is paid upfront,
++ * since that paywall has no trial wording.
++ */
++function offer(user, clientVersion = CONFIG_MIN_APP_VERSION) {
++  const name = groupFor(user);
++  if (!name) return null;
++  const legacy = LEGACY[name];
++  const v = legacy ? normaliseVariant(name, legacy) : CONFIG.variants[name];
++  if (!v) return null;
++  const drawn = !legacy && clientVersion >= CONFIG_MIN_APP_VERSION; // 1.0.13+ draws the variant itself
++  const trialDays = legacy || drawn ? v.trialDays : 0;
+   return {
+-    group,
+-    freeOrders: FREE_ORDERS[group],
+-    plan: yearly ? 'annual' : 'monthly',
+-    amount: p.amount,
+-    monthlyAmount: MONTHLY_199.amount,
+-    planId: yearly ? planAnnual() : plan199(),
+-    totalCount: p.totalCount,
+-    trial: group === 'hard_trial',
+-    trialDays: yearly ? yearlyTrialDays() : TRIAL_DAYS,
+-    videoUrl: videoFor(group),
++    group: name,
++    gateGroup: GATE_GROUP[v.gate],
++    config: !legacy,
++    drawn,
++    gate: v.gate,
++    plans: v.plans,
++    defaultPlan: v.default,
++    trial: trialDays > 0,
++    trialDays: trialDays > 0 ? trialDays : TRIAL_DAYS,
++    freeOrders: v.freeOrders,
++    prices: v.prices,
++    planIds: v.planIds,
++    videoUrl: videoFor(v.gate === 'login' ? 'hard_trial' : 'free1'),
+   };
+ }
+ 
+-// The paywall video per group (each set in backend .env, no app release):
+-//   hard_trial → LAUNDRY_PAYWALL_VIDEO_URL_TRIAL, free1 → LAUNDRY_PAYWALL_VIDEO_URL_DIRECT;
++/** The plan a test account is charged for: the one it asked for if offered, else its default. */
++function planFor(o, asked) {
++  const plan = o.plans.includes(asked) ? asked : o.defaultPlan;
++  return { plan, amount: o.prices[plan], planId: o.planIds[plan], totalCount: TOTAL_COUNT[plan] };
++}
++
++// The paywall video per gate (each set in backend .env, no app release):
++//   login gate → LAUNDRY_PAYWALL_VIDEO_URL_TRIAL, others → LAUNDRY_PAYWALL_VIDEO_URL_DIRECT;
+ // LAUNDRY_PAYWALL_VIDEO_URL is the fallback for both. None → no video.
+ function videoFor(group) {
+   const specific = group === 'hard_trial' ? process.env.LAUNDRY_PAYWALL_VIDEO_URL_TRIAL : process.env.LAUNDRY_PAYWALL_VIDEO_URL_DIRECT;
+@@ -129,7 +219,7 @@
+   if (last && Date.now() - last < RESEND_MS) return;
+   if (sentAt.size > 50000) sentAt.clear();
+   sentAt.set(user.id, Date.now());
+-  clevertap.setProfile(user.id, { Paywall_Variant: group, Paywall_Offer: yearlyOffer(user, group) ? 'yearly_4999' : 'monthly_199' }).catch(() => {});
++  clevertap.setProfile(user.id, { Paywall_Variant: group }).catch(() => {});
+ }
+ 
+-module.exports = { appVersion, groupFor, offer, saveToProfile, TRIAL_DAYS };
++module.exports = { appVersion, groupFor, offer, planFor, saveToProfile, TRIAL_DAYS };
+--- pt-orig/routes/laundry-billing.js
++++ pt-live/routes/laundry-billing.js
+@@ -110,7 +110,8 @@
+     const user = req.laundryAuth.user;
+     freeOrders.saveVariantToProfile(user);
+     // Paywall test: brand-new accounts whose first login was on 1.0.12+ (else null → as before).
+-    const pt = paywallTest.offer(user);
++    // The asking app's version decides whether it can draw a server-set paywall (1.0.13+).
++    const pt = paywallTest.offer(user, paywallTest.appVersion(req));
+     paywallTest.saveToProfile(user);
+     const sub = await currentSubscription(userId);
+     const hasActive = Boolean(sub && HAS_ACCESS.includes(sub.status));
+@@ -140,19 +141,23 @@
+       hasActiveSubscription: hasActive,
+       trialEligible,
+       freeOrders: pt ? pt.freeOrders : freeOrders.freeOrdersFor(user),
+-      // Paywall test only (additive; older apps ignore them): the group, Monthly-only
+-      // ₹199, the trial (hard_trial, while the shop can still take one), the video.
+-      paywallGroup: pt ? pt.group : null,
+-      // One plan only: Monthly ₹199, or (hard_trial from the switch, app 1.0.13+)
+-      // Yearly ₹4,999. Older apps don't know yearlyOnly and show both plans.
+-      monthlyOnly: Boolean(pt) && pt.plan === 'monthly',
+-      yearlyOnly: Boolean(pt) && pt.plan === 'annual',
++      // Paywall test only (additive; older apps ignore them). paywallGroup is what
++      // the app's gates key on: hard_trial = paywall at login, free1 = after the
++      // first order, null = only when the free orders run out.
++      paywallGroup: pt ? pt.gateGroup : null,
++      // Monthly is the only plan (the legacy ₹199 video paywall).
++      monthlyOnly: Boolean(pt) && pt.plans.length === 1 && pt.plans[0] === 'monthly',
+       trialOffered: Boolean(pt && pt.trial && trialEligible),
+       trialDays: pt && pt.trial ? pt.trialDays : rzp.TRIAL_DAYS,
+       paywallVideoUrl: pt ? pt.videoUrl : null,
++      // The server-set paywall app 1.0.13+ draws: plans shown, the one pre-selected,
++      // trial days (0 = paid upfront). Null for everyone else.
++      paywall: pt && pt.drawn
++        ? { variant: pt.group, plans: pt.plans, defaultPlan: pt.defaultPlan, trialDays: pt.trial && trialEligible ? pt.trialDays : 0 }
++        : null,
+       plans: {
+-        monthly: { amount: pt ? pt.monthlyAmount : rzp.amountFor('monthly') },
+-        annual: { amount: rzp.amountFor('annual') },
++        monthly: { amount: pt && pt.prices.monthly ? pt.prices.monthly : rzp.amountFor('monthly') },
++        annual: { amount: pt && pt.prices.annual ? pt.prices.annual : rzp.amountFor('annual') },
+         // 0 once the shop has used its trial: the plan is charged in full today.
+         trial: { amount: trialEligible ? env.laundryTrialAmountPaise : 0 },
+       },
+@@ -178,13 +183,15 @@
+     // ₹2 now, then ₹4,999/yr after TRIAL_DAYS). One trial per shop: once a
+     // subscription has got past checkout, the next one bills the plan in full
+     // on approval.
+-    // Paywall test accounts: the plan the server offers them — Monthly ₹199 on its
+-    // own plan, or Yearly ₹4,999 (hard_trial from the switch, app 1.0.13+);
+-    // hard_trial adds the ₹2 trial, free1 none — whatever the app asks for.
+-    const pt = paywallTest.offer(user);
++    // Paywall test accounts: a plan their offer has (the one asked for if offered,
++    // else its default), at its price, with its trial (or none) — whatever the app
++    // sends. An app older than 1.0.13 on a server-set variant shows both standard
++    // plans upfront, so it gets the standard plan it asked for.
++    const pt = paywallTest.offer(user, paywallTest.appVersion(req));
+     let plan = String((req.body && req.body.plan) || '').toLowerCase();
+     if (!['monthly', 'annual'].includes(plan)) plan = 'monthly';
+-    if (pt) plan = pt.plan;
++    const offered = pt && (pt.drawn || !pt.config || pt.plans.includes(plan)) ? paywallTest.planFor(pt, plan) : null;
++    if (offered) plan = offered.plan;
+     // `trial: false` asks for no trial at all (the Android app's free-orders
+     // model: the plan is charged in full on approval). Anything else keeps the
+     // one-per-shop ₹2 trial, so the website is unchanged.
+@@ -192,9 +199,9 @@
+     const trialAmount = wantsTrial && (await isTrialEligible(userId)) ? env.laundryTrialAmountPaise : 0;
+     const trialDays = pt && trialAmount ? pt.trialDays : undefined;
+ 
+-    const amount = pt ? pt.amount : rzp.amountFor(plan);
+-    const planId = pt ? pt.planId : rzp.planIdFor(plan);
+-    const totalCount = pt ? pt.totalCount : rzp.totalCountFor(plan);
++    const amount = offered ? offered.amount : rzp.amountFor(plan);
++    const planId = offered ? offered.planId : rzp.planIdFor(plan);
++    const totalCount = offered ? offered.totalCount : rzp.totalCountFor(plan);
+ 
+     const existing = await currentSubscription(userId);
+ 

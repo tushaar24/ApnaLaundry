@@ -87,9 +87,10 @@ internal object Pw {
 
 /**
  * The paywall new shops get (from 2026-10-14, app 1.0.12+): the dark design with
- * the intro video and ONE plan at the server's price — Monthly ₹199 when the
- * server says `monthlyOnly`, Yearly ₹4,999 when it says `yearlyOnly` (hard_trial
- * from 2026-10-18, 1.0.13+). [tag] is "1 of 1 free orders used" etc.
+ * the intro video and the plans the server sets (PaywallConfig, 1.0.13+) at its
+ * prices — one plan (no choice) or Yearly and Monthly with its default picked —
+ * as a ₹2 trial or paid in full, worded to match; or, from an older server, the
+ * Monthly-only ₹199 offer. [tag] is "1 of 1 free orders used" etc.
  * [PaywallScreen] paints [Pw.Bg] behind it (status bar included).
  */
 @Composable
@@ -99,6 +100,7 @@ internal fun VideoOffer(
     hardGate: Boolean,
     onClose: () -> Unit,
     onPay: () -> Unit,
+    onSelectPlan: (PaywallPlan) -> Unit,
 ) {
     val activity = LocalContext.current as Activity
     var faq by remember { mutableStateOf(false) }
@@ -201,18 +203,34 @@ internal fun VideoOffer(
             }
 
             Spacer(Modifier.height(28.dp))
-            Text("Your plan", style = fig(16, FontWeight.Bold, Tokens.OnDark))
+            val plans = ui.offeredPlans
+            Text(if (plans.size > 1) "Pick your plan" else "Your plan", style = fig(16, FontWeight.Bold, Tokens.OnDark))
             Spacer(Modifier.height(16.dp))
-            if (yearly) {
-                // ₹4,999 a year ≈ ₹417 a month — the per-month figure makes the yearly price easy to judge.
-                val perMonth = rupees((ui.annualAmount / 1200.0).roundToInt() * 100)
-                PlanCard(title = "Yearly", sub = "Pay once a year · just $perMonth a month", price = price, slash = slash, was = null)
-            } else {
-                PlanCard(
-                    title = "Monthly", sub = "Pay every month", price = price, slash = slash,
-                    // Strike out the old price only while this one is lower.
-                    was = if (ui.monthlyAmount < WAS_MONTHLY_PAISE) rupees(WAS_MONTHLY_PAISE) else null,
-                )
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                plans.forEach { p ->
+                    val selected = p == ui.effectivePlan
+                    val onClick = if (plans.size > 1) ({ onSelectPlan(p) }) else null
+                    if (p == PaywallPlan.ANNUAL) {
+                        // ₹4,999 a year ≈ ₹417 a month — the per-month figure makes the yearly price easy to judge.
+                        val perMonth = rupees((ui.annualAmount / 1200.0).roundToInt() * 100)
+                        val save = ui.monthlyAmount * 12 - ui.annualAmount
+                        PlanCard(
+                            title = "Yearly", sub = "Pay once a year · just $perMonth a month",
+                            price = rupees(ui.annualAmount), slash = "/year", was = null,
+                            // Next to Monthly, say what Yearly saves (only when it does).
+                            badge = if (PaywallPlan.MONTHLY in plans && save > 0) "SAVE ${rupees(save)}" else null,
+                            selected = selected, onClick = onClick,
+                        )
+                    } else {
+                        PlanCard(
+                            title = "Monthly", sub = "Pay every month",
+                            price = rupees(ui.monthlyAmount), slash = "/month",
+                            // Strike out the old price only while this one is lower.
+                            was = if (ui.monthlyAmount < WAS_MONTHLY_PAISE) rupees(WAS_MONTHLY_PAISE) else null,
+                            badge = null, selected = selected, onClick = onClick,
+                        )
+                    }
+                }
             }
 
             Spacer(Modifier.height(28.dp))
@@ -289,21 +307,34 @@ internal fun VideoOffer(
     }
 }
 
+/** A plan on the dark paywall; [onClick] null = the only plan (always selected). */
 @Composable
-private fun PlanCard(title: String, sub: String, price: String, slash: String, was: String?) {
+private fun PlanCard(
+    title: String, sub: String, price: String, slash: String, was: String?,
+    badge: String?, selected: Boolean, onClick: (() -> Unit)?,
+) {
     Box(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
-            .background(Pw.Selected.copy(alpha = 0.15f))
-            .border(2.dp, Pw.Selected, RoundedCornerShape(16.dp))
+            .background(if (selected) Pw.Selected.copy(alpha = 0.15f) else Pw.Surface)
+            .border(2.dp, if (selected) Pw.Selected else Pw.Surface, RoundedCornerShape(16.dp))
+            .then(if (onClick != null) Modifier.tap(onClick = onClick) else Modifier)
             .padding(16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Box(
-                Modifier.size(20.dp).clip(CircleShape).border(2.dp, Pw.Accent, CircleShape),
+                Modifier.size(20.dp).clip(CircleShape).border(2.dp, if (selected) Pw.Accent else Pw.Text, CircleShape),
                 contentAlignment = Alignment.Center,
-            ) { Box(Modifier.size(10.dp).clip(CircleShape).background(Pw.Accent)) }
+            ) { if (selected) Box(Modifier.size(10.dp).clip(CircleShape).background(Pw.Accent)) }
             Column(Modifier.weight(1f)) {
-                Text(title, style = fig(16, FontWeight.Bold, Tokens.OnDark))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(title, style = fig(16, FontWeight.Bold, Tokens.OnDark))
+                    badge?.let {
+                        Text(
+                            it, style = fig(11, FontWeight.ExtraBold, Tokens.OnDark), maxLines = 1,
+                            modifier = Modifier.clip(RoundedCornerShape(50)).background(Tokens.Orange).padding(horizontal = 8.dp, vertical = 2.dp),
+                        )
+                    }
+                }
                 Text(sub, style = fig(13, FontWeight.Normal, Pw.Text))
             }
             Column(horizontalAlignment = Alignment.End) {

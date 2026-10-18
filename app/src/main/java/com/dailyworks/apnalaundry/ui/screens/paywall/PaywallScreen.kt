@@ -78,8 +78,6 @@ import org.koin.compose.koinInject
 private const val WAS_MONTHLY = 799
 private const val WAS_ANNUAL = 8999
 
-// backend TRIAL_DAYS (laundry-razorpay.js) — only the retry sheet's trial wording uses it.
-private const val TRIAL_DAYS = 7
 
 /** "₹4,999" from paise. */
 internal fun rupees(paise: Int): String {
@@ -183,8 +181,8 @@ fun PaywallScreen(
         if (offer && known) vm.trackShown(from, laundry.liveOrderCount())
     }
 
-    // A one-plan offer (Monthly ₹199 or Yearly ₹4,999) is the dark video design (VideoOffer), navy behind the status bar too.
-    val videoOffer = offer && ui.singlePlan
+    // The server-set paywall (or the legacy Monthly-only offer) is the dark video design (VideoOffer), navy behind the status bar too.
+    val videoOffer = offer && ui.videoDesign
     Box(
         Modifier.fillMaxSize()
             .then(if (videoOffer) Modifier.background(Pw.Bg) else Modifier.background(Tokens.Bg))
@@ -206,13 +204,14 @@ fun PaywallScreen(
             // A cancelled plan still running shows here too (until when, no Cancel).
             ui.hasActive || ui.inGrace -> ActiveView(ui = ui, onClose = onClose, onCancel = { vm.cancel() })
 
-            // New shops (server: monthlyOnly / yearlyOnly): one plan, with the intro video.
-            ui.singlePlan -> VideoOffer(
+            // New shops: the plans the server sets (or Monthly-only), with the intro video.
+            ui.videoDesign -> VideoOffer(
                 ui = ui,
                 tag = offerCopy(from, orders, freeOrders).tag,
                 hardGate = hardGate,
                 onClose = closeOffer,
                 onPay = { vm.pay(activity) },
+                onSelectPlan = vm::selectPlan,
             )
 
             else -> Column(Modifier.fillMaxSize()) {
@@ -333,7 +332,10 @@ fun PaywallScreen(
             plan = ui.effectivePlan,
             trialAmount = ui.trialAmount,
             hasTrial = ui.hasTrial,
+            trialDays = ui.trialDays,
             monthlyAmount = ui.monthlyAmount,
+            // Only point to Monthly when the paywall offers it.
+            monthlyOffered = PaywallPlan.MONTHLY in ui.offeredPlans,
             busy = ui.busy,
             onRetry = { chosen -> vm.retry(activity, chosen) },
             onDismiss = { vm.dismissRetry() },
@@ -343,17 +345,19 @@ fun PaywallScreen(
 
 /**
  * Shown when Razorpay Checkout comes back unpaid (failed, cancelled or Back).
- * After a failed Yearly attempt it recommends the smaller Monthly plan
- * (mirror of the web paywall's retry sheet).
+ * After a failed Yearly attempt it recommends the smaller Monthly plan when the
+ * paywall offers it (mirror of the web paywall's retry sheet).
  */
 @Composable
 private fun RetrySheet(
-    plan: PaywallPlan, trialAmount: Int, hasTrial: Boolean, monthlyAmount: Int, busy: Boolean,
-    onRetry: (PaywallPlan) -> Unit, onDismiss: () -> Unit,
+    plan: PaywallPlan, trialAmount: Int, hasTrial: Boolean, trialDays: Int, monthlyAmount: Int, monthlyOffered: Boolean,
+    busy: Boolean, onRetry: (PaywallPlan) -> Unit, onDismiss: () -> Unit,
 ) {
     val trial = rupees(trialAmount)
+    val freeDays = if (trialDays == 1) "1 free day is" else "$trialDays free days are"
+    val sameDays = if (trialDays == 1) "Same free day" else "Same $trialDays free days"
     AppBottomSheet(
-        title = if (hasTrial) "Your $TRIAL_DAYS free days are waiting" else "Your payment didn't go through",
+        title = if (hasTrial) "Your $freeDays waiting" else "Your payment didn't go through",
         onDismiss = onDismiss,
         leading = {
             Box(
@@ -368,7 +372,7 @@ private fun RetrySheet(
                 else "Nothing was charged. Try once more and the full app opens right away.",
                 style = fig(15, FontWeight.Normal, Tokens.Muted),
             )
-            if (plan == PaywallPlan.ANNUAL) {
+            if (plan == PaywallPlan.ANNUAL && monthlyOffered) {
                 // A failed Yearly attempt: recommend the smaller Monthly plan.
                 Spacer(Modifier.height(16.dp))
                 Column(
@@ -381,7 +385,7 @@ private fun RetrySheet(
                         Text("${rupees(monthlyAmount)}/month", style = bric(18, FontWeight.Bold, Tokens.BlueText), maxLines = 1, softWrap = false)
                     }
                     Text(
-                        if (hasTrial) "Same $TRIAL_DAYS free days, $trial refunded instantly — then a smaller monthly payment."
+                        if (hasTrial) "$sameDays, $trial refunded instantly — then a smaller monthly payment."
                         else "A smaller payment today, then every month.",
                         style = fig(13, color = Tokens.BlueText),
                     )

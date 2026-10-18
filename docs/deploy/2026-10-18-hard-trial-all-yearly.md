@@ -38,3 +38,15 @@ The running backend gives:
 - **Trial length:** edit `LAUNDRY_PAYWALL_YEARLY_TRIAL_DAYS` in `backend/.env`, then `docker compose -f docker-compose.prod.yml up -d --force-recreate backend`.
 - **Back to 50/50:** remove `LAUNDRY_PAYWALL_HARD_ALL_FROM` and recreate the backend. Accounts made in between go back to their hash group.
 - **Full rollback:** restore the two files from the backup folder and rebuild.
+
+## Superseded the same day: server-set variants (LAUNDRY_PAYWALL_CONFIG)
+
+`sh docs/deploy/2026-10-18-paywall-config-deploy.sh`:
+- server commit **64d441d**, patch `2026-10-18-backend-paywall-config.patch`;
+- `LAUNDRY_PAYWALL_HARD_ALL_FROM` and `_YEARLY_TRIAL_DAYS` are removed, replaced by `LAUNDRY_PAYWALL_CONFIG`.
+
+The current variant is **hard_trial_yearly_plus_monthly_4999_499**: login gate, Yearly ₹4,999 (pre-selected) and Monthly ₹499, 1-day ₹2 trial. It applies from the same switch time, on app 1.0.13+.
+
+The app's `yearlyOnly` was replaced by `BillingStatus.paywall` (PaywallConfig). How to edit variants: `docs/paywall-config.md`.
+
+Checked after the deploy: free1 315 and hard_trial 323 unchanged; the 1 sign-up since the switch was on 1.0.12 and got hard_trial at ₹199.
