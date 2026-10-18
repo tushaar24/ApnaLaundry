@@ -88,8 +88,10 @@ class LaundryRepository(private val shops: ShopDirectory) {
      * details of the shop on screen (not its address — another place), and a
      * copy of its services to start from. Onboarding is skipped (the owner
      * already did it once). Everything is dirty, so the next sync sends it up.
+     * [billPhone]: the new shop's own number on its bills ("" = the login
+     * number); null = the same as the shop on screen.
      */
-    suspend fun seedShop(shopId: String, name: String) {
+    suspend fun seedShop(shopId: String, name: String, billPhone: String? = null) {
         val from = shopDao.get()
         val services = serviceDao.getAll().filter { !it.deleted }
         val now = SyncClock.now()
@@ -99,12 +101,17 @@ class LaundryRepository(private val shops: ShopDirectory) {
             target.shopDao().upsert(
                 base.copy(
                     name = name, address = "", nextOrder = 1001, nextCust = 1,
+                    billPhone = billPhone ?: base.billPhone,
                     onboardingStep = "done", updatedAt = now, dirty = true,
                 )
             )
             target.serviceDao().upsertAll(services.map { it.copy(updatedAt = now, dirty = true) })
         }
     }
+
+    /** A shop's number on its bills — its own, else the login number ("" before the shop exists here). */
+    suspend fun billPhoneOf(shopId: String): String =
+        shops.db(shopId).shopDao().get()?.let { it.billPhone.ifBlank { it.phone } }.orEmpty()
 
     // ---------------- seeding / lifecycle ----------------
     /**

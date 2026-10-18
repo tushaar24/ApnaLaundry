@@ -37,13 +37,13 @@ class ShopsRepository(
 
     /**
      * Adds a shop — the server refuses without a plan ([PlanRequiredException])
-     * — seeds it from the shop on screen, and switches to it. Its data goes up
-     * with the next sync.
+     * — seeds it from the shop on screen (with its own [billPhone], if given),
+     * and switches to it. Its data goes up with the next sync.
      */
-    suspend fun add(name: String): ShopRef {
+    suspend fun add(name: String, billPhone: String? = null): ShopRef {
         val shop = api.addShop(name)
         dir.save(dir.list() + shop)
-        repo.seedShop(shop.id, shop.name)
+        repo.seedShop(shop.id, shop.name, billPhone)
         dir.switchTo(shop.id)
         repo.refreshTsCounter()
         return shop

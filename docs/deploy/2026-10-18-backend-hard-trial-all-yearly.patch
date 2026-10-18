@@ -1,0 +1,120 @@
+--- pt-orig/services/laundry-paywall-test.js
++++ pt-live/services/laundry-paywall-test.js
+@@ -20,11 +20,19 @@
+ //                (finished or skipped). ₹199/month, charged on approval, no trial.
+ // Both: Monthly only at ₹199 (LAUNDRY_RAZORPAY_PLAN_MONTHLY_199), the video
+ // paywall (a video per group, see videoFor), the guide always on.
+-// CleverTap profile: Paywall_Variant = hard_trial | free1.
++// CleverTap profile: Paywall_Variant = hard_trial | free1, Paywall_Offer = monthly_199 | yearly_4999.
++//
++// From LAUNDRY_PAYWALL_HARD_ALL_FROM (owner, 2026-10-18): every new test account
++// is hard_trial — no more 50/50; accounts created before keep their group. Those
++// created on app 1.0.13+ get Yearly only: ₹2 today, then ₹4,999/yr
++// (LAUNDRY_RAZORPAY_PLAN_ANNUAL) after LAUNDRY_PAYWALL_YEARLY_TRIAL_DAYS (default
++// 7). On 1.0.12 the app can only show Monthly, so ₹199/month as before.
+ 
+ const TEST = 'paywall_v1';
+ const MIN_APP_VERSION = 12;
++const YEARLY_MIN_APP_VERSION = 13;
+ const MONTHLY_199 = { amount: 19900, totalCount: 120 }; // ₹199 × up to 10y
++const YEARLY_4999 = { amount: 499900, totalCount: 10 }; // ₹4,999 × up to 10y
+ const TRIAL_DAYS = 1;
+ const FREE_ORDERS = { hard_trial: 0, free1: 1 };
+ 
+@@ -35,7 +43,14 @@
+ const START = timeFromEnv('LAUNDRY_PAYWALL_TEST_START');
+ // Optional: accounts created from here on are no longer added (existing ones keep their group).
+ const END = timeFromEnv('LAUNDRY_PAYWALL_TEST_END');
++// Every account created from here on is hard_trial (null = the 50/50 split).
++const HARD_ALL_FROM = timeFromEnv('LAUNDRY_PAYWALL_HARD_ALL_FROM');
+ const plan199 = () => String(process.env.LAUNDRY_RAZORPAY_PLAN_MONTHLY_199 || '').trim();
++const planAnnual = () => String(process.env.LAUNDRY_RAZORPAY_PLAN_ANNUAL || '').trim();
++function yearlyTrialDays() {
++  const n = parseInt(process.env.LAUNDRY_PAYWALL_YEARLY_TRIAL_DAYS, 10);
++  return Number.isFinite(n) && n > 0 ? n : 7;
++}
+ function hardTrialPct() {
+   const n = parseInt(process.env.LAUNDRY_PAYWALL_TEST_PCT, 10);
+   return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 50;
+@@ -62,23 +77,33 @@
+   if (OVERRIDE_PHONES.has(String(user.phone || '').slice(-10))) return null;
+   const created = new Date(user.createdAt).getTime();
+   if (!(created >= START) || (END !== null && created >= END)) return null;
++  if (HARD_ALL_FROM !== null && created >= HARD_ALL_FROM) return 'hard_trial';
+   const bucket = crypto.createHash('sha256').update(`${TEST}:${user.id}`).digest().readUInt32BE(0) % 100;
+   return bucket < hardTrialPct() ? 'hard_trial' : 'free1';
+ }
+ 
++/** True when a hard_trial account gets the Yearly-only offer (created after the switch, on 1.0.13+). */
++function yearlyOffer(user, group) {
++  if (group !== 'hard_trial' || HARD_ALL_FROM === null || !planAnnual()) return false;
++  return new Date(user.createdAt).getTime() >= HARD_ALL_FROM && Number(user.signupAppVersion) >= YEARLY_MIN_APP_VERSION;
++}
++
+ /** What a test account is offered, or null (not in the test → everything as before). */
+ function offer(user) {
+   const group = groupFor(user);
+   if (!group) return null;
++  const yearly = yearlyOffer(user, group);
++  const p = yearly ? YEARLY_4999 : MONTHLY_199;
+   return {
+     group,
+     freeOrders: FREE_ORDERS[group],
+-    plan: 'monthly',
++    plan: yearly ? 'annual' : 'monthly',
++    amount: p.amount,
+     monthlyAmount: MONTHLY_199.amount,
+-    planId: plan199(),
+-    totalCount: MONTHLY_199.totalCount,
++    planId: yearly ? planAnnual() : plan199(),
++    totalCount: p.totalCount,
+     trial: group === 'hard_trial',
+-    trialDays: TRIAL_DAYS,
++    trialDays: yearly ? yearlyTrialDays() : TRIAL_DAYS,
+     videoUrl: videoFor(group),
+   };
+ }
+@@ -104,7 +129,7 @@
+   if (last && Date.now() - last < RESEND_MS) return;
+   if (sentAt.size > 50000) sentAt.clear();
+   sentAt.set(user.id, Date.now());
+-  clevertap.setProfile(user.id, { Paywall_Variant: group }).catch(() => {});
++  clevertap.setProfile(user.id, { Paywall_Variant: group, Paywall_Offer: yearlyOffer(user, group) ? 'yearly_4999' : 'monthly_199' }).catch(() => {});
+ }
+ 
+ module.exports = { appVersion, groupFor, offer, saveToProfile, TRIAL_DAYS };
+--- pt-orig/routes/laundry-billing.js
++++ pt-live/routes/laundry-billing.js
+@@ -143,7 +143,10 @@
+       // Paywall test only (additive; older apps ignore them): the group, Monthly-only
+       // ₹199, the trial (hard_trial, while the shop can still take one), the video.
+       paywallGroup: pt ? pt.group : null,
+-      monthlyOnly: Boolean(pt),
++      // One plan only: Monthly ₹199, or (hard_trial from the switch, app 1.0.13+)
++      // Yearly ₹4,999. Older apps don't know yearlyOnly and show both plans.
++      monthlyOnly: Boolean(pt) && pt.plan === 'monthly',
++      yearlyOnly: Boolean(pt) && pt.plan === 'annual',
+       trialOffered: Boolean(pt && pt.trial && trialEligible),
+       trialDays: pt && pt.trial ? pt.trialDays : rzp.TRIAL_DAYS,
+       paywallVideoUrl: pt ? pt.videoUrl : null,
+@@ -175,8 +178,9 @@
+     // ₹2 now, then ₹4,999/yr after TRIAL_DAYS). One trial per shop: once a
+     // subscription has got past checkout, the next one bills the plan in full
+     // on approval.
+-    // Paywall test accounts: always Monthly ₹199 on its own plan; hard_trial adds
+-    // the 1-day ₹2 trial, free1 none — whatever the app asks for.
++    // Paywall test accounts: the plan the server offers them — Monthly ₹199 on its
++    // own plan, or Yearly ₹4,999 (hard_trial from the switch, app 1.0.13+);
++    // hard_trial adds the ₹2 trial, free1 none — whatever the app asks for.
+     const pt = paywallTest.offer(user);
+     let plan = String((req.body && req.body.plan) || '').toLowerCase();
+     if (!['monthly', 'annual'].includes(plan)) plan = 'monthly';
+@@ -188,7 +192,7 @@
+     const trialAmount = wantsTrial && (await isTrialEligible(userId)) ? env.laundryTrialAmountPaise : 0;
+     const trialDays = pt && trialAmount ? pt.trialDays : undefined;
+ 
+-    const amount = pt ? pt.monthlyAmount : rzp.amountFor(plan);
++    const amount = pt ? pt.amount : rzp.amountFor(plan);
+     const planId = pt ? pt.planId : rzp.planIdFor(plan);
+     const totalCount = pt ? pt.totalCount : rzp.totalCountFor(plan);
+ 

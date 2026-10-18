@@ -41,12 +41,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.data.billing.BillingRepository
 import com.dailyworks.apnalaundry.data.shops.FREE_SHOPS
 import com.dailyworks.apnalaundry.data.shops.ShopRef
+import com.dailyworks.apnalaundry.domain.BillDetails
 import com.dailyworks.apnalaundry.ui.ShopViewModel
 import com.dailyworks.apnalaundry.ui.components.AppBottomSheet
 import com.dailyworks.apnalaundry.ui.components.FieldBox
@@ -65,16 +67,19 @@ import org.koin.compose.koinInject
 fun shopLabel(s: ShopRef, n: Int): String = s.name.ifBlank { if (n == 0) "My shop" else "Shop ${n + 1}" }
 
 /**
- * "Your shops" (Home: tap the shop name ▾): every shop as a card, the one on
- * screen ticked — tap a card to switch to it, its ✏️ to edit that shop's name
- * and bill details — then "Add a shop" (paid: the add screen shows the
- * paywall first without a plan).
+ * "Your shops" (Home: tap the shop name ▾): every shop as a card with its own
+ * phone number, the one on screen ticked — tap a card to switch to it, its ✏️
+ * to edit that shop's name, phone number and bill details — then "Add a shop"
+ * (paid: the add screen shows the paywall first without a plan).
  */
 @Composable
 fun ShopsSheet(shopVm: ShopViewModel, navigator: AppNavigator, from: String, onDismiss: () -> Unit) {
     val shops by shopVm.shops.collectAsStateWithLifecycle()
     val activeId by shopVm.activeShopId.collectAsStateWithLifecycle()
     var deleting by remember { mutableStateOf<Pair<ShopRef, String>?>(null) } // shop, its label
+    // Each shop's number on its bills (from its own database).
+    var phones by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    LaunchedEffect(shops) { phones = shopVm.shopPhones(shops.map { it.id }) }
     AppBottomSheet(title = "Your shops", subtitle = "Each shop has its own customers, khata and bills", onDismiss = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             shops.forEachIndexed { i, s ->
@@ -91,6 +96,9 @@ fun ShopsSheet(shopVm: ShopViewModel, navigator: AppNavigator, from: String, onD
                     Icon(Icons.Outlined.Storefront, null, tint = if (on) Tokens.Blue else Tokens.InkSecondary, modifier = Modifier.size(22.dp))
                     Column(Modifier.weight(1f)) {
                         Text(shopLabel(s, i), style = fig(16, FontWeight.Bold), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        phones[s.id]?.takeIf { it.isNotEmpty() }?.let {
+                            Text(BillDetails.fmtBillPhone(it), style = fig(13, color = Tokens.Muted), maxLines = 1)
+                        }
                         if (on) Text("Open now", style = fig(12, FontWeight.SemiBold, Tokens.Blue), maxLines = 1)
                     }
                     Row { // ✏️ and delete side by side, no gap
@@ -175,8 +183,9 @@ private fun SheetAction(icon: androidx.compose.ui.graphics.vector.ImageVector, t
 
 /**
  * Add a shop. The 2nd shop is free ([FREE_SHOPS]); from the 3rd, no plan =
- * the paywall first ("Add more shops"), then the name — the free limit isn't
- * spelled out anywhere in the app (owner's call). The new shop
+ * the paywall first ("Add more shops"), then the name and the shop's own
+ * phone number (printed on its bills; the login number stays the same) — the
+ * free limit isn't spelled out anywhere in the app (owner's call). The new shop
  * starts with the current shop's services and bill details (not its
  * address), and opens on Home. The server enforces the same rule.
  */
@@ -200,13 +209,16 @@ fun AddShopScreen(shopVm: ShopViewModel, navigator: AppNavigator, from: String) 
         false -> PaywallScreen(onClose = { navigator.back() }, onDone = { hasPlan = true }, from = "add_shop")
         true -> {
             var name by remember { mutableStateOf("") }
+            // Starts as the shop on screen's number; empty = the login number.
+            var phone by remember { mutableStateOf(BillDetails.cleanPhone(state.shop.billPhone.ifBlank { state.shop.phone })) }
             var busy by remember { mutableStateOf(false) }
             var error by remember { mutableStateOf<String?>(null) }
             val clean = name.trim().replace(Regex("\\s+"), " ")
+            val phoneOk = phone.isEmpty() || BillDetails.isPhoneValid(phone)
             fun submit() {
-                if (clean.isEmpty() || busy) return
+                if (clean.isEmpty() || !phoneOk || busy) return
                 busy = true
-                shopVm.addShop(clean) { err ->
+                shopVm.addShop(clean, phone) { err ->
                     busy = false
                     when (err) {
                         null -> { shopVm.showInfo("$clean added · you're now in this shop"); navigator.openHome() }
@@ -221,9 +233,22 @@ fun AddShopScreen(shopVm: ShopViewModel, navigator: AppNavigator, from: String) 
                     Text("New shop's name", style = fig(15, FontWeight.Bold))
                     FieldBox(
                         name, { name = it.take(40); error = null }, placeholder = "e.g. Shine Laundry, Station Road",
-                        height = 56.dp, capitalization = KeyboardCapitalization.Words,
-                        imeAction = ImeAction.Done, onImeAction = { submit() },
+                        height = 56.dp, capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Next,
                     )
+                    Text("Shop's phone number", style = fig(15, FontWeight.Bold))
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        FieldBox(
+                            phone, { phone = it.filter { c -> c.isDigit() }.take(10); error = null },
+                            prefix = "+91", placeholder = "98765 43210", height = 56.dp, keyboardType = KeyboardType.Number,
+                            borderColor = if (phoneOk) Tokens.FieldBorder else Tokens.Orange,
+                            imeAction = ImeAction.Done, onImeAction = { submit() },
+                        )
+                        Text(
+                            if (phoneOk) "Printed on this shop's bills. Customers call or WhatsApp you on it. You still log in with ${BillDetails.fmtBillPhone(state.shop.phone)}."
+                            else "Enter all 10 digits, or leave it empty",
+                            style = fig(13, if (phoneOk) FontWeight.Normal else FontWeight.SemiBold, if (phoneOk) Tokens.Muted else Tokens.OrangeText),
+                        )
+                    }
                     Column(
                         Modifier.fillMaxWidth().rounded(14.dp).background(Tokens.Card)
                             .border(1.dp, Tokens.CardBorder, RoundedCornerShape(14.dp)).padding(14.dp),
@@ -237,7 +262,7 @@ fun AddShopScreen(shopVm: ShopViewModel, navigator: AppNavigator, from: String) 
                     error?.let { Text(it, style = fig(14, FontWeight.SemiBold, Tokens.OrangeText)) }
                 }
                 Box(Modifier.fillMaxWidth().background(Tokens.Card).padding(16.dp)) {
-                    PrimaryButton(if (busy) "Adding…" else "Add shop", enabled = clean.isNotEmpty() && !busy, height = 56.dp) { submit() }
+                    PrimaryButton(if (busy) "Adding…" else "Add shop", enabled = clean.isNotEmpty() && phoneOk && !busy, height = 56.dp) { submit() }
                 }
             }
         }

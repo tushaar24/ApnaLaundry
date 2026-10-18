@@ -107,6 +107,17 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="mylaundry" />
             </intent-filter>
+            <!-- App Links: https://mylaundry.work/open/<screen> and /pay/<code> (WhatsApp
+                 buttons, SMS) open the app directly — verified by the site's
+                 /.well-known/assetlinks.json. Without the app, the site's page sends
+                 the owner to the Play Store. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="mylaundry.work" android:pathPrefix="/open" />
+                <data android:scheme="https" android:host="mylaundry.work" android:pathPrefix="/pay" />
+            </intent-filter>
         </activity>
 
         <!-- Razorpay Checkout (payment screen) follows the app: portrait. It's a

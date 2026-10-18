@@ -54,6 +54,9 @@ data class BillingStatus(
     val paywallGroup: String? = null,
     // Only the Monthly plan is offered (₹199, no Yearly) — the video paywall.
     val monthlyOnly: Boolean = false,
+    // Only the Yearly plan is offered (₹4,999, no Monthly) — the video paywall
+    // (hard_trial from 2026-10-18, app 1.0.13+). Older servers leave it out.
+    val yearlyOnly: Boolean = false,
     // This shop's paywall starts a trial (hard_trial): ₹2 today, plan after [trialDays].
     val trialOffered: Boolean = false,
     val trialDays: Int = 7,

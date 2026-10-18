@@ -228,10 +228,11 @@ class ShopViewModel(
 
     /**
      * Adds a shop (the server refuses without a plan) and switches to it.
+     * [billPhone]: its number on bills ("" = the login number).
      * [onDone]: null = added; else what went wrong ("plan" = needs a plan).
      */
-    fun addShop(name: String, onDone: (String?) -> Unit) = viewModelScope.launch {
-        val r = runCatching { shopsRepo.add(name) }
+    fun addShop(name: String, billPhone: String, onDone: (String?) -> Unit) = viewModelScope.launch {
+        val r = runCatching { shopsRepo.add(name, billPhone) }
         r.onSuccess {
             invalidateUndo()
             Analytics.shopAdded(shopDir.shops.value.size)
@@ -241,6 +242,9 @@ class ShopViewModel(
             onDone(if (e is com.dailyworks.apnalaundry.data.sync.PlanRequiredException) "plan" else "Couldn't add the shop — check internet and try again")
         }
     }
+
+    /** Each shop's number on its bills, for "Your shops". */
+    suspend fun shopPhones(ids: List<String>): Map<String, String> = ids.associateWith { repo.billPhoneOf(it) }
 
     /** Bumps when the shop logo finishes loading, so bills redraw with it. */
     private val _logoTick = MutableStateFlow(0)

@@ -183,8 +183,8 @@ fun PaywallScreen(
         if (offer && known) vm.trackShown(from, laundry.liveOrderCount())
     }
 
-    // New shops' Monthly-only offer is the dark video design (VideoOffer), navy behind the status bar too.
-    val videoOffer = offer && ui.monthlyOnly
+    // A one-plan offer (Monthly ₹199 or Yearly ₹4,999) is the dark video design (VideoOffer), navy behind the status bar too.
+    val videoOffer = offer && ui.singlePlan
     Box(
         Modifier.fillMaxSize()
             .then(if (videoOffer) Modifier.background(Pw.Bg) else Modifier.background(Tokens.Bg))
@@ -206,8 +206,8 @@ fun PaywallScreen(
             // A cancelled plan still running shows here too (until when, no Cancel).
             ui.hasActive || ui.inGrace -> ActiveView(ui = ui, onClose = onClose, onCancel = { vm.cancel() })
 
-            // New shops (server: monthlyOnly): one plan, ₹199/month, with the intro video.
-            ui.monthlyOnly -> VideoOffer(
+            // New shops (server: monthlyOnly / yearlyOnly): one plan, with the intro video.
+            ui.singlePlan -> VideoOffer(
                 ui = ui,
                 tag = offerCopy(from, orders, freeOrders).tag,
                 hardGate = hardGate,

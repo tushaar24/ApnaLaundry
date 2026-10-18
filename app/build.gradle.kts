@@ -18,8 +18,8 @@ android {
         applicationId = "com.dailyworks.apnalaundry"
         minSdk = 24
         targetSdk = 36
-        versionCode = 12
-        versionName = "1.0.12"
+        versionCode = 13
+        versionName = "1.0.13"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

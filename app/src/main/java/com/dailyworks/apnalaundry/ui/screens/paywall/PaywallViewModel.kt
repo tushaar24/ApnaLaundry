@@ -44,9 +44,17 @@ data class PaywallUiState(
 
     // The server offers Monthly only (new shops on 1.0.12+: ₹199, no Yearly).
     val monthlyOnly: Boolean get() = status?.monthlyOnly == true
+    // The server offers Yearly only (hard_trial from 2026-10-18: ₹4,999, no Monthly).
+    val yearlyOnly: Boolean get() = status?.yearlyOnly == true
+    // One plan only → the dark video paywall (VideoOffer).
+    val singlePlan: Boolean get() = monthlyOnly || yearlyOnly
     val videoUrl: String? get() = status?.paywallVideoUrl?.takeIf { it.isNotBlank() }
-    /** The plan Pay buys: Monthly when it's the only one offered, else the owner's pick. */
-    val effectivePlan: PaywallPlan get() = if (monthlyOnly) PaywallPlan.MONTHLY else plan
+    /** The plan Pay buys: the only one offered, else the owner's pick. */
+    val effectivePlan: PaywallPlan get() = when {
+        yearlyOnly -> PaywallPlan.ANNUAL
+        monthlyOnly -> PaywallPlan.MONTHLY
+        else -> plan
+    }
 
     // No ₹2 trial on Android, except the paywall test's "hard_trial" group: the
     // server offers it (₹2 today, the plan after [trialDays]). Everyone else is
@@ -141,7 +149,7 @@ class PaywallViewModel(
         Analytics.paywallShown(
             from = from, defaultPlan = s.effectivePlan.arg, orderCount = orderCount,
             amount = if (s.effectivePlan == PaywallPlan.ANNUAL) s.annualAmount else s.monthlyAmount,
-            trial = s.hasTrial, video = s.monthlyOnly && s.videoUrl != null,
+            trial = s.hasTrial, video = s.singlePlan && s.videoUrl != null,
         )
     }
 
