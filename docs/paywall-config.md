@@ -66,7 +66,10 @@ On the server, edit the single `LAUNDRY_PAYWALL_CONFIG=` line in `~/shweta-makeu
 ```sh
 cd ~/shweta-makeup-monorepo && docker compose -f docker-compose.prod.yml up -d --force-recreate backend
 docker logs --since 1m shweta-makeup-monorepo-backend-1 2>&1 | grep "\[paywall\]"   # empty = accepted
+docker compose -f docker-compose.prod.yml up -d --force-recreate --no-deps laundry-dash   # admin dashboard picks up the same setting
 ```
+
+The admin dashboard (admin.mylaundry.work) uses the backend's own rule to label each owner's variant. It reads the setting when its container starts, so **recreate it too** (last line above), or its "Paywall test" column and filter will show the old variants. The same goes for any backend change to `services/laundry-paywall-test.js`.
 
 If the JSON is broken, or a variant is incomplete (no gate, plans or price, or an unknown price without a plan id), the backend logs `[paywall] … ignored` and falls back safely. Owners don't see a broken paywall.
 
