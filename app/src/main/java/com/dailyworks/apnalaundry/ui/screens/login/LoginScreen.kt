@@ -214,6 +214,7 @@ private fun ColumnScope.OtpStep(ui: AuthUiState, vm: AuthViewModel) {
     val compact = WindowInsets.isImeVisible ||
         LocalConfiguration.current.screenHeightDp < 720 * LocalDensity.current.fontScale.coerceAtLeast(1f)
     val activity = LocalContext.current.findActivity()
+    if (ui.smsSends > 0) SmsOtpConsent(key = ui.smsSends, onCode = vm::onOtpAutofilled)
     FullHeightScroll {
         Hero(bottom = if (compact) 20 else 28, compact = compact) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {

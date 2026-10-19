@@ -31,6 +31,9 @@ import kotlinx.serialization.json.Json
 @Serializable
 data class OtpChallengeResponse(
     val success: Boolean,
+    /** Reply to `firebaseOk`: "firebase" = log in with Firebase phone auth (nothing
+     *  sent); "sms" = the server sent the OTP itself (MSG91) and this is its challenge. */
+    val method: String? = null,
     val challengeId: String? = null,
     val challengeToken: String? = null,
     val expiresAt: String? = null,
@@ -40,6 +43,9 @@ data class OtpChallengeResponse(
     val message: String? = null,
     val retryAt: String? = null,
 )
+
+@Serializable
+private data class OtpRequest(val phone: String, val firebaseOk: Boolean = false)
 
 @Serializable
 data class CredentialsResponse(
@@ -70,19 +76,21 @@ fun parseIsoMs(iso: String?): Long {
 }
 
 /**
- * Login against the backend. Real numbers: Firebase phone auth on the device,
- * then firebase {idToken} -> opaque access/refresh credentials. App-review
- * numbers (10000000xx) keep the backend's own OTP: request-otp -> challenge
- * id + secret challenge token; verify-otp (Bearer challenge token) -> credentials.
+ * Login against the backend. Real numbers: request-otp {firebaseOk} first — the
+ * server says Firebase phone auth on the device (then firebase {idToken} ->
+ * opaque access/refresh credentials) or sends the SMS itself. App-review numbers
+ * (10000000xx) and server-sent SMS use the backend's own OTP: request-otp ->
+ * challenge id + secret challenge token; verify-otp (Bearer challenge token) -> credentials.
  */
 class AuthApi(private val client: HttpClient = defaultClient()) {
 
     private val base = BuildConfig.API_BASE_URL
 
-    suspend fun requestOtp(phone: String): ApiReply<OtpChallengeResponse> {
+    /** [firebaseOk]: this build can log in with Firebase — the server decides (see [OtpChallengeResponse.method]). */
+    suspend fun requestOtp(phone: String, firebaseOk: Boolean = false): ApiReply<OtpChallengeResponse> {
         val res = client.post("$base/auth/request-otp") {
             contentType(ContentType.Application.Json)
-            setBody(mapOf("phone" to phone))
+            setBody(OtpRequest(phone, firebaseOk))
         }
         return ApiReply(res.status.value, runCatching<OtpChallengeResponse> { res.body() }.getOrNull())
     }

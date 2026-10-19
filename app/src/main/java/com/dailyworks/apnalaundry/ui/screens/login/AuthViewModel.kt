@@ -24,6 +24,8 @@ data class AuthUiState(
     val attemptsRemaining: Int? = null,
     /** The current OTP came from a resend (changes the waiting line's copy). */
     val resent: Boolean = false,
+    /** Counts SMS the server sent itself (MSG91); > 0 = offer to read it (SMS User Consent). */
+    val smsSends: Int = 0,
 ) {
     enum class Step { PHONE, OTP }
 
@@ -48,16 +50,24 @@ class AuthViewModel(private val auth: AuthRepository) : ViewModel() {
     fun onPhone(v: String) { _ui.value = _ui.value.copy(phone = v.filter { it.isDigit() }.take(10), error = null) }
     fun onOtp(v: String) { _ui.value = _ui.value.copy(otp = v.filter { it.isDigit() }.take(6), error = null) }
 
+    /** The OTP read from the server's SMS (the user tapped Allow): fill it in and log in. */
+    fun onOtpAutofilled(code: String) {
+        if (_ui.value.step != AuthUiState.Step.OTP || _ui.value.loading) return
+        onOtp(code)
+        verify()
+    }
+
     fun backToPhone() {
         countdownJob?.cancel()
         challenge = null
-        _ui.value = _ui.value.copy(step = AuthUiState.Step.PHONE, otp = "", error = null, resendInSecs = 0, attemptsRemaining = null, resent = false)
+        _ui.value = _ui.value.copy(step = AuthUiState.Step.PHONE, otp = "", error = null, resendInSecs = 0, attemptsRemaining = null, resent = false, smsSends = 0)
     }
 
     /**
-     * Sends (or resends) the OTP. Real numbers go through Firebase phone auth,
-     * which needs the [activity] (its reCAPTCHA fallback) and may read the SMS
-     * itself — then the user is logged in without typing anything.
+     * Sends (or resends) the OTP. Real numbers go through Firebase phone auth
+     * unless the server sends the SMS itself. Firebase needs the [activity] (its
+     * reCAPTCHA fallback) and may read the SMS itself — then the user is logged
+     * in without typing anything.
      */
     fun requestOtp(activity: Activity) {
         val s = _ui.value
@@ -72,12 +82,21 @@ class AuthViewModel(private val auth: AuthRepository) : ViewModel() {
             auth.requestOtp(activity, s.phone, previous, onAutoVerified = ::onAutoVerified)
                 .onSuccess { ch ->
                     challenge = ch
+                    val serverSms = (ch as? AuthRepository.Challenge.Backend)?.sms == true
+                    Analytics.otpSent(
+                        method = when {
+                            ch is AuthRepository.Challenge.Firebase -> "firebase"
+                            serverSms -> "sms"
+                            else -> "review"
+                        },
+                    )
                     _ui.value = _ui.value.copy(
                         // An instant (no-SMS) verification may already be logging in.
                         loading = autoVerifyJob?.isActive == true, step = AuthUiState.Step.OTP,
                         otp = if (autoVerifyJob?.isActive == true) _ui.value.otp else "",
                         attemptsRemaining = (ch as? AuthRepository.Challenge.Backend)?.attemptsRemaining,
                         resent = s.step == AuthUiState.Step.OTP,
+                        smsSends = if (serverSms) _ui.value.smsSends + 1 else 0,
                     )
                     startResendCountdown(ch.nextSendAtMs)
                 }

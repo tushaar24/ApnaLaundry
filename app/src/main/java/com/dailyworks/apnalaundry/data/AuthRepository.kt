@@ -7,6 +7,7 @@ import com.dailyworks.apnalaundry.analytics.MetaEvents
 import com.dailyworks.apnalaundry.data.remote.AuthApi
 import com.dailyworks.apnalaundry.data.remote.CredentialsResponse
 import com.dailyworks.apnalaundry.data.remote.FirebasePhoneAuth
+import com.dailyworks.apnalaundry.data.remote.OtpChallengeResponse
 import com.dailyworks.apnalaundry.data.remote.parseIsoMs
 import com.dailyworks.apnalaundry.data.sync.SyncManager
 import com.google.firebase.FirebaseException
@@ -21,8 +22,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.suspendCancellableCoroutine
 
 /**
- * OTP login — Firebase phone auth for real numbers, the backend's challenge
- * flow for app-review numbers — plus the login/logout data lifecycle:
+ * OTP login — for real numbers the server picks Firebase phone auth or an SMS
+ * it sends itself (MSG91), the backend's challenge flow for that SMS and for
+ * app-review numbers — plus the login/logout data lifecycle:
  *  - verify success -> store credentials -> initial sync. If the server
  *    already holds this account's shop, setup is skipped (pull restored
  *    everything); otherwise defaults are seeded and the setup flow runs.
@@ -43,13 +45,15 @@ class AuthRepository(
         val phone: String
         val nextSendAtMs: Long
 
-        /** App-review number (10000000xx): the backend's own deterministic OTP, no SMS. */
+        /** The backend's challenge: an SMS it sent ([sms]), or an app-review number's
+         *  (10000000xx) deterministic OTP, no SMS. */
         data class Backend(
             val id: String,
             val token: String,
             override val phone: String,
             override val nextSendAtMs: Long,
             val attemptsRemaining: Int,
+            val sms: Boolean = false,
         ) : Challenge
 
         /** Every real number: Firebase sent the SMS. */
@@ -69,9 +73,12 @@ class AuthRepository(
     ) : Exception(message)
 
     /**
-     * Sends (or resends, passing the [previous] challenge) the OTP. For real
-     * numbers Firebase may read the SMS itself, before or after the code-sent
-     * step: that credential goes to [onAutoVerified], to log in via [verifyCredential].
+     * Sends (or resends, passing the [previous] challenge) the OTP. Real numbers
+     * ask the server first (LAUNDRY_OTP_APP_METHOD): it either sends the SMS
+     * itself, or says Firebase — also the answer when it can't be reached or its
+     * SMS is down, so login keeps working as before. With Firebase, it may read
+     * the SMS itself, before or after the code-sent step: that credential goes to
+     * [onAutoVerified], to log in via [verifyCredential].
      */
     suspend fun requestOtp(
         activity: Activity,
@@ -79,8 +86,16 @@ class AuthRepository(
         previous: Challenge?,
         onAutoVerified: (PhoneAuthCredential) -> Unit,
     ): Result<Challenge> = runCatching {
-        if (isReviewNumber(phone)) requestBackendOtp(phone)
-        else requestFirebaseOtp(activity, phone, (previous as? Challenge.Firebase)?.resendToken, onAutoVerified)
+        if (isReviewNumber(phone)) return@runCatching requestBackendOtp(phone)
+        val body = runCatching { api.requestOtp(phone, firebaseOk = true) }.getOrNull()?.body
+        when {
+            body?.success == true && body.challengeId != null && body.challengeToken != null ->
+                backendChallenge(phone, body, sms = true)
+            // The server's own limits (cooldown, daily cap) stand.
+            body?.code != null && body.code != OTP_UNAVAILABLE ->
+                throw AuthException(body.message ?: "Couldn't send OTP — try again")
+            else -> requestFirebaseOtp(activity, phone, (previous as? Challenge.Firebase)?.resendToken, onAutoVerified)
+        }
     }
 
     private suspend fun requestBackendOtp(phone: String): Challenge {
@@ -89,14 +104,17 @@ class AuthRepository(
         if (body?.success != true || body.challengeId == null || body.challengeToken == null) {
             throw AuthException(body?.message ?: "Couldn't send OTP — try again")
         }
-        return Challenge.Backend(
-            id = body.challengeId,
-            token = body.challengeToken,
-            phone = phone,
-            nextSendAtMs = parseIsoMs(body.nextSendAt),
-            attemptsRemaining = body.attemptsRemaining ?: 5,
-        )
+        return backendChallenge(phone, body, sms = false)
     }
+
+    private fun backendChallenge(phone: String, body: OtpChallengeResponse, sms: Boolean) = Challenge.Backend(
+        id = body.challengeId!!,
+        token = body.challengeToken!!,
+        phone = phone,
+        nextSendAtMs = parseIsoMs(body.nextSendAt),
+        attemptsRemaining = body.attemptsRemaining ?: 5,
+        sms = sms,
+    )
 
     private suspend fun requestFirebaseOtp(
         activity: Activity,
@@ -243,6 +261,8 @@ class AuthRepository(
     private companion object {
         const val OFFLINE = "No internet — check your connection and try again"
         const val RESEND_COOLDOWN_MS = 30_000L
+        /** The server couldn't send its SMS: fall back to Firebase. */
+        const val OTP_UNAVAILABLE = "OTP_UNAVAILABLE"
 
         // 10000000xx: the backend's app-review numbers (not real Indian mobiles).
         fun isReviewNumber(phone: String) = phone.startsWith("10000000")

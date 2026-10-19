@@ -102,6 +102,9 @@ object Analytics {
     fun otpRequested(phoneType: String, isResend: Boolean) =
         track("OTP Requested", mapOf("phone_type" to phoneType, "is_resend" to isResend))
 
+    /** [method]: firebase | sms (the server's own, MSG91) | review. */
+    fun otpSent(method: String) = track("OTP Sent", mapOf("method" to method))
+
     fun otpRequestFailed(reason: String) =
         track("OTP Request Failed", mapOf("reason" to reason))
 

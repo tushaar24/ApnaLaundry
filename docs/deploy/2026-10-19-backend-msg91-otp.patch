@@ -1,0 +1,239 @@
+diff -ruN a/config/env.js b/config/env.js
+--- a/config/env.js	2026-10-19 10:24:17
++++ b/config/env.js	2026-10-19 10:25:08
+@@ -85,7 +85,7 @@
+   // ApnaLaundry app OTP login (/api/laundry/auth/*). Deliberately NOT in
+   // REQUIRED — the course stack must keep booting without them; the laundry
+   // auth routes 503 until a provider is configured.
+-  //   LAUNDRY_OTP_PROVIDER: 'test' (fixed code, no SMS) | 'minimoth' | '2factor'
++  //   LAUNDRY_OTP_PROVIDER: 'test' (fixed code, no SMS) | 'minimoth' | '2factor' | 'msg91'
+   laundryOtpProvider: process.env.LAUNDRY_OTP_PROVIDER,
+   laundryTestOtpCode: process.env.LAUNDRY_TEST_OTP_CODE,
+   laundryMinimothApiKey: process.env.LAUNDRY_MINIMOTH_API_KEY,
+@@ -96,6 +96,14 @@
+   // Shared secret for the /api/laundry/auth/test-2factor/* debug routes
+   // (X-Test-Secret header); unset = those routes 404.
+   laundryTwoFactorTestSecret: process.env.LAUNDRY_2FACTOR_TEST_SECRET,
++  // MSG91 OTP (v5): auth key + the OTP template id from the MSG91 dashboard
++  // (its DLT template carries the sender id, LAUNDRY_MSG91_SENDER_ID is for reference).
++  laundryMsg91AuthKey: process.env.LAUNDRY_MSG91_AUTH_KEY,
++  laundryMsg91TemplateId: process.env.LAUNDRY_MSG91_TEMPLATE_ID,
++  // How the Android app (1.0.14+) logs real numbers in: 'firebase' (Firebase phone
++  // auth on the device — the default, as before) | 'sms' (this backend's OTP
++  // provider, LAUNDRY_OTP_PROVIDER). Older apps always use Firebase.
++  laundryOtpAppMethod: process.env.LAUNDRY_OTP_APP_METHOD,
+ 
+   // MyLaundry WhatsApp Business (Cloud) API — its own Meta app/number, apart
+   // from the course site's WHATSAPP_*. Not REQUIRED: the webhook answers 403
+diff -ruN a/routes/laundry-auth.js b/routes/laundry-auth.js
+--- a/routes/laundry-auth.js	2026-10-19 10:24:16
++++ b/routes/laundry-auth.js	2026-10-19 10:28:24
+@@ -8,7 +8,7 @@
+ const crypto = require('crypto');
+ 
+ const env = require('../config/env');
+-const { providerFor, isReviewNumber, twoFactorTest } = require('../services/laundry-otp');
++const { providerFor, isReviewNumber, twoFactorTest, msg91Test } = require('../services/laundry-otp');
+ const { normalizePhone, isValidIndianMobile } = require('../utils/phone');
+ const laundryMeta = require('../services/laundry-meta');
+ const { clientPlatform } = require('../services/laundry-platform');
+@@ -36,7 +36,14 @@
+ // always uses 2Factor, never logs anyone in, returns 2Factor's raw reply:
+ //   POST /api/laundry/auth/test-2factor/send    {phone, template?}
+ //   POST /api/laundry/auth/test-2factor/verify  {phone, otp}
++// Same secret, always MSG91 (whatever LAUNDRY_OTP_PROVIDER says):
++//   POST /api/laundry/auth/test-msg91/send      {phone}
++//   POST /api/laundry/auth/test-msg91/verify    {phone, otp}
+ //
++// App 1.0.14+ sends firebaseOk: true on request-otp. The reply's `method` says
++// how to log in: 'firebase' (nothing sent; use Firebase phone auth as before)
++// unless LAUNDRY_OTP_APP_METHOD=sms, then 'sms' (sent here; use verify-otp).
++//
+ // The response keeps the old access/refresh wire shape (both fields carry the
+ // permanent token, expiry 2099) so shipped app builds work unchanged.
+ //
+@@ -80,6 +87,12 @@
+     if (!isValidIndianMobile(phone) && !isReviewNumber(phone)) {
+       return res.status(400).json({ success: false, message: 'Enter a valid 10-digit mobile number' });
+     }
++    // The Android app (1.0.14+) asks here first for every number (firebaseOk: true):
++    // while LAUNDRY_OTP_APP_METHOD isn't 'sms', real numbers keep Firebase phone auth
++    // on the device — nothing is sent here. Older apps never send firebaseOk.
++    if (req.body && req.body.firebaseOk === true && !isReviewNumber(phone) && env.laundryOtpAppMethod !== 'sms') {
++      return res.json({ success: true, method: 'firebase' });
++    }
+     const provider = providerFor(phone);
+     if (!provider) {
+       return res.status(503).json({ success: false, code: 'OTP_UNAVAILABLE', message: 'OTP login is not configured' });
+@@ -137,6 +150,7 @@
+     req.log.info({ phone: maskPhone(phone), challengeId: challenge.id, provider: provider.name }, 'laundry otp sent');
+     return res.status(201).json({
+       success: true,
++      method: 'sms',
+       challengeId: challenge.id,
+       challengeToken,
+       expiresAt: challenge.expiresAt.toISOString(),
+@@ -377,6 +391,50 @@
+     req.log.info({ phone: maskPhone(phone), reply: result.reply }, '2factor test verify');
+     const matched = Boolean(result.reply?.ok) && /otp matched/i.test(result.reply?.details || '');
+     return res.json({ success: matched, phone: `+91${phone}`, ...result });
++  } catch (error) {
++    return next(error);
++  }
++});
++
++// Gate for the MSG91 test routes: the same X-Test-Secret, plus MSG91 creds.
++function requireMsg91Test(req, res, next) {
++  const secret = env.laundryTwoFactorTestSecret;
++  if (!secret) return res.status(404).json({ success: false, message: 'Not found' });
++  const given = Buffer.from(String(req.get('x-test-secret') || ''));
++  const want = Buffer.from(secret);
++  if (given.length !== want.length || !crypto.timingSafeEqual(given, want)) {
++    return res.status(401).json({ success: false, message: 'Bad X-Test-Secret' });
++  }
++  if (!msg91Test.configured()) {
++    return res.status(503).json({ success: false, message: 'LAUNDRY_MSG91_AUTH_KEY / LAUNDRY_MSG91_TEMPLATE_ID not set' });
++  }
++  return next();
++}
++
++router.post('/test-msg91/send', publicWriteLimiter, requireMsg91Test, async (req, res, next) => {
++  try {
++    const phone = normalizePhone(req.body?.phone);
++    if (!isValidIndianMobile(phone)) {
++      return res.status(400).json({ success: false, message: 'Enter a valid 10-digit mobile number' });
++    }
++    const result = await msg91Test.send(phone);
++    req.log.info({ phone: maskPhone(phone), reply: result.reply }, 'msg91 test send');
++    return res.json({ success: result.outcome === 'sent', phone: `+91${phone}`, ...result });
++  } catch (error) {
++    return next(error);
++  }
++});
++
++router.post('/test-msg91/verify', publicWriteLimiter, requireMsg91Test, async (req, res, next) => {
++  try {
++    const phone = normalizePhone(req.body?.phone);
++    const otp = String(req.body?.otp || '');
++    if (!isValidIndianMobile(phone) || !/^[0-9]{4,6}$/.test(otp)) {
++      return res.status(400).json({ success: false, message: 'phone (10 digits) and otp (4-6 digits) are required' });
++    }
++    const result = await msg91Test.verify(phone, otp);
++    req.log.info({ phone: maskPhone(phone), reply: result.reply }, 'msg91 test verify');
++    return res.json({ success: result.outcome === 'valid', phone: `+91${phone}`, ...result });
+   } catch (error) {
+     return next(error);
+   }
+diff -ruN a/services/laundry-otp.js b/services/laundry-otp.js
+--- a/services/laundry-otp.js	2026-10-19 10:24:15
++++ b/services/laundry-otp.js	2026-10-19 10:28:24
+@@ -12,7 +12,9 @@
+ //              generates, delivers and verifies the code
+ //   2factor  — 2factor.in SMS OTP (API key in the URL); AUTOGEN sends a
+ //              6-digit code, VERIFY3 checks it against the phone number
+-// Both expose: send(phone) / verify(phone, code) -> outcome
++//   msg91    — MSG91 OTP v5 (authkey header): sends a 6-digit code on the
++//              DLT template LAUNDRY_MSG91_TEMPLATE_ID, verifies by phone
++// All expose: send(phone) / verify(phone, code) -> outcome
+ //   { code: 'sent'|'valid'|'invalid'|'expired'|'limited'|'unavailable'|'unknown',
+ //     reference?, retryAfter? }
+ 
+@@ -173,6 +175,65 @@
+   },
+ };
+ 
++// MSG91 OTP v5: POST /api/v5/otp?template_id&mobile=91…&otp_length&otp_expiry
++// sends a provider-generated code on the DLT template (the template carries the
++// sender id); GET /api/v5/otp/verify?otp&mobile=91… checks it by phone. The auth
++// key goes in the `authkey` header (never in a logged URL). Replies are
++// {type: 'success'|'error', message, request_id?}; we classify on `message`.
++const MSG91_OTP_BASE = 'https://control.msg91.com/api/v5/otp';
++
++const msg91Provider = {
++  name: 'msg91',
++  async call(method, path, params) {
++    let res;
++    try {
++      res = await fetch(`${MSG91_OTP_BASE}${path}?${new URLSearchParams(params)}`, {
++        method,
++        headers: { authkey: env.laundryMsg91AuthKey, accept: 'application/json', 'content-type': 'application/json' },
++        ...(method === 'POST' ? { body: '{}' } : {}),
++        signal: AbortSignal.timeout(8000),
++      });
++    } catch (err) {
++      logger.error({ err: err.message }, 'msg91 request failed');
++      return null;
++    }
++    let payload = {};
++    try { payload = await res.json(); } catch { /* non-JSON body */ }
++    return {
++      ok: res.ok,
++      httpStatus: res.status,
++      type: String(payload.type || ''),
++      message: String(payload.message || ''),
++      requestId: payload.request_id ? String(payload.request_id) : '',
++    };
++  },
++  async send(phone) {
++    const r = await this.call('POST', '', {
++      template_id: env.laundryMsg91TemplateId,
++      mobile: `91${phone}`,
++      otp_length: '6',
++      otp_expiry: '5', // minutes — the challenge's own expiry (OTP_EXPIRY_MS)
++    });
++    if (!r) return { code: 'unknown' };
++    if (r.type === 'success') return { code: 'sent', reference: r.requestId || 'msg91' };
++    logger.warn({ httpStatus: r.httpStatus, message: r.message }, 'msg91 send rejected');
++    return { code: 'unavailable' };
++  },
++  async verify(phone, code) {
++    const r = await this.call('GET', '/verify', { otp: code, mobile: `91${phone}` });
++    this.lastReply = r;
++    if (!r) return { code: 'unknown' };
++    if (r.type === 'success') return { code: 'valid' };
++    const m = r.message.toLowerCase();
++    if (m.includes('not match') || m.includes('invalid otp') || m.includes('incorrect')) return { code: 'invalid' };
++    // "already verified" = this code was used: same as expired (request a new one).
++    if (m.includes('expired') || m.includes('already verified')) return { code: 'expired' };
++    if (m.includes('max') || m.includes('limit')) return { code: 'limited' };
++    logger.warn({ httpStatus: r.httpStatus, message: r.message }, 'msg91 verify rejected');
++    return { code: 'unknown' };
++  },
++};
++
+ // Provider for a (normalized) phone: review numbers always get the local
+ // deterministic provider — even with no real provider configured — so QA and
+ // app-store review work regardless of SMS setup.
+@@ -198,6 +259,9 @@
+   if (env.laundryOtpProvider === '2factor') {
+     return env.laundryTwoFactorApiKey ? twoFactorProvider : null;
+   }
++  if (env.laundryOtpProvider === 'msg91') {
++    return env.laundryMsg91AuthKey && env.laundryMsg91TemplateId ? msg91Provider : null;
++  }
+   return null;
+ }
+ 
+@@ -220,4 +284,21 @@
+   },
+ };
+ 
+-module.exports = { otpProvider, providerFor, isReviewNumber, twoFactorTest };
++// MSG91 sends for the secret-gated test endpoint (/api/laundry/auth/test-msg91/*):
++// always MSG91, whatever LAUNDRY_OTP_PROVIDER says — to check it before switching.
++// Returns { outcome, reply } — reply is MSG91's own {httpStatus, type, message}.
++const msg91Test = {
++  configured: () => Boolean(env.laundryMsg91AuthKey && env.laundryMsg91TemplateId),
++  async send(phone) {
++    const r = await msg91Provider.call('POST', '', {
++      template_id: env.laundryMsg91TemplateId, mobile: `91${phone}`, otp_length: '6', otp_expiry: '5',
++    });
++    return { outcome: r && r.type === 'success' ? 'sent' : 'failed', reply: r };
++  },
++  async verify(phone, code) {
++    const outcome = await msg91Provider.verify(phone, code);
++    return { outcome: outcome.code, reply: msg91Provider.lastReply || null };
++  },
++};
++
++module.exports = { otpProvider, providerFor, isReviewNumber, twoFactorTest, msg91Test };
