@@ -1,0 +1,76 @@
+diff -ruN a/config/env.js b/config/env.js
+--- a/config/env.js	2026-10-20 09:55:13
++++ b/config/env.js	2026-10-20 09:55:45
+@@ -128,6 +128,11 @@
+   laundryRazorpayPlanAnnual: process.env.LAUNDRY_RAZORPAY_PLAN_ANNUAL,
+   // Trial amount (paise) charged upfront on every new subscription. ₹2 = 200.
+   laundryTrialAmountPaise: parseInt(process.env.LAUNDRY_TRIAL_AMOUNT_PAISE, 10) || 200,
++  // A ₹2 trial's first charge (services/laundry-razorpay.js trialStartAt): at this
++  // IST hour ('off' = the old "now + trial days"), with the pre-debit notice at
++  // least this many hours after the ₹2. Defaults 14 / 16.
++  laundryTrialChargeHourIst: process.env.LAUNDRY_TRIAL_CHARGE_HOUR_IST,
++  laundryTrialMinNoticeHours: process.env.LAUNDRY_TRIAL_MIN_NOTICE_HOURS,
+ 
+   // Server-side CleverTap (passcode API) for events confirmed on the backend —
+   // subscription charged / failed / halted from Razorpay webhooks. The client
+diff -ruN a/services/laundry-razorpay.js b/services/laundry-razorpay.js
+--- a/services/laundry-razorpay.js	2026-10-20 09:55:13
++++ b/services/laundry-razorpay.js	2026-10-20 09:55:45
+@@ -20,6 +20,30 @@
+ };
+ const TRIAL_DAYS = 7; // trial_2: ₹2 now, first ₹499 plan charge 7 days later
+ 
++// When a ₹2 trial's first plan charge happens. Razorpay sends the UPI pre-debit
++// notice exactly 24 h before it, and owners cancel AutoPay right after that
++// notice — far more when it lands minutes after the ₹2 (1-day trials: 54% vs 21%
++// on day 6) or in the evening, and debits at 13:00–17:00 succeed most often
++// (cancel readout, 20 Oct 2026). So the charge goes at a fixed IST hour (14:00),
++// never before the promised trial days, and with the notice at least
++// MIN_NOTICE_HOURS (16) after the ₹2 — at 14:00 the day before. A 1-day trial
++// is then charged 40–64 h after the ₹2 (later than promised, never earlier).
++// LAUNDRY_TRIAL_CHARGE_HOUR_IST=off restores "now + trial days".
++const IST_OFFSET_MS = 5.5 * 3600 * 1000;
++const DAY_MS = 24 * 3600 * 1000;
++function trialStartAt(nowMs, days) {
++  const hourSetting = String(env.laundryTrialChargeHourIst ?? '').trim().toLowerCase();
++  if (hourSetting === 'off') return Math.floor(nowMs / 1000) + days * 24 * 3600;
++  const hour = hourSetting === '' || !Number.isInteger(Number(hourSetting)) ? 14 : Math.min(23, Math.max(0, Number(hourSetting)));
++  const minNoticeH = Number.isFinite(parseFloat(env.laundryTrialMinNoticeHours)) ? Math.max(0, parseFloat(env.laundryTrialMinNoticeHours)) : 16;
++  const earliest = nowMs + Math.max(days * DAY_MS, (minNoticeH + 24) * 3600 * 1000);
++  // First `hour`:00 IST at or after `earliest`.
++  const earliestIst = earliest + IST_OFFSET_MS;
++  let atIst = Math.floor(earliestIst / DAY_MS) * DAY_MS + hour * 3600 * 1000;
++  if (atIst < earliestIst) atIst += DAY_MS;
++  return Math.floor((atIst - IST_OFFSET_MS) / 1000);
++}
++
+ const configured = Boolean(env.laundryRazorpayKeyId && env.laundryRazorpayKeySecret);
+ 
+ function authHeader() {
+@@ -69,7 +93,8 @@
+  * bills the plan automatically.
+  *
+  * trialAmountPaise > 0: charge ₹2 upfront as an addon and delay the first plan
+- * charge by `trialDays` (default TRIAL_DAYS) via `start_at`. Without a trial the
++ * charge by `trialDays` (default TRIAL_DAYS) via `start_at` — at 14:00 IST, with
++ * the pre-debit notice at least 16 h after the ₹2 (see trialStartAt). Without a trial the
+  * plan bills from the first cycle (charged on authorisation).
+  */
+ async function createSubscription({ planId, totalCount, customerId, trialAmountPaise, trialDays, notes }) {
+@@ -82,7 +107,7 @@
+     notes: notes || {},
+   };
+   if (trialAmountPaise && trialAmountPaise > 0) {
+-    body.start_at = Math.floor(Date.now() / 1000) + days * 24 * 3600;
++    body.start_at = trialStartAt(Date.now(), days);
+     body.addons = [{ item: { name: 'Trial', amount: trialAmountPaise, currency: 'INR' } }];
+   }
+   return api('/subscriptions', body);
+@@ -108,6 +133,7 @@
+ module.exports = {
+   PLANS,
+   TRIAL_DAYS,
++  trialStartAt,
+   isConfigured,
+   plansReady,
+   planIdFor,
