@@ -16,12 +16,20 @@ sealed interface ActiveSheet {
     data class Reschedule(val orderId: Int, val kind: String) : ActiveSheet
     data class Cancel(val orderId: Int) : ActiveSheet
     data class DeleteOrder(val orderId: Int) : ActiveSheet
+    /**
+     * [trigger] (analytics): auto | add_button | add_with_query | address_card | list | other.
+     * [askAddress] = false: no address field (the first-customer test's v2 asks for it in [AddressForm]).
+     */
     data class CustomerForm(
         val editId: String?, val ctx: String,
         val prefillName: String = "", val prefillPhone: String = "",
         val needAddress: Boolean = false,
+        val trigger: String = "other",
+        val askAddress: Boolean = true,
         val onSaved: (String) -> Unit = {},
     ) : ActiveSheet
+    /** v2 of the first-customer test: just the customer's address, for home pickup / delivery. [trigger] is for analytics. */
+    data class AddressForm(val custId: String, val trigger: String, val onSaved: (String) -> Unit = {}) : ActiveSheet
     data class Receive(val custId: String) : ActiveSheet
     data class AddOld(val custId: String) : ActiveSheet
     data class BillView(val orderId: Int) : ActiveSheet
@@ -57,6 +65,7 @@ fun SheetHost(
         is ActiveSheet.ChangeStatus -> ChangeStatusSheet(state, active.orderId, vm, onOpen, onDismiss)
         is ActiveSheet.DeleteOrder -> DeleteOrderSheet(state, active.orderId, vm, navigator, onDismiss)
         is ActiveSheet.CustomerForm -> CustomerFormSheet(state, active, vm, onDismiss)
+        is ActiveSheet.AddressForm -> AddressFormSheet(state, active, vm, onDismiss)
         is ActiveSheet.Receive -> ReceivePaymentSheet(state, active.custId, vm, onDismiss)
         is ActiveSheet.AddOld -> AddOldBaakiSheet(state, active.custId, vm, onDismiss)
         is ActiveSheet.BillView -> BillViewSheet(state, active.orderId, vm, onDismiss)

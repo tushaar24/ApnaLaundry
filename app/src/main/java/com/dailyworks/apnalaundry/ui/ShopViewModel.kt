@@ -13,6 +13,7 @@ import com.dailyworks.apnalaundry.data.shops.ShopDirectory
 import com.dailyworks.apnalaundry.data.shops.ShopRef
 import com.dailyworks.apnalaundry.data.shops.ShopsRepository
 import kotlinx.coroutines.flow.flatMapLatest
+import com.dailyworks.apnalaundry.data.experiments.CustomerFlow
 import com.dailyworks.apnalaundry.data.experiments.ExperimentsRepository
 import com.dailyworks.apnalaundry.data.Snapshot
 import com.dailyworks.apnalaundry.data.sync.SyncScheduler
@@ -74,6 +75,10 @@ class ShopViewModel(
     /** A/B (server-assigned, 50/50): this shop gets the guide at all. Unknown = no. */
     val guideOn: StateFlow<Boolean> = prefs.guideVariant.map { it == ExperimentsRepository.GUIDE }
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    /** A/B (server-assigned, new accounts on 1.0.15+): how New order adds the first customer. */
+    val customerFlow: StateFlow<CustomerFlow> = prefs.customerFlow.map { CustomerFlow.of(it) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, CustomerFlow.LEGACY)
 
     /**
      * Where the shop is in the guide. It starts by itself only for a brand-new

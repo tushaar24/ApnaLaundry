@@ -109,6 +109,51 @@ Custom property keys are `snake_case`. `Charged` uses CleverTap's reserved
 | `Earnings Period Changed` | `period` (`today`\|`week`\|`month`) | period toggle on Earnings |
 | `Order Search Opened` | — | search opened on Home |
 
+### First customer on New order — A/B (Android 1.0.15, 2026-10-24)
+
+How a brand-new shop adds its first customer. Assigned by the backend
+(`GET /api/laundry/experiments` → `customerFlow`, see
+`docs/deploy/2026-10-24-customer-flow-ab.md`) to accounts whose first login is
+on Android 1.0.15+ after `LAUNDRY_CUSTOMER_FLOW_START`, about a third each.
+Everyone else (older accounts, older apps, the website) keeps the 1.0.14 flow.
+
+| `customer_flow` | What the owner sees |
+| --- | --- |
+| `v1_auto_sheet` | New order opens the New customer sheet (name, phone, optional address) by itself — with the guide on too; the guide's tip shows inside the sheet |
+| `v2_no_address` | The sheet opens by itself with only name + phone. Home pickup / delivery asks for the address in its own "Customer's address" sheet: when a customer is set while home is on, when the route switches to home, from "Add" next to Address, or the greyed "Add address first" button |
+| `v3_tap_to_add` | The sheet never opens by itself; the owner taps "Add new customer" (with the guide, its card points there) |
+| *(absent)* | not in the test: the sheet opens by itself unless the guide is on |
+
+Profile property **`Customer_Flow`** (server + app) and event property
+**`customer_flow`** on **every** Android event of a test account, so any
+funnel or raw export splits by it. Main funnel: `New Order Started` →
+`Customer Sheet Opened` → `Customer Sheet Closed {how: saved}` (=
+`Customer Added`) → `Order Saved`; drop-off detail below.
+
+| Event | Properties | Fired when |
+| ----- | ---------- | ---------- |
+| `Customer Sheet Opened` | `ctx` (`order`\|`list`), `mode` (`new`\|`edit`), `trigger` (`auto`\|`add_button`\|`add_with_query`\|`address_card`\|`list`\|`list_with_query`\|`customer_page`\|`other`), `address_shown`, `address_needed`, `prefilled` (`none`\|`name`\|`phone`), `customers` (saved so far), `guide_on` | the customer sheet appears (all versions of the flow) |
+| `Customer Sheet Field Edited` | `field` (`name`\|`phone`\|`address`\|`old_khata`), `ctx`, `seconds_since_open` | first typing in that field (once per field per sheet) |
+| `Customer Phone Trimmed` | `digits`, `lead` (`91`\|`0`\|`other`) | more than 10 digits typed/pasted in Phone (it keeps the first 10 — "+91 98…" saves wrong) |
+| `Customer Contacts Tapped` | `permission` (`granted`\|`asking`) | "Choose from contacts" |
+| `Contacts Permission Answered` | `granted` | the contacts permission dialog answered (no → Android's own picker) |
+| `Customer Contact Picked` | `source` (`in_app`\|`system`), `ok` (had a 10-digit mobile), `already_saved` | a contact tapped |
+| `Customer Contacts Closed` | `source`, `contacts` (listed, in_app), `searched` | the contact list left without picking |
+| `Customer Duplicate Shown` | `ctx` | "Already saved as …" (the number is a customer already) |
+| `Customer Save Blocked` | `reason` (`name`\|`phone_empty`\|`phone_short`\|`duplicate`\|`address`), `ctx` (`order`\|`list`\|`address_sheet`), `name_filled`, `phone_digits`, `address_filled` | the greyed "Save customer" / "Save address" tapped |
+| `Customer Sheet Closed` | `ctx`, `mode`, `trigger`, `how` (`saved`\|`used_existing`\|`dismissed`), `seconds_on_screen`, `name_filled`, `phone_digits`, `address_shown`, `address_filled`, `contacts_tapped`, `contact_picked`, `blocked_taps`, `missing` (what still blocked Save on a dismiss, else `none`), `method` (`typed`\|`contacts`, on save) | the sheet goes away — saved, "Use this" on a duplicate, or back / swipe / tap outside |
+| `Address Sheet Opened` | `trigger` (`route`\|`customer_saved`\|`customer_picked`\|`address_card`\|`save_button`), `had_address`, `guide_on` | v2's address sheet appears |
+| `Address Sheet Closed` | `trigger`, `how` (`saved`\|`dismissed`), `seconds_on_screen`, `edited`, `filled`, `blocked_taps` | v2's address sheet goes away |
+| `Customer Selected` | `from` (`recent`\|`search`), `query_length` | an existing customer picked on New order |
+| `Customer Search Used` | — | New order's customer search typed in (once per screen) |
+| `Order Route Changed` | `leg` (`pickup`\|`delivery`), `to` (`shop`\|`home`), `customer_set`, `has_address` | At shop ↔ home switched on New order |
+| `Order Save Blocked` | `reason` (`customer`\|`address`\|`clothes`), `is_edit` | the greyed bottom button ("Choose a customer" / "Add address first" / "Add clothes first") tapped |
+
+`New Order Abandoned` also carries `customer_sheet_opens`, `save_blocked_taps`,
+`address_needed`, `address_sheet_opened` (1.0.15+). The guide adds the step
+`order_address_form` (v2's address sheet tip); its `order_route` and
+`order_customer_form` cards word themselves for the variant.
+
 ### Guide & support (Android)
 
 The guide walks a new shop through its first order end to end: New order →

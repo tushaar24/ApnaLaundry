@@ -104,6 +104,8 @@ fun PrimaryButton(
     enabled: Boolean = true,
     height: Dp = 56.dp,
     bg: Color = Tokens.Blue,
+    // A tap on the greyed button (analytics: what the owner was missing). It still looks and acts disabled.
+    onDisabledClick: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
     // heightIn: a label that wraps (big font, narrow phone) grows the button
@@ -114,7 +116,7 @@ fun PrimaryButton(
             .heightIn(min = height)
             .rounded(14.dp)
             .background(if (enabled) bg else Tokens.BlueDisabled)
-            .tap(enabled = enabled, onClick = onClick)
+            .tap(enabled = enabled || onDisabledClick != null) { if (enabled) onClick() else onDisabledClick?.invoke() }
             .padding(horizontal = 12.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center,
     ) {

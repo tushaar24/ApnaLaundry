@@ -78,11 +78,25 @@ object Analytics {
         updateProfile(mapOf("Paywall_Variant" to g))
     }
 
+    // The first-customer test (2026-10-24): the account's CustomerFlow key from
+    // GET /experiments, saved on the profile as Customer_Flow (the server saves
+    // it too) and stamped on every event as customer_flow. null = not in the test.
+    @Volatile private var customerFlow: String? = null
+    @Volatile private var customerFlowSaved: String? = null
+
+    fun setCustomerFlow(flow: String?) {
+        customerFlow = flow
+        if (flow == null || flow == customerFlowSaved) return
+        customerFlowSaved = flow
+        updateProfile(mapOf("Customer_Flow" to flow))
+    }
+
     private fun track(name: String, props: Map<String, Any?> = emptyMap()) {
         if (!enabled) return
         val clean = HashMap<String, Any>()
         for ((k, v) in props) if (v != null) clean[k] = v
         paywallVariant?.let { clean["paywall_variant"] = it }
+        customerFlow?.let { clean["customer_flow"] = it }
         // Stamped last so no event prop can override them.
         clean["platform"] = "android"
         clean["source"] = "android"
@@ -126,6 +140,8 @@ object Analytics {
         track("Logged Out")
         paywallVariant = null
         paywallVariantSaved = null
+        customerFlow = null
+        customerFlowSaved = null
     }
 
     // ---- onboarding (after the paywall: intro -> name -> services -> bill) ----
@@ -152,6 +168,7 @@ object Analytics {
     fun newOrderAbandoned(
         entryPoint: String, isEdit: Boolean, stage: String, customerSet: Boolean, customerAdded: Boolean,
         customerFormOpened: Boolean, clothesAdded: Boolean, pieces: Int, kg: Double, total: Int, seconds: Long,
+        customerSheetOpens: Int = 0, saveBlockedTaps: Int = 0, addressNeeded: Boolean = false, addressSheetOpened: Boolean = false,
     ) = track(
         "New Order Abandoned",
         mapOf(
@@ -159,8 +176,123 @@ object Analytics {
             "customer_set" to customerSet, "customer_added" to customerAdded,
             "customer_form_opened" to customerFormOpened, "clothes_added" to clothesAdded,
             "pieces" to pieces, "kg" to kg, "total" to total, "seconds_on_screen" to seconds,
+            "customer_sheet_opens" to customerSheetOpens, "save_blocked_taps" to saveBlockedTaps,
+            "address_needed" to addressNeeded, "address_sheet_opened" to addressSheetOpened,
         ),
     )
+
+    // ---- adding a customer on New order (the first-customer test, 2026-10-24) ----
+
+    /** An existing customer picked on New order. [from] = recent | search; [queryLength] = what was typed. */
+    fun customerSelected(from: String, queryLength: Int) =
+        track("Customer Selected", mapOf("from" to from, "query_length" to queryLength))
+
+    /** The customer search on New order was typed in (once per screen). */
+    fun customerSearchUsed() = track("Customer Search Used")
+
+    /** Pickup or delivery switched. [leg] = pickup | delivery, [to] = shop | home. */
+    fun orderRouteChanged(leg: String, to: String, customerSet: Boolean, hasAddress: Boolean) =
+        track("Order Route Changed", mapOf("leg" to leg, "to" to to, "customer_set" to customerSet, "has_address" to hasAddress))
+
+    /** The greyed New order button tapped. [reason] = customer | address | clothes. */
+    fun orderSaveBlocked(reason: String, isEdit: Boolean) =
+        track("Order Save Blocked", mapOf("reason" to reason, "is_edit" to isEdit))
+
+    /**
+     * The customer sheet appeared. [ctx] = order | list; [mode] = new | edit;
+     * [trigger] = auto (opened by itself) | add_button | add_with_query (typed a
+     * name/number first) | address_card | list | other; [addressShown] = the
+     * address field is on the sheet; [prefilled] = none | name | phone.
+     */
+    fun customerSheetOpened(
+        ctx: String, mode: String, trigger: String, addressShown: Boolean, addressNeeded: Boolean,
+        prefilled: String, customers: Int, guideOn: Boolean,
+    ) = track(
+        "Customer Sheet Opened",
+        mapOf(
+            "ctx" to ctx, "mode" to mode, "trigger" to trigger, "address_shown" to addressShown,
+            "address_needed" to addressNeeded, "prefilled" to prefilled, "customers" to customers, "guide_on" to guideOn,
+        ),
+    )
+
+    /** First typing in a field of the customer sheet (once per field per sheet). [field] = name | phone | address | old_khata. */
+    fun customerSheetFieldEdited(field: String, ctx: String, seconds: Long) =
+        track("Customer Sheet Field Edited", mapOf("field" to field, "ctx" to ctx, "seconds_since_open" to seconds))
+
+    /**
+     * More than 10 digits typed or pasted in the phone field (it keeps the
+     * first 10). [lead] = 91 | 0 | other: what the extra digits most likely were.
+     */
+    fun customerPhoneTrimmed(digits: Int, lead: String) =
+        track("Customer Phone Trimmed", mapOf("digits" to digits, "lead" to lead))
+
+    /** "Choose from contacts" tapped. [permission] = granted | asking. */
+    fun customerContactsTapped(permission: String) =
+        track("Customer Contacts Tapped", mapOf("permission" to permission))
+
+    /** The contacts permission dialog answered (no = Android's own picker opens). */
+    fun contactsPermissionAnswered(granted: Boolean) =
+        track("Contacts Permission Answered", mapOf("granted" to granted))
+
+    /**
+     * A contact tapped. [source] = in_app (our list) | system (Android's picker);
+     * [ok] = it had a 10-digit mobile; [alreadySaved] = that number is already a customer.
+     */
+    fun customerContactPicked(source: String, ok: Boolean, alreadySaved: Boolean) =
+        track("Customer Contact Picked", mapOf("source" to source, "ok" to ok, "already_saved" to alreadySaved))
+
+    /** The contact list left without picking. [contacts] = how many it listed (in_app); [searched] = typed in its search. */
+    fun customerContactsClosed(source: String, contacts: Int?, searched: Boolean) =
+        track("Customer Contacts Closed", mapOf("source" to source, "contacts" to contacts, "searched" to searched))
+
+    /** "Already saved as …" shown: the number typed/picked is an existing customer. */
+    fun customerDuplicateShown(ctx: String) = track("Customer Duplicate Shown", mapOf("ctx" to ctx))
+
+    /**
+     * The greyed "Save customer" tapped. [reason] = the first thing missing:
+     * name | phone_empty | phone_short | duplicate | address.
+     */
+    fun customerSaveBlocked(reason: String, ctx: String, nameFilled: Boolean, phoneDigits: Int, addressFilled: Boolean) =
+        track(
+            "Customer Save Blocked",
+            mapOf("reason" to reason, "ctx" to ctx, "name_filled" to nameFilled, "phone_digits" to phoneDigits, "address_filled" to addressFilled),
+        )
+
+    /**
+     * The customer sheet went away. [how] = saved | used_existing | dismissed
+     * (back, swipe, tap outside); [missing] = what still blocked Save when it
+     * was dismissed (name | phone_empty | phone_short | duplicate | address | none);
+     * [method] = typed | contacts (where the saved number came from).
+     */
+    fun customerSheetClosed(
+        ctx: String, mode: String, trigger: String, how: String, seconds: Long, nameFilled: Boolean, phoneDigits: Int,
+        addressShown: Boolean, addressFilled: Boolean, contactsTapped: Boolean, contactPicked: Boolean,
+        blockedTaps: Int, missing: String, method: String?,
+    ) = track(
+        "Customer Sheet Closed",
+        mapOf(
+            "ctx" to ctx, "mode" to mode, "trigger" to trigger, "how" to how, "seconds_on_screen" to seconds,
+            "name_filled" to nameFilled, "phone_digits" to phoneDigits, "address_shown" to addressShown,
+            "address_filled" to addressFilled, "contacts_tapped" to contactsTapped, "contact_picked" to contactPicked,
+            "blocked_taps" to blockedTaps, "missing" to missing, "method" to method,
+        ),
+    )
+
+    /**
+     * v2's address-only sheet appeared. [trigger] = route (switched to home) |
+     * customer_saved | customer_picked (a customer set while home was on) |
+     * address_card ("Add"/"Change" next to Address) | save_button (the greyed
+     * "Add address first"); [hadAddress] = the customer already has one.
+     */
+    fun addressSheetOpened(trigger: String, hadAddress: Boolean, guideOn: Boolean) =
+        track("Address Sheet Opened", mapOf("trigger" to trigger, "had_address" to hadAddress, "guide_on" to guideOn))
+
+    /** The address sheet went away. [how] = saved | dismissed. */
+    fun addressSheetClosed(trigger: String, how: String, seconds: Long, edited: Boolean, filled: Boolean, blockedTaps: Int) =
+        track(
+            "Address Sheet Closed",
+            mapOf("trigger" to trigger, "how" to how, "seconds_on_screen" to seconds, "edited" to edited, "filled" to filled, "blocked_taps" to blockedTaps),
+        )
 
     fun orderSaved(
         orderId: Int, isEdit: Boolean, hasBill: Boolean, pickup: String, delivery: String,

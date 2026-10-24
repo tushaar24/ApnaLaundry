@@ -65,6 +65,7 @@ import java.time.ZoneId
 import java.util.Locale
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dailyworks.apnalaundry.analytics.Analytics
+import com.dailyworks.apnalaundry.data.experiments.CustomerFlow
 import com.dailyworks.apnalaundry.core.AppDate
 import com.dailyworks.apnalaundry.core.Money
 import com.dailyworks.apnalaundry.domain.BillDetails
@@ -163,11 +164,23 @@ fun NewOrderScreen(
     var saved by remember { mutableStateOf(false) }
     var custFormOpened by remember { mutableStateOf(false) }
     var custAdded by remember { mutableStateOf(false) }
+    var custSheetOpens by remember { mutableIntStateOf(0) }
+    var saveBlockedTaps by remember { mutableIntStateOf(0) }
+    var addressSheetOpened by remember { mutableStateOf(false) }
+    var searchLogged by remember { mutableStateOf(false) }
     val openedAt = remember { System.currentTimeMillis() }
     val entryPoint = if (presetCustId != null) "customer" else if (from == "empty_home" || from == "push") from else "home"
     LaunchedEffect(active) {
-        if (active is ActiveSheet.CustomerForm && (active as ActiveSheet.CustomerForm).editId == null) custFormOpened = true
+        when (val a = active) {
+            is ActiveSheet.CustomerForm -> if (a.editId == null) { custFormOpened = true; custSheetOpens++ }
+            is ActiveSheet.AddressForm -> addressSheetOpened = true
+            else -> Unit
+        }
     }
+
+    // The first-customer test (server-assigned, new accounts on 1.0.15+); LEGACY = the 1.0.14 flow.
+    val flow by shopVm.customerFlow.collectAsStateWithLifecycle()
+    val noAddress = flow == CustomerFlow.NO_ADDRESS
 
     // The guide, part 1 on this screen: customer → shop/home → dates → clothes → save.
     val tour by shopVm.tour.collectAsStateWithLifecycle()
@@ -176,18 +189,36 @@ fun NewOrderScreen(
     val targets = rememberSpotlightTargets()
     val tourScroll = remember { List(TOUR_SAVE) { BringIntoViewRequester() } }
 
+    // v2: a customer set while the order is home pickup / delivery and they have no address →
+    // the address sheet, once the customer sheet has closed and the new customer has loaded.
+    var pendingAddress by remember { mutableStateOf<Pair<String, String>?>(null) } // customer id to trigger
+    fun openCustomerForm(trigger: String, prefillName: String = "", prefillPhone: String = "") {
+        active = ActiveSheet.CustomerForm(
+            editId = null, ctx = "order", prefillName = prefillName, prefillPhone = prefillPhone,
+            needAddress = pickup == Route.HOME || delivery == Route.HOME,
+            trigger = trigger, askAddress = !noAddress,
+            onSaved = { id ->
+                custId = id; query = ""; custAdded = true
+                if (noAddress) pendingAddress = id to "customer_saved"
+            },
+        )
+    }
+
     // No customers yet: there's nobody to search, so open "Add customer" straight away.
     val vmLoaded by shopVm.loaded.collectAsStateWithLifecycle()
     var autoAdded by remember { mutableStateOf(false) }
-    LaunchedEffect(vmLoaded) {
-        // The tour shows the "Add new customer" button instead.
-        if (!vmLoaded || autoAdded || editId != null || presetCustId != null || state.customers.isNotEmpty() || tourOn) return@LaunchedEffect
+    LaunchedEffect(vmLoaded, flow) {
+        if (!vmLoaded || autoAdded || editId != null || presetCustId != null || state.customers.isNotEmpty()) return@LaunchedEffect
+        when (flow) {
+            // 1.0.14: the guide shows the "Add new customer" button instead.
+            CustomerFlow.LEGACY -> if (tourOn) return@LaunchedEffect
+            // v3: never by itself — the owner taps "Add new customer" (the guide points at it).
+            CustomerFlow.TAP_TO_ADD -> return@LaunchedEffect
+            // v1 / v2: always, guide or not; the guide's tip shows inside the sheet.
+            CustomerFlow.AUTO_SHEET, CustomerFlow.NO_ADDRESS -> Unit
+        }
         autoAdded = true
-        active = ActiveSheet.CustomerForm(
-            editId = null, ctx = "order",
-            needAddress = pickup == Route.HOME || delivery == Route.HOME,
-            onSaved = { id -> custId = id; query = ""; custAdded = true },
-        )
+        openCustomerForm("auto")
     }
 
     LaunchedEffect(Unit) {
@@ -245,6 +276,18 @@ fun NewOrderScreen(
 
     val cust = custId?.let { Selectors.customer(state, it) }
     val anyHome = pickup == Route.HOME || delivery == Route.HOME
+
+    // v2: the address sheet for [c] when the order goes to / comes from their home and they have none.
+    fun askAddress(custIdToAsk: String, trigger: String) {
+        active = ActiveSheet.AddressForm(custIdToAsk, trigger, onSaved = { custId = it })
+    }
+    LaunchedEffect(pendingAddress, active, state.customers) {
+        val (pid, trigger) = pendingAddress ?: return@LaunchedEffect
+        if (active != null) return@LaunchedEffect // wait for the customer sheet to close
+        val c = state.customers.firstOrNull { it.id == pid } ?: return@LaunchedEffect // a new customer still loading
+        pendingAddress = null
+        if (noAddress && (pickup == Route.HOME || delivery == Route.HOME) && c.address.isBlank()) askAddress(c.id, trigger)
+    }
     val exPct = exPctText.toIntOrNull() ?: 0
     val discPct = if (discOn && discIsPct) minOf(100, discountText.toIntOrNull() ?: 0) else 0
 
@@ -318,6 +361,8 @@ fun NewOrderScreen(
             customerSet = cust != null, customerAdded = custAdded, customerFormOpened = custFormOpened,
             clothesAdded = !empty, pieces = pieces, kg = kg, total = grand,
             seconds = (System.currentTimeMillis() - openedAt) / 1000,
+            customerSheetOpens = custSheetOpens, saveBlockedTaps = saveBlockedTaps,
+            addressNeeded = anyHome && cust != null && cust.address.isBlank(), addressSheetOpened = addressSheetOpened,
         )
     }
     val activity = LocalContext.current.findActivity()
@@ -371,10 +416,17 @@ fun NewOrderScreen(
                     val results = if (q.isEmpty()) state.customers.sortedBy { it.agoRank }.take(3)
                     else state.customers.filter { it.name.contains(q, true) || (qd.length >= 3 && it.phone.contains(qd)) }.take(4)
                     Column(Modifier.fillMaxWidth().rounded(14.dp).background(Tokens.Card).border(2.dp, Tokens.Blue, RoundedCornerShape(14.dp))) {
-                        FieldBox(query, { query = it }, placeholder = "Search name or phone number", height = 52.dp, borderColor = Color.Transparent, borderWidth = 0.dp)
+                        FieldBox(query, {
+                            if (!searchLogged && it.isNotBlank()) { searchLogged = true; Analytics.customerSearchUsed() }
+                            query = it
+                        }, placeholder = "Search name or phone number", height = 52.dp, borderColor = Color.Transparent, borderWidth = 0.dp)
                         if (q.isEmpty()) SectionLabel("Recent customers", Modifier.padding(start = 14.dp, top = 6.dp))
                         results.forEach { r ->
-                            Row(Modifier.fillMaxWidth().tap { custId = r.id; query = "" }.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Row(Modifier.fillMaxWidth().tap {
+                                Analytics.customerSelected(if (q.isEmpty()) "recent" else "search", q.length)
+                                custId = r.id; query = ""
+                                if (noAddress && anyHome && r.address.isBlank()) askAddress(r.id, "customer_picked")
+                            }.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Avatar(Selectors.initials(r.name), small = true)
                                 Column(Modifier.weight(1f)) {
                                     Text(r.name, style = fig(15, FontWeight.Bold))
@@ -389,12 +441,10 @@ fun NewOrderScreen(
                                 Modifier.fillMaxWidth().heightIn(min = 48.dp).rounded(12.dp).border(1.5.dp, Tokens.Blue, RoundedCornerShape(12.dp))
                                     .tap {
                                         val isPhone = q.isNotEmpty() && q.all { it.isDigit() || it == ' ' || it == '+' }
-                                        active = ActiveSheet.CustomerForm(
-                                            editId = null, ctx = "order",
+                                        openCustomerForm(
+                                            trigger = if (q.isEmpty()) "add_button" else "add_with_query",
                                             prefillName = if (isPhone) "" else q,
                                             prefillPhone = if (isPhone) qd.takeLast(10) else "",
-                                            needAddress = anyHome,
-                                            onSaved = { id -> custId = id; query = ""; custAdded = true },
                                         )
                                     }
                                     .padding(horizontal = 12.dp, vertical = 8.dp),
@@ -407,8 +457,13 @@ fun NewOrderScreen(
 
             // ---- pickup / delivery ----
             Column(Modifier.tourTarget(targets, tourScroll, TOUR_ROUTE), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                RouteChoice("Pickup", pickup, "At shop", "From home") { pickup = it }
-                RouteChoice("Delivery", delivery, "At shop", "To home") { delivery = it }
+                // v2: switching to home asks for the customer's address right away (if they have none).
+                fun routeChanged(leg: String, to: Route) {
+                    Analytics.orderRouteChanged(leg, if (to == Route.HOME) "home" else "shop", cust != null, cust?.address?.isNotBlank() == true)
+                    if (noAddress && to == Route.HOME && cust != null && cust.address.isBlank()) askAddress(cust.id, "route")
+                }
+                RouteChoice("Pickup", pickup, "At shop", "From home") { if (it != pickup) { pickup = it; routeChanged("pickup", it) } }
+                RouteChoice("Delivery", delivery, "At shop", "To home") { if (it != delivery) { delivery = it; routeChanged("delivery", it) } }
                 if (anyHome) {
                     AppCard {
                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -418,7 +473,8 @@ fun NewOrderScreen(
                                     Text(cust?.address?.ifBlank { "No address saved yet" } ?: "Choose a customer first", style = fig(14, color = if (cust?.address?.isNotBlank() == true) Tokens.InkSecondary else Tokens.OrangeText))
                                 }
                                 if (cust != null) Text(if (cust.address.isNotBlank()) "Change" else "Add", style = fig(14, FontWeight.Bold, Tokens.Blue), modifier = Modifier.tap {
-                                    active = ActiveSheet.CustomerForm(editId = cust.id, ctx = "order", needAddress = true, onSaved = { custId = it })
+                                    if (noAddress) askAddress(cust.id, "address_card")
+                                    else active = ActiveSheet.CustomerForm(editId = cust.id, ctx = "order", needAddress = true, trigger = "address_card", onSaved = { custId = it })
                                 })
                             }
                             FieldBox(feeText, { feeText = it.filter { c -> c.isDigit() }.take(4) }, prefix = "₹", placeholder = "Pickup / delivery charge (optional)", height = 48.dp, keyboardType = KeyboardType.Number)
@@ -585,7 +641,20 @@ fun NewOrderScreen(
 
         // ---- sticky bottom bar ----
         Column(Modifier.fillMaxWidth().background(Tokens.Card).padding(16.dp).windowInsetsPadding(WindowInsets.navigationBars)) {
-            PrimaryButton(ctaLabel, Modifier.spotlightTarget(targets, "tour_$TOUR_SAVE"), enabled = ready, height = 56.dp) {
+            PrimaryButton(
+                ctaLabel, Modifier.spotlightTarget(targets, "tour_$TOUR_SAVE"), enabled = ready, height = 56.dp,
+                onDisabledClick = {
+                    saveBlockedTaps++
+                    val reason = when {
+                        cust == null -> "customer"
+                        anyHome && cust.address.isBlank() -> "address"
+                        else -> "clothes"
+                    }
+                    Analytics.orderSaveBlocked(reason, editId != null)
+                    // v2: "Add address first" opens the address sheet.
+                    if (noAddress && reason == "address" && cust != null) askAddress(cust.id, "save_button")
+                },
+            ) {
                 if (!ready) return@PrimaryButton
                 shopVm.saveOrder(
                     editId = editId, custId = cust!!.id, pickup = pickup, delivery = delivery,
@@ -618,7 +687,7 @@ fun NewOrderScreen(
         if (vmLoaded && active == null && !editingRates) {
             val step = when (tourStep) {
                 TOUR_CUSTOMER -> TourSteps.customer(hasCustomers = state.customers.isNotEmpty())
-                TOUR_ROUTE -> TourSteps.route
+                TOUR_ROUTE -> if (noAddress) TourSteps.routeAsksAddress else TourSteps.route
                 TOUR_DATES -> TourSteps.dates
                 TOUR_CLOTHES -> TourSteps.clothes
                 else -> TourSteps.save(

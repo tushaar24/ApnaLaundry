@@ -102,7 +102,7 @@ fun CustomersScreen(shopVm: ShopViewModel, navigator: AppNavigator, initialFilte
 
     // No customers yet: no search, ₹0 tiles or floating button — just one clear way to add the first one.
     val noCustomers = state.customers.isEmpty()
-    fun addCustomer() { active = ActiveSheet.CustomerForm(editId = null, ctx = "list") }
+    fun addCustomer() { active = ActiveSheet.CustomerForm(editId = null, ctx = "list", trigger = "list") }
 
     Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars)) {
         Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -145,7 +145,7 @@ fun CustomersScreen(shopVm: ShopViewModel, navigator: AppNavigator, initialFilte
                             Text(if (q.isNotEmpty()) "No customer found for “$q”" else "No customers here", style = fig(16, FontWeight.SemiBold), textAlign = TextAlign.Center)
                             val label = if (q.isNotEmpty()) (if (qd.length >= 3) "Add customer with this number" else "Add “${q.replaceFirstChar { it.uppercase() }}” as customer") else "Add customer"
                             Box(Modifier.rounded(12.dp).background(Tokens.Blue).tap {
-                                active = ActiveSheet.CustomerForm(editId = null, ctx = "list", prefillName = if (qd.length >= 3) "" else q.replaceFirstChar { it.uppercase() }, prefillPhone = if (qd.length >= 3) qd.takeLast(10) else "")
+                                active = ActiveSheet.CustomerForm(editId = null, ctx = "list", trigger = "list_with_query", prefillName = if (qd.length >= 3) "" else q.replaceFirstChar { it.uppercase() }, prefillPhone = if (qd.length >= 3) qd.takeLast(10) else "")
                             }.heightIn(min = 48.dp).padding(horizontal = 20.dp, vertical = 12.dp), contentAlignment = Alignment.Center) {
                                 Text(label, style = fig(15, FontWeight.Bold, Tokens.OnDark), textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             }

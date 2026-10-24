@@ -88,9 +88,9 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
     // the free-orders gate on New order reads it instead of waiting on the network.
     val billing: BillingRepository = koinInject()
     LaunchedEffect(li) { if (li) billing.refreshSaved() }
-    // A/B groups (the guide): fetched at app start / right after login, while setup runs.
+    // A/B groups (the guide, the first-customer flow): fetched at app start / right after login, while setup runs.
     val experiments: ExperimentsRepository = koinInject()
-    LaunchedEffect(li) { if (li) experiments.refresh() }
+    LaunchedEffect(li) { if (li) { experiments.restore(); experiments.refresh() } }
     // The owner's shops (multi-shop): a shop added on another phone shows up here.
     LaunchedEffect(li) { if (li) shopVm.refreshShops() }
 

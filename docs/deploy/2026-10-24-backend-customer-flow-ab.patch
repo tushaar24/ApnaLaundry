@@ -1,0 +1,108 @@
+diff -ruN a/backend/routes/laundry-experiments.js b/backend/routes/laundry-experiments.js
+--- a/backend/routes/laundry-experiments.js	2026-10-24 17:51:54
++++ b/backend/routes/laundry-experiments.js	2026-10-24 17:52:26
+@@ -8,7 +8,7 @@
+ 
+ // A/B tests the app asks the server about, so a split can change without an
+ // app release:
+-//   GET /api/laundry/experiments -> { success, experiments: { guide: 'guide' | 'no_guide' } }
++//   GET /api/laundry/experiments -> { success, experiments: { guide: 'guide' | 'no_guide', customerFlow? } }
+ //
+ // guide (2026-10-13, Android 1.0.10): the step-by-step guide with voice for a
+ // new shop (first order -> ready -> delivered + money -> khata -> earnings).
+@@ -17,6 +17,20 @@
+ // only moves no_guide shops into guide, never back; 0 = nobody, 100 = all.
+ // The group is saved on the shop's CleverTap profile as Guide_Variant (the
+ // app sets it too), to split funnels by group.
++//
++// customerFlow (2026-10-24, Android 1.0.15): how New order adds a brand-new
++// shop's first customer.
++//   v1_auto_sheet  the New customer sheet (name, phone, address) opens by itself
++//   v2_no_address  it opens by itself with name + phone only; home pickup /
++//                  delivery asks for the address in its own sheet
++//   v3_tap_to_add  it never opens by itself; the owner taps "Add new customer"
++// Only accounts whose first login was on Android 1.0.15+ (signup_app_version),
++// created at/after LAUNDRY_CUSTOMER_FLOW_START (ISO time; unset = test off).
++// Everyone else gets no customerFlow key, and the app keeps the 1.0.14 flow.
++// Split: LAUNDRY_CUSTOMER_FLOW_SPLIT="34,33,33" (v1,v2,v3; the default), on a
++// stable hash of the user id. LAUNDRY_CUSTOMER_FLOW_FORCE='{"<10-digit phone>":"v2_no_address"}'
++// pins QA phones to a variant (start / version rules ignored). Saved to
++// CleverTap as Customer_Flow (the app stamps it on every event as customer_flow).
+ 
+ const router = express.Router();
+ router.use(requireLaundryAuth);
+@@ -28,6 +42,49 @@
+   return crypto.createHash('sha256').update(`${test}:${userId}`).digest().readUInt32BE(0) % 100;
+ }
+ 
++const CUSTOMER_FLOW_TEST = 'customer_flow_v1';
++const CUSTOMER_FLOWS = ['v1_auto_sheet', 'v2_no_address', 'v3_tap_to_add'];
++const CUSTOMER_FLOW_MIN_APP = 15;
++
++function customerFlowStart() {
++  const t = Date.parse(process.env.LAUNDRY_CUSTOMER_FLOW_START || '');
++  return Number.isFinite(t) ? t : null;
++}
++
++function customerFlowSplit() {
++  const parts = String(process.env.LAUNDRY_CUSTOMER_FLOW_SPLIT || '').split(',').map((x) => parseInt(x, 10));
++  const ok = parts.length === CUSTOMER_FLOWS.length && parts.every((n) => Number.isFinite(n) && n >= 0) && parts.some((n) => n > 0);
++  return ok ? parts : [34, 33, 33];
++}
++
++function customerFlowForce() {
++  try {
++    const f = JSON.parse(process.env.LAUNDRY_CUSTOMER_FLOW_FORCE || '{}');
++    return f && typeof f === 'object' ? f : {};
++  } catch {
++    return {};
++  }
++}
++
++// The account's customerFlow variant, or null = not in the test.
++function customerFlowFor(user) {
++  if (!user) return null;
++  const forced = customerFlowForce()[String(user.phone || '').slice(-10)];
++  if (CUSTOMER_FLOWS.includes(forced)) return forced;
++  const start = customerFlowStart();
++  if (start === null) return null;
++  if (user.signupPlatform !== 'android' || !(Number(user.signupAppVersion) >= CUSTOMER_FLOW_MIN_APP)) return null;
++  if (!(new Date(user.createdAt).getTime() >= start)) return null;
++  const split = customerFlowSplit();
++  const total = split.reduce((a, n) => a + n, 0);
++  let b = (bucket(CUSTOMER_FLOW_TEST, user.id) * total) / 100;
++  for (let i = 0; i < split.length; i++) {
++    if (b < split[i]) return CUSTOMER_FLOWS[i];
++    b -= split[i];
++  }
++  return CUSTOMER_FLOWS[CUSTOMER_FLOWS.length - 1];
++}
++
+ function guidePct() {
+   const n = parseInt(process.env.LAUNDRY_GUIDE_PCT, 10);
+   return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 50;
+@@ -36,6 +93,7 @@
+ // The group last saved to CleverTap per user, so an app start doesn't
+ // re-send an unchanged one (resets on restart — then it's sent once again).
+ const saved = new Map();
++const savedFlow = new Map();
+ 
+ router.get('/', (req, res) => {
+   const userId = req.laundryUserId;
+@@ -52,7 +110,15 @@
+   // group is also saved to CleverTap here, as the app calls this at every start.
+   freeOrders.saveVariantToProfile(user);
+   paywallTest.saveToProfile(user);
+-  res.json({ success: true, experiments: { guide } });
++  const customerFlow = customerFlowFor(user);
++  if (customerFlow && savedFlow.get(userId) !== customerFlow) {
++    if (savedFlow.size > 50000) savedFlow.clear();
++    savedFlow.set(userId, customerFlow);
++    clevertap.setProfile(userId, { Customer_Flow: customerFlow }).catch(() => {});
++  }
++  // No key at all when not in the test: older apps and older accounts see the same response as before.
++  res.json({ success: true, experiments: customerFlow ? { guide, customerFlow } : { guide } });
+ });
+ 
+ module.exports = router;
++module.exports.customerFlowFor = customerFlowFor;

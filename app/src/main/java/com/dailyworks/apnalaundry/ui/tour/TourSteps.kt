@@ -64,10 +64,31 @@ object TourSteps {
         "Tap ‘Choose from contacts’, or type the name and phone number. Then tap ‘Save customer’.",
     )
 
+    /** The first-customer test's v1 / v3 sheet: the same form, and it says the address can wait. */
+    val customerFormAddressOptional = TourStep(
+        "order_customer_form", TourPart.ORDER,
+        "Save the customer",
+        "Tap ‘Choose from contacts’, or type the name and phone number. Address is optional. Then tap ‘Save customer’.",
+    )
+
     val route = TourStep(
         "order_route", TourPart.ORDER,
         "Shop or home?",
         "Customer came to your shop? Keep ‘At shop’. Going to their home? Tap ‘From home’ or ‘To home’.",
+    )
+
+    /** v2 (no address on the customer sheet): choosing home asks for the address next. */
+    val routeAsksAddress = TourStep(
+        "order_route", TourPart.ORDER,
+        "Shop or home?",
+        "Customer came to your shop? Keep ‘At shop’. Going to their home? Tap ‘From home’ or ‘To home’, then save their address.",
+    )
+
+    /** v2's address sheet. */
+    val addressForm = TourStep(
+        "order_address_form", TourPart.ORDER,
+        "Add the address",
+        "Type the house, area and a landmark. Then tap ‘Save address’.",
     )
 
     val dates = TourStep(

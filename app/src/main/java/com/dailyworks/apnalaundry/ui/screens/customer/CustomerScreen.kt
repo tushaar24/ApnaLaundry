@@ -110,7 +110,7 @@ fun CustomerScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: Strin
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlineButton("New order", Modifier.weight(1f), height = 48.dp) { navigator.openNewOrder(custId = custId, from = "customer") }
                 OutlineButton("Edit", Modifier.weight(1f), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) {
-                    active = ActiveSheet.CustomerForm(editId = custId, ctx = "list")
+                    active = ActiveSheet.CustomerForm(editId = custId, ctx = "list", trigger = "customer_page")
                 }
             }
 
