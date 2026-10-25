@@ -130,3 +130,12 @@ Ask reads each new answer once with the phone's own text-to-speech, in the app's
   - added to `EXCLUDED_PHONES` in `~/laundry-dashboard/server.js` (backup `server.js.bak.<stamp>`);
   - added as `LAUNDRY_SUPPORT_HIDDEN_PHONES=9818012136` in `backend/.env` (backup `.env.bak-testphone-<stamp>`);
   - `laundry-dash` and `backend` were recreated.
+
+## Demo video link + Ask first order (25 Oct, evening)
+
+- **`GET /api/laundry/app-config`** returns `{ success, demoVideoUrl }`. It's deployed as server commit `10ece35` from `2026-10-25-backend-app-config.patch`.
+  - The link comes from `LAUNDRY_DEMO_VIDEO_URL` in `backend/.env` (now `https://youtu.be/Z5Si-Uw8euo`; backup `.env.bak-demo-video-<stamp>`). Without it, the route returns that same link.
+  - Responses cache for 5 minutes. Checked after the deploy: the curl gave the link, and `/experiments`, `/billing/status`, `/shops`, `/assistant/config` and `/sync/pull` all returned 200.
+  - **To change the video:** edit `LAUNDRY_DEMO_VIDEO_URL`, then `docker compose -f docker-compose.prod.yml up -d backend`.
+  - **The app** fetches the link at start and keeps the last one in Prefs `demo_video_url`. With no saved link, or when the call fails, it uses the built-in `https://youtu.be/Z5Si-Uw8euo`. Older apps never call the route.
+- **Ask before the first order:** a shop with no orders sees only "Let's create your first order" (mic + type). The prompt keeps the model on creating that order. Everything is as before once there's one order (prod `9352d9a`).
