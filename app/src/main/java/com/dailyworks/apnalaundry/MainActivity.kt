@@ -150,7 +150,10 @@ private fun AppRoot() {
     val toast by shopVm.toast.collectAsStateWithLifecycle()
     val waPrompt by shopVm.waPrompt.collectAsStateWithLifecycle()
     val tour by shopVm.tour.collectAsStateWithLifecycle()
+    val created by shopVm.orderCreated.collectAsStateWithLifecycle()
+    val state by shopVm.state.collectAsStateWithLifecycle()
     val context = androidx.compose.ui.platform.LocalContext.current
+    androidx.compose.runtime.LaunchedEffect(Unit) { com.dailyworks.apnalaundry.ui.components.OrderChime.preload(context) }
 
     Box(Modifier.fillMaxSize().background(Tokens.Bg)) {
         AppNavGraph(navController = navController, navigator = navigator, shopVm = shopVm)
@@ -181,6 +184,10 @@ private fun AppRoot() {
                     else -> null
                 },
             )
+        }
+        // Every new order: "Order created!" + the chime (owner, 2026-10-25).
+        created?.let { id ->
+            com.dailyworks.apnalaundry.ui.components.OrderCreatedDialog(state, id, onDismiss = shopVm::dismissOrderCreated)
         }
     }
 }

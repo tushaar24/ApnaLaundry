@@ -411,9 +411,15 @@ class ShopViewModel(
             exPct = exPct, discPct = discPct, gstOn = gstOn, gstPct = gstPct, gstMode = gstMode, note = note,
         )
         res.toast?.let { publish(CmdResult(it, res.undo)) }
+        if (!res.edited) _orderCreated.value = res.orderId
         sync.requestSync()
         onDone(res)
     }
+
+    /** A new order just saved (New order or Ask): AppRoot shows "Order created!" + the chime. */
+    private val _orderCreated = MutableStateFlow<Int?>(null)
+    val orderCreated: StateFlow<Int?> = _orderCreated
+    fun dismissOrderCreated() { _orderCreated.value = null }
 
     private fun launchCmd(block: suspend () -> CmdResult) =
         viewModelScope.launch {
