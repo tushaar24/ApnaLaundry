@@ -79,3 +79,9 @@ The why:
 Each arm gets about a third of new sign-ups: about 45 a day at the 22–24 Oct rate of roughly 140 sign-ups a day.
 
 Seeing a 40% → 55% lift in "saved an order" needs about 170 owners per arm (95% confidence, 80% power), so 4–5 days of sign-ups on 1.0.15.
+
+## Deployed
+
+- **Live since 2026-10-25T14:23:57Z (19:53 IST)**, as server commit `029bcbe`. The dry run passed first (new 1.0.15+ accounts split about 1035 / 1011 / 954).
+- **Checked afterwards:** older accounts get the same `/experiments` as before.
+- **App:** 1.0.15 was never released, so the variants reach owners with the 1.0.16 release.

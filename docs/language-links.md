@@ -49,3 +49,12 @@ A link can open the Android app in one language, for ads, WhatsApp or SMS in tha
   - `web/src/app/open/[[...screen]]/route.ts`;
   - `web/src/app/pay/[[...code]]/route.ts`.
 - **Deploy:** `docs/deploy/2026-10-25-web-language-links-deploy.sh`.
+
+## Deployed
+
+- **Website live on mylaundry.work since 2026-10-25 ~19:51 IST.** Backup of the 3 files it replaced: `~/apnalaundry-web-filebak/20261025-142120/files.tar`.
+- **Checked:**
+  - `/open/hi` → `intent://home?lang=hi`, with Play referrer `lang=hi`;
+  - `/open/ta/new-order` → `new-order?lang=ta`;
+  - `/open/new-order?lang=kn` and `/pay/<code>?lang=hi` work;
+  - `/open` and `/open/customers` are unchanged.
