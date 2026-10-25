@@ -107,6 +107,9 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
     val tour by shopVm.tour.collectAsStateWithLifecycle()
     val tourPaused by shopVm.tourPaused.collectAsStateWithLifecycle()
     val waPrompt by shopVm.waPrompt.collectAsStateWithLifecycle()
+    val demoUrl by koinInject<com.dailyworks.apnalaundry.data.AppConfigRepository>().demoVideoUrl
+        .collectAsStateWithLifecycle(initialValue = com.dailyworks.apnalaundry.data.AppConfigRepository.DEFAULT_DEMO_VIDEO)
+    var demoOpen by remember { mutableStateOf(false) }
     val targets = rememberSpotlightTargets()
     val context = LocalContext.current
 
@@ -198,10 +201,17 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                 Text(state.shop.name, style = bric(22, FontWeight.Bold), modifier = Modifier.weight(1f, fill = false), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Icon(Icons.Filled.KeyboardArrowDown, tr("Switch shop"), tint = Tokens.Ink, modifier = Modifier.size(24.dp))
             }
-            Box(Modifier.height(44.dp).rounded(999.dp).background(Tokens.Card).border(1.dp, Tokens.CardBorder, RoundedCornerShape(999.dp)).tap { navigator.openRates("home") }.padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
-                Text(tr("Services"), style = fig(14, FontWeight.Bold))
+            // Demo: the how-to video, played in the app (link from the server, saved; built-in fallback).
+            Row(
+                Modifier.height(44.dp).rounded(999.dp).background(Tokens.Card).border(1.dp, Tokens.CardBorder, RoundedCornerShape(999.dp))
+                    .tap { demoOpen = true; Analytics.demoVideoOpened("home") }.padding(start = 12.dp, end = 14.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                com.dailyworks.apnalaundry.ui.components.YouTubeMark()
+                Text(tr("Demo"), style = fig(14, FontWeight.Bold))
             }
         }
+        if (demoOpen) com.dailyworks.apnalaundry.ui.components.DemoVideoDialog(demoUrl) { demoOpen = false }
 
         val noOrders = state.orders.isEmpty()
 
@@ -220,7 +230,7 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                 EmptyHome(Modifier.spotlightTarget(targets, "new_order")) { startNewOrder("empty_home") }
                 return@Box
             }
-            LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, bottom = 170.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 // Sticky: stays on screen while scrolling orders.
                 stickyHeader(key = "search") {
                     Box(Modifier.fillMaxWidth().background(Tokens.Bg).padding(top = 4.dp, bottom = 2.dp)) {
@@ -289,16 +299,15 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                 items(list, key = { "d${it.id}" }) { o -> OrderCard(state, o, tabPickup, false, { navigator.openOrder(o.id) }, { act(o) }, { active = ActiveSheet.Menu(o.id) }, { dial(context, o, state) }, actionModifier = actTarget(o)) }
             }
 
-            // New order FAB
-            run {
-                Row(Modifier.align(Alignment.BottomEnd).padding(16.dp).spotlightTarget(targets, "new_order").height(56.dp).rounded(999.dp).background(Tokens.Blue).tap { startNewOrder("home") }.padding(start = 18.dp, end = 22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Icon(Icons.Filled.Add, null, tint = Tokens.OnDark, modifier = Modifier.size(22.dp))
-                    Text(tr("New order"), style = fig(16, FontWeight.Bold, Tokens.OnDark))
-                }
-            }
         }
 
-        BottomNav(NavTab.ORDERS, itemModifier = { Modifier.spotlightTarget(targets, "nav_${it.name}") }) { query = ""; navigator.selectTab(it) }
+        // New order lives in the bottom bar now (with Ask); the guide's arrow points there
+        // — except on the empty Home, whose own big button has it.
+        BottomNav(
+            NavTab.ORDERS, itemModifier = { Modifier.spotlightTarget(targets, "nav_${it.name}") },
+            newOrderModifier = if (noOrders) Modifier else Modifier.spotlightTarget(targets, "new_order"),
+            onNewOrder = { startNewOrder("home") },
+        ) { query = ""; navigator.selectTab(it) }
     }
 
     // The guide on Home: New order (part 1), the order's card (2–3), then the

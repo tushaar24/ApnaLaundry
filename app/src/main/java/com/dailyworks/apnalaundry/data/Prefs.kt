@@ -37,6 +37,8 @@ class Prefs(private val context: Context) {
     private val ASSISTANT_ON = booleanPreferencesKey("assistant_on")
     // Ask reads its answers out loud (phone's text-to-speech); unset = on.
     private val ASSISTANT_SPEAK = booleanPreferencesKey("assistant_speak")
+    // The demo video link from the server (AppConfigRepository); unset = the built-in one. Kept on logout.
+    private val DEMO_VIDEO_URL = stringPreferencesKey("demo_video_url")
 
     // Auth (opaque server tokens — see data/remote/TokenManager)
     private val ACCESS_TOKEN = stringPreferencesKey("access_token")
@@ -85,6 +87,7 @@ class Prefs(private val context: Context) {
     val customerFlow: Flow<String?> = context.dataStore.data.map { it[CUSTOMER_FLOW] }
     val assistantOn: Flow<Boolean> = context.dataStore.data.map { it[ASSISTANT_ON] ?: false }
     val assistantSpeak: Flow<Boolean> = context.dataStore.data.map { it[ASSISTANT_SPEAK] ?: true }
+    val demoVideoUrl: Flow<String?> = context.dataStore.data.map { it[DEMO_VIDEO_URL] }
     val userPhone: Flow<String?> = context.dataStore.data.map { it[USER_PHONE] }
     val lastSyncCheckpoint: Flow<Long> = context.dataStore.data.map { it[SYNC_CHECKPOINT] ?: 0L }
     val shopsJson: Flow<String?> = context.dataStore.data.map { it[SHOPS] }
@@ -101,6 +104,7 @@ class Prefs(private val context: Context) {
     suspend fun setCustomerFlow(v: String?) { context.dataStore.edit { if (v == null) it.remove(CUSTOMER_FLOW) else it[CUSTOMER_FLOW] = v } }
     suspend fun setAssistantOn(v: Boolean) { context.dataStore.edit { it[ASSISTANT_ON] = v } }
     suspend fun setAssistantSpeak(v: Boolean) { context.dataStore.edit { it[ASSISTANT_SPEAK] = v } }
+    suspend fun setDemoVideoUrl(v: String) { context.dataStore.edit { it[DEMO_VIDEO_URL] = v } }
     suspend fun setLastSyncCheckpoint(v: Long) { context.dataStore.edit { it[SYNC_CHECKPOINT] = v } }
     suspend fun setShops(json: String) { context.dataStore.edit { it[SHOPS] = json } }
     suspend fun setActiveShop(id: String) { context.dataStore.edit { it[ACTIVE_SHOP] = id } }

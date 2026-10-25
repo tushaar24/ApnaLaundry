@@ -96,6 +96,9 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
     // The assistant ("Ask" on Home): on only where the server says so (an older server: off).
     val assistantApi: com.dailyworks.apnalaundry.data.assistant.AssistantApi = koinInject()
     LaunchedEffect(li) { if (li) assistantApi.refreshEnabled() }
+    // The demo video link (server-set; saved, else the built-in one).
+    val appConfig: com.dailyworks.apnalaundry.data.AppConfigRepository = koinInject()
+    LaunchedEffect(Unit) { appConfig.refresh() }
     // The owner's shops (multi-shop): a shop added on another phone shows up here.
     LaunchedEffect(li) { if (li) shopVm.refreshShops() }
 

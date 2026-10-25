@@ -51,6 +51,7 @@ val appModule = module {
     single { TourVoice(androidContext(), get()) }
     single { ExperimentsRepository(get(), get(), get()) }
     single { AssistantApi(get(), get(), get()) }
+    single { com.dailyworks.apnalaundry.data.AppConfigRepository(get(), get()) }
     factory { VoiceRecorder(androidContext()) }
     single { AuthRepository(get(), get(), get(), get(), get(), get(), get()) }
 

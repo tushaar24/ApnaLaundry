@@ -373,10 +373,26 @@ fun NewOrderScreen(
         onDispose { if (!saved && activity?.isChangingConfigurations != true) abandon() }
     }
 
+    // Back before the shop's first order: "Confused how to create an order?" with the
+    // demo video right in the dialog (owner, 2026-10-25). Once per visit — Back again leaves.
+    val demoUrl by org.koin.compose.koinInject<com.dailyworks.apnalaundry.data.AppConfigRepository>().demoVideoUrl
+        .collectAsStateWithLifecycle(initialValue = com.dailyworks.apnalaundry.data.AppConfigRepository.DEFAULT_DEMO_VIDEO)
+    val firstOrder = editId == null && vmLoaded && state.orders.isEmpty()
+    var helpShown by rememberSaveable { mutableStateOf(false) }
+    var helpOpen by remember { mutableStateOf(false) }
+    val leave = {
+        if (firstOrder && !helpShown) {
+            helpShown = true
+            helpOpen = true
+            Analytics.firstOrderHelpShown()
+        } else navigator.back()
+    }
+    BackHandler(enabled = firstOrder && !helpShown && active == null && !editingRates) { leave() }
+
     Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.statusBars).imePadding()) {
         TopBar(
             title = if (editId != null) tr("Edit order") else tr("New order"),
-            onBack = { navigator.back() },
+            onBack = { leave() },
             trailing = { if (editingOrder != null) Text("#${editingOrder.no()}", style = fig(14, color = Tokens.Muted)) },
         )
         Column(
@@ -724,6 +740,13 @@ fun NewOrderScreen(
     }
 
     SheetHost(active, state, shopVm, navigator, onOpen = { active = it }, onDismiss = { active = null })
+    if (helpOpen) {
+        com.dailyworks.apnalaundry.ui.components.FirstOrderHelpDialog(
+            demoUrl,
+            onStay = { helpOpen = false; Analytics.firstOrderHelpChoice("stay") },
+            onLeave = { helpOpen = false; Analytics.firstOrderHelpChoice("leave"); navigator.back() },
+        )
+    }
     if (editingRates) {
         // The rate list drawn over this form, in the same screen (not a Dialog), so
         // nothing typed here is lost and back returns here: a Dialog's back could

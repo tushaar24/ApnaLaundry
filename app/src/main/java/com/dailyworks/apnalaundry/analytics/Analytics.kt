@@ -468,6 +468,16 @@ object Analytics {
 
     fun orderSearchOpened() = track("Order Search Opened")
 
+    // ---- demo video (YouTube, played in the app; link from the server) ----
+    /** from: home (the "Demo" chip). */
+    fun demoVideoOpened(from: String) = track("Demo Video Opened", mapOf("from" to from))
+
+    /** Back on New order before the shop's first order: the help dialog with the video. */
+    fun firstOrderHelpShown() = track("First Order Help Shown")
+
+    /** choice: stay ("Make my order") | leave. */
+    fun firstOrderHelpChoice(choice: String) = track("First Order Help Choice", mapOf("choice" to choice))
+
     // ---- language ----
     /** from / to: language codes (en, hi, ta…); where: login (first open or the top-left chip) | settings. Also sets profile Language. */
     fun languageChanged(from: String, to: String, where: String) {

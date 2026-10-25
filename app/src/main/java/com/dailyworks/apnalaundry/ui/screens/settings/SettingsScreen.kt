@@ -263,6 +263,6 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
             Spacer(Modifier.height(8.dp))
         }
 
-        BottomNav(current = NavTab.SETTINGS, onSelect = navigator::selectTab)
+        BottomNav(current = NavTab.SETTINGS, onNewOrder = { navigator.openNewOrder(from = "nav") }, onSelect = navigator::selectTab)
     }
 }

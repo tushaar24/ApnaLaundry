@@ -163,7 +163,7 @@ fun CustomersScreen(shopVm: ShopViewModel, navigator: AppNavigator, initialFilte
                 Text(tr("Add customer"), style = fig(16, FontWeight.Bold, Tokens.OnDark))
             }
         }
-        BottomNav(current = NavTab.CUSTOMERS, itemModifier = { Modifier.spotlightTarget(targets, "nav_${it.name}") }, onSelect = navigator::selectTab)
+        BottomNav(current = NavTab.CUSTOMERS, itemModifier = { Modifier.spotlightTarget(targets, "nav_${it.name}") }, onNewOrder = { navigator.openNewOrder(from = "nav") }, onSelect = navigator::selectTab)
     }
 
     if (active == null) when (tour) {

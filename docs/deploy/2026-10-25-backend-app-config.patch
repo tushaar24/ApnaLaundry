@@ -1,0 +1,36 @@
+diff -ruN b3-orig/backend/app.js b3-live/backend/app.js
+--- b3-orig/backend/app.js	2026-10-25 18:21:25
++++ b3-live/backend/app.js	2026-10-25 18:21:32
+@@ -69,6 +69,8 @@
+ // The app's assistant (logged-in; relays to Sarvam AI) — before the generic router.
+ // Its own parser: a voice note arrives as base64 JSON.
+ app.use('/api/laundry/assistant', express.json({ limit: '2mb' }), require('./routes/laundry-assistant'));
++// App settings (the demo video link) — public, before the generic router.
++app.use('/api/laundry/app-config', require('./routes/laundry-app-config'));
+ app.use('/api/laundry', laundryJson, require('./routes/laundry'));
+ 
+ app.use(express.json({
+diff -ruN b3-orig/backend/routes/laundry-app-config.js b3-live/backend/routes/laundry-app-config.js
+--- b3-orig/backend/routes/laundry-app-config.js	1970-01-01 05:30:00
++++ b3-live/backend/routes/laundry-app-config.js	2026-10-25 18:21:30
+@@ -0,0 +1,20 @@
++const express = require('express');
++
++// Settings every app reads at start, no login (Android 1.0.16+):
++//   GET /api/laundry/app-config -> { success, demoVideoUrl }
++//
++// demoVideoUrl: the how-to video (YouTube) behind Home's "Demo" and the
++// first-order help dialog. Set LAUNDRY_DEMO_VIDEO_URL in backend/.env and
++// recreate the backend to change it — no app release. The app saves the last
++// link it got and has the same built-in link for when it can't reach us.
++
++const router = express.Router();
++
++const DEFAULT_DEMO_VIDEO = 'https://youtu.be/Z5Si-Uw8euo';
++
++router.get('/', (req, res) => {
++  res.set('Cache-Control', 'public, max-age=300');
++  res.json({ success: true, demoVideoUrl: (process.env.LAUNDRY_DEMO_VIDEO_URL || DEFAULT_DEMO_VIDEO).trim() });
++});
++
++module.exports = router;
