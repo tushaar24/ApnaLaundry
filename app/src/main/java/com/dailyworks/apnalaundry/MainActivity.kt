@@ -75,7 +75,16 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (savedInstanceState == null) DeepLinks.offer(intent)
+        if (savedInstanceState == null) {
+            DeepLinks.offer(intent)
+            // A language link (mylaundry.work/open/hi) opens the app in that language; redrawn
+            // so Android's own words follow too. Else a Play install from one: its referrer.
+            if (takeLinkLanguage(intent)) {
+                recreate()
+                return
+            }
+            com.dailyworks.apnalaundry.core.InstallLanguage.check(this)
+        }
         Checkout.preload(applicationContext)
         // The app is light-only: dark status-bar and navigation icons always, even
         // when the phone is in dark mode (the default would draw white icons on
@@ -104,10 +113,24 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
         super.onNewIntent(intent)
         setIntent(intent)
         DeepLinks.offer(intent)
+        if (takeLinkLanguage(intent)) recreate()
         val extras = intent.extras ?: return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && CleverTapAPI.getNotificationInfo(extras).fromCleverTap) {
             CleverTapAPI.getDefaultInstance(applicationContext)?.pushNotificationClickedEvent(extras)
         }
+    }
+
+    /**
+     * The link's language becomes the app's (owner, 2026-10-25) — even over one picked
+     * before; the login dialog and Settings change it back. True when the screen must redraw.
+     */
+    private fun takeLinkLanguage(intent: Intent?): Boolean {
+        val lang = DeepLinks.language(intent) ?: return false
+        val from = com.dailyworks.apnalaundry.core.I18n.language
+        if (from == lang && com.dailyworks.apnalaundry.core.I18n.chosen(this)) return false
+        com.dailyworks.apnalaundry.core.I18n.set(this, lang)
+        com.dailyworks.apnalaundry.analytics.Analytics.languageChanged(from.code, lang.code, "link")
+        return from != lang
     }
 
     override fun onPaymentSuccess(razorpayPaymentId: String?, paymentData: PaymentData?) {

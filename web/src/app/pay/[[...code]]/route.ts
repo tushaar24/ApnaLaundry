@@ -12,5 +12,6 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ code?: string[] }> }) {
   const { code } = await params;
-  return openAppResponse(req.headers.get("user-agent") ?? "", "subscription", "pay", code?.[0] ?? "");
+  const lang = (req.nextUrl.searchParams.get("lang") ?? "").toLowerCase(); // optional, e.g. ?lang=hi
+  return openAppResponse(req.headers.get("user-agent") ?? "", "subscription", "pay", code?.[0] ?? "", lang);
 }

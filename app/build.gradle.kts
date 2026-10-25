@@ -134,6 +134,8 @@ dependencies {
 
     // Meta (Facebook) SDK — app events only (no Login/Share), for Meta ads.
     implementation(libs.facebook.core)
+    // Play's install referrer: a language link's lang=hi on the first open (core/InstallLanguage.kt).
+    implementation(libs.installreferrer)
 
     // Room
     implementation(libs.androidx.room.runtime)

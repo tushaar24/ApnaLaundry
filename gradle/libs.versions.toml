@@ -25,6 +25,7 @@ playBilling = "8.0.0"
 razorpayCheckout = "1.6.40"
 zxing = "3.5.3"
 facebookCore = "18.3.0"
+installReferrer = "2.2" # the same one facebook-core brings
 playServicesAuth = "21.1.0"
 playServicesAuthApiPhone = "18.0.2"
 firebaseBom = "33.7.0"
@@ -67,6 +68,7 @@ firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging
 firebase-crashlytics = { group = "com.google.firebase", name = "firebase-crashlytics" }
 zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
 facebook-core = { group = "com.facebook.android", name = "facebook-core", version.ref = "facebookCore" }
+installreferrer = { group = "com.android.installreferrer", name = "installreferrer", version.ref = "installReferrer" }
 
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }

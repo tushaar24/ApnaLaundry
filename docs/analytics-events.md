@@ -217,7 +217,7 @@ The app comes in English + 10 Indian languages (`docs/i18n.md`). The choice is s
 
 | Event | Properties | Fired when |
 | ----- | ---------- | ---------- |
-| `Language Changed` | `from`, `to` (codes), `where` (`login_first` = the picker on the first open \| `login_open` = the picker that opens with the login screen after that \| `login` = the chip at the top right \| `settings`) | a language was picked (also the first pick) |
+| `Language Changed` | `from`, `to` (codes), `where` (`login_first` = the picker on the first open \| `login_open` = the picker that opens with the login screen after that \| `login` = the chip at the top right \| `settings` \| `link` = a language link opened the app \| `install_link` = the first open after a Play install from a language link — docs/language-links.md) | a language was picked (also the first pick) |
 
 The underlying actions still fire their usual events: `Order Saved`, `Bill Sent`, `Reminder Sent`, `Order Marked Ready`, and so on.
 

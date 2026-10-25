@@ -8,29 +8,38 @@
  * owner lands on Update). It fires on load, with a button for in-app browsers
  * that need a tap. Other devices get the Play Store and website links.
  *
+ * Language links (app 1.0.16+): a `lang` (en hi mr gu bn ta te kn ml pa or) opens
+ * the app in that language — mylaundry://<screen>?lang=hi — and the Play Store
+ * link carries referrer lang=hi, which a fresh install reads on its first open
+ * (core/InstallLanguage.kt). Older apps ignore it.
+ *
  * Every hit is logged as one JSON line (`open_link`) so link taps can be counted
  * from the container logs.
  */
 
 export const SCREENS = ["new-order", "home", "customers", "earnings", "subscription"];
+/** The app's languages (core/I18n.kt AppLanguage). */
+export const LANGS = ["en", "hi", "mr", "gu", "bn", "ta", "te", "kn", "ml", "pa", "or"];
 const PACKAGE = "com.dailyworks.apnalaundry";
 const PLAY_URL = `https://play.google.com/store/apps/details?id=${PACKAGE}`;
 
-export function openAppResponse(userAgent: string, screen: string, via: string, code = ""): Response {
+export function openAppResponse(userAgent: string, screen: string, via: string, code = "", lang = ""): Response {
   const target = SCREENS.includes(screen) ? screen : "home";
+  const language = LANGS.includes(lang) ? lang : "";
   const android = /android/i.test(userAgent);
-  console.log(JSON.stringify({ evt: "open_link", via, target, code: code.slice(0, 64), android, at: new Date().toISOString() }));
-  const intentUrl = `intent://${target}#Intent;scheme=mylaundry;package=${PACKAGE};S.browser_fallback_url=${encodeURIComponent(PLAY_URL)};end`;
+  console.log(JSON.stringify({ evt: "open_link", via, target, lang: language, code: code.slice(0, 64), android, at: new Date().toISOString() }));
+  const playUrl = language ? `${PLAY_URL}&referrer=${encodeURIComponent(`lang=${language}`)}` : PLAY_URL;
+  const intentUrl = `intent://${target}${language ? `?lang=${language}` : ""}#Intent;scheme=mylaundry;package=${PACKAGE};S.browser_fallback_url=${encodeURIComponent(playUrl)};end`;
 
   const body = android
     ? `<h1>Opening MyLaundry…</h1>
        <p>App khul raha hai. Agar nahi khula, neeche dabaiye.</p>
        <a class="btn" href="${intentUrl}">Open MyLaundry app</a>
-       <a class="link" href="${PLAY_URL}">Get the app on Play Store</a>
+       <a class="link" href="${playUrl}">Get the app on Play Store</a>
        <script>location.replace(${JSON.stringify(intentUrl)});</script>`
     : `<h1>Open this link on your Android phone</h1>
        <p>MyLaundry ka app Android pe hai. Phone pe ye link kholiye, ya Play Store se app lijiye.</p>
-       <a class="btn" href="${PLAY_URL}">Get the app on Play Store</a>
+       <a class="btn" href="${playUrl}">Get the app on Play Store</a>
        <a class="link" href="/">Use MyLaundry on the website</a>`;
 
   const html = `<!doctype html>
