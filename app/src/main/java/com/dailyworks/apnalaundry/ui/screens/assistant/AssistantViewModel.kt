@@ -359,6 +359,9 @@ class AssistantViewModel(
             appendLine(tools.rateCard(3500))
             appendLine()
             appendLine("Shop now: ${st.customers.size} customers, ${st.orders.count { LaundryMath.isOpen(it) }} open orders.")
+            if (st.orders.isEmpty()) {
+                appendLine("- This shop has NO orders yet. Your only job now is their first order: ask for the customer's name, 10-digit mobile and the clothes (which service, how many), then create_order. If they ask something else, answer in one line and bring them back to the first order.")
+            }
             if (done.isNotEmpty()) {
                 appendLine()
                 appendLine("Done by the owner in this chat:")

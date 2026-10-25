@@ -114,6 +114,8 @@ fun AssistantScreen(shopVm: ShopViewModel, navigator: AppNavigator, from: String
     val context = LocalContext.current
     var input by rememberSaveable { mutableStateOf("") }
     val listState = rememberLazyListState()
+    val loaded by shopVm.loaded.collectAsStateWithLifecycle()
+    val firstOrder = loaded && state.orders.isEmpty()
     // Answers read out loud with the phone's text-to-speech, in the app's language (switch at the top).
     val speaker: com.dailyworks.apnalaundry.ui.tour.TourVoice = org.koin.compose.koinInject()
     val prefs: com.dailyworks.apnalaundry.data.Prefs = org.koin.compose.koinInject()
@@ -173,7 +175,9 @@ fun AssistantScreen(shopVm: ShopViewModel, navigator: AppNavigator, from: String
 
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (bubbles.isEmpty() && !busy) {
-                Welcome(
+                // No order yet: only the first order (owner, 2026-10-25); the usual start after that.
+                if (firstOrder) FirstOrderStart()
+                else Welcome(
                     onAsk = { q -> vm.ask(q, "chip") },
                     onStart = { q -> input = q },
                 )
@@ -190,13 +194,33 @@ fun AssistantScreen(shopVm: ShopViewModel, navigator: AppNavigator, from: String
         }
 
         InputBar(
-            input = input, onInput = { input = it }, busy = busy, voice = voice,
+            input = input, onInput = { input = it }, busy = busy, voice = voice, firstOrder = firstOrder,
             onSend = { send("text") }, onMic = startMic, onStop = vm::stopVoice, onCancel = vm::cancelVoice,
         )
     }
 }
 
 // ---------------- empty state ----------------
+
+/** Ask before the shop's first order: just that — no suggestions, nothing else. */
+@Composable
+private fun FirstOrderStart() {
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(Modifier.size(72.dp).rounded(999.dp).background(Tokens.BlueLight), contentAlignment = Alignment.Center) {
+            Icon(Icons.Filled.Mic, null, tint = Tokens.Blue, modifier = Modifier.size(36.dp))
+        }
+        Text(tr("Let's create your first order"), style = bric(26, FontWeight.Bold), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        Text(
+            tr("Tap the mic and say the customer's name, mobile number and clothes. For example: “Ramesh, 98765 43210, 3 shirts iron”."),
+            style = fig(16, color = Tokens.InkSecondary), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        )
+        Text(tr("Or type it below."), style = fig(14, color = Tokens.Muted), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+    }
+}
 
 @Composable
 private fun Welcome(onAsk: (String) -> Unit, onStart: (String) -> Unit) {
@@ -545,6 +569,7 @@ internal fun statusLabel(s: OrderStatus) = when (s) {
 private fun InputBar(
     input: String, onInput: (String) -> Unit, busy: Boolean, voice: AssistantViewModel.Voice,
     onSend: () -> Unit, onMic: () -> Unit, onStop: () -> Unit, onCancel: () -> Unit,
+    firstOrder: Boolean = false,
 ) {
     Box(Modifier.fillMaxWidth().background(Tokens.Card).border(1.dp, Tokens.Divider, RoundedCornerShape(0.dp)).padding(12.dp)) {
         when (voice) {
@@ -565,7 +590,7 @@ private fun InputBar(
             }
             AssistantViewModel.Voice.Idle -> Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 FieldBox(
-                    input, onInput, Modifier.weight(1f), placeholder = if (busy) tr("Wait for the answer…") else tr("Type here…"),
+                    input, onInput, Modifier.weight(1f), placeholder = if (busy) tr("Wait for the answer…") else if (firstOrder) tr("Customer, mobile, clothes…") else tr("Type here…"),
                     height = 56.dp, capitalization = KeyboardCapitalization.Sentences,
                     imeAction = ImeAction.Send, onImeAction = onSend,
                 )
