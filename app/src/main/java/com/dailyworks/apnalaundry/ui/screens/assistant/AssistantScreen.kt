@@ -2,6 +2,7 @@ package com.dailyworks.apnalaundry.ui.screens.assistant
 
 import androidx.compose.material.icons.automirrored.outlined.VolumeOff
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
+import kotlinx.coroutines.flow.first
 import androidx.compose.runtime.mutableLongStateOf
 import android.Manifest
 import android.content.pm.PackageManager
@@ -131,7 +132,12 @@ fun AssistantScreen(shopVm: ShopViewModel, navigator: AppNavigator, from: String
         if (speakOn && b.who == AssistantViewModel.Who.ASSISTANT) speaker.read(b.text, "ask:${b.id}")
     }
 
-    LaunchedEffect(Unit) { Analytics.screen("assistant"); Analytics.assistantOpened(from) }
+    LaunchedEffect(Unit) {
+        Analytics.screen("assistant")
+        // Once the shop's data is in: whether Ask opened in its "first order only" mode.
+        androidx.compose.runtime.snapshotFlow { loaded }.first { it }
+        Analytics.assistantOpened(from, firstOrder = shopVm.state.value.orders.isEmpty())
+    }
     // Newest message (or "Thinking…") in sight.
     LaunchedEffect(bubbles.size, busy) {
         val n = bubbles.size + if (busy) 1 else 0
@@ -160,6 +166,7 @@ fun AssistantScreen(shopVm: ShopViewModel, navigator: AppNavigator, from: String
                     .tap {
                         val on = !speakOn
                         if (!on) speaker.stopAll()
+                        Analytics.assistantSpeakToggled(on)
                         scope.launch { prefs.setAssistantSpeak(on) }
                     },
                 contentAlignment = Alignment.Center,
@@ -171,7 +178,7 @@ fun AssistantScreen(shopVm: ShopViewModel, navigator: AppNavigator, from: String
                 )
             }
             if (bubbles.isNotEmpty() && !busy) {
-                Text(tr("New chat"), style = fig(15, FontWeight.Bold, Tokens.Blue), modifier = Modifier.tap { vm.clear() }.padding(horizontal = 8.dp, vertical = 12.dp))
+                Text(tr("New chat"), style = fig(15, FontWeight.Bold, Tokens.Blue), modifier = Modifier.tap { Analytics.assistantNewChat(bubbles.size); vm.clear() }.padding(horizontal = 8.dp, vertical = 12.dp))
             }
         })
 
@@ -189,7 +196,7 @@ fun AssistantScreen(shopVm: ShopViewModel, navigator: AppNavigator, from: String
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    items(bubbles, key = { it.id }) { b -> BubbleView(b, state, vm, shopVm, navigator) { speaker.read(b.text, "ask:${b.id}") } }
+                    items(bubbles, key = { it.id }) { b -> BubbleView(b, state, vm, shopVm, navigator) { Analytics.assistantAnswerReplayed(); speaker.read(b.text, "ask:${b.id}") } }
                     if (busy) item(key = "thinking") { Thinking() }
                 }
             }

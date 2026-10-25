@@ -125,7 +125,12 @@ private fun embedHtml(id: String, autoplay: Boolean) = """
 
 /** Home's "Demo": the video over a dark screen, ✕ to close. */
 @Composable
-fun DemoVideoDialog(url: String, onClose: () -> Unit) {
+fun DemoVideoDialog(url: String, from: String = "home", onClose: () -> Unit) {
+    // How long it stayed open (≈ watched) — "Demo Video Closed".
+    val openedAt = remember { System.currentTimeMillis() }
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose { com.dailyworks.apnalaundry.analytics.Analytics.demoVideoClosed(from, (System.currentTimeMillis() - openedAt) / 1000) }
+    }
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(Modifier.fillMaxSize().background(Color(0xFF0B0D10)).windowInsetsPadding(WindowInsets.systemBars)) {
             Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {

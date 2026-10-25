@@ -132,8 +132,9 @@ funnel or raw export splits by it. Main funnel: `New Order Started` →
 
 | Event | Properties | Fired when |
 | ----- | ---------- | ---------- |
-| `Customer Sheet Opened` | `ctx` (`order`\|`list`), `mode` (`new`\|`edit`), `trigger` (`auto`\|`add_button`\|`add_with_query`\|`address_card`\|`list`\|`list_with_query`\|`customer_page`\|`other`), `address_shown`, `address_needed`, `prefilled` (`none`\|`name`\|`phone`), `customers` (saved so far), `guide_on` | the customer sheet appears (all versions of the flow) |
+| `Customer Sheet Opened` | `ctx` (`order`\|`list`), `mode` (`new`\|`edit`), `trigger` (`auto`\|`add_button`\|`add_with_query`\|`address_card`\|`list`\|`list_with_query`\|`list_empty` (the empty Customers screen's button, 1.0.16; `list` = the bottom bar's Add customer)\|`customer_page`\|`other`), `address_shown`, `address_needed`, `prefilled` (`none`\|`name`\|`phone`), `customers` (saved so far), `guide_on` | the customer sheet appears (all versions of the flow) |
 | `Customer Sheet Field Edited` | `field` (`name`\|`phone`\|`address`\|`old_khata`), `ctx`, `seconds_since_open` | first typing in that field (once per field per sheet) |
+| `Customer Sheet Field Focused` | `field`, `ctx`, `seconds_since_open` | a field tapped into, typed in or not (once per field per sheet; 1.0.16) — "tapped Name but never typed" = keyboard trouble |
 | `Customer Phone Trimmed` | `digits`, `lead` (`91`\|`0`\|`other`) | more than 10 digits typed/pasted in Phone (it keeps the first 10 — "+91 98…" saves wrong) |
 | `Customer Contacts Tapped` | `permission` (`granted`\|`asking`) | "Choose from contacts" |
 | `Contacts Permission Answered` | `granted` | the contacts permission dialog answered (no → Android's own picker) |
@@ -141,9 +142,9 @@ funnel or raw export splits by it. Main funnel: `New Order Started` →
 | `Customer Contacts Closed` | `source`, `contacts` (listed, in_app), `searched` | the contact list left without picking |
 | `Customer Duplicate Shown` | `ctx` | "Already saved as …" (the number is a customer already) |
 | `Customer Save Blocked` | `reason` (`name`\|`phone_empty`\|`phone_short`\|`duplicate`\|`address`), `ctx` (`order`\|`list`\|`address_sheet`), `name_filled`, `phone_digits`, `address_filled` | the greyed "Save customer" / "Save address" tapped |
-| `Customer Sheet Closed` | `ctx`, `mode`, `trigger`, `how` (`saved`\|`used_existing`\|`dismissed`), `seconds_on_screen`, `name_filled`, `phone_digits`, `address_shown`, `address_filled`, `contacts_tapped`, `contact_picked`, `blocked_taps`, `missing` (what still blocked Save on a dismiss, else `none`), `method` (`typed`\|`contacts`, on save) | the sheet goes away — saved, "Use this" on a duplicate, or back / swipe / tap outside |
+| `Customer Sheet Closed` | `ctx`, `mode`, `trigger`, `how` (`saved`\|`used_existing`\|`dismissed`), `seconds_on_screen`, `name_filled`, `phone_digits`, `address_shown`, `address_filled`, `contacts_tapped`, `contact_picked`, `blocked_taps`, `missing` (what still blocked Save on a dismiss, else `none`), `method` (`typed`\|`contacts`, on save); 1.0.16+: `interacted` (did anything at all), `fields_focused` / `fields_edited` (in order, e.g. `name,phone`), `first_action_secs` (-1 = nothing), `keyboard_shown`, `duplicate_shown`, `steps` (the whole trail, ≤ 300 chars: `focus_<field>`, `type_<field>`, `contacts`, `contact_picked`, `contact_none`, `contact_no_mobile`, `dup_shown`, `use_existing`, `save_blocked_<reason>`, `save` — e.g. `focus_name>type_name>focus_phone>type_phone>save_blocked_phone_short`) | the sheet goes away — saved, "Use this" on a duplicate, or back / swipe / tap outside |
 | `Address Sheet Opened` | `trigger` (`route`\|`customer_saved`\|`customer_picked`\|`address_card`\|`save_button`), `had_address`, `guide_on` | v2's address sheet appears |
-| `Address Sheet Closed` | `trigger`, `how` (`saved`\|`dismissed`), `seconds_on_screen`, `edited`, `filled`, `blocked_taps` | v2's address sheet goes away |
+| `Address Sheet Closed` | `trigger`, `how` (`saved`\|`dismissed`), `seconds_on_screen`, `edited`, `filled`, `blocked_taps`; 1.0.16+: `focused` (the field tapped into), `keyboard_shown` | v2's address sheet goes away |
 | `Customer Selected` | `from` (`recent`\|`search`), `query_length` | an existing customer picked on New order |
 | `Customer Search Used` | — | New order's customer search typed in (once per screen) |
 | `Order Route Changed` | `leg` (`pickup`\|`delivery`), `to` (`shop`\|`home`), `customer_set`, `has_address` | At shop ↔ home switched on New order |
@@ -202,7 +203,10 @@ Sarvam AI through `/api/laundry/assistant`. It is shown only where the server's 
 
 | Event | Properties | Fired when |
 | ----- | ---------- | ---------- |
-| `Assistant Opened` | `from` (`home`\|`push`) | the Ask screen opens (Home button, or `mylaundry://assistant`) |
+| `Assistant Opened` | `from` (`nav` = the bottom bar — `Bottom Bar Tapped` says which tab \| `push`), `first_order` (the shop has no order yet: Ask shows only "create your first order") | the Ask screen opens (bottom bar, or `mylaundry://assistant`) |
+| `Assistant Speak Toggled` | `on` | the 🔊 at the top: answers read aloud on / off |
+| `Assistant Answer Replayed` | — | the 🔊 next to an answer |
+| `Assistant New Chat` | `messages` | "New chat" cleared the conversation |
 | `Assistant Asked` | `via` (`text`\|`voice`\|`chip`), `chars` | a question is sent |
 | `Assistant Answered` | `rounds`, `tools` (comma-separated tool names), `cards`, `ms` | the reply arrived |
 | `Assistant Failed` | `reason` (`network`\|`server`\|`limit`\|`off`\|`login`) | no reply (the owner sees why) |
@@ -218,6 +222,20 @@ The app comes in English + 10 Indian languages (`docs/i18n.md`). The choice is s
 | Event | Properties | Fired when |
 | ----- | ---------- | ---------- |
 | `Language Changed` | `from`, `to` (codes), `where` (`login_first` = the picker on the first open \| `login_open` = the picker that opens with the login screen after that \| `login` = the chip at the top right \| `settings` \| `link` = a language link opened the app \| `install_link` = the first open after a Play install from a language link — docs/language-links.md) | a language was picked (also the first pick) |
+| `Language Dialog Shown` | `where` (`login_first`\|`login_open`\|`login`\|`settings`), `current` | the language dialog appears (every login screen opens with it) |
+| `Language Dialog Dismissed` | `where`, `current` | closed without a pick (back / tap outside) |
+
+### Bottom bar, Home and new orders (Android 1.0.16, 2026-10-25)
+
+| Event | Properties | Fired when |
+| ----- | ---------- | ---------- |
+| `Bottom Bar Tapped` | `button` (`orders`\|`customers`\|`earnings`\|`settings`\|`ask`\|`new_order`\|`add_customer`), `on` (the tab it was tapped on), `style` (`pills` = Ask + New order / Add customer over the tabs \| `notched` = Ask in the middle \| `flat` = no Ask) | any bottom-bar button |
+| `Demo Video Opened` | `from` (`home`) | Home's "Demo" chip (YouTube, in the app; link from `/api/laundry/app-config`) |
+| `Demo Video Closed` | `from`, `seconds` (open ≈ watched) | its dialog closed |
+| `First Order Help Shown` | — | back on New order before the shop's first order: "Confused? Watch the video" |
+| `First Order Help Choice` | `choice` (`stay`\|`leave`) | its buttons |
+| `Order Created Dialog Closed` | `order_id`, `how` (`auto` after 3 s \| `ok` \| `outside`) | the "Order created!" dialog (with its sound) after every new order |
+| `Bill Design Saved` | `template` (`classic`…`invoice`), `from` (`settings`\|`onboarding`), `changed` | Bill design: Save (Settings) / Start taking orders (setup) |
 
 The underlying actions still fire their usual events: `Order Saved`, `Bill Sent`, `Reminder Sent`, `Order Marked Ready`, and so on.
 

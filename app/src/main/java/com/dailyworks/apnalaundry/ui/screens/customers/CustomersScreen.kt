@@ -104,7 +104,8 @@ fun CustomersScreen(shopVm: ShopViewModel, navigator: AppNavigator, initialFilte
 
     // No customers yet: no search, ₹0 tiles or floating button — just one clear way to add the first one.
     val noCustomers = state.customers.isEmpty()
-    fun addCustomer() { active = ActiveSheet.CustomerForm(editId = null, ctx = "list", trigger = "list") }
+    // trigger "list" = the bottom bar's Add customer (the old floating button); "list_empty" = the empty screen's button.
+    fun addCustomer(trigger: String = "list") { active = ActiveSheet.CustomerForm(editId = null, ctx = "list", trigger = trigger) }
 
     Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars)) {
         Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -124,7 +125,7 @@ fun CustomersScreen(shopVm: ShopViewModel, navigator: AppNavigator, initialFilte
             }
         }
         if (noCustomers) {
-            NoCustomers(Modifier.weight(1f), onAdd = ::addCustomer)
+            NoCustomers(Modifier.weight(1f), onAdd = { addCustomer("list_empty") })
         } else Box(Modifier.weight(1f).fillMaxWidth()) {
             LazyColumn(
                 Modifier.fillMaxSize(),
@@ -160,7 +161,7 @@ fun CustomersScreen(shopVm: ShopViewModel, navigator: AppNavigator, initialFilte
         // No customers yet: the empty screen has its own button, so just Ask in the middle.
         BottomNav(
             current = NavTab.CUSTOMERS, itemModifier = { Modifier.spotlightTarget(targets, "nav_${it.name}") },
-            onNewOrder = if (noCustomers) null else ::addCustomer, primaryLabel = tr("Add customer"),
+            onNewOrder = if (noCustomers) null else ({ addCustomer() }), primaryLabel = tr("Add customer"),
             primaryIcon = androidx.compose.material.icons.Icons.Outlined.PersonAdd,
             onSelect = navigator::selectTab,
         )

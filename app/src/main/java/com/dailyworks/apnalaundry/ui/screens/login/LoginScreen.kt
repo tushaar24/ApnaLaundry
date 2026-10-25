@@ -148,10 +148,11 @@ fun LoginScreen(onLoggedIn: () -> Unit, vm: AuthViewModel = koinViewModel()) {
         LanguagePickerDialog(
             onPick = { pickLanguage = false; applyLanguage(context, it, if (firstPick) "login_first" else "login_open") },
             onDismiss = if (firstPick) null else ({ pickLanguage = false }),
+            where = if (firstPick) "login_first" else "login_open",
         )
     }
     if (changeLanguage) {
-        LanguagePickerDialog(onPick = { changeLanguage = false; applyLanguage(context, it, "login") }, onDismiss = { changeLanguage = false })
+        LanguagePickerDialog(onPick = { changeLanguage = false; applyLanguage(context, it, "login") }, onDismiss = { changeLanguage = false }, where = "login")
     }
 }
 

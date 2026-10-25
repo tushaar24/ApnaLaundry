@@ -142,6 +142,7 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
                 com.dailyworks.apnalaundry.ui.components.LanguagePickerDialog(
                     onPick = { languageOpen = false; com.dailyworks.apnalaundry.ui.components.applyLanguage(context, it, "settings") },
                     onDismiss = { languageOpen = false },
+                    where = "settings",
                 )
             }
 

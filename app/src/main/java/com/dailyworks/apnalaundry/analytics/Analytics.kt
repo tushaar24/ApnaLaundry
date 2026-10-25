@@ -220,6 +220,13 @@ object Analytics {
         track("Customer Sheet Field Edited", mapOf("field" to field, "ctx" to ctx, "seconds_since_open" to seconds))
 
     /**
+     * A field of the customer sheet tapped into (focused) — once per field per sheet, typed in
+     * or not, so "tapped the name but never typed" (keyboard trouble) shows. [field] as above.
+     */
+    fun customerSheetFieldFocused(field: String, ctx: String, seconds: Long) =
+        track("Customer Sheet Field Focused", mapOf("field" to field, "ctx" to ctx, "seconds_since_open" to seconds))
+
+    /**
      * More than 10 digits typed or pasted in the phone field (it keeps the
      * first 10). [lead] = 91 | 0 | other: what the extra digits most likely were.
      */
@@ -263,11 +270,20 @@ object Analytics {
      * (back, swipe, tap outside); [missing] = what still blocked Save when it
      * was dismissed (name | phone_empty | phone_short | duplicate | address | none);
      * [method] = typed | contacts (where the saved number came from).
+     *
+     * What the owner did in it (2026-10-25): [interacted] = anything at all (a field
+     * tapped, typing, contacts, Save); [focused] / [edited] = the fields tapped into /
+     * typed in, in order ("name,phone"); [firstActionSecs] = seconds to the first of
+     * those (-1 = none); [keyboardShown] = the keyboard came up; [duplicateShown];
+     * [steps] = the whole trail, e.g. "focus_name>type_name>focus_phone>type_phone>
+     * save_blocked_phone_short>save" (capped at 300 characters).
      */
     fun customerSheetClosed(
         ctx: String, mode: String, trigger: String, how: String, seconds: Long, nameFilled: Boolean, phoneDigits: Int,
         addressShown: Boolean, addressFilled: Boolean, contactsTapped: Boolean, contactPicked: Boolean,
         blockedTaps: Int, missing: String, method: String?,
+        interacted: Boolean = false, focused: String = "", edited: String = "", firstActionSecs: Long = -1,
+        keyboardShown: Boolean = false, duplicateShown: Boolean = false, steps: String = "",
     ) = track(
         "Customer Sheet Closed",
         mapOf(
@@ -275,6 +291,9 @@ object Analytics {
             "name_filled" to nameFilled, "phone_digits" to phoneDigits, "address_shown" to addressShown,
             "address_filled" to addressFilled, "contacts_tapped" to contactsTapped, "contact_picked" to contactPicked,
             "blocked_taps" to blockedTaps, "missing" to missing, "method" to method,
+            "interacted" to interacted, "fields_focused" to focused, "fields_edited" to edited,
+            "first_action_secs" to firstActionSecs, "keyboard_shown" to keyboardShown,
+            "duplicate_shown" to duplicateShown, "steps" to steps,
         ),
     )
 
@@ -287,11 +306,17 @@ object Analytics {
     fun addressSheetOpened(trigger: String, hadAddress: Boolean, guideOn: Boolean) =
         track("Address Sheet Opened", mapOf("trigger" to trigger, "had_address" to hadAddress, "guide_on" to guideOn))
 
-    /** The address sheet went away. [how] = saved | dismissed. */
-    fun addressSheetClosed(trigger: String, how: String, seconds: Long, edited: Boolean, filled: Boolean, blockedTaps: Int) =
+    /** The address sheet went away. [how] = saved | dismissed; [focused] = the field was tapped into; [keyboardShown]. */
+    fun addressSheetClosed(
+        trigger: String, how: String, seconds: Long, edited: Boolean, filled: Boolean, blockedTaps: Int,
+        focused: Boolean = false, keyboardShown: Boolean = false,
+    ) =
         track(
             "Address Sheet Closed",
-            mapOf("trigger" to trigger, "how" to how, "seconds_on_screen" to seconds, "edited" to edited, "filled" to filled, "blocked_taps" to blockedTaps),
+            mapOf(
+                "trigger" to trigger, "how" to how, "seconds_on_screen" to seconds, "edited" to edited, "filled" to filled,
+                "blocked_taps" to blockedTaps, "focused" to focused, "keyboard_shown" to keyboardShown,
+            ),
         )
 
     fun orderSaved(
@@ -472,6 +497,9 @@ object Analytics {
     /** from: home (the "Demo" chip). */
     fun demoVideoOpened(from: String) = track("Demo Video Opened", mapOf("from" to from))
 
+    /** The demo video's dialog closed; seconds: how long it was open (≈ watched). */
+    fun demoVideoClosed(from: String, seconds: Long) = track("Demo Video Closed", mapOf("from" to from, "seconds" to seconds))
+
     /** Back on New order before the shop's first order: the help dialog with the video. */
     fun firstOrderHelpShown() = track("First Order Help Shown")
 
@@ -479,15 +507,55 @@ object Analytics {
     fun firstOrderHelpChoice(choice: String) = track("First Order Help Choice", mapOf("choice" to choice))
 
     // ---- language ----
-    /** from / to: language codes (en, hi, ta…); where: login (first open or the top-left chip) | settings. Also sets profile Language. */
+    /**
+     * from / to: language codes (en, hi, ta…); where: login_first | login_open (the dialog that opens
+     * with login) | login (the top-right chip) | settings | link | install_link. Also sets profile Language.
+     */
     fun languageChanged(from: String, to: String, where: String) {
         track("Language Changed", mapOf("from" to from, "to" to to, "where" to where))
         updateProfile(mapOf("Language" to to))
     }
 
+    /** The language dialog appeared. where: login_first | login_open | login (chip) | settings; current: the code shown selected. */
+    fun languageDialogShown(where: String, current: String) =
+        track("Language Dialog Shown", mapOf("where" to where, "current" to current))
+
+    /** The language dialog closed without a pick (back / tap outside) — the language stays. */
+    fun languageDialogDismissed(where: String, current: String) =
+        track("Language Dialog Dismissed", mapOf("where" to where, "current" to current))
+
+    // ---- bottom bar ----
+    /**
+     * A bottom-bar button tapped. button: orders | customers | earnings | settings | ask |
+     * new_order | add_customer; on: the tab it was tapped on; style: pills (Ask + New order /
+     * Add customer over the tabs) | notched (Ask in the middle) | flat (no Ask).
+     */
+    fun bottomBarTapped(button: String, on: String, style: String) =
+        track("Bottom Bar Tapped", mapOf("button" to button, "on" to on, "style" to style))
+
+    // ---- order created ----
+    /** The "Order created!" dialog closed. how: auto (after 3 s) | ok | outside; orderId. */
+    fun orderCreatedDialogClosed(orderId: Int, how: String) =
+        track("Order Created Dialog Closed", mapOf("order_id" to orderId, "how" to how))
+
+    // ---- bill design ----
+    /** Bill design saved. template: classic | … | invoice; from: settings | onboarding; changed: a different design than before. */
+    fun billDesignSaved(template: String, from: String, changed: Boolean) =
+        track("Bill Design Saved", mapOf("template" to template, "from" to from, "changed" to changed))
+
     // ---- assistant ("Ask": Sarvam AI through our server) ----
-    /** from: home | push. */
-    fun assistantOpened(from: String) = track("Assistant Opened", mapOf("from" to from))
+    /** from: nav (bottom bar — see Bottom Bar Tapped for which tab) | push; firstOrder: the shop has no order yet (Ask shows only "create your first order"). */
+    fun assistantOpened(from: String, firstOrder: Boolean? = null) =
+        track("Assistant Opened", mapOf("from" to from, "first_order" to firstOrder))
+
+    /** The 🔊 at the top: reading answers aloud switched on / off. */
+    fun assistantSpeakToggled(on: Boolean) = track("Assistant Speak Toggled", mapOf("on" to on))
+
+    /** The 🔊 next to an answer: read again. */
+    fun assistantAnswerReplayed() = track("Assistant Answer Replayed")
+
+    /** "New chat": the conversation cleared. messages: how many bubbles it had. */
+    fun assistantNewChat(messages: Int) = track("Assistant New Chat", mapOf("messages" to messages))
 
     /** via: text | voice | chip; chars: the question's length (never its words). */
     fun assistantAsked(via: String, chars: Int) = track("Assistant Asked", mapOf("via" to via, "chars" to chars))

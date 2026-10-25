@@ -1,5 +1,10 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class) // WindowInsets.isImeVisible
+
 package com.dailyworks.apnalaundry.ui.sheets
 
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -101,7 +106,28 @@ fun CustomerFormSheet(state: LaundryState, form: ActiveSheet.CustomerForm, vm: S
         addrNeeded && address.trim().isEmpty() -> "address"
         else -> "none"
     }
-    fun fieldEdited(field: String) { if (edited.add(field)) Analytics.customerSheetFieldEdited(field, form.ctx, secs()) }
+    // Everything the owner did, in order (owner, 2026-10-25: did they touch the sheet at all, and what):
+    // focus_<field>, type_<field>, contacts, contact_picked, contact_none, dup_shown, use_existing,
+    // save_blocked_<reason>, save — sent with "Customer Sheet Closed".
+    val steps = remember { mutableListOf<String>() }
+    val focused = remember { linkedSetOf<String>() }
+    var firstActionSecs by remember { mutableStateOf(-1L) }
+    var keyboardShown by remember { mutableStateOf(false) }
+    var dupShown by remember { mutableStateOf(false) }
+    fun step(s: String) {
+        if (steps.lastOrNull() == s) return
+        if (firstActionSecs < 0 && s != "dup_shown") firstActionSecs = secs()
+        steps += s
+    }
+    fun fieldFocused(field: String) {
+        step("focus_$field")
+        if (focused.add(field)) Analytics.customerSheetFieldFocused(field, form.ctx, secs())
+    }
+    fun fieldEdited(field: String) {
+        if (edited.add(field)) { step("type_$field"); Analytics.customerSheetFieldEdited(field, form.ctx, secs()) }
+    }
+    val imeUp = WindowInsets.isImeVisible
+    LaunchedEffect(imeUp) { if (imeUp) keyboardShown = true }
     LaunchedEffect(Unit) {
         Analytics.customerSheetOpened(
             ctx = form.ctx, mode = mode, trigger = form.trigger, addressShown = addressShown, addressNeeded = addrNeeded,
@@ -109,14 +135,17 @@ fun CustomerFormSheet(state: LaundryState, form: ActiveSheet.CustomerForm, vm: S
             customers = state.customers.size, guideOn = tour == TourStage.ORDER,
         )
     }
-    LaunchedEffect(dup?.id) { if (dup != null) Analytics.customerDuplicateShown(form.ctx) }
+    LaunchedEffect(dup?.id) { if (dup != null) { dupShown = true; step("dup_shown"); Analytics.customerDuplicateShown(form.ctx) } }
     DisposableEffect(Unit) {
         onDispose {
+            val trail = steps.joinToString(">").let { if (it.length > 300) it.take(299) + "…" else it }
             Analytics.customerSheetClosed(
                 ctx = form.ctx, mode = mode, trigger = form.trigger, how = how, seconds = secs(),
                 nameFilled = name.trim().isNotEmpty(), phoneDigits = phone.length, addressShown = addressShown,
                 addressFilled = address.trim().isNotEmpty(), contactsTapped = contactsTapped, contactPicked = pickedPhone != null,
                 blockedTaps = blockedTaps, missing = if (how == "dismissed") missing() else "none", method = method,
+                interacted = steps.any { it != "dup_shown" }, focused = focused.joinToString(","), edited = edited.joinToString(","),
+                firstActionSecs = firstActionSecs, keyboardShown = keyboardShown, duplicateShown = dupShown, steps = trail,
             )
         }
     }
@@ -125,15 +154,15 @@ fun CustomerFormSheet(state: LaundryState, form: ActiveSheet.CustomerForm, vm: S
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var picking by remember { mutableStateOf(false) }
-    fun fill(c: PhoneContact) { name = c.name; phone = c.phone; pickedPhone = c.phone; picking = false }
+    fun fill(c: PhoneContact) { step("contact_picked"); name = c.name; phone = c.phone; pickedPhone = c.phone; picking = false }
     val savedPhones = remember(state.customers) { state.customers.map { it.phone }.toSet() }
     // Permission refused: Android's own contact picker needs none.
     val systemPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickContact()) { uri ->
-        if (uri == null) { Analytics.customerContactsClosed("system", null, false); return@rememberLauncherForActivityResult }
+        if (uri == null) { step("contact_none"); Analytics.customerContactsClosed("system", null, false); return@rememberLauncherForActivityResult }
         scope.launch {
             val c = PhoneContacts.fromPickerUri(context, uri)
             Analytics.customerContactPicked("system", ok = c != null, alreadySaved = c != null && c.phone in savedPhones)
-            c?.let(::fill) ?: vm.showInfo(tr("That contact has no 10-digit mobile number"))
+            c?.let(::fill) ?: run { step("contact_no_mobile"); vm.showInfo(tr("That contact has no 10-digit mobile number")) }
         }
     }
     val askContacts = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -142,6 +171,7 @@ fun CustomerFormSheet(state: LaundryState, form: ActiveSheet.CustomerForm, vm: S
     }
     fun chooseFromContacts() {
         contactsTapped = true
+        step("contacts")
         val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
         Analytics.customerContactsTapped(if (granted) "granted" else "asking")
         if (granted) picking = true else askContacts.launch(Manifest.permission.READ_CONTACTS)
@@ -150,7 +180,7 @@ fun CustomerFormSheet(state: LaundryState, form: ActiveSheet.CustomerForm, vm: S
         ContactPickerSheet(
             state,
             onPick = { c -> Analytics.customerContactPicked("in_app", ok = true, alreadySaved = c.phone in savedPhones); fill(c) },
-            onBack = { contacts, searched -> Analytics.customerContactsClosed("in_app", contacts, searched); picking = false },
+            onBack = { contacts, searched -> step("contact_none"); Analytics.customerContactsClosed("in_app", contacts, searched); picking = false },
         )
         return
     }
@@ -174,8 +204,8 @@ fun CustomerFormSheet(state: LaundryState, form: ActiveSheet.CustomerForm, vm: S
                 }
                 Text(tr("or type the details"), style = fig(12, color = Tokens.Muted), modifier = Modifier.align(Alignment.CenterHorizontally))
             }
-            Field(tr("Name"), name, { fieldEdited("name"); name = it }, tr("Customer name"))
-            Field(tr("Phone"), phone, {
+            Field(tr("Name"), name, { fieldEdited("name"); name = it }, tr("Customer name"), modifier = Modifier.onFocusChanged { if (it.hasFocus) fieldFocused("name") })
+            Field(tr("Phone"), phone, modifier = Modifier.onFocusChanged { if (it.hasFocus) fieldFocused("phone") }, onChange = {
                 fieldEdited("phone")
                 val digits = it.filter { c -> c.isDigit() }
                 if (digits.length > 10 && !phoneTrimLogged) {
@@ -183,11 +213,11 @@ fun CustomerFormSheet(state: LaundryState, form: ActiveSheet.CustomerForm, vm: S
                     Analytics.customerPhoneTrimmed(digits.length, when { digits.startsWith("91") -> "91"; digits.startsWith("0") -> "0"; else -> "other" })
                 }
                 phone = digits.take(10)
-            }, tr("10-digit number"), prefix = "+91", kb = KeyboardType.Phone)
+            }, placeholder = tr("10-digit number"), prefix = "+91", kb = KeyboardType.Phone)
             if (dup != null) {
                 Row(Modifier.fillMaxWidth().rounded(12.dp).background(Tokens.OrangeLight).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(tr("Already saved as {name}", "name" to dup.name), style = fig(14, FontWeight.SemiBold, Tokens.OrangeDeep), modifier = Modifier.weight(1f))
-                    Text(tr("Use this"), style = fig(14, FontWeight.Bold, Tokens.Blue), modifier = Modifier.tap { how = "used_existing"; form.onSaved(dup.id); onDismiss() })
+                    Text(tr("Use this"), style = fig(14, FontWeight.Bold, Tokens.Blue), modifier = Modifier.tap { step("use_existing"); how = "used_existing"; form.onSaved(dup.id); onDismiss() })
                 }
             }
             if (addressShown) Column {
@@ -196,19 +226,24 @@ fun CustomerFormSheet(state: LaundryState, form: ActiveSheet.CustomerForm, vm: S
                     Text(if (addrNeeded) tr("Needed for home pickup / delivery") else tr("Optional"), style = fig(12, color = if (addrNeeded) Tokens.OrangeText else Tokens.Muted), textAlign = TextAlign.End)
                 }
                 Box(Modifier.height(6.dp))
-                FieldBox(address, { fieldEdited("address"); address = it.replace('\n', ' ') }, placeholder = tr("House, area, landmark"), height = 80.dp, singleLine = false,
+                FieldBox(address, { fieldEdited("address"); address = it.replace('\n', ' ') },
+                    modifier = Modifier.onFocusChanged { if (it.hasFocus) fieldFocused("address") },
+                    placeholder = tr("House, area, landmark"), height = 80.dp, singleLine = false,
                     borderColor = if (addrNeeded && address.isBlank()) Tokens.OrangeBorder else Tokens.FieldBorder)
             }
             if (form.ctx == "list" && !editing) {
-                Field(tr("Old khata from your notebook"), oldBaaki, { fieldEdited("old_khata"); oldBaaki = it.filter { c -> c.isDigit() }.take(6) }, "0", prefix = "₹", kb = KeyboardType.Number)
+                Field(tr("Old khata from your notebook"), oldBaaki, { fieldEdited("old_khata"); oldBaaki = it.filter { c -> c.isDigit() }.take(6) }, "0", prefix = "₹", kb = KeyboardType.Number,
+                    modifier = Modifier.onFocusChanged { if (it.hasFocus) fieldFocused("old_khata") })
             }
             PrimaryButton(
                 if (editing) tr("Save changes") else tr("Save customer"), enabled = valid, height = 56.dp,
                 onDisabledClick = {
                     blockedTaps++
+                    step("save_blocked_${missing()}")
                     Analytics.customerSaveBlocked(missing(), form.ctx, name.trim().isNotEmpty(), phone.length, address.trim().isNotEmpty())
                 },
             ) {
+                step("save")
                 how = "saved"
                 method = if (pickedPhone != null && pickedPhone == phone) "contacts" else "typed"
                 vm.saveCustomer(form.editId, name.trim(), phone, address.trim(), oldBaaki.toIntOrNull() ?: 0, form.ctx == "list") { id ->
@@ -233,17 +268,26 @@ fun AddressFormSheet(state: LaundryState, form: ActiveSheet.AddressForm, vm: Sho
     var how by remember { mutableStateOf("dismissed") }
     var edited by remember { mutableStateOf(false) }
     var blockedTaps by remember { mutableIntStateOf(0) }
+    var focused by remember { mutableStateOf(false) }
+    var keyboardShown by remember { mutableStateOf(false) }
+    val imeUp = WindowInsets.isImeVisible
+    LaunchedEffect(imeUp) { if (imeUp) keyboardShown = true }
     LaunchedEffect(Unit) { Analytics.addressSheetOpened(form.trigger, c.address.isNotBlank(), tour == TourStage.ORDER) }
     DisposableEffect(Unit) {
         onDispose {
-            Analytics.addressSheetClosed(form.trigger, how, (System.currentTimeMillis() - openedAt) / 1000, edited, address.isNotBlank(), blockedTaps)
+            Analytics.addressSheetClosed(
+                form.trigger, how, (System.currentTimeMillis() - openedAt) / 1000, edited, address.isNotBlank(), blockedTaps,
+                focused = focused, keyboardShown = keyboardShown,
+            )
         }
     }
     AppBottomSheet(title = tr("Customer's address"), subtitle = tr("{name} · for home pickup / delivery", "name" to c.name), onDismiss = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (tour == TourStage.ORDER) TourTip(TourSteps.addressForm)
             FieldBox(
-                address, { edited = true; address = it.replace('\n', ' ') }, placeholder = tr("House, area, landmark"), height = 96.dp, singleLine = false,
+                address, { edited = true; address = it.replace('\n', ' ') },
+                modifier = Modifier.onFocusChanged { if (it.hasFocus) focused = true },
+                placeholder = tr("House, area, landmark"), height = 96.dp, singleLine = false,
                 borderColor = if (address.isBlank()) Tokens.OrangeBorder else Tokens.FieldBorder,
             )
             PrimaryButton(
@@ -300,11 +344,14 @@ private fun ContactPickerSheet(state: LaundryState, onPick: (PhoneContact) -> Un
 }
 
 @Composable
-private fun Field(label: String, value: String, onChange: (String) -> Unit, placeholder: String, prefix: String? = null, kb: KeyboardType = KeyboardType.Text) {
+private fun Field(
+    label: String, value: String, onChange: (String) -> Unit, placeholder: String, prefix: String? = null,
+    kb: KeyboardType = KeyboardType.Text, modifier: Modifier = Modifier,
+) {
     Column {
         Text(label, style = fig(14, FontWeight.SemiBold))
         Box(Modifier.height(6.dp))
-        FieldBox(value, onChange, placeholder = placeholder, prefix = prefix, height = 52.dp, keyboardType = kb)
+        FieldBox(value, onChange, modifier = modifier, placeholder = placeholder, prefix = prefix, height = 52.dp, keyboardType = kb)
     }
 }
 

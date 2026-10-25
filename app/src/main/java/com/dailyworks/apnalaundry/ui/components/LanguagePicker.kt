@@ -37,12 +37,15 @@ import com.dailyworks.apnalaundry.ui.theme.Tokens
 /**
  * Pick the app's language — each in its own script, so it reads at a glance.
  * [onDismiss] null = a language must be picked (first open, before login).
+ * [where] for analytics: login_first | login_open | login (the chip) | settings —
+ * "Language Dialog Shown" / "Dismissed" here; a pick is "Language Changed" (applyLanguage).
  */
 @Composable
-fun LanguagePickerDialog(onPick: (AppLanguage) -> Unit, onDismiss: (() -> Unit)?) {
+fun LanguagePickerDialog(onPick: (AppLanguage) -> Unit, onDismiss: (() -> Unit)?, where: String = "") {
     val current = I18n.language
+    androidx.compose.runtime.LaunchedEffect(Unit) { Analytics.languageDialogShown(where, current.code) }
     Dialog(
-        onDismissRequest = { onDismiss?.invoke() },
+        onDismissRequest = { if (onDismiss != null) { Analytics.languageDialogDismissed(where, current.code); onDismiss() } },
         properties = DialogProperties(dismissOnBackPress = onDismiss != null, dismissOnClickOutside = onDismiss != null),
     ) {
         Column(

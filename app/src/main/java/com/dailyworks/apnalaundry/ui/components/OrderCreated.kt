@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.dailyworks.apnalaundry.R
+import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.core.Money
 import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.domain.LaundryMath
@@ -86,11 +87,12 @@ fun OrderCreatedDialog(state: LaundryState, orderId: Int, onDismiss: () -> Unit)
         OrderChime.play(context)
         pop.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow))
     }
+    fun close(how: String) { Analytics.orderCreatedDialogClosed(orderId, how); onDismiss() }
     LaunchedEffect(orderId) {
         delay(AUTO_CLOSE_MS)
-        onDismiss()
+        close("auto")
     }
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(onDismissRequest = { close("outside") }) {
         Column(
             Modifier.fillMaxWidth().rounded(24.dp).background(Tokens.Card).padding(horizontal = 24.dp, vertical = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -112,7 +114,7 @@ fun OrderCreatedDialog(state: LaundryState, orderId: Int, onDismiss: () -> Unit)
                 if (amount > 0) Text(Money.rupees(amount), style = bric(22, FontWeight.Bold, Tokens.GreenText))
             }
             Box(
-                Modifier.padding(top = 8.dp).fillMaxWidth().heightIn(min = 52.dp).rounded(14.dp).background(Tokens.Blue).tap(onClick = onDismiss),
+                Modifier.padding(top = 8.dp).fillMaxWidth().heightIn(min = 52.dp).rounded(14.dp).background(Tokens.Blue).tap { close("ok") },
                 contentAlignment = Alignment.Center,
             ) { Text(tr("OK"), style = fig(16, FontWeight.Bold, Tokens.OnDark)) }
         }

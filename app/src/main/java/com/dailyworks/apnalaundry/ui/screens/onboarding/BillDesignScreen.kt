@@ -129,12 +129,16 @@ fun BillDesignScreen(shopVm: ShopViewModel, editing: Boolean, onBack: () -> Unit
         bottom = {
             if (editing) {
                 PrimaryButton(tr("Save"), height = 56.dp, enabled = BillDetails.isNameOk(name)) {
+                    Analytics.billDesignSaved(draft.billTemplate, "settings", changed = draft.billTemplate != BillDetails.TEMPLATES[startIndex].first)
                     shopVm.updateShopDetails(name = BillDetails.cleanName(name), details = draft)
                     shopVm.showInfo(tr("Bill saved"))
                     onDone()
                 }
             } else {
-                PrimaryButton(tr("Start taking orders"), height = 56.dp) { onDone() }
+                PrimaryButton(tr("Start taking orders"), height = 56.dp) {
+                    Analytics.billDesignSaved(draft.billTemplate, "onboarding", changed = draft.billTemplate != BillDetails.TEMPLATES[startIndex].first)
+                    onDone()
+                }
             }
         },
     ) {

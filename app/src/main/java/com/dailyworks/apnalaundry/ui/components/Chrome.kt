@@ -117,11 +117,22 @@ fun BottomNav(
     // Ask only where the server has the assistant on (else New order alone, full width).
     val askOn by org.koin.compose.koinInject<com.dailyworks.apnalaundry.data.Prefs>().assistantOn
         .collectAsStateWithLifecycle(initialValue = false)
+    // Every button's tap → "Bottom Bar Tapped" (which button, on which tab, in which bar).
+    val style = when { onNewOrder != null -> "pills"; askOn -> "notched"; else -> "flat" }
+    val on = current.name.lowercase()
+    val select: (NavTab) -> Unit = { tab ->
+        com.dailyworks.apnalaundry.analytics.Analytics.bottomBarTapped(tab.name.lowercase(), on, style)
+        onSelect(tab)
+    }
     // Customers / Earnings / Settings: no action buttons — Ask sits in the middle of the
     // bar, the big black button in its notch (owner, 2026-10-25). Orders: the panel below.
     if (onNewOrder == null) {
-        NotchedTabs(current, itemModifier, askOn, onSelect)
+        NotchedTabs(current, itemModifier, askOn, select)
         return
+    }
+    val primary = {
+        com.dailyworks.apnalaundry.analytics.Analytics.bottomBarTapped(if (current == NavTab.CUSTOMERS) "add_customer" else "new_order", on, style)
+        onNewOrder()
     }
     val shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     Column(Modifier.fillMaxWidth().shadow(14.dp, shape).background(Tokens.Card, shape)) {
@@ -134,7 +145,7 @@ fun BottomNav(
                 if (askOn) {
                     Row(
                         Modifier.weight(1f).height(56.dp).then(itemModifier(NavTab.ASK)).rounded(999.dp).background(Tokens.Ink)
-                            .tap { onSelect(NavTab.ASK) }.padding(horizontal = 8.dp),
+                            .tap { select(NavTab.ASK) }.padding(horizontal = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
                     ) {
@@ -146,7 +157,7 @@ fun BottomNav(
                 }
                 Row(
                     Modifier.weight(1f).height(56.dp).then(newOrderModifier).rounded(999.dp).background(Tokens.Blue)
-                        .tap(onClick = onNewOrder).padding(horizontal = 10.dp),
+                        .tap(onClick = primary).padding(horizontal = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
                 ) {
@@ -166,7 +177,7 @@ fun BottomNav(
                     Modifier
                         .weight(1f)
                         .then(itemModifier(tab))
-                        .tap { onSelect(tab) }
+                        .tap { select(tab) }
                         .padding(vertical = 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(3.dp),
