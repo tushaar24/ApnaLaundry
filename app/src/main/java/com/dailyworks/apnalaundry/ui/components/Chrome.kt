@@ -25,6 +25,11 @@ import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.runtime.getValue
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
@@ -101,19 +106,25 @@ fun BottomNav(
     itemModifier: (NavTab) -> Modifier = { Modifier },
     onSelect: (NavTab) -> Unit,
 ) {
+    // Ask only where the server has the assistant on (else the four flat tabs as before).
+    val askOn by org.koin.compose.koinInject<com.dailyworks.apnalaundry.data.Prefs>().assistantOn
+        .collectAsStateWithLifecycle(initialValue = false)
     Row(
         Modifier
             .fillMaxWidth()
-            .heightIn(min = 72.dp)
-            .background(Tokens.Card)
-            .border(1.dp, Tokens.Divider, RoundedCornerShape(0.dp))
+            .heightIn(min = BAR_H)
+            .then(
+                if (askOn) Modifier.drawBehind { drawNotchedBar() }
+                else Modifier.background(Tokens.Card).border(1.dp, Tokens.Divider, RoundedCornerShape(0.dp)),
+            )
             .padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Ask only where the server has the assistant on (else the four tabs as before).
-        val askOn by org.koin.compose.koinInject<com.dailyworks.apnalaundry.data.Prefs>().assistantOn
-            .collectAsStateWithLifecycle(initialValue = false)
         NavTab.entries.filter { it != NavTab.ASK || askOn }.forEach { tab ->
+            if (tab == NavTab.ASK) {
+                AskNavButton(Modifier.weight(1f).then(itemModifier(tab))) { onSelect(tab) }
+                return@forEach
+            }
             val selected = tab == current
             val color = if (selected) Tokens.Blue else Tokens.Muted
             Column(
@@ -129,6 +140,86 @@ fun BottomNav(
                 Text(tr(tab.label), style = fig(11, if (selected) FontWeight.Bold else FontWeight.SemiBold, color), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
+    }
+}
+
+// The bar with Ask: a notch in the middle of its top edge cradles the round button.
+private val BAR_H = 72.dp
+private val ASK_SIZE = 60.dp
+private val NOTCH_GAP = 6.dp // between the button and the notch
+private val NOTCH_SHOULDER = 12.dp // the soft curve into the notch
+
+/**
+ * The white bar with a round notch at the top middle (the Ask button sits in
+ * it, half above the bar) and its 1 dp top line following the notch.
+ */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawNotchedBar() {
+    val w = size.width
+    val h = size.height
+    val cx = w / 2f
+    val r = ASK_SIZE.toPx() / 2f + NOTCH_GAP.toPx()
+    val s = NOTCH_SHOULDER.toPx()
+    val d = 25.0 // degrees: where the shoulders meet the notch
+    val rad = Math.toRadians(d)
+    val ax = (cx - r * kotlin.math.cos(rad)).toFloat()
+    val bx = (cx + r * kotlin.math.cos(rad)).toFloat()
+    val y = (r * kotlin.math.sin(rad)).toFloat()
+    val top = androidx.compose.ui.graphics.Path().apply {
+        moveTo(0f, 0f)
+        lineTo(cx - r - s, 0f)
+        quadraticBezierTo(cx - r, 0f, ax, y)
+        arcTo(androidx.compose.ui.geometry.Rect(cx - r, -r, cx + r, r), (180 - d).toFloat(), -(180 - 2 * d).toFloat(), false)
+        quadraticBezierTo(cx + r, 0f, cx + r + s, 0f)
+        lineTo(w, 0f)
+    }
+    val bar = androidx.compose.ui.graphics.Path().apply {
+        addPath(top)
+        lineTo(w, h)
+        lineTo(0f, h)
+        close()
+    }
+    drawPath(bar, Tokens.Card)
+    drawPath(top, Tokens.Divider, style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
+}
+
+/**
+ * Ask, the middle of the bottom bar: a big black mic button sitting in the
+ * bar's notch, half above it, with a soft pulse so it's noticed; "Ask" under it
+ * (owner: bigger, highlighted, like a docked button — in black).
+ */
+@Composable
+private fun AskNavButton(modifier: Modifier, onClick: () -> Unit) {
+    val pulse = androidx.compose.animation.core.rememberInfiniteTransition(label = "ask")
+    val t by pulse.animateFloat(
+        initialValue = 0f, targetValue = 1f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            androidx.compose.animation.core.tween(1800, easing = androidx.compose.animation.core.LinearOutSlowInEasing),
+        ),
+        label = "ring",
+    )
+    Box(modifier.height(BAR_H).tap(onClick = onClick)) {
+        // Centred on the bar's top edge: half above it, in the notch.
+        Box(Modifier.align(Alignment.TopCenter).offset(y = -ASK_SIZE / 2).size(ASK_SIZE), contentAlignment = Alignment.Center) {
+            // The pulse: a ring that grows and fades, again and again.
+            Box(
+                Modifier.size(ASK_SIZE)
+                    .graphicsLayer { scaleX = 1f + 0.3f * t; scaleY = 1f + 0.3f * t; alpha = 0.3f * (1f - t) }
+                    .background(Tokens.Ink, androidx.compose.foundation.shape.CircleShape),
+            )
+            Box(
+                Modifier.size(ASK_SIZE)
+                    .shadow(8.dp, androidx.compose.foundation.shape.CircleShape)
+                    .background(Tokens.Ink, androidx.compose.foundation.shape.CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(NavTab.ASK.icon, tr(NavTab.ASK.label), tint = Tokens.OnDark, modifier = Modifier.size(30.dp))
+            }
+        }
+        Text(
+            tr(NavTab.ASK.label), style = fig(12, FontWeight.ExtraBold, Tokens.Ink),
+            maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp),
+        )
     }
 }
 
