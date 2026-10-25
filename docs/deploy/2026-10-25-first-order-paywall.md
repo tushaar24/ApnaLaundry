@@ -21,7 +21,11 @@ Accounts already in `free1_monthly_499` keep the wall at the 2nd New order. To g
 
 ## Apply
 
-The auto-mode classifier blocked the prod `.env` edit from the job; the dry run passed.
+**LIVE 2026-10-25 11:43:37 UTC (17:13 IST)**, run from the job after the owner gave permission.
+- The backend accepted the setting (no `[paywall]` errors) and laundry-dash was recreated.
+- Checked in the container with `offer()`:
+  - an account created now → `gate first_order`, `gateGroup free1`, 1 free order, ₹499;
+  - one created yesterday → `free_orders` (unchanged).
 
 ```sh
 DRY_RUN=1 bash docs/deploy/2026-10-25-first-order-paywall-deploy.sh   # prints the new variant + split
