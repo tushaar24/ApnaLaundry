@@ -27,3 +27,10 @@ app/release/
 
 # Claude Code job worktrees (separate checkouts — never commit)
 .claude/worktrees/
+
+# Secrets (Sarvam AI key etc.) — never commit
+.env
+.venv/
+
+# Call recordings + transcripts (owners' voices / words) — local only
+/tools/sarvam/data/
