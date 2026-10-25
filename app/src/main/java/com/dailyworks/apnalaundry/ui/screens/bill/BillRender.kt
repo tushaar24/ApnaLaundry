@@ -148,6 +148,7 @@ object BillRender {
     ) {
         val receipt = template == BillDetails.RECEIPT
         val bold = template == BillDetails.BOLD
+        val invoice = template == BillDetails.INVOICE
         val f = fonts(context, receipt)
         val left = PAD
         val right = W - PAD
@@ -218,7 +219,27 @@ object BillRender {
             val hasLogo = logo != null && logoId.isNotEmpty()
             val shopName = if (receipt) name.uppercase() else name
             val details = listOf(phone, email, address, if (gstin.isNotEmpty()) "GSTIN $gstin" else "").filter { it.isNotEmpty() }
-            if (bold) {
+            if (invoice) {
+                // Logo on the left; name, address and "Mobile - 7676373888" centred beside it; a black rule.
+                val logoSize = 66f
+                val textX0 = if (hasLogo) left + logoSize + 10 else left
+                val textW = right - textX0
+                val cx = (textX0 + right) / 2
+                val digits = phone.filter { it.isDigit() }.takeLast(10)
+                val info = listOf(address, if (digits.isNotEmpty()) "Mobile - $digits" else "", email, if (gstin.isNotEmpty()) "GSTIN $gstin" else "")
+                    .filter { it.isNotEmpty() }
+                font(23f, 700)
+                var textH = wrap(p, name, textW).size * 27f
+                font(14.5f, 400)
+                info.forEach { textH += wrap(p, it, textW).size * 19f }
+                val blockH = max(if (hasLogo) logoSize else 0f, textH)
+                if (hasLogo) drawLogo(logoSize, left, PAD + (blockH - logoSize) / 2, false)
+                cy = PAD + (blockH - textH) / 2 - 5
+                lines(name, 23f, 700, false, textW, cx, Paint.Align.CENTER, INK, 27f)
+                info.forEach { lines(it, 14.5f, 400, false, textW, cx, Paint.Align.CENTER, INK, 19f) }
+                cy = PAD + blockH + 14
+                rule(cy, width = 1.2f, color = INK)
+            } else if (bold) {
                 val textX = left + if (hasLogo) 56f else 0f
                 val textW = right - textX
                 font(22f, 700, display = true)
@@ -339,8 +360,9 @@ object BillRender {
 
     // ---------------- layouts ----------------
 
-    private fun layout(context: Context, canvas: Canvas, r: BillReceipt, logo: Bitmap?, draw: Boolean, minH: Float): Float =
-        with(Pen(context, canvas, r.template, logo, r.logoId, draw)) {
+    private fun layout(context: Context, canvas: Canvas, r: BillReceipt, logo: Bitmap?, draw: Boolean, minH: Float): Float {
+        if (r.template == BillDetails.INVOICE) return layoutInvoice(context, canvas, r, logo, draw, minH)
+        return with(Pen(context, canvas, r.template, logo, r.logoId, draw)) {
             // 1. shop block
             shopBlock(r.shopName, r.shopPhone, r.email, r.address, r.gstin)
 
@@ -417,6 +439,100 @@ object BillRender {
             if (r.readyBy.isNotEmpty()) lines(r.readyBy, 12.5f, 400, false, right - left, mid, Paint.Align.CENTER, MUTED, 18f)
 
             // 8. terms, 9. thank you
+            termsBlock(r.terms)
+            finish(minH)
+        }
+    }
+
+    /**
+     * The Invoice design (owner's sample bill, 2026-10-25): logo + shop on top,
+     * the order's details as label → value, then a table Item · Qty · Rate ·
+     * Total (the service under each item), money with paise.
+     */
+    private fun layoutInvoice(context: Context, canvas: Canvas, r: BillReceipt, logo: Bitmap?, draw: Boolean, minH: Float): Float =
+        with(Pen(context, canvas, r.template, logo, r.logoId, draw)) {
+            shopBlock(r.shopName, r.shopPhone, r.email, r.address, r.gstin)
+
+            if (r.taxInvoice) {
+                cy += 22
+                font(12f, 800)
+                p.letterSpacing = 0.14f
+                text("TAX INVOICE", mid, cy, Paint.Align.CENTER, HEADING)
+                p.letterSpacing = 0f
+            }
+
+            // Order / Customer / Mobile / Created At / Delivered Date
+            val details = listOf(
+                "Order" to r.orderNo, "Customer" to r.customerName.uppercase(), "Mobile" to r.customerMobile,
+                "Created At" to r.createdAt, r.dateLabel to r.dateValue,
+            ).filter { it.first.isNotEmpty() && it.second.isNotEmpty() }
+            cy += 6
+            details.forEach { (label, value) ->
+                cy += 23
+                font(14.5f, 400)
+                text(label, left, cy, Paint.Align.LEFT)
+                val room = right - left - p.measureText(label) - 16
+                var size = 14.5f
+                font(size, 700)
+                while (p.measureText(value) > room && size > 9f) { size -= 0.5f; font(size, 700) } // a long name shrinks, never overlaps
+                text(value, right, cy, Paint.Align.RIGHT)
+            }
+            cy += 15
+            rule(cy, width = 1.2f, color = INK)
+
+            // Item · Qty · Rate · Total
+            val qtyX = left + 0.60f * (right - left) // centre of Qty
+            val rateR = left + 0.80f * (right - left) // right edge of Rate
+            val itemW = qtyX - left - 24
+            cy += 25
+            font(14.5f, 700)
+            text("Item", left, cy, Paint.Align.LEFT)
+            text("Qty", qtyX, cy, Paint.Align.CENTER)
+            text("Rate", rateR, cy, Paint.Align.RIGHT)
+            text("Total", right, cy, Paint.Align.RIGHT)
+            cy += 10
+            rule(cy, width = 2f, color = INK)
+            r.lines.forEachIndexed { i, l ->
+                if (i > 0) rule(cy, width = 0.8f, color = BORDER)
+                cy += 22
+                font(14f, 400)
+                text(l.qty, qtyX, cy, Paint.Align.CENTER)
+                text(l.unit, rateR, cy, Paint.Align.RIGHT)
+                text(l.totalExact.ifEmpty { l.amount }, right, cy, Paint.Align.RIGHT)
+                wrap(p, l.name.ifEmpty { l.item }, itemW).forEachIndexed { k, s ->
+                    if (k > 0) cy += 18
+                    text(s, left, cy, Paint.Align.LEFT)
+                }
+                if (l.sub.isNotEmpty()) lines(l.sub, 12.5f, 400, false, itemW, left, Paint.Align.LEFT, HEADING, 16f)
+                cy += 10
+            }
+            rule(cy, width = 1.2f, color = INK)
+
+            // Subtotal, extras, Total
+            fun row(label: String, value: String, strong: Boolean = false, color: Int = INK) {
+                cy += if (strong) 28 else 24
+                font(if (strong) 17f else 14.5f, if (strong) 700 else 400)
+                text(label, left, cy, Paint.Align.LEFT, color)
+                font(if (strong) 17f else 14.5f, 700)
+                text(value, right, cy, Paint.Align.RIGHT, color)
+            }
+            row("Subtotal", r.subtotalExact.ifEmpty { r.subtotal })
+            r.extras.forEach { row(it.label, it.exact, color = if (it.discount) GREEN else INK) }
+            cy += 12
+            rule(cy, width = 1.2f, color = INK)
+            row("Total", r.totalExact.ifEmpty { r.total }, strong = true)
+            cy += 6
+
+            if (r.gstNote.isNotEmpty()) {
+                cy += 4
+                lines(r.gstNote, 11.5f, 400, false, right - left, left, Paint.Align.LEFT, MUTED, 15f)
+            }
+            if (r.payStatus.isNotEmpty()) {
+                cy += 22
+                font(13.5f, 700)
+                text(r.payStatus, mid, cy, Paint.Align.CENTER, if (r.payStatus == "Paid in full") GREEN else INK)
+            }
+            qrBlock(r.upi)
             termsBlock(r.terms)
             finish(minH)
         }

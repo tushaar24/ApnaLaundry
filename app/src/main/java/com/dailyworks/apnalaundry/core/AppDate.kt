@@ -79,6 +79,13 @@ object AppDate {
     fun dayName(iso: String): String = dayShort(parse(iso))
     fun dayOfMonth(iso: String): Int = parse(iso).dayOfMonth
 
+    /** "03/10/2026" — the Invoice bill's dates. Blank in -> blank out. */
+    fun dmy(iso: String): String {
+        if (iso.isBlank()) return ""
+        val d = parse(iso)
+        return "${d.dayOfMonth.toString().padStart(2, '0')}/${d.monthValue.toString().padStart(2, '0')}/${d.year}"
+    }
+
     /** 24h "HH:mm" -> "5:00 PM". Blank in -> blank out. */
     fun to12h(hhmm: String): String {
         if (hhmm.isBlank()) return ""

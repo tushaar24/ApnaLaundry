@@ -16,8 +16,12 @@ object BillDetails {
     const val BOLD = "bold"
     const val RECEIPT = "receipt"
 
+    /** A table invoice: logo + shop on top, order details, then Item · Qty · Rate · Total (2026-10-25). */
+    const val INVOICE = "invoice"
+
     // Names shown with tr() (i18n marks them for the catalogue); the design is saved by its id.
-    val TEMPLATES = listOf(CLASSIC to i18n("Classic"), BOLD to i18n("Bold"), RECEIPT to i18n("Receipt"))
+    // An app from before a design treats its id as Classic (templateOrDefault).
+    val TEMPLATES = listOf(CLASSIC to i18n("Classic"), BOLD to i18n("Bold"), RECEIPT to i18n("Receipt"), INVOICE to i18n("Invoice"))
 
     val STEPS = listOf("intro", "name", "services", "bill", "done")
 

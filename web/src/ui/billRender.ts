@@ -200,6 +200,97 @@ function layout(ctx: CanvasRenderingContext2D, r: BillReceipt, draw: boolean, mi
   const shopName = receipt ? r.shop.name.toUpperCase() : r.shop.name;
   const details = [r.shop.phone, r.shop.email, r.shop.address, r.shop.gstin ? `GSTIN ${r.shop.gstin}` : ""].filter(Boolean);
 
+  if (t === "invoice") {
+    // The Invoice design (owner's sample bill, 2026-10-25): logo left with the shop centred beside it,
+    // the order's details as label → value, then Item · Qty · Rate · Total, money with paise.
+    // Port twin: BillRender.layoutInvoice.
+    const logoSize = 66;
+    const textX0 = hasLogo ? left + logoSize + 10 : left;
+    const textW = right - textX0;
+    const cx = (textX0 + right) / 2;
+    const digits = r.shop.phone.replace(/\D/g, "").slice(-10);
+    const info = [r.shop.address, digits ? `Mobile - ${digits}` : "", r.shop.email, r.shop.gstin ? `GSTIN ${r.shop.gstin}` : ""].filter(Boolean);
+    font(23, 700, BODY);
+    let textH = wrap(ctx, r.shop.name, textW).length * 27;
+    font(14.5, 400, BODY);
+    for (const d of info) textH += wrap(ctx, d, textW).length * 19;
+    const blockH = Math.max(hasLogo ? logoSize : 0, textH);
+    if (hasLogo) logo(logoSize, left, PAD + (blockH - logoSize) / 2, false);
+    p.y = PAD + (blockH - textH) / 2 - 5;
+    lines(r.shop.name, 23, 700, BODY, textW, cx, "center", C.ink, 27);
+    for (const d of info) lines(d, 14.5, 400, BODY, textW, cx, "center", C.ink, 19);
+    p.y = PAD + blockH + 14;
+    rule({ width: 1.2, color: C.ink });
+
+    if (r.taxInvoice) {
+      p.y += 22;
+      font(12, 800);
+      text("TAX INVOICE", mid, p.y, "center", C.heading);
+    }
+
+    // Order / Customer / Mobile / Created At / Delivered Date
+    const rows: [string, string][] = ([
+      ["Order", r.orderNo ?? ""], ["Customer", r.customer.name.toUpperCase()], ["Mobile", r.customerMobile ?? ""],
+      ["Created At", r.createdAt ?? ""], [r.dateLabel ?? "", r.dateValue ?? ""],
+    ] as [string, string][]).filter(([a, b]) => a && b);
+    p.y += 6;
+    for (const [label, value] of rows) {
+      p.y += 23;
+      font(14.5, 400, BODY);
+      text(label, left, p.y, "left");
+      const room = right - left - ctx.measureText(label).width - 16;
+      let size = 14.5;
+      font(size, 700, BODY);
+      while (ctx.measureText(value).width > room && size > 9) { size -= 0.5; font(size, 700, BODY); } // a long name shrinks, never overlaps
+      text(value, right, p.y, "right");
+    }
+    p.y += 15;
+    rule({ width: 1.2, color: C.ink });
+
+    // Item · Qty · Rate · Total
+    const qtyX = left + 0.6 * (right - left);
+    const rateR = left + 0.8 * (right - left);
+    const itemW = qtyX - left - 24;
+    p.y += 25;
+    font(14.5, 700, BODY);
+    text("Item", left, p.y, "left");
+    text("Qty", qtyX, p.y, "center");
+    text("Rate", rateR, p.y, "right");
+    text("Total", right, p.y, "right");
+    p.y += 10;
+    rule({ width: 2, color: C.ink });
+    r.lines.forEach((l, i) => {
+      if (i > 0) rule({ width: 0.8, color: C.border });
+      p.y += 22;
+      font(14, 400, BODY);
+      text(l.qty ?? "", qtyX, p.y, "center");
+      text(l.unit ?? "", rateR, p.y, "right");
+      text(l.totalExact || l.amount, right, p.y, "right");
+      wrap(ctx, l.name || l.item, itemW).forEach((s, k) => {
+        if (k > 0) p.y += 18;
+        text(s, left, p.y, "left");
+      });
+      if (l.sub) lines(l.sub, 12.5, 400, BODY, itemW, left, "left", C.heading, 16);
+      p.y += 10;
+    });
+    rule({ width: 1.2, color: C.ink });
+
+    // Subtotal, extras, Total
+    const invRow = (label: string, value: string, strong = false, color = C.ink) => {
+      p.y += strong ? 28 : 24;
+      font(strong ? 17 : 14.5, strong ? 700 : 400, BODY);
+      text(label, left, p.y, "left", color);
+      font(strong ? 17 : 14.5, 700, BODY);
+      text(value, right, p.y, "right", color);
+    };
+    invRow("Subtotal", r.subtotalExact || r.subtotal);
+    for (const e of r.extras) invRow(e.label, e.exact || e.value, false, e.discount ? C.green : C.ink);
+    p.y += 12;
+    rule({ width: 1.2, color: C.ink });
+    invRow("Total", r.totalExact || r.total, true);
+    p.y += 6;
+  } else {
+
   // 1. shop block
   if (t === "bold") {
     // Measure the band first, then paint it under the text.
@@ -333,6 +424,8 @@ function layout(ctx: CanvasRenderingContext2D, r: BillReceipt, draw: boolean, mi
     p.y += 8;
   }
 
+  } // end of the non-Invoice designs
+
   // 5b. inclusive GST: what the total already includes
   if (r.gstNote) {
     p.y += 4;
@@ -372,7 +465,7 @@ function layout(ctx: CanvasRenderingContext2D, r: BillReceipt, draw: boolean, mi
   } else {
     p.y += 4;
   }
-  if (r.readyBy) lines(r.readyBy, 12.5, 400, BODY, right - left, mid, "center", C.muted, 18);
+  if (r.readyBy && t !== "invoice") lines(r.readyBy, 12.5, 400, BODY, right - left, mid, "center", C.muted, 18); // Invoice shows the date in its details
 
   // 8. terms
   if (r.terms.length) {

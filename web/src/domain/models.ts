@@ -105,7 +105,7 @@ export interface LedgerEntry {
   note: string;
 }
 
-export type BillTemplate = "classic" | "bold" | "receipt";
+export type BillTemplate = "classic" | "bold" | "receipt" | "invoice";
 
 /** Onboarding progress ("" = a shop from before onboarding was tracked). */
 export type OnboardingStep = "" | "intro" | "name" | "services" | "bill" | "done";

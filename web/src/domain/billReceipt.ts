@@ -10,7 +10,7 @@ import * as Sel from "@/domain/selectors";
 
 /**
  * Everything printed on a customer's bill, already formatted — one model
- * drives every design (Classic / Bold / Receipt), the PDF, the shared image,
+ * drives every design (Classic / Bold / Receipt / Invoice), the PDF, the shared image,
  * the "View bill" sheet, the public /b/ page and the onboarding preview, so
  * they can never drift apart. Port twin: domain/BillReceipt.kt.
  */
@@ -20,12 +20,18 @@ export interface ReceiptLine {
   sub: string; // service name under the item ("" = none)
   amount: string;
   rate?: string; // price per item: "₹20 each" / "₹60/kg" ("" / absent = none)
+  // The Invoice design's columns: "Shirt", "3", "₹80.00", "₹240.00" ("" where a lump bill has none).
+  name?: string;
+  qty?: string;
+  unit?: string;
+  totalExact?: string;
 }
 
 export interface ReceiptRow {
   label: string;
   value: string;
   discount?: boolean; // printed green
+  exact?: string; // the value with paise (Invoice design)
 }
 
 export interface ReceiptUpi {
@@ -57,6 +63,14 @@ export interface BillReceipt {
   payStatus: string; // real bills: "To pay ₹X" / "Paid ₹Y · to pay ₹Z" / "Paid in full"; "" on the preview
   upi: ReceiptUpi | null;
   terms: string[];
+  // The Invoice design: the order's details as label → value, money with paise.
+  orderNo?: string; // "1005" / the owner's serial
+  customerMobile?: string; // "9455838720" (no +91)
+  createdAt?: string; // "03/10/2026"
+  dateLabel?: string; // "Delivered Date" / "Delivery Date" / ""
+  dateValue?: string;
+  subtotalExact?: string; // "₹840.00"
+  totalExact?: string;
 }
 
 /** The order fields a bill shows — also what the public bill endpoint returns. */
@@ -110,10 +124,26 @@ function rateOf(l: OrderLine): string {
   return l.kg > 0 ? `${rupees(l.price)}/kg` : `${rupees(l.price)} each`;
 }
 
+/** ₹ with paise: "₹840.00". */
+const exact = (rupeesAmt: number) => rupeesPaise(rupeesAmt * 100);
+
 function line(l: OrderLine): ReceiptLine {
-  if (l.kg > 0) return { item: Sel.weightLabel(l), sub: "", amount: rupees(l.amt), rate: rateOf(l) };
-  if (l.isQuick) return { item: l.qty > 0 ? `${l.itemName} × ${l.qty}` : l.itemName, sub: "", amount: rupees(l.amt) };
-  return { item: `${l.itemName} × ${l.qty}`, sub: l.serviceName, amount: rupees(l.amt), rate: rateOf(l) };
+  if (l.kg > 0) {
+    return {
+      item: Sel.weightLabel(l), sub: "", amount: rupees(l.amt), rate: rateOf(l),
+      name: l.serviceName, qty: `${Sel.trimKg(l.kg)} kg`, unit: l.price > 0 ? `${exact(l.price)}/kg` : "", totalExact: exact(l.amt),
+    };
+  }
+  if (l.isQuick) {
+    return {
+      item: l.qty > 0 ? `${l.itemName} × ${l.qty}` : l.itemName, sub: "", amount: rupees(l.amt),
+      name: l.itemName, qty: l.qty > 0 ? String(l.qty) : "", unit: "", totalExact: exact(l.amt),
+    };
+  }
+  return {
+    item: `${l.itemName} × ${l.qty}`, sub: l.serviceName, amount: rupees(l.amt), rate: rateOf(l),
+    name: l.itemName, qty: String(l.qty), unit: exact(l.price), totalExact: exact(l.amt),
+  };
 }
 
 function readyByOf(o: BillOrder): string {
@@ -151,10 +181,10 @@ export function receiptFrom({ shop, customer: c, order: o }: BillData, opts: Rec
   const extras: ReceiptRow[] = [];
   if (o.express && o.exAmt > 0) {
     const label = opts.expressPct != null ? `Express (urgent, +${opts.expressPct}%)` : "Express (urgent)";
-    extras.push({ label, value: `+ ${rupees(o.exAmt)}` });
+    extras.push({ label, value: `+ ${rupees(o.exAmt)}`, exact: `+ ${exact(o.exAmt)}` });
   }
-  if (o.fee > 0) extras.push({ label: "Pickup / delivery", value: `+ ${rupees(o.fee)}` });
-  if (o.discount > 0) extras.push({ label: "Discount", value: `− ${rupees(o.discount)}`, discount: true });
+  if (o.fee > 0) extras.push({ label: "Pickup / delivery", value: `+ ${rupees(o.fee)}`, exact: `+ ${exact(o.fee)}` });
+  if (o.discount > 0) extras.push({ label: "Discount", value: `− ${rupees(o.discount)}`, discount: true, exact: `− ${exact(o.discount)}` });
   if (gst.on && gst.mode === "excl") {
     extras.push({ label: "Taxable value", value: rupeesPaise(gst.taxablePaise) });
     extras.push({ label: `CGST @${halfRate(gst.pct)}%`, value: `+ ${rupeesPaise(gst.cgstPaise)}` });
@@ -188,5 +218,12 @@ export function receiptFrom({ shop, customer: c, order: o }: BillData, opts: Rec
       ? { id: d.upiId, payload: upiPayload(d.upiId, shop.name, total, o.id), amount: rupees(total) }
       : null,
     terms: termLines(d),
+    orderNo: Sel.orderNo(o),
+    customerMobile: phone,
+    createdAt: AppDate.dmy(o.createdOn),
+    dateLabel: o.status === "DELIVERED" && o.doneDate ? "Delivered Date" : o.deliveryDate ? "Delivery Date" : "",
+    dateValue: o.status === "DELIVERED" && o.doneDate ? AppDate.dmy(o.doneDate) : AppDate.dmy(o.deliveryDate),
+    subtotalExact: exact(clothesOf(o)),
+    totalExact: exact(total),
   };
 }

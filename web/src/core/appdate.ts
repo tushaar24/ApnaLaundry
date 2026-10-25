@@ -94,6 +94,13 @@ export function plain(iso: string): string {
   return `${DAY_SHORT[dayIndex(d)]}, ${d.getUTCDate()} ${MON[d.getUTCMonth()]}`;
 }
 
+/** "03/10/2026" — the Invoice bill's dates. Blank in → blank out. */
+export function dmy(iso: string): string {
+  if (!iso) return "";
+  const d = parse(iso);
+  return `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}/${d.getUTCFullYear()}`;
+}
+
 export function dayName(iso: string): string {
   return DAY_SHORT[dayIndex(parse(iso))];
 }

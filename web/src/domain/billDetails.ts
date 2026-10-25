@@ -11,6 +11,8 @@ export const BILL_TEMPLATES: { id: BillTemplate; label: string }[] = [
   { id: "classic", label: "Classic" },
   { id: "bold", label: "Bold" },
   { id: "receipt", label: "Receipt" },
+  // A table invoice: logo + shop, order details, Item · Qty · Rate · Total (2026-10-25).
+  { id: "invoice", label: "Invoice" },
 ];
 
 export const TERM_PRESETS: { id: string; text: string }[] = [
