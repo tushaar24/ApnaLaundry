@@ -70,6 +70,7 @@ class AppNavigator(val nav: NavHostController) {
     fun selectTab(tab: NavTab) = when (tab) {
         NavTab.ORDERS -> navigateTab(Routes.HOME)
         NavTab.CUSTOMERS -> navigateTab("customers?filter=all")
+        NavTab.ASK -> openAssistant("nav") // its own screen (back returns here), not a tab page
         NavTab.EARNINGS -> navigateTab(Routes.EARNINGS)
         NavTab.SETTINGS -> navigateTab(Routes.SETTINGS)
     }

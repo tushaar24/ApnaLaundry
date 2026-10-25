@@ -22,7 +22,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.People
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -85,6 +88,8 @@ fun AppCard(
 enum class NavTab(val label: String, val icon: ImageVector) {
     ORDERS(i18n("Orders"), Icons.AutoMirrored.Outlined.ReceiptLong),
     CUSTOMERS(i18n("Customers"), Icons.Outlined.People),
+    /** The assistant — opens its own screen; only where the server has it on. */
+    ASK(i18n("Ask"), Icons.Outlined.Mic),
     EARNINGS(i18n("Earnings"), Icons.Outlined.BarChart),
     SETTINGS(i18n("Settings"), Icons.Outlined.Settings),
 }
@@ -105,7 +110,10 @@ fun BottomNav(
             .padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        NavTab.entries.forEach { tab ->
+        // Ask only where the server has the assistant on (else the four tabs as before).
+        val askOn by org.koin.compose.koinInject<com.dailyworks.apnalaundry.data.Prefs>().assistantOn
+            .collectAsStateWithLifecycle(initialValue = false)
+        NavTab.entries.filter { it != NavTab.ASK || askOn }.forEach { tab ->
             val selected = tab == current
             val color = if (selected) Tokens.Blue else Tokens.Muted
             Column(
