@@ -91,6 +91,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import com.dailyworks.apnalaundry.ui.components.showDatePicker
 import com.dailyworks.apnalaundry.ui.tour.Spotlight
 import com.dailyworks.apnalaundry.ui.tour.TourStage
@@ -142,6 +143,33 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
     @OptIn(ExperimentalLayoutApi::class)
     val compact = searching || (searchFocused && WindowInsets.isImeVisible)
     val listState = rememberLazyListState()
+    // Scrolling the orders up folds the sections above the tabs; pulling down at the top
+    // of the list brings them back. Only a real drag of the list flips it — never the
+    // list resizing as they fold — so it can't flicker.
+    var collapsed by rememberSaveable { mutableStateOf(false) }
+    val foldAfterPx = with(LocalDensity.current) { 48.dp.toPx() }
+    val collapseOnScroll = remember(listState, foldAfterPx) {
+        object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+            var pulled = 0f
+            override fun onPreScroll(available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                val dy = available.y
+                if (dy < 0f) {
+                    pulled = (pulled + dy).coerceAtMost(0f)
+                    if (!collapsed && pulled < -foldAfterPx && listState.canScrollForward) { collapsed = true; pulled = 0f }
+                } else if (dy > 0f) {
+                    pulled = 0f
+                    if (collapsed && !listState.canScrollBackward) collapsed = false
+                }
+                return androidx.compose.ui.geometry.Offset.Zero
+            }
+
+            override fun onPostScroll(consumed: androidx.compose.ui.geometry.Offset, available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                // Pulled down past the top of the list: show them again.
+                if (available.y > 0f && collapsed) collapsed = false
+                return androidx.compose.ui.geometry.Offset.Zero
+            }
+        }
+    }
     // All-dates search: once per change of the query or the data, not on every redraw.
     val results = remember(state.orders, state.customers, query, tabPickup) {
         if (query.isBlank()) emptyList() else searchResults(state, query, tabPickup)
@@ -217,11 +245,25 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
 
         if (!noOrders) {
             // While searching only the tabs stay, so switching tab re-runs the search there.
-            if (!compact) DashboardStrip(state, selDate, hidden, onEye = shopVm::toggleHideAmounts, onOpen = { navigator.openEarnings() })
+            // Scrolling the orders folds the sales / orders-today cards, the dates and the
+            // filters away — only Pickups / Deliveries stay (owner, 2026-10-25).
+            androidx.compose.animation.AnimatedVisibility(
+                visible = !compact && !collapsed,
+                enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
+                exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut(),
+            ) {
+                DashboardStrip(state, selDate, hidden, onEye = shopVm::toggleHideAmounts, onOpen = { navigator.openEarnings() })
+            }
             TabRow(state, tabPickup, selDate) { tabPickup = it; filter = "all" }
-            if (!compact) {
-                DateStrip(state, tabPickup, selDate) { selDate = it }
-                FilterTabs(state, tabPickup, selDate, filter) { filter = it }
+            androidx.compose.animation.AnimatedVisibility(
+                visible = !compact && !collapsed,
+                enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
+                exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut(),
+            ) {
+                Column {
+                    DateStrip(state, tabPickup, selDate) { selDate = it }
+                    FilterTabs(state, tabPickup, selDate, filter) { filter = it }
+                }
             }
         }
 
@@ -230,7 +272,7 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                 EmptyHome(Modifier.spotlightTarget(targets, "new_order")) { startNewOrder("empty_home") }
                 return@Box
             }
-            LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            LazyColumn(Modifier.fillMaxSize().nestedScroll(collapseOnScroll), state = listState, contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 // Sticky: stays on screen while scrolling orders.
                 stickyHeader(key = "search") {
                     Box(Modifier.fillMaxWidth().background(Tokens.Bg).padding(top = 4.dp, bottom = 2.dp)) {
