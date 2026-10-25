@@ -157,9 +157,10 @@ fun CustomersScreen(shopVm: ShopViewModel, navigator: AppNavigator, initialFilte
             }
         }
         // Ask + "Add customer" in the bottom bar (owner, 2026-10-25), like New order on Orders.
+        // No customers yet: the empty screen has its own button, so just Ask in the middle.
         BottomNav(
             current = NavTab.CUSTOMERS, itemModifier = { Modifier.spotlightTarget(targets, "nav_${it.name}") },
-            onNewOrder = ::addCustomer, primaryLabel = tr("Add customer"),
+            onNewOrder = if (noCustomers) null else ::addCustomer, primaryLabel = tr("Add customer"),
             primaryIcon = androidx.compose.material.icons.Icons.Outlined.PersonAdd,
             onSelect = navigator::selectTab,
         )
