@@ -116,10 +116,13 @@ fun LoginScreen(onLoggedIn: () -> Unit, vm: AuthViewModel = koinViewModel()) {
     // First open: the notification permission (Android 13+), then Google's
     // number picker — one after the other, never both on screen. Kept at this
     // level so "Change number" (back from the OTP step) doesn't ask again.
-    // Before all that, the very first open asks the language (it can't be skipped);
-    // picking one redraws the screen in it. The chip at the top left changes it later.
+    // Before all that, every open starts with the language dialog (owner, 2026-10-25).
+    // The very first one can't be skipped; later ones show the current language and
+    // close on back. Picking redraws the screen in it — saveable, so it doesn't come
+    // back after that. The chip at the top right opens it again.
     val context = LocalContext.current
-    var pickLanguage by remember { mutableStateOf(!I18n.chosen(context)) }
+    val firstPick = remember { !I18n.chosen(context) }
+    var pickLanguage by rememberSaveable { mutableStateOf(true) }
     var changeLanguage by remember { mutableStateOf(false) }
     val phoneHint = rememberPhoneHint(vm::onPhone)
     var askedOnOpen by rememberSaveable { mutableStateOf(false) }
@@ -131,7 +134,8 @@ fun LoginScreen(onLoggedIn: () -> Unit, vm: AuthViewModel = koinViewModel()) {
     }
 
     Column(Modifier.fillMaxSize().background(Tokens.Blue).imePadding()) {
-        Row(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(start = 16.dp, end = 16.dp, top = 10.dp)) {
+        // The language chip, top right (owner, 2026-10-25).
+        Row(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(start = 16.dp, end = 16.dp, top = 10.dp), horizontalArrangement = Arrangement.End) {
             LanguageChip(onClick = { changeLanguage = true }, onDark = true)
         }
         // The row above already sits below the status bar.
@@ -141,7 +145,10 @@ fun LoginScreen(onLoggedIn: () -> Unit, vm: AuthViewModel = koinViewModel()) {
     }
 
     if (pickLanguage) {
-        LanguagePickerDialog(onPick = { pickLanguage = false; applyLanguage(context, it, "login_first") }, onDismiss = null)
+        LanguagePickerDialog(
+            onPick = { pickLanguage = false; applyLanguage(context, it, if (firstPick) "login_first" else "login_open") },
+            onDismiss = if (firstPick) null else ({ pickLanguage = false }),
+        )
     }
     if (changeLanguage) {
         LanguagePickerDialog(onPick = { changeLanguage = false; applyLanguage(context, it, "login") }, onDismiss = { changeLanguage = false })

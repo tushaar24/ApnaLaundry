@@ -73,7 +73,7 @@ fun LanguagePickerDialog(onPick: (AppLanguage) -> Unit, onDismiss: (() -> Unit)?
     }
 }
 
-/** The current language as a small chip (login, top left): globe + its name + ▾. */
+/** The current language as a small chip (login, top right): globe + its name + ▾. */
 @Composable
 fun LanguageChip(onClick: () -> Unit, modifier: Modifier = Modifier, onDark: Boolean = false) {
     val fg = if (onDark) Tokens.OnDark else Tokens.Ink
