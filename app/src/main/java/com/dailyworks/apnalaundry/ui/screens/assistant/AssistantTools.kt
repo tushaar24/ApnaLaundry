@@ -112,9 +112,13 @@ class AssistantTools(private val st: LaundryState, private val today: String = A
     private fun findCustomers(a: JsonObject): ToolOutcome {
         val q = a.str("query")
         if (q.isBlank()) return err("Give a name or phone number")
-        val found = matchCustomers(q).take(8)
+        val all = matchCustomers(q)
+        // The owner said one customer's full name exactly: that's them — no "which one?".
+        val exact = all.filter { norm(it.name) == norm(q) }
+        val found = (if (exact.size == 1) exact else all).take(8)
         return ok {
             put("count", found.size)
+            if (exact.size == 1) put("exact_match", true)
             putJsonArray("customers") { found.forEach { add(customerBrief(it)) } }
             if (found.isEmpty()) put("note", "No customer matches \"$q\". Check the spelling, or it may be a new customer.")
         }
@@ -360,7 +364,7 @@ class AssistantTools(private val st: LaundryState, private val today: String = A
             put("items", lines.joinToString(", ") { if (it.kg > 0) "${it.serviceName} ${Selectors.trimKg(it.kg)} kg" else "${it.itemName} × ${it.qty} (${it.serviceName})" }.ifBlank { "pickup — clothes counted later" })
             put("total", total)
             if (dd.isNotBlank()) put("ready_by", dd)
-            put("next", "The owner checks it and taps Save order. Tell them that — it is NOT saved yet.")
+            put("next", "NOT saved yet. Tell them (\"you\"): check it and tap Save order.")
         }.toString(), card)
     }
 
@@ -370,7 +374,7 @@ class AssistantTools(private val st: LaundryState, private val today: String = A
         val c = Selectors.customer(st, o.custId)
         return ToolOutcome(buildJsonObject {
             put("shown_to_owner", true); put("order_no", o.no()); put("customer", c.name); put("total", LaundryMath.amtOf(o))
-            put("next", "The owner taps Send bill on WhatsApp. Nothing is sent yet.")
+            put("next", "Nothing sent yet. Tell them (\"you\"): tap Send bill on WhatsApp.")
             if (c.phone.length != 10) put("warning", "No 10-digit phone saved — WhatsApp will ask whom to send to")
         }.toString(), AssistantCard.SendBill(o.id))
     }
@@ -383,7 +387,7 @@ class AssistantTools(private val st: LaundryState, private val today: String = A
         return ToolOutcome(buildJsonObject {
             put("shown_to_owner", true); put("orders", orders.size)
             putJsonArray("updates") { orders.forEach { o -> add(buildJsonObject { put("order_no", o.no()); put("customer", Selectors.customer(st, o.custId).name); put("status", statusWord(o.status)) }) } }
-            put("next", "Each has a Send button that opens the customer's WhatsApp chat with the update typed in. Nothing is sent yet.")
+            put("next", "Nothing sent yet. Tell them (\"you\"): tap Send under each order — it opens that customer's WhatsApp chat with the update typed in.")
         }.toString(), AssistantCard.StatusUpdates(orders.map { it.id }))
     }
 
@@ -393,7 +397,7 @@ class AssistantTools(private val st: LaundryState, private val today: String = A
         if (bal <= 0) return err("${c.name} has no baaki (${if (bal < 0) "${Money.rupees(bal)} advance" else "all clear"})")
         return ToolOutcome(buildJsonObject {
             put("shown_to_owner", true); put("customer", c.name); put("baaki", bal)
-            put("next", "The owner taps Remind on WhatsApp. Nothing is sent yet.")
+            put("next", "Nothing sent yet. Tell them (\"you\"): tap Remind on WhatsApp.")
         }.toString(), AssistantCard.Reminder(c.id))
     }
 
@@ -405,7 +409,7 @@ class AssistantTools(private val st: LaundryState, private val today: String = A
         return ToolOutcome(buildJsonObject {
             put("shown_to_owner", true)
             put("to", c?.name ?: "the owner picks a chat or their WhatsApp Status")
-            put("next", "The owner taps Open WhatsApp. Nothing is sent yet.")
+            put("next", "Nothing sent yet. Tell them (\"you\"): tap Open WhatsApp" + if (c == null) ", then pick chats or My Status." else ".")
         }.toString(), AssistantCard.WhatsAppText(text.take(1500), c?.id))
     }
 
@@ -423,7 +427,7 @@ class AssistantTools(private val st: LaundryState, private val today: String = A
         val dd = a.date("delivery_date")?.takeIf { it >= today } ?: ""
         return ToolOutcome(buildJsonObject {
             put("shown_to_owner", true); put("order_no", o.no()); put("customer", Selectors.customer(st, o.custId).name); put("to", statusWord(to))
-            put("next", "The owner taps the button; the app then offers to tell the customer on WhatsApp. Not changed yet.")
+            put("next", "Not changed yet. Tell them (\"you\"): tap the button below; the app then offers to tell the customer on WhatsApp.")
         }.toString(), AssistantCard.MarkOrder(o.id, to, dd))
     }
 
