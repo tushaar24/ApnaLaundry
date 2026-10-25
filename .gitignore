@@ -34,3 +34,4 @@ app/release/
 
 # Call recordings + transcripts (owners' voices / words) — local only
 /tools/sarvam/data/
+__pycache__/
