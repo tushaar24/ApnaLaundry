@@ -39,9 +39,9 @@ import com.dailyworks.apnalaundry.ui.theme.Tokens
 import kotlinx.coroutines.delay
 
 /**
- * The "order created" chime — res/raw/order_created.wav, made from scratch by
- * tools/sounds/make_order_chime.py (no one's copyright). Played at media volume,
- * like the guide's voice. Loaded once at app start so the first order has it.
+ * The "order created" sound — res/raw/order_created.mp3, the owner's pick ("Koiroylers
+ * Get Coin", 3 s; 2026-10-25). Played at media volume, like the guide's voice. Loaded
+ * once at app start so the first order has it.
  */
 object OrderChime {
     private var pool: SoundPool? = null
@@ -72,8 +72,8 @@ object OrderChime {
 
 /**
  * Every new order (New order, Ask): a big green tick, "Order created!", the order's
- * number, customer and amount, and the chime (owner, 2026-10-25). Closes by itself
- * after a few seconds — owners make many orders a day — or on OK / a tap outside.
+ * number, customer and amount, and the sound (owner, 2026-10-25). Closes by itself
+ * after 2 seconds (owner) — or sooner on OK / a tap outside.
  */
 @Composable
 fun OrderCreatedDialog(state: LaundryState, orderId: Int, onDismiss: () -> Unit) {
@@ -119,4 +119,4 @@ fun OrderCreatedDialog(state: LaundryState, orderId: Int, onDismiss: () -> Unit)
     }
 }
 
-private const val AUTO_CLOSE_MS = 3000L
+private const val AUTO_CLOSE_MS = 2000L
