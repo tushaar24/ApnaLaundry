@@ -80,6 +80,7 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
             "customers" -> navigator.openCustomers()
             "earnings" -> navigator.openEarnings()
             "subscription" -> navigator.openSubscription()
+            "assistant" -> if (prefs.assistantOn.first()) navigator.openAssistant("push") else navigator.openHome()
             else -> navigator.openHome()
         }
     }
@@ -91,6 +92,9 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
     // A/B groups (the guide, the first-customer flow): fetched at app start / right after login, while setup runs.
     val experiments: ExperimentsRepository = koinInject()
     LaunchedEffect(li) { if (li) { experiments.restore(); experiments.refresh() } }
+    // The assistant ("Ask" on Home): on only where the server says so (an older server: off).
+    val assistantApi: com.dailyworks.apnalaundry.data.assistant.AssistantApi = koinInject()
+    LaunchedEffect(li) { if (li) assistantApi.refreshEnabled() }
     // The owner's shops (multi-shop): a shop added on another phone shows up here.
     LaunchedEffect(li) { if (li) shopVm.refreshShops() }
 
@@ -238,6 +242,13 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
             arguments = listOf(navArgument("from") { type = NavType.StringType; defaultValue = "home" }),
         ) { entry ->
             com.dailyworks.apnalaundry.ui.screens.shops.AddShopScreen(shopVm, navigator, entry.arguments?.getString("from") ?: "home")
+        }
+
+        composable(
+            Routes.ASSISTANT,
+            arguments = listOf(navArgument("from") { type = NavType.StringType; defaultValue = "home" }),
+        ) { entry ->
+            com.dailyworks.apnalaundry.ui.screens.assistant.AssistantScreen(shopVm, navigator, entry.arguments?.getString("from") ?: "home")
         }
 
         composable(Routes.SUBSCRIPTION) {

@@ -19,6 +19,7 @@ object Routes {
     const val SUBSCRIPTION = "subscription"
     const val BILL_DESIGN = "bill-design"
     const val ADD_SHOP = "add-shop/{from}"
+    const val ASSISTANT = "assistant?from={from}"
 }
 
 /** Thin typed wrapper over the NavController used by every screen. */
@@ -38,6 +39,8 @@ class AppNavigator(val nav: NavHostController) {
     fun openOrder(orderId: Int, from: String = "home") = push("order/$orderId?from=$from")
     fun openCustomer(custId: String, from: String = "customers") = push("customer/$custId?from=$from")
     fun openCombinedBill(custId: String) = push("combined-bill/$custId")
+    /** "Ask" — the assistant (only when the server has it on for this shop). */
+    fun openAssistant(from: String = "home") = push("assistant?from=$from")
 
     /**
      * Opens a screen — once. A double tap on a slow phone (or a tap on the

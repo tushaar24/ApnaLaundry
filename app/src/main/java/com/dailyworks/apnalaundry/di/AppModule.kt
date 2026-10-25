@@ -20,6 +20,9 @@ import com.dailyworks.apnalaundry.ui.ShopViewModel
 import com.dailyworks.apnalaundry.ui.screens.login.AuthViewModel
 import com.dailyworks.apnalaundry.ui.screens.paywall.PaywallViewModel
 import com.dailyworks.apnalaundry.ui.tour.TourVoice
+import com.dailyworks.apnalaundry.data.assistant.AssistantApi
+import com.dailyworks.apnalaundry.ui.screens.assistant.AssistantViewModel
+import com.dailyworks.apnalaundry.ui.screens.assistant.VoiceRecorder
 import io.ktor.client.HttpClient
 import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.viewmodel.dsl.viewModel
@@ -47,9 +50,12 @@ val appModule = module {
     single { FirebasePhoneAuth() }
     single { TourVoice(androidContext(), get()) }
     single { ExperimentsRepository(get(), get(), get()) }
+    single { AssistantApi(get(), get(), get()) }
+    factory { VoiceRecorder(androidContext()) }
     single { AuthRepository(get(), get(), get(), get(), get(), get(), get()) }
 
     viewModel { ShopViewModel(get(), get(), get(), get(), get(), get(), get()) }
     viewModel { AuthViewModel(get()) }
     viewModel { PaywallViewModel(get(), get(), get()) }
+    viewModel { AssistantViewModel(get(), get(), get(), get(), get()) }
 }

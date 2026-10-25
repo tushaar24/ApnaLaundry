@@ -1,0 +1,190 @@
+diff -ruN backend-orig/backend/app.js backend-live/backend/app.js
+--- backend-orig/backend/app.js	2026-10-25 14:59:39
++++ backend-live/backend/app.js	2026-10-25 15:00:08
+@@ -66,6 +66,9 @@
+ app.use('/api/laundry/experiments', require('./routes/laundry-experiments'));
+ // Multi-shop: list / add shops (logged-in) — before the generic router.
+ app.use('/api/laundry/shops', require('./routes/laundry-shops'));
++// The app's assistant (logged-in; relays to Sarvam AI) — before the generic router.
++// Its own parser: a voice note arrives as base64 JSON.
++app.use('/api/laundry/assistant', express.json({ limit: '2mb' }), require('./routes/laundry-assistant'));
+ app.use('/api/laundry', laundryJson, require('./routes/laundry'));
+ 
+ app.use(express.json({
+diff -ruN backend-orig/backend/routes/laundry-assistant.js backend-live/backend/routes/laundry-assistant.js
+--- backend-orig/backend/routes/laundry-assistant.js	1970-01-01 05:30:00
++++ backend-live/backend/routes/laundry-assistant.js	2026-10-25 15:00:06
+@@ -0,0 +1,173 @@
++const express = require('express');
++const crypto = require('crypto');
++
++const { requireLaundryAuth } = require('../middleware/laundry-auth');
++const logger = require('../config/logger');
++
++// The Android app's assistant ("Ask"): the owner types or speaks — make an
++// order, ask about sales, an order, a customer's khata, send a bill or a
++// status update on WhatsApp. The app runs every tool itself on its own
++// database; this router only relays to Sarvam AI, so the API key never ships
++// in the app:
++//   GET  /api/laundry/assistant/config     -> { success, enabled }
++//   POST /api/laundry/assistant/chat       { messages, tools } -> { success, message: { content, tool_calls }, finish_reason }
++//   POST /api/laundry/assistant/transcribe { audio: <base64>, mime } -> { success, transcript, language }
++//
++// Env (backend/.env):
++//   SARVAM_API_KEY                     required; unset = the assistant is off for everyone
++//   LAUNDRY_ASSISTANT_PCT              0-100 of shops that get it (stable hash of the user id), default 100
++//   LAUNDRY_ASSISTANT_PHONES           comma-separated 10-digit numbers that always get it (QA)
++//   LAUNDRY_ASSISTANT_DAILY_LIMIT      chat calls per user per IST day, default 150 (a question is 1-3 calls)
++//   LAUNDRY_ASSISTANT_VOICE_LIMIT      voice notes per user per IST day, default 60
++//   LAUNDRY_ASSISTANT_MODEL            default sarvam-105b-conversations
++//   LAUNDRY_ASSISTANT_STT_MODEL        default saaras:v4
++//   LAUNDRY_ASSISTANT_STT_MODE         default translit (Hindi comes back in English letters: "Ramesh ke teen shirt")
++//
++// Older apps never call this; nothing else changes.
++
++const router = express.Router();
++router.use(requireLaundryAuth);
++
++const SARVAM = 'https://api.sarvam.ai';
++// Changing this re-buckets everyone — bump it only for a fresh rollout.
++const ROLLOUT = 'assistant_v1';
++
++const apiKey = () => process.env.SARVAM_API_KEY || '';
++
++function intEnv(name, dflt, min, max) {
++  const n = parseInt(process.env[name], 10);
++  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : dflt;
++}
++
++function bucket(userId) {
++  return crypto.createHash('sha256').update(`${ROLLOUT}:${userId}`).digest().readUInt32BE(0) % 100;
++}
++
++function enabledFor(user) {
++  if (!apiKey()) return false;
++  const qa = (process.env.LAUNDRY_ASSISTANT_PHONES || '').split(',').map((s) => s.trim()).filter(Boolean);
++  if (qa.includes(String(user.phone))) return true;
++  return bucket(user.id) < intEnv('LAUNDRY_ASSISTANT_PCT', 100, 0, 100);
++}
++
++// Per user per IST day, in memory (a restart forgets — fine for a cost cap).
++const used = new Map();
++function istDay() {
++  return new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
++}
++function take(kind, userId, limit) {
++  const k = `${kind}:${userId}:${istDay()}`;
++  const n = used.get(k) || 0;
++  if (n >= limit) return false;
++  if (used.size > 100000) used.clear();
++  used.set(k, n + 1);
++  return true;
++}
++
++async function sarvam(path, init, timeoutMs) {
++  const ctl = new AbortController();
++  const t = setTimeout(() => ctl.abort(), timeoutMs);
++  try {
++    const res = await fetch(`${SARVAM}${path}`, {
++      ...init,
++      headers: { 'api-subscription-key': apiKey(), ...(init.headers || {}) },
++      signal: ctl.signal,
++    });
++    const body = await res.json().catch(() => ({}));
++    return { ok: res.ok, status: res.status, body };
++  } finally {
++    clearTimeout(t);
++  }
++}
++
++function gate(req, res) {
++  if (!enabledFor(req.laundryAuth.user)) {
++    res.status(403).json({ success: false, code: 'ASSISTANT_OFF', message: 'The assistant is not on for this shop' });
++    return false;
++  }
++  return true;
++}
++
++router.get('/config', (req, res) => {
++  res.json({ success: true, enabled: enabledFor(req.laundryAuth.user) });
++});
++
++const ROLES = new Set(['system', 'user', 'assistant', 'tool']);
++
++router.post('/chat', async (req, res, next) => {
++  try {
++    if (!gate(req, res)) return;
++    const { messages, tools } = req.body || {};
++    const okMessages = Array.isArray(messages) && messages.length > 0 && messages.length <= 60 &&
++      messages.every((m) => m && ROLES.has(m.role) && (m.content == null || typeof m.content === 'string'));
++    const okTools = tools == null || (Array.isArray(tools) && tools.length <= 30);
++    if (!okMessages || !okTools || JSON.stringify(req.body).length > 120000) {
++      return res.status(400).json({ success: false, message: 'Bad request' });
++    }
++    const userId = req.laundryUserId;
++    if (!take('chat', userId, intEnv('LAUNDRY_ASSISTANT_DAILY_LIMIT', 150, 0, 100000))) {
++      return res.status(429).json({ success: false, code: 'DAILY_LIMIT', message: 'Daily limit reached' });
++    }
++    const started = Date.now();
++    const r = await sarvam('/v1/chat/completions', {
++      method: 'POST',
++      headers: { 'Content-Type': 'application/json' },
++      body: JSON.stringify({
++        model: process.env.LAUNDRY_ASSISTANT_MODEL || 'sarvam-105b-conversations',
++        messages,
++        ...(tools && tools.length ? { tools, tool_choice: 'auto' } : {}),
++        temperature: 0.2,
++        max_tokens: 1024,
++      }),
++    }, 25000);
++    const choice = r.body && Array.isArray(r.body.choices) ? r.body.choices[0] : null;
++    if (!r.ok || !choice || !choice.message) {
++      logger.warn({ userId, status: r.status, error: r.body && r.body.error }, 'laundry assistant: sarvam chat failed');
++      return res.status(502).json({ success: false, message: 'Assistant unavailable' });
++    }
++    logger.info({ userId, ms: Date.now() - started, usage: r.body.usage, finish: choice.finish_reason }, 'laundry assistant chat');
++    const m = choice.message;
++    return res.json({
++      success: true,
++      message: { content: m.content == null ? null : String(m.content), tool_calls: Array.isArray(m.tool_calls) ? m.tool_calls : [] },
++      finish_reason: choice.finish_reason || null,
++    });
++  } catch (e) {
++    if (e && e.name === 'AbortError') return res.status(504).json({ success: false, message: 'Assistant timed out' });
++    return next(e);
++  }
++});
++
++const AUDIO_TYPES = new Set(['audio/mp4', 'audio/m4a', 'audio/aac', 'audio/mpeg', 'audio/ogg', 'audio/webm', 'audio/wav', 'audio/amr']);
++
++router.post('/transcribe', async (req, res, next) => {
++  try {
++    if (!gate(req, res)) return;
++    const { audio, mime } = req.body || {};
++    const type = AUDIO_TYPES.has(mime) ? mime : 'audio/mp4';
++    const buf = typeof audio === 'string' && audio.length <= 1500000 ? Buffer.from(audio, 'base64') : null;
++    if (!buf || buf.length < 200) return res.status(400).json({ success: false, message: 'Bad audio' });
++    const userId = req.laundryUserId;
++    if (!take('voice', userId, intEnv('LAUNDRY_ASSISTANT_VOICE_LIMIT', 60, 0, 100000))) {
++      return res.status(429).json({ success: false, code: 'DAILY_LIMIT', message: 'Daily limit reached' });
++    }
++    const form = new FormData();
++    form.append('file', new Blob([buf], { type }), type === 'audio/mp4' ? 'voice.m4a' : 'voice');
++    form.append('model', process.env.LAUNDRY_ASSISTANT_STT_MODEL || 'saaras:v4');
++    form.append('mode', process.env.LAUNDRY_ASSISTANT_STT_MODE || 'translit');
++    form.append('language_code', 'unknown');
++    const started = Date.now();
++    const r = await sarvam('/speech-to-text', { method: 'POST', body: form }, 25000);
++    if (!r.ok || typeof r.body.transcript !== 'string') {
++      logger.warn({ userId, status: r.status, error: r.body && r.body.error }, 'laundry assistant: sarvam stt failed');
++      return res.status(502).json({ success: false, message: 'Could not hear that' });
++    }
++    logger.info({ userId, ms: Date.now() - started, bytes: buf.length, language: r.body.language_code }, 'laundry assistant voice');
++    return res.json({ success: true, transcript: r.body.transcript, language: r.body.language_code || null });
++  } catch (e) {
++    if (e && e.name === 'AbortError') return res.status(504).json({ success: false, message: 'Assistant timed out' });
++    return next(e);
++  }
++});
++
++module.exports = router;

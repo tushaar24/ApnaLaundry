@@ -196,6 +196,22 @@ Profile property **`Shop_Count`** = how many shops the owner has.
 | `Shop Deleted` | `shop_count` (left after it) | 🗑 on an extra shop's card → Delete shop (the main shop can't be deleted) |
 | `Earnings Shops Changed` | `selection` (`this`\|`all`\|`some`), `shops` | Earnings shop chips |
 
+### Assistant — "Ask" (Android 1.0.16, 2026-10-25)
+
+Sarvam AI through `/api/laundry/assistant`. It is shown only where the server's `/config` says it's on. Details: `docs/deploy/2026-10-25-assistant.md`. The owner's words are never sent to CleverTap; only lengths and tool names are.
+
+| Event | Properties | Fired when |
+| ----- | ---------- | ---------- |
+| `Assistant Opened` | `from` (`home`\|`push`) | the Ask screen opens (Home button, or `mylaundry://assistant`) |
+| `Assistant Asked` | `via` (`text`\|`voice`\|`chip`), `chars` | a question is sent |
+| `Assistant Answered` | `rounds`, `tools` (comma-separated tool names), `cards`, `ms` | the reply arrived |
+| `Assistant Failed` | `reason` (`network`\|`server`\|`limit`\|`off`\|`login`) | no reply (the owner sees why) |
+| `Assistant Voice` | `seconds`, `ok`, `reason` (`short`\|`empty`\|`mic`\|`network`\|`server`\|`limit`\|`off`) | a voice note was stopped and turned (or not) into words |
+| `Assistant Card Shown` | `card` (`new_order`\|`send_bill`\|`status_update`\|`reminder`\|`whatsapp_message`\|`mark_order`) | a reply put a card to tap |
+| `Assistant Card Used` | `card` | its button was tapped: order saved, WhatsApp opened, order marked |
+
+The underlying actions still fire their usual events: `Order Saved`, `Bill Sent`, `Reminder Sent`, `Order Marked Ready`, and so on.
+
 ### Billing / paywall (A/B: `trial_2` \| `free_50`)
 
 The variant is assigned by the backend (Firebase-weighted, stable per user) and

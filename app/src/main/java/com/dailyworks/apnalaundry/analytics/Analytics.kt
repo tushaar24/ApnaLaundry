@@ -468,6 +468,30 @@ object Analytics {
 
     fun orderSearchOpened() = track("Order Search Opened")
 
+    // ---- assistant ("Ask": Sarvam AI through our server) ----
+    /** from: home | push. */
+    fun assistantOpened(from: String) = track("Assistant Opened", mapOf("from" to from))
+
+    /** via: text | voice | chip; chars: the question's length (never its words). */
+    fun assistantAsked(via: String, chars: Int) = track("Assistant Asked", mapOf("via" to via, "chars" to chars))
+
+    /** rounds: model calls; tools: tool names run, comma-separated; cards: buttons shown; ms: wait. */
+    fun assistantAnswered(rounds: Int, tools: String, cards: Int, ms: Long) =
+        track("Assistant Answered", mapOf("rounds" to rounds, "tools" to tools, "cards" to cards, "ms" to ms))
+
+    /** reason: network | server | limit | off | login. */
+    fun assistantFailed(reason: String) = track("Assistant Failed", mapOf("reason" to reason))
+
+    /** A voice note: seconds long; ok = turned into words; reason when not (short | empty | mic | network | server | limit | off). */
+    fun assistantVoice(seconds: Int, ok: Boolean, reason: String) =
+        track("Assistant Voice", mapOf("seconds" to seconds, "ok" to ok, "reason" to reason.ifBlank { null }))
+
+    /** card: new_order | send_bill | status_update | reminder | whatsapp_message | mark_order. */
+    fun assistantCardShown(card: String) = track("Assistant Card Shown", mapOf("card" to card))
+
+    /** The owner tapped a card's button (order saved, WhatsApp opened, order marked). */
+    fun assistantCardUsed(card: String) = track("Assistant Card Used", mapOf("card" to card))
+
     // ---- billing / paywall funnel (₹2 trial hard gate) ----
     // The client fires the UI funnel; the backend fires the money-confirmed
     // events (Subscription Activated / Charged / Payment Failed / Halted /

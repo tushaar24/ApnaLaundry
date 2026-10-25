@@ -33,6 +33,8 @@ import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Mic
+import org.koin.compose.koinInject
 import androidx.compose.material.icons.outlined.Checkroom
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
@@ -104,6 +106,7 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
     val tour by shopVm.tour.collectAsStateWithLifecycle()
     val tourPaused by shopVm.tourPaused.collectAsStateWithLifecycle()
     val waPrompt by shopVm.waPrompt.collectAsStateWithLifecycle()
+    val assistantOn by koinInject<com.dailyworks.apnalaundry.data.Prefs>().assistantOn.collectAsStateWithLifecycle(initialValue = false)
     val targets = rememberSpotlightTargets()
     val context = LocalContext.current
 
@@ -280,6 +283,14 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                     }
                 }
                 items(list, key = { "d${it.id}" }) { o -> OrderCard(state, o, tabPickup, false, { navigator.openOrder(o.id) }, { act(o) }, { active = ActiveSheet.Menu(o.id) }, { dial(context, o, state) }, actionModifier = actTarget(o)) }
+            }
+
+            // Ask (the assistant): where the server has it on, and not during the guide.
+            if (assistantOn && tour == TourStage.DONE) {
+                Row(Modifier.align(Alignment.BottomStart).padding(16.dp).height(56.dp).rounded(999.dp).background(Tokens.Ink).tap { navigator.openAssistant("home") }.padding(start = 16.dp, end = 20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Filled.Mic, null, tint = Tokens.OnDark, modifier = Modifier.size(22.dp))
+                    Text("Ask", style = fig(16, FontWeight.Bold, Tokens.OnDark))
+                }
             }
 
             // New order FAB

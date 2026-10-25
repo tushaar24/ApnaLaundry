@@ -29,7 +29,8 @@ import kotlinx.coroutines.flow.StateFlow
 object DeepLinks {
     const val SCHEME = "mylaundry"
     const val WEB_HOST = "mylaundry.work"
-    val SCREENS = setOf("new-order", "home", "customers", "earnings", "subscription")
+    // "assistant": Ask — Home instead where it isn't on.
+    val SCREENS = setOf("new-order", "home", "customers", "earnings", "subscription", "assistant")
 
     private val _pending = MutableStateFlow<String?>(null)
     val pending: StateFlow<String?> = _pending
