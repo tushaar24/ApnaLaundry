@@ -73,7 +73,7 @@ object OrderChime {
 /**
  * Every new order (New order, Ask): a big green tick, "Order created!", the order's
  * number, customer and amount, and the sound (owner, 2026-10-25). Closes by itself
- * after 2 seconds (owner) — or sooner on OK / a tap outside.
+ * after 3 seconds (owner) — or sooner on OK / a tap outside.
  */
 @Composable
 fun OrderCreatedDialog(state: LaundryState, orderId: Int, onDismiss: () -> Unit) {
@@ -119,4 +119,4 @@ fun OrderCreatedDialog(state: LaundryState, orderId: Int, onDismiss: () -> Unit)
     }
 }
 
-private const val AUTO_CLOSE_MS = 2000L
+private const val AUTO_CLOSE_MS = 3000L
