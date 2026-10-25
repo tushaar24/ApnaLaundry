@@ -109,6 +109,9 @@ fun BottomNav(
     newOrderModifier: Modifier = Modifier,
     /** Orders only: "Ask" + "+ New order" over the tabs. null (other tabs) = Ask in the bar's middle instead. */
     onNewOrder: (() -> Unit)? = null,
+    /** The blue button's words / icon: "+ New order" (Orders), "Add customer" (Customers). */
+    primaryLabel: String? = null,
+    primaryIcon: androidx.compose.ui.graphics.vector.ImageVector = androidx.compose.material.icons.Icons.Filled.Add,
     onSelect: (NavTab) -> Unit,
 ) {
     // Ask only where the server has the assistant on (else New order alone, full width).
@@ -147,8 +150,8 @@ fun BottomNav(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
                 ) {
-                    Icon(androidx.compose.material.icons.Icons.Filled.Add, null, tint = Tokens.OnDark, modifier = Modifier.size(24.dp))
-                    Text(tr("New order"), style = fig(18, FontWeight.Bold, Tokens.OnDark), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Icon(primaryIcon, null, tint = Tokens.OnDark, modifier = Modifier.size(24.dp))
+                    Text(primaryLabel ?: tr("New order"), style = fig(18, FontWeight.Bold, Tokens.OnDark), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }

@@ -92,6 +92,13 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import kotlin.math.roundToInt
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.draw.clipToBounds
 import com.dailyworks.apnalaundry.ui.components.showDatePicker
 import com.dailyworks.apnalaundry.ui.tour.Spotlight
 import com.dailyworks.apnalaundry.ui.tour.TourStage
@@ -143,30 +150,38 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
     @OptIn(ExperimentalLayoutApi::class)
     val compact = searching || (searchFocused && WindowInsets.isImeVisible)
     val listState = rememberLazyListState()
-    // Scrolling the orders up folds the sections above the tabs; pulling down at the top
-    // of the list brings them back. Only a real drag of the list flips it — never the
-    // list resizing as they fold — so it can't flicker.
-    var collapsed by rememberSaveable { mutableStateOf(false) }
-    val foldAfterPx = with(LocalDensity.current) { 48.dp.toPx() }
-    val collapseOnScroll = remember(listState, foldAfterPx) {
+    // The sales / orders-today cards fold with the finger: scrolling the orders up shrinks
+    // them first (the list waits), pulling down at the top of the list grows them back;
+    // let go half-way and they settle open or shut. Only their height changes per frame
+    // (a layout-phase read, no recomposition) — the tabs, dates and filters stay.
+    var dashMax by remember { mutableIntStateOf(0) } // their full height, px
+    var dashOffset by remember { mutableFloatStateOf(0f) } // 0 = open … -dashMax = folded
+    val collapseOnScroll = remember {
         object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
-            var pulled = 0f
-            override fun onPreScroll(available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
-                val dy = available.y
-                if (dy < 0f) {
-                    pulled = (pulled + dy).coerceAtMost(0f)
-                    if (!collapsed && pulled < -foldAfterPx && listState.canScrollForward) { collapsed = true; pulled = 0f }
-                } else if (dy > 0f) {
-                    pulled = 0f
-                    if (collapsed && !listState.canScrollBackward) collapsed = false
-                }
-                return androidx.compose.ui.geometry.Offset.Zero
+            private fun fold(dy: Float): Float {
+                if (dashMax == 0) return 0f
+                val next = (dashOffset + dy).coerceIn(-dashMax.toFloat(), 0f)
+                val used = next - dashOffset
+                dashOffset = next
+                return used
             }
 
-            override fun onPostScroll(consumed: androidx.compose.ui.geometry.Offset, available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
-                // Pulled down past the top of the list: show them again.
-                if (available.y > 0f && collapsed) collapsed = false
-                return androidx.compose.ui.geometry.Offset.Zero
+            // Up: the cards fold before the list moves.
+            override fun onPreScroll(available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource) =
+                if (available.y < 0f) androidx.compose.ui.geometry.Offset(0f, fold(available.y)) else androidx.compose.ui.geometry.Offset.Zero
+
+            // Down past the top of the list: they unfold.
+            override fun onPostScroll(consumed: androidx.compose.ui.geometry.Offset, available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource) =
+                if (available.y > 0f) androidx.compose.ui.geometry.Offset(0f, fold(available.y)) else androidx.compose.ui.geometry.Offset.Zero
+
+            // Never left half-way.
+            override suspend fun onPostFling(consumed: androidx.compose.ui.unit.Velocity, available: androidx.compose.ui.unit.Velocity): androidx.compose.ui.unit.Velocity {
+                val max = dashMax.toFloat()
+                if (max > 0f && dashOffset < 0f && dashOffset > -max) {
+                    val target = if (dashOffset < -max / 2) -max else 0f
+                    androidx.compose.animation.core.animate(dashOffset, target, animationSpec = androidx.compose.animation.core.tween(160)) { v, _ -> dashOffset = v }
+                }
+                return androidx.compose.ui.unit.Velocity.Zero
             }
         }
     }
@@ -245,25 +260,31 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
 
         if (!noOrders) {
             // While searching only the tabs stay, so switching tab re-runs the search there.
-            // Scrolling the orders folds the sales / orders-today cards, the dates and the
-            // filters away — only Pickups / Deliveries stay (owner, 2026-10-25).
-            androidx.compose.animation.AnimatedVisibility(
-                visible = !compact && !collapsed,
-                enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
-                exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut(),
-            ) {
-                DashboardStrip(state, selDate, hidden, onEye = shopVm::toggleHideAmounts, onOpen = { navigator.openEarnings() })
+            // The sales / orders-today cards fold as the orders scroll (owner, 2026-10-25):
+            // drawn at full size, shown only as tall as dashOffset leaves, slid up and faded.
+            if (!compact) {
+                Box(
+                    Modifier
+                        .clipToBounds()
+                        .layout { measurable, constraints ->
+                            val p = measurable.measure(constraints)
+                            val shift = dashOffset.roundToInt().coerceAtLeast(-p.height)
+                            layout(p.width, p.height + shift) { p.placeRelative(0, shift) }
+                        }
+                        .graphicsLayer { alpha = if (dashMax > 0) (1f + dashOffset / dashMax).coerceIn(0f, 1f) else 1f },
+                ) {
+                    Box(Modifier.onSizeChanged { s ->
+                        dashMax = s.height
+                        dashOffset = dashOffset.coerceIn(-s.height.toFloat(), 0f)
+                    }) {
+                        DashboardStrip(state, selDate, hidden, onEye = shopVm::toggleHideAmounts, onOpen = { navigator.openEarnings() })
+                    }
+                }
             }
             TabRow(state, tabPickup, selDate) { tabPickup = it; filter = "all" }
-            androidx.compose.animation.AnimatedVisibility(
-                visible = !compact && !collapsed,
-                enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
-                exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut(),
-            ) {
-                Column {
-                    DateStrip(state, tabPickup, selDate) { selDate = it }
-                    FilterTabs(state, tabPickup, selDate, filter) { filter = it }
-                }
+            if (!compact) {
+                DateStrip(state, tabPickup, selDate) { selDate = it }
+                FilterTabs(state, tabPickup, selDate, filter) { filter = it }
             }
         }
 

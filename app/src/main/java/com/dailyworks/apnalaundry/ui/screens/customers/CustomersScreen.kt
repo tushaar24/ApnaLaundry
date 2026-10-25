@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Search
@@ -127,7 +128,7 @@ fun CustomersScreen(shopVm: ShopViewModel, navigator: AppNavigator, initialFilte
         } else Box(Modifier.weight(1f).fillMaxWidth()) {
             LazyColumn(
                 Modifier.fillMaxSize(),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 96.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(list, key = { it.first.id }) { (c, bal) ->
@@ -154,16 +155,14 @@ fun CustomersScreen(shopVm: ShopViewModel, navigator: AppNavigator, initialFilte
                     }
                 }
             }
-            Row(
-                Modifier.align(Alignment.BottomEnd).padding(16.dp).height(52.dp).rounded(999.dp).background(Tokens.Blue)
-                    .tap(onClick = ::addCustomer).padding(horizontal = 20.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Icon(Icons.Filled.Add, null, tint = Tokens.OnDark, modifier = Modifier.size(22.dp))
-                Text(tr("Add customer"), style = fig(16, FontWeight.Bold, Tokens.OnDark))
-            }
         }
-        BottomNav(current = NavTab.CUSTOMERS, itemModifier = { Modifier.spotlightTarget(targets, "nav_${it.name}") }, onSelect = navigator::selectTab)
+        // Ask + "Add customer" in the bottom bar (owner, 2026-10-25), like New order on Orders.
+        BottomNav(
+            current = NavTab.CUSTOMERS, itemModifier = { Modifier.spotlightTarget(targets, "nav_${it.name}") },
+            onNewOrder = ::addCustomer, primaryLabel = tr("Add customer"),
+            primaryIcon = androidx.compose.material.icons.Icons.Outlined.PersonAdd,
+            onSelect = navigator::selectTab,
+        )
     }
 
     if (active == null) when (tour) {
