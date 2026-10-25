@@ -50,6 +50,22 @@ object SeedData {
         ),
     )
 
+    /**
+     * The shop still charges the sample rates it started with: every price (and
+     * per-kg rate / minimum) of the starting services it still has is unchanged.
+     * Adding or deleting services or items doesn't count; with none of the
+     * starting services left, the rates are its own.
+     */
+    fun ratesUnchanged(current: List<Service>): Boolean {
+        val mine = current.filter { c -> services.any { it.id == c.id } }
+        if (mine.isEmpty()) return false
+        return mine.all { c ->
+            val seed = services.first { it.id == c.id }
+            c.ratePerKg == seed.ratePerKg && c.minKg == seed.minKg &&
+                c.items.all { item -> seed.items.firstOrNull { it.name == item.name }?.let { it.price == item.price } ?: true }
+        }
+    }
+
     private fun c(id: String, name: String, phone: String, addr: String, past: Int, last: String, ago: Int) =
         Customer(id, name, phone, addr, past, last, ago)
 

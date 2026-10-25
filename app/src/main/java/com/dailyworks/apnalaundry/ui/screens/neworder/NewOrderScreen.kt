@@ -186,6 +186,8 @@ fun NewOrderScreen(
     // The guide, part 1 on this screen: customer → shop/home → dates → clothes → save.
     val tour by shopVm.tour.collectAsStateWithLifecycle()
     val tourOn = tour == TourStage.ORDER && editId == null
+    // The shop still has the rates it started with: the guide points at "Edit services" first.
+    val sampleRates = remember(state.services) { com.dailyworks.apnalaundry.domain.SeedData.ratesUnchanged(state.services) }
     var tourStep by rememberSaveable { mutableIntStateOf(TOUR_CUSTOMER) }
     val targets = rememberSpotlightTargets()
     val tourScroll = remember { List(TOUR_SAVE) { BringIntoViewRequester() } }
@@ -527,7 +529,7 @@ fun NewOrderScreen(
                 Row(Modifier.fillMaxWidth().padding(end = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     SectionLabel(tr("Clothes"))
                     Row(
-                        Modifier.height(36.dp).rounded(999.dp).background(Tokens.BlueLight).tap { editingRates = true }.padding(horizontal = 14.dp),
+                        Modifier.tourTarget(targets, tourScroll, TOUR_RATES).height(36.dp).rounded(999.dp).background(Tokens.BlueLight).tap { editingRates = true }.padding(horizontal = 14.dp),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         Icon(Icons.Outlined.Edit, null, tint = Tokens.Blue, modifier = Modifier.size(16.dp))
@@ -682,6 +684,8 @@ fun NewOrderScreen(
         LaunchedEffect(Unit) { shopVm.tourAutoStart() }
         // A customer picked (or added) ends the customer step by itself.
         LaunchedEffect(cust?.id) { if (tourStep == TOUR_CUSTOMER && cust != null) tourStep = TOUR_ROUTE }
+        // Prices changed (in Edit services, opened from the arrow): on to the clothes.
+        LaunchedEffect(sampleRates, tourStep) { if (tourStep == TOUR_RATES && !sampleRates) tourStep = TOUR_CLOTHES }
         LaunchedEffect(tourStep) {
             if (tourStep < TOUR_SAVE) { kotlinx.coroutines.delay(120); tourScroll[tourStep].bringIntoView() }
         }
@@ -690,6 +694,7 @@ fun NewOrderScreen(
                 TOUR_CUSTOMER -> TourSteps.customer(hasCustomers = state.customers.isNotEmpty())
                 TOUR_ROUTE -> if (noAddress) TourSteps.routeAsksAddress else TourSteps.route
                 TOUR_DATES -> TourSteps.dates
+                TOUR_RATES -> TourSteps.sampleRates
                 TOUR_CLOTHES -> TourSteps.clothes
                 else -> TourSteps.save(
                     ctaLabel, needsCustomer = cust == null, needsClothes = needsClothes,
@@ -706,7 +711,8 @@ fun NewOrderScreen(
                 },
                 onNext = {
                     tourStep = when {
-                        tourStep != TOUR_SAVE -> tourStep + 1
+                        // The sample-rates step only while the rates are still the samples.
+                        tourStep != TOUR_SAVE -> (tourStep + 1).let { if (it == TOUR_RATES && !sampleRates) TOUR_CLOTHES else it }
                         cust == null -> TOUR_CUSTOMER
                         needsClothes -> TOUR_CLOTHES
                         else -> TOUR_ROUTE
@@ -740,8 +746,9 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
 private const val TOUR_CUSTOMER = 0
 private const val TOUR_ROUTE = 1
 private const val TOUR_DATES = 2
-private const val TOUR_CLOTHES = 3
-private const val TOUR_SAVE = 4
+private const val TOUR_RATES = 3 // only while the shop has the sample rates
+private const val TOUR_CLOTHES = 4
+private const val TOUR_SAVE = 5
 
 /** A tour target inside the form: the spotlight finds it, and the form scrolls to it. */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)

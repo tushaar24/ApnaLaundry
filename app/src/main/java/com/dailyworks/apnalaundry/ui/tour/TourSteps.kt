@@ -114,6 +114,14 @@ object TourSteps {
     )
 
     // ‘Wash & Iron’ is a default service: its name stays as the rate card shows it.
+    /** Before the clothes, while the shop still has the sample rates: arrow at "Edit services". */
+    val sampleRates get() = TourStep(
+        "order_sample_rates", TourPart.ORDER,
+        tr("These are sample rates"),
+        tr("We filled in common prices to start. Your shop's prices may be different — tap ‘{button}’ to change them.", "button" to tr("Edit services")),
+        say = tr("These are sample rates. We filled in common prices to start. Your shop's prices may be different. Tap {button} to change them.", "button" to tr("Edit services")),
+    )
+
     val clothes get() = TourStep(
         "order_clothes", TourPart.ORDER,
         tr("Add the clothes"),
