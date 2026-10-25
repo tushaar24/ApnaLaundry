@@ -113,6 +113,9 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
     val paywallGroup by prefs.paywallGroup.collectAsStateWithLifecycle(initialValue = null)
     val paywallPending by prefs.paywallCheckPending.collectAsStateWithLifecycle(initialValue = false)
     val tourStage by shopVm.tour.collectAsStateWithLifecycle()
+    // The guide is on: start its voice engine now, so the first card speaks the moment it shows.
+    val tourVoice: com.dailyworks.apnalaundry.ui.tour.TourVoice = koinInject()
+    LaunchedEffect(tourStage) { if (tourStage != TourStage.DONE) tourVoice.warmUp() }
     val shopState by shopVm.state.collectAsStateWithLifecycle()
     val route = navController.currentBackStackEntryAsState().value?.destination?.route
     // A brand-new login waits for the hard-trial check before moving on to setup.

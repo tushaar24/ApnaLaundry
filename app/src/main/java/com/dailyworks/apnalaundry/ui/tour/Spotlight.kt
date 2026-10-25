@@ -350,10 +350,19 @@ private fun AnnounceStep(step: TourStep) {
         voice.say(step.say, step.id)
     }
     val id by rememberUpdatedState(step.id)
+    val say by rememberUpdatedState(step.say)
     DisposableEffect(Unit) { onDispose { voice.stop(id) } }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     DisposableEffect(lifecycle) {
-        val observer = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_STOP) voice.stopAll() }
+        // Back from the background (WhatsApp sent, home button): this card talks again.
+        var stopped = false
+        val observer = LifecycleEventObserver { _, e ->
+            when (e) {
+                Lifecycle.Event.ON_STOP -> { stopped = true; voice.stopAll() }
+                Lifecycle.Event.ON_START -> if (stopped) { stopped = false; voice.say(say, id) }
+                else -> Unit
+            }
+        }
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer) }
     }
