@@ -364,12 +364,13 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
 
         }
 
-        // New order lives in the bottom bar now (with Ask); the guide's arrow points there
-        // — except on the empty Home, whose own big button has it.
+        // New order lives in the bottom bar now (with Ask); the guide's arrow points there.
+        // The empty Home has its own big button, so its bar is the other tabs' one: Ask in
+        // the middle, no New order (owner, 2026-10-25).
         BottomNav(
             NavTab.ORDERS, itemModifier = { Modifier.spotlightTarget(targets, "nav_${it.name}") },
-            newOrderModifier = if (noOrders) Modifier else Modifier.spotlightTarget(targets, "new_order"),
-            onNewOrder = { startNewOrder("home") },
+            newOrderModifier = Modifier.spotlightTarget(targets, "new_order"),
+            onNewOrder = if (noOrders) null else ({ startNewOrder("home") }),
         ) { query = ""; navigator.selectTab(it) }
     }
 
