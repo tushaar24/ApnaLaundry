@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import com.dailyworks.apnalaundry.core.AppDate
 import com.dailyworks.apnalaundry.core.Money
+import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.domain.LaundryMath
 import com.dailyworks.apnalaundry.domain.LaundryState
 import com.dailyworks.apnalaundry.domain.Order
@@ -61,61 +62,63 @@ fun OrderCard(
     val counted = o.lines.isNotEmpty()
     val home = if (pickupTab) o.pickup == Route.HOME else o.delivery == Route.HOME
     val amt = LaundryMath.amtOf(o)
-    val addr = c.address.ifBlank { "address not saved" }
+    val addr = c.address.ifBlank { tr("address not saved") }
 
     val where = if (pickupTab) {
-        if (home) "Pick up from $addr" + (if (o.pickupTime.isNotBlank()) " · ${o.pickupTime}" else "") else "Walk-in at shop"
+        if (home) tr("Pick up from {address}", "address" to addr) + (if (o.pickupTime.isNotBlank()) " · ${o.pickupTime}" else "") else tr("Walk-in at shop")
     } else {
-        if (home) "Deliver to $addr" + (if (o.deliveryTime.isNotBlank()) " · ${o.deliveryTime}" else "")
-        else "Customer collects at shop" + (if (o.deliveryTime.isNotBlank()) " · by ${o.deliveryTime}" else "")
+        if (home) tr("Deliver to {address}", "address" to addr) + (if (o.deliveryTime.isNotBlank()) " · ${o.deliveryTime}" else "")
+        else if (o.deliveryTime.isNotBlank()) tr("Customer collects at shop · by {time}", "time" to o.deliveryTime)
+        else tr("Customer collects at shop")
     }
     val showWhere = home || (!pickupTab && o.deliveryTime.isNotBlank())
 
     val warn = when {
-        !pickupTab && o.deliveryDate.isBlank() && o.status in listOf(OrderStatus.CREATED, OrderStatus.RECEIVED, OrderStatus.READY) -> "No delivery date · tap ⋯ to set"
-        late -> "Late · was due ${AppDate.plain(if (pickupTab) o.pickupDate else o.deliveryDate)}"
-        !pickupTab && o.status == OrderStatus.CREATED -> "Not picked up yet"
-        !pickupTab && o.status == OrderStatus.RECEIVED -> "Not ready yet"
+        !pickupTab && o.deliveryDate.isBlank() && o.status in listOf(OrderStatus.CREATED, OrderStatus.RECEIVED, OrderStatus.READY) -> tr("No delivery date · tap ⋯ to set")
+        late -> tr("Late · was due {date}", "date" to AppDate.plain(if (pickupTab) o.pickupDate else o.deliveryDate))
+        !pickupTab && o.status == OrderStatus.CREATED -> tr("Not picked up yet")
+        !pickupTab && o.status == OrderStatus.RECEIVED -> tr("Not ready yet")
         else -> ""
     }
 
     // payment label
     val (payLabel, payFg) = if (o.status == OrderStatus.DELIVERED) {
         when {
-            o.paid >= amt -> "Paid" to Tokens.BlueText
-            o.paid > 0 -> "Part paid" to Tokens.OrangeText
-            else -> "In khata" to Tokens.OrangeText
+            o.paid >= amt -> tr("Paid") to Tokens.BlueText
+            o.paid > 0 -> tr("Part paid") to Tokens.OrangeText
+            else -> tr("In khata") to Tokens.OrangeText
         }
     } else {
         when {
-            o.pre >= amt && amt > 0 -> "Paid" to Tokens.BlueText
-            o.pre > 0 -> "${Money.rupees(amt - o.pre)} more to collect" to Tokens.OrangeText
-            else -> "Unpaid" to Tokens.OrangeText
+            o.pre >= amt && amt > 0 -> tr("Paid") to Tokens.BlueText
+            o.pre > 0 -> tr("{amount} more to collect", "amount" to Money.rupees(amt - o.pre)) to Tokens.OrangeText
+            else -> tr("Unpaid") to Tokens.OrangeText
         }
     }
 
     val actLabel = when (o.status) {
-        OrderStatus.CREATED -> "Mark picked up"
-        OrderStatus.RECEIVED -> "Mark ready"
-        OrderStatus.READY -> "Mark delivered"
+        OrderStatus.CREATED -> tr("Mark picked up")
+        OrderStatus.RECEIVED -> tr("Mark ready")
+        OrderStatus.READY -> tr("Mark delivered")
         else -> ""
     }
     val canAct = actLabel.isNotEmpty()
     val doneText = when (o.status) {
-        OrderStatus.DELIVERED -> "Delivered" + (if (o.doneAt.isNotBlank()) " · ${o.doneAt}" else "")
-        OrderStatus.CANCELLED -> "Cancelled" + (if (o.cancelReason.isNotBlank()) " · ${o.cancelReason}" else "")
+        OrderStatus.DELIVERED -> tr("Delivered") + (if (o.doneAt.isNotBlank()) " · ${o.doneAt}" else "")
+        // The reason is saved in English; the usual ones show in the app's language.
+        OrderStatus.CANCELLED -> tr("Cancelled") + (if (o.cancelReason.isNotBlank()) " · ${tr(o.cancelReason)}" else "")
         else -> ""
     }
 
     val whenText = when {
         !showDate -> ""
-        pickupTab -> "Pickup ${AppDate.plain(o.pickupDate)} · "
-        o.deliveryDate.isNotBlank() -> "Delivery ${AppDate.plain(o.deliveryDate)} · "
-        else -> "No delivery date · "
+        pickupTab -> tr("Pickup {date}", "date" to AppDate.plain(o.pickupDate)) + " · "
+        o.deliveryDate.isNotBlank() -> tr("Delivery {date}", "date" to AppDate.plain(o.deliveryDate)) + " · "
+        else -> tr("No delivery date") + " · "
     }
     val meta = "#${o.no()} · " + whenText + if (counted) "${Selectors.itemsLabel(o)} · ${Selectors.svcLabel(o)}"
-    else if (o.pickup == Route.HOME && o.status == OrderStatus.CREATED) "Clothes will be counted at pickup"
-    else (if (o.pieces > 0) "${o.pieces} pieces · " else "") + "Bill not made yet"
+    else if (o.pickup == Route.HOME && o.status == OrderStatus.CREATED) tr("Clothes will be counted at pickup")
+    else (if (o.pieces > 0) tr("{n} pieces", "n" to o.pieces) + " · " else "") + tr("Bill not made yet")
 
     val cardBorder = if (late) Tokens.OrangeBorder else Tokens.CardBorder
 
@@ -141,7 +144,7 @@ fun OrderCard(
             }
             if (o.note.isNotBlank()) {
                 Text(
-                    "Note: ${o.note}",
+                    tr("Note: {note}", "note" to o.note),
                     style = fig(13, FontWeight.SemiBold, androidx.compose.ui.graphics.Color(0xFF6B5500)),
                     maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     modifier = Modifier.fillMaxWidth().rounded(6.dp).background(androidx.compose.ui.graphics.Color(0xFFFFF8DC))
@@ -175,9 +178,9 @@ fun OrderCard(
                     }
                 }
                 if (home && canAct) {
-                    IconSquare(Icons.Filled.Call, "Call") { onCall() }
+                    IconSquare(Icons.Filled.Call, tr("Call")) { onCall() }
                 }
-                IconSquare(Icons.Filled.MoreVert, "More") { onMore() }
+                IconSquare(Icons.Filled.MoreVert, tr("More")) { onMore() }
             }
         }
     }
@@ -186,7 +189,7 @@ fun OrderCard(
 @Composable
 fun ExpressTag() {
     Box(Modifier.rounded(999.dp).background(Tokens.OrangeLight).padding(horizontal = 7.dp, vertical = 3.dp)) {
-        Text("EXPRESS", style = fig(11, FontWeight.Bold, Tokens.OrangeText).copy(letterSpacing = 0.04.em))
+        Text(tr("EXPRESS"), style = fig(11, FontWeight.Bold, Tokens.OrangeText).copy(letterSpacing = 0.04.em))
     }
 }
 

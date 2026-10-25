@@ -1,0 +1,61 @@
+diff -ruN b2-orig/backend/routes/laundry-assistant.js b2-live/backend/routes/laundry-assistant.js
+--- b2-orig/backend/routes/laundry-assistant.js	2026-10-25 16:24:42
++++ b2-live/backend/routes/laundry-assistant.js	2026-10-25 16:24:55
+@@ -10,9 +10,15 @@
+ // database; this router only relays to Sarvam AI, so the API key never ships
+ // in the app:
+ //   GET  /api/laundry/assistant/config     -> { success, enabled }
+-//   POST /api/laundry/assistant/chat       { messages, tools } -> { success, message: { content, tool_calls }, finish_reason }
+-//   POST /api/laundry/assistant/transcribe { audio: <base64>, mime } -> { success, transcript, language }
++//   POST /api/laundry/assistant/chat       { messages, tools, tool_choice? } -> { success, message: { content, tool_calls }, finish_reason }
++//   POST /api/laundry/assistant/transcribe { audio: <base64>, mime, language?, mode? } -> { success, transcript, language }
+ //
++// Optional fields (app 1.0.16+, the app in Indian languages): tool_choice
++// "required" makes the model call a tool (the app's retry when a reply says
++// "tap Save" but made no card); language (e.g. ta-IN) and mode (codemix …)
++// make speech-to-text listen for the app's language. Without them it is
++// exactly as before: the model decides, auto-detect, English letters.
++//
+ // Env (backend/.env):
+ //   SARVAM_API_KEY                     required; unset = the assistant is off for everyone
+ //   LAUNDRY_ASSISTANT_PCT              0-100 of shops that get it (stable hash of the user id), default 100
+@@ -93,6 +99,10 @@
+ });
+ 
+ const ROLES = new Set(['system', 'user', 'assistant', 'tool']);
++const TOOL_CHOICES = new Set(['auto', 'required', 'none']);
++// Sarvam speech-to-text languages the app offers, and how to write the words.
++const STT_LANGUAGES = new Set(['unknown', 'en-IN', 'hi-IN', 'mr-IN', 'gu-IN', 'bn-IN', 'ta-IN', 'te-IN', 'kn-IN', 'ml-IN', 'pa-IN', 'od-IN']);
++const STT_MODES = new Set(['transcribe', 'translit', 'codemix', 'verbatim']);
+ 
+ router.post('/chat', async (req, res, next) => {
+   try {
+@@ -115,7 +125,7 @@
+       body: JSON.stringify({
+         model: process.env.LAUNDRY_ASSISTANT_MODEL || 'sarvam-105b-conversations',
+         messages,
+-        ...(tools && tools.length ? { tools, tool_choice: 'auto' } : {}),
++        ...(tools && tools.length ? { tools, tool_choice: TOOL_CHOICES.has(req.body.tool_choice) ? req.body.tool_choice : 'auto' } : {}),
+         temperature: 0.2,
+         max_tokens: 1024,
+       }),
+@@ -143,7 +153,7 @@
+ router.post('/transcribe', async (req, res, next) => {
+   try {
+     if (!gate(req, res)) return;
+-    const { audio, mime } = req.body || {};
++    const { audio, mime, language, mode } = req.body || {};
+     const type = AUDIO_TYPES.has(mime) ? mime : 'audio/mp4';
+     const buf = typeof audio === 'string' && audio.length <= 1500000 ? Buffer.from(audio, 'base64') : null;
+     if (!buf || buf.length < 200) return res.status(400).json({ success: false, message: 'Bad audio' });
+@@ -154,8 +164,8 @@
+     const form = new FormData();
+     form.append('file', new Blob([buf], { type }), type === 'audio/mp4' ? 'voice.m4a' : 'voice');
+     form.append('model', process.env.LAUNDRY_ASSISTANT_STT_MODEL || 'saaras:v4');
+-    form.append('mode', process.env.LAUNDRY_ASSISTANT_STT_MODE || 'translit');
+-    form.append('language_code', 'unknown');
++    form.append('mode', STT_MODES.has(mode) ? mode : process.env.LAUNDRY_ASSISTANT_STT_MODE || 'translit');
++    form.append('language_code', STT_LANGUAGES.has(language) ? language : 'unknown');
+     const started = Date.now();
+     const r = await sarvam('/speech-to-text', { method: 'POST', body: form }, 25000);
+     if (!r.ok || typeof r.body.transcript !== 'string') {

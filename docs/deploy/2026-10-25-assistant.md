@@ -73,3 +73,44 @@ Checked on prod with the demo account (1000000055):
   - Play Console: update the Data safety form. Audio is collected, sent to Sarvam AI to turn into text, and not stored.
 
 Events: `docs/analytics-events.md` → "Assistant".
+
+## Later the same day: it does everything, in the app's language
+
+**What it can do:** everything the app does:
+- **Orders:**
+  - any status change, forward or back (delivered with cash / UPI / split / khata, cancelled with a reason);
+  - edit an order: clothes, this order's rate, kg, express, discount, dates, note;
+  - delete an order.
+- **Money:**
+  - paid / part paid (`LaundryRepository.prepayPart`);
+  - khata payments;
+  - old baaki.
+- **Rate card:** prices, items, new service, per-kg rate, ready days, rename / delete.
+- **Customers:** add, or change name / phone / address.
+
+Every change is still a one-tap card.
+
+**Customers are matched automatically.** By number (full or last 4), then by name. A new customer is made only when none matches; the same name with a new number counts as another person.
+
+**Language.** The assistant replies only in the app's language (`core/I18n.kt`, see `docs/i18n.md`):
+- In the system prompt, names and items in tool arguments stay in English letters.
+- The mic sends `language` (e.g. `ta-IN`) and `mode: codemix`.
+
+**"It says tap Save but there's no button" (owner, 25 Oct).** The cause: after a few turns the model copied its own earlier "tap X" replies instead of calling the tool. The logs showed requests answered with no tool call. Reproduced 8/8 with a chat history.
+
+The fix (app):
+- If a reply mentions tap / button, in any of the 11 languages, and no card was made, the app sends it back once with `tool_choice: required` and a `reply` tool for plain answers (`Assistant Nudged` event).
+- Card results say "the card is on screen, your part is done" (the old "nothing happened yet" made it call the tool again).
+- One card per identical call per question.
+- Made-up placeholders ("New Service", "Item1") are refused.
+
+**Backend for this — deployed 2026-10-25 ~16:45 IST** (server-local commit 294d884, after the owner allowed it; the script below is the record).
+
+    DRY_RUN=1 bash docs/deploy/2026-10-25-assistant-languages-deploy.sh
+    bash docs/deploy/2026-10-25-assistant-languages-deploy.sh
+
+What it adds:
+- `tool_choice` and speech `language` / `mode`, checked against fixed lists;
+- the patch is `2026-10-25-backend-assistant-languages.patch`, smoke-tested locally against Sarvam.
+
+Checked on prod with the demo account: `tool_choice: required` → `tool_calls`; `/assistant/config`, `/experiments`, `/billing/status`, `/shops`, `/sync/pull` → 200.

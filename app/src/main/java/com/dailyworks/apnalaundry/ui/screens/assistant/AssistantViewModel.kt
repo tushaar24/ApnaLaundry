@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.core.AppDate
+import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.data.LaundryRepository
 import com.dailyworks.apnalaundry.data.assistant.AssistantApi
 import com.dailyworks.apnalaundry.data.assistant.AssistantException
@@ -109,28 +110,61 @@ class AssistantViewModel(
             val cards = mutableListOf<AssistantCard>()
             val tools = mutableListOf<String>()
             var rounds = 0
+            // The nudge below and the reply it corrected: dropped from the history after the turn.
+            var nudgeAt = -1
             try {
                 var answer: String? = null
+                var force = false
+                val made = mutableMapOf<String, String>() // tool + args → result: one card per change per turn
                 while (true) {
                     rounds++
                     val st = shop.filterNotNull().first()
                     val runner = AssistantTools(st)
-                    val reply = api.chat(listOf(system(st, runner)) + window(turnStart), AssistantTools.SCHEMA)
-                    if (reply.tool_calls.isEmpty() || rounds >= MAX_ROUNDS) { answer = reply.content; break }
+                    val reply = api.chat(
+                        listOf(system(st, runner)) + window(turnStart),
+                        if (force) AssistantTools.SCHEMA_WITH_REPLY else AssistantTools.SCHEMA,
+                        mustUseTool = force,
+                    )
+                    force = false
+                    reply.tool_calls.firstOrNull { it.function.name == AssistantTools.REPLY }?.let { r ->
+                        answer = AssistantTools.replyText(r.function.arguments)
+                        return@let
+                    }
+                    if (answer != null) break
+                    if (reply.tool_calls.isEmpty() || rounds >= MAX_ROUNDS) {
+                        // "Tap Save" with no card on screen: the model skipped the tool (it copies its
+                        // earlier replies). Once per question: send it back to do it — or just answer.
+                        val said = clean(reply.content)
+                        if (cards.isEmpty() && nudgeAt < 0 && rounds < MAX_ROUNDS && mentionsButton(said)) {
+                            nudgeAt = history.size
+                            history += msg("assistant", said)
+                            history += msg("user", NO_CARD_NUDGE)
+                            force = true
+                            Analytics.assistantNudged()
+                            continue
+                        }
+                        answer = reply.content
+                        break
+                    }
                     history += toolCalls(reply, rounds)
                     reply.tool_calls.forEachIndexed { i, call ->
                         tools += call.function.name
-                        val out = runner.run(call.function.name, call.function.arguments)
-                        out.card?.let { c -> cards += c; Analytics.assistantCardShown(cardName(c)) }
+                        val sig = call.function.name + "|" + call.function.arguments
+                        val content = made[sig] ?: run {
+                            val out = runner.run(call.function.name, call.function.arguments)
+                            out.card?.let { c -> cards += c; Analytics.assistantCardShown(cardName(c)) }
+                            (if (out.card != null) cardOnScreen(out.json) else out.json).also { if (out.card != null) made[sig] = it }
+                        }
                         history += buildJsonObject {
                             put("role", "tool")
                             put("tool_call_id", call.id.ifBlank { "call_${rounds}_$i" })
-                            put("content", if (out.card != null) waitingForTap(out.json) else out.json)
+                            put("content", content)
                         }
                     }
                 }
+                if (nudgeAt >= 0) repeat(2) { history.removeAt(nudgeAt) }
                 val text = clean(answer).ifBlank {
-                    if (cards.isNotEmpty()) "Check it below and tap the button." else "Sorry, I couldn't get that. Please ask again in simple words."
+                    if (cards.isNotEmpty()) tr("Check it below and tap the button.") else tr("Sorry, I couldn't get that. Please ask again in simple words.")
                 }
                 history += msg("assistant", text)
                 add(Who.ASSISTANT, text, cards)
@@ -152,7 +186,7 @@ class AssistantViewModel(
     fun startVoice() {
         if (_busy.value || _voice.value != Voice.Idle) return
         if (!recorder.start()) {
-            add(Who.ERROR, "Couldn't start the mic. Close any app using it and try again.")
+            add(Who.ERROR, tr("Couldn't start the mic. Close any app using it and try again."))
             Analytics.assistantVoice(0, false, "mic")
             return
         }
@@ -168,7 +202,7 @@ class AssistantViewModel(
         val audio = recorder.stop()
         if (audio == null) {
             _voice.value = Voice.Idle
-            add(Who.ERROR, "Didn't hear anything. Tap the mic, speak, then tap Stop.")
+            add(Who.ERROR, tr("Didn't hear anything. Tap the mic, speak, then tap Stop."))
             Analytics.assistantVoice(secs, false, "short")
             return
         }
@@ -184,7 +218,7 @@ class AssistantViewModel(
             }
             _voice.value = Voice.Idle
             if (heard.isEmpty()) {
-                add(Who.ERROR, "Couldn't make out the words. Please say it again, a little slower.")
+                add(Who.ERROR, tr("Couldn't make out the words. Please say it again, a little slower."))
                 Analytics.assistantVoice(secs, false, "empty")
             } else {
                 Analytics.assistantVoice(secs, true, "")
@@ -287,11 +321,18 @@ class AssistantViewModel(
             if (phone.isNotBlank() || st.shop.address.isNotBlank()) {
                 appendLine("Shop contact for messages: " + listOfNotNull(phone.takeIf { it.isNotBlank() }?.let { "phone $it" }, st.shop.address.takeIf { it.isNotBlank() }?.let { "address $it" }).joinToString(", ") + ". Never write placeholders like [shop number].")
             }
-            appendLine("Today is ${today.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.ENGLISH)}, ${AppDate.plain(iso)} ${today.year} ($iso), time ${AppDate.nowText()}.")
+            appendLine("Today is ${today.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.ENGLISH)}, ${com.dailyworks.apnalaundry.core.I18n.english { AppDate.plain(iso) }} ${today.year} ($iso), time ${AppDate.nowText()}.")
             appendLine("Dates: yesterday = ${today.minusDays(1)}; this week = $monday to $iso; this month = ${today.withDayOfMonth(1)} to $iso; last month = ${lastMonth.withDayOfMonth(1)} to ${lastMonth.withDayOfMonth(lastMonth.lengthOfMonth())}.")
             appendLine()
             appendLine("How to answer:")
-            appendLine("- Reply in the same language AND the same letters as the owner's last message. Written in English letters (even Hindi words, like \"aaj kitna kamaya\") → reply in English letters (Hinglish), never Devanagari. Written in Devanagari → Devanagari. English → English. Short and simple: 1-4 lines. No tables, no headings, no markdown; a few \"• \" lines are fine.")
+            val lang = com.dailyworks.apnalaundry.core.I18n.language
+            if (lang == com.dailyworks.apnalaundry.core.AppLanguage.EN) {
+                appendLine("- The app is set to English: always reply in simple English, whatever language the owner writes or speaks in.")
+            } else {
+                appendLine("- The app is set to ${lang.english}: ALWAYS reply ONLY in ${lang.english}, in ${lang.script} script — whatever language or letters the owner uses. Everyday words shop owners say in English (order, bill, cash, UPI, WhatsApp) may stay as they are, written in ${lang.script}.")
+                appendLine("- But in tool arguments write customer names and items in English letters, as they are saved in the app (e.g. a name said as \"रमेश\" → \"Ramesh\", \"शर्ट\" → \"Shirt\").")
+            }
+            appendLine("- Short and simple: 1-4 lines. No tables, no headings, no markdown; a few \"• \" lines are fine.")
             appendLine("- Money as ₹ with Indian commas (₹1,25,000). Baaki = money a customer still owes (their khata). Advance = they paid extra.")
             appendLine("- ALWAYS use the tools for shop data. Never guess customers, orders, prices or numbers.")
             appendLine("- Customers: for any action just pass customer_name (and customer_phone if the owner said a number). The app checks whether they are already saved — by number, then name — and takes them automatically; for a new order with someone not saved, they become a new customer (needs a 10-digit number: ask if missing). If the app says several match, ask which one (name + last 4 digits). Use find_customers only to look someone up.")
@@ -308,6 +349,8 @@ class AssistantViewModel(
             appendLine("  • save_customer (new customer or change name / phone / address), add_old_baaki.")
             appendLine("  • Cancel = change_status to cancelled (the order stays, marked cancelled). delete_order only when they say delete / mita do / galti se bana — never for cancel.")
             appendLine("  Several changes at once = several tool calls.")
+            appendLine("- Every new request needs its OWN tool call — a card from an earlier message doesn't do it. Never tell the owner to tap a button unless a tool in THIS reply put a card on screen (card_on_screen).")
+            appendLine("- Never invent names, items or prices the owner didn't say (no \"New Service\", \"Item1\"). If something needed is missing, ask.")
             appendLine("- IMPORTANT: a change happens ONLY when the owner taps the button on its card. So never write \"ho gaya\", \"kar diya\", \"add ho gaya\", \"done\", \"saved\", \"marked\". Say what the card will do and ask them to tap. Wrong: \"Shirt ka rate ₹12 kar diya.\" Right: \"Shirt ka rate ₹12 karne ke liye 'Save to rate card' tap karo.\" Wrong: \"2 pant add ho gaye.\" Right: \"2 pant jodne ke liye 'Save changes' tap karo.\"")
             appendLine("- Never ask the owner for a customer_id, order id or service id — look them up yourself (find_customers, find_orders, the rate card). Ask only for things only they know: which customer when several match, amounts, cash or UPI.")
             appendLine("- Only this shop's laundry work. For anything else, say politely you can only help with the shop.")
@@ -325,15 +368,25 @@ class AssistantViewModel(
         return msg("system", text.trim())
     }
 
-    /** A card's tool result, marked so the model never says "ho gaya" before the owner taps. */
-    private fun waitingForTap(json: String): String = runCatching {
+    /**
+     * A card's tool result: the card is on screen and the model's part is done
+     * (said plainly — "nothing happened yet" made it call the tool again), but
+     * it isn't saved until the owner taps, so no "ho gaya".
+     */
+    private fun cardOnScreen(json: String): String = runCatching {
         JsonObject(
             kotlinx.serialization.json.Json.parseToJsonElement(json).jsonObject + mapOf(
-                "done" to JsonPrimitive(false),
-                "say" to JsonPrimitive("Nothing has happened yet — it happens only when they tap the button on the card. Don't say ho gaya / kar diya / done; ask them to tap."),
+                "card_on_screen" to JsonPrimitive(true),
+                "say" to JsonPrimitive("The card with its button is on the owner's screen now — your part is done; don't call this tool again. In one line tell them to check the card and tap its button. It isn't saved until they tap, so don't say ho gaya / kar diya / done."),
             ),
         ).toString()
     }.getOrDefault(json)
+
+    /** Does the reply tell the owner to tap something? (In every app language.) */
+    private fun mentionsButton(text: String): Boolean {
+        val t = text.lowercase()
+        return LATIN_BUTTON.containsMatchIn(t) || BUTTON_WORDS.any { t.contains(it) }
+    }
 
     private fun clean(s: String?): String = s.orEmpty()
         .replace("**", "")
@@ -341,11 +394,11 @@ class AssistantViewModel(
         .trim()
 
     private fun errorText(e: Exception): String = when {
-        e is AssistantException && e.code == "limit" -> "You've asked a lot today. The assistant will be back tomorrow."
-        e is AssistantException && e.code == "off" -> "The assistant isn't available right now."
-        e is AssistantException -> "The assistant didn't answer. Please try again."
-        e is NotLoggedInException -> "Please log in again."
-        else -> "No internet? Check it and try again."
+        e is AssistantException && e.code == "limit" -> tr("You've asked a lot today. The assistant will be back tomorrow.")
+        e is AssistantException && e.code == "off" -> tr("The assistant isn't available right now.")
+        e is AssistantException -> tr("The assistant didn't answer. Please try again.")
+        e is NotLoggedInException -> tr("Please log in again.")
+        else -> tr("No internet? Check it and try again.")
     }
 
     private fun reason(e: Exception): String = when (e) {
@@ -357,6 +410,30 @@ class AssistantViewModel(
     companion object {
         /** Model calls per question: answer, or tools then answer (a new order may take 3). */
         private const val MAX_ROUNDS = 6
+
+        /**
+         * "Tap" / "button" in the app's languages — a reply with these but no card is
+         * checked once. Whole words in English letters ("Tapan" isn't "tap"); not
+         * "press", which also means ironing ("3 shirt press").
+         */
+        private val LATIN_BUTTON = Regex("\\b(tap|tapping|button|buttons)\\b")
+        private val BUTTON_WORDS = listOf(
+            "टैप", "बटन", "दबा", // Hindi, Marathi
+            "ટેપ", "બટન", "દબા", // Gujarati
+            "ট্যাপ", "বাটন", "চাপ", // Bengali
+            "தட்டு", "டேப்", "பட்டன்", "பொத்தான்", // Tamil
+            "ట్యాప్", "బటన్", "నొక్క", // Telugu
+            "ಟ್ಯಾಪ್", "ಬಟನ್", "ಒತ್ತ", // Kannada
+            "ടാപ്പ്", "ബട്ടൺ", "അമർത്ത", // Malayalam
+            "ਟੈਪ", "ਬਟਨ", "ਦਬਾ", // Punjabi
+            "ଟ୍ୟାପ୍", "ବଟନ୍", "ଦବା", // Odia
+        )
+
+        /** Sent (once) when a reply points at a button but no tool made a card. */
+        private const val NO_CARD_NUDGE =
+            "[App] No card is on the screen — you did not call any tool, so there is no button. " +
+                "If I asked you to make a change or send something, call its tool now. " +
+                "If I only asked a question or how to do something, use reply to answer."
         private const val MAX_VOICE_MS = 25_000L
 
         fun cardName(c: AssistantCard) = when (c) {

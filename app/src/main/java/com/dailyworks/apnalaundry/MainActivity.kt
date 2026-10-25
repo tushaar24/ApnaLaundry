@@ -56,6 +56,11 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
     private val checkoutBridge: CheckoutBridge by inject()
     private val syncScheduler: SyncScheduler by inject()
 
+    // Android's own pickers and words in the app's language (com.dailyworks.apnalaundry.core.I18n).
+    override fun attachBaseContext(newBase: android.content.Context) {
+        super.attachBaseContext(com.dailyworks.apnalaundry.core.I18n.wrap(newBase))
+    }
+
     // Sync on open and every minute while visible (edits from other devices).
     override fun onStart() {
         Push.reportEnabled(this) // they may have switched notifications on/off in Settings

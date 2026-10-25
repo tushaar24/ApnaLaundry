@@ -63,6 +63,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.core.AppDate
 import com.dailyworks.apnalaundry.core.Money
+import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.data.StatusMessage
 import com.dailyworks.apnalaundry.domain.LaundryMath
 import com.dailyworks.apnalaundry.domain.LaundryState
@@ -121,7 +122,7 @@ fun AssistantScreen(shopVm: ShopViewModel, navigator: AppNavigator, from: String
     DisposableEffect(Unit) { onDispose { vm.cancelVoice() } }
 
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) vm.startVoice() else shopVm.showInfo("Allow the microphone to speak — or type instead")
+        if (granted) vm.startVoice() else shopVm.showInfo(tr("Allow the microphone to speak — or type instead"))
     }
     val startMic = {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) vm.startVoice()
@@ -132,9 +133,9 @@ fun AssistantScreen(shopVm: ShopViewModel, navigator: AppNavigator, from: String
     }
 
     Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.ime))) {
-        TopBar("Ask", onBack = { navigator.back() }, trailing = {
+        TopBar(tr("Ask"), onBack = { navigator.back() }, trailing = {
             if (bubbles.isNotEmpty() && !busy) {
-                Text("New chat", style = fig(15, FontWeight.Bold, Tokens.Blue), modifier = Modifier.tap { vm.clear() }.padding(horizontal = 8.dp, vertical = 12.dp))
+                Text(tr("New chat"), style = fig(15, FontWeight.Bold, Tokens.Blue), modifier = Modifier.tap { vm.clear() }.padding(horizontal = 8.dp, vertical = 12.dp))
             }
         })
 
@@ -174,21 +175,21 @@ private fun Welcome(onAsk: (String) -> Unit, onStart: (String) -> Unit) {
         Box(Modifier.size(64.dp).rounded(999.dp).background(Tokens.BlueLight), contentAlignment = Alignment.Center) {
             Icon(Icons.Filled.Mic, null, tint = Tokens.Blue, modifier = Modifier.size(32.dp))
         }
-        Text("Ask about your shop", style = bric(24, FontWeight.Bold))
-        Text("Tap the mic and speak — Hindi or English. Or type below.", style = fig(16, color = Tokens.InkSecondary))
+        Text(tr("Ask about your shop"), style = bric(24, FontWeight.Bold))
+        Text(tr("Tap the mic and speak. Or type below."), style = fig(16, color = Tokens.InkSecondary))
         Spacer(Modifier.height(4.dp))
-        SectionLabel("Try")
+        SectionLabel(tr("Try"))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Chip("Aaj kitna kamaya?") { onAsk("Aaj kitna kamaya?") }
-            Chip("Who has baaki?") { onAsk("Which customers have baaki?") }
-            Chip("Which orders are ready?") { onAsk("Which orders are ready?") }
-            Chip("This month's sales") { onAsk("How were sales this month?") }
-            Chip("New order for…") { onStart("New order for ") }
-            Chip("Send bill to…") { onStart("Send the bill of the last order of ") }
-            Chip("Khata of…") { onStart("Show the khata of ") }
+            Chip(tr("How much did I earn today?")) { onAsk(tr("How much did I earn today?")) }
+            Chip(tr("Who has baaki?")) { onAsk(tr("Which customers have baaki?")) }
+            Chip(tr("Which orders are ready?")) { onAsk(tr("Which orders are ready?")) }
+            Chip(tr("This month's sales")) { onAsk(tr("How were sales this month?")) }
+            Chip(tr("New order for…")) { onStart(tr("New order for") + " ") }
+            Chip(tr("Send bill to…")) { onStart(tr("Send the bill of the last order of") + " ") }
+            Chip(tr("Khata of…")) { onStart(tr("Show the khata of") + " ") }
         }
         Spacer(Modifier.height(4.dp))
-        Text("Orders are saved and messages sent only when you tap the button.", style = fig(13, color = Tokens.Muted))
+        Text(tr("Orders are saved and messages sent only when you tap the button."), style = fig(13, color = Tokens.Muted))
     }
 }
 
@@ -217,7 +218,7 @@ private fun BubbleView(b: AssistantViewModel.Bubble, state: LaundryState, vm: As
                 Modifier.widthIn(max = 320.dp).rounded(16.dp).background(Tokens.Card)
                     .border(1.dp, Tokens.CardBorder, RoundedCornerShape(16.dp)).padding(horizontal = 14.dp, vertical = 10.dp),
             ) { Text(b.text, style = fig(15)) }
-            if (b.cards.isNotEmpty()) Text("👇 Nothing changes until you tap the button", style = fig(13, FontWeight.SemiBold, Tokens.Muted))
+            if (b.cards.isNotEmpty()) Text(tr("👇 Nothing changes until you tap the button"), style = fig(13, FontWeight.SemiBold, Tokens.Muted))
             b.cards.forEachIndexed { i, c -> CardView(c, "${b.id}:$i", state, vm, shopVm, navigator) }
         }
         AssistantViewModel.Who.ERROR -> Box(
@@ -234,7 +235,7 @@ private fun Thinking() {
     Box(
         Modifier.rounded(16.dp).background(Tokens.Card).border(1.dp, Tokens.CardBorder, RoundedCornerShape(16.dp))
             .padding(horizontal = 14.dp, vertical = 10.dp),
-    ) { Text("Thinking" + ".".repeat(dots), style = fig(15, color = Tokens.Muted)) }
+    ) { Text(tr("Thinking") + ".".repeat(dots), style = fig(15, color = Tokens.Muted)) }
 }
 
 // ---------------- cards ----------------
@@ -323,43 +324,43 @@ private fun NewOrderCard(
 
     CardBox {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("New order", style = bric(18, FontWeight.Bold), modifier = Modifier.weight(1f))
-            if (existing == null) Tag("New customer")
-            if (d.express) Tag("Express")
+            Text(tr("New order"), style = bric(18, FontWeight.Bold), modifier = Modifier.weight(1f))
+            if (existing == null) Tag(tr("New customer"))
+            if (d.express) Tag(tr("Express"))
         }
         Text(name + if (phone.isNotBlank()) " · ${Selectors.fmtPhone(phone)}" else "", style = fig(15, FontWeight.SemiBold))
         if (d.pickup == Route.HOME || d.delivery == Route.HOME) {
-            val how = listOfNotNull(if (d.pickup == Route.HOME) "Home pickup" else null, if (d.delivery == Route.HOME) "Home delivery" else null).joinToString(" · ")
+            val how = listOfNotNull(if (d.pickup == Route.HOME) tr("Home pickup") else null, if (d.delivery == Route.HOME) tr("Home delivery") else null).joinToString(" · ")
             Text(how + (d.address.ifBlank { existing?.address.orEmpty() }.takeIf { it.isNotBlank() }?.let { " — $it" } ?: ""), style = fig(13, color = Tokens.Muted), maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Divider))
-        if (d.lines.isEmpty()) Text("Pickup — count the clothes when you get them", style = fig(14, color = Tokens.Muted))
+        if (d.lines.isEmpty()) Text(tr("Pickup — count the clothes when you get them"), style = fig(14, color = Tokens.Muted))
         d.lines.forEach { l ->
-            if (l.kg > 0) AmountRow("${l.serviceName} · ${Selectors.trimKg(l.kg)} kg", Money.rupees(l.amt))
+            if (l.kg > 0) AmountRow(tr("{service} · {kg} kg", "service" to l.serviceName, "kg" to Selectors.trimKg(l.kg)), Money.rupees(l.amt))
             else AmountRow("${l.itemName} × ${l.qty} · ${l.serviceName}", Money.rupees(l.amt))
         }
-        if (d.express && d.exAmt > 0) AmountRow("Express", Money.rupees(d.exAmt))
+        if (d.express && d.exAmt > 0) AmountRow(tr("Express"), Money.rupees(d.exAmt))
         if (d.lines.isNotEmpty()) {
             Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Divider))
-            AmountRow("Total" + if (state.shop.gstOn && state.shop.gstPct > 0) " (with GST)" else "", Money.rupees(d.total), bold = true)
+            AmountRow(if (state.shop.gstOn && state.shop.gstPct > 0) tr("Total (with GST)") else tr("Total"), Money.rupees(d.total), bold = true)
         }
-        if (d.deliveryDate.isNotBlank()) Text("Ready by ${AppDate.short(d.deliveryDate)}", style = fig(14, FontWeight.SemiBold, Tokens.InkSecondary))
-        if (d.note.isNotBlank()) Text("Note: ${d.note}", style = fig(13, color = Tokens.Muted))
+        if (d.deliveryDate.isNotBlank()) Text(tr("Ready by {date}", "date" to AppDate.short(d.deliveryDate)), style = fig(14, FontWeight.SemiBold, Tokens.InkSecondary))
+        if (d.note.isNotBlank()) Text(tr("Note: {note}", "note" to d.note), style = fig(13, color = Tokens.Muted))
 
         when (status) {
             null -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlineButton("Cancel", Modifier.weight(1f), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.InkSecondary) {
+                OutlineButton(tr("Cancel"), Modifier.weight(1f), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.InkSecondary) {
                     vm.draft(card.key, AssistantViewModel.Draft.Cancelled)
                 }
-                PrimaryButton("Save order", Modifier.weight(1.6f), height = 48.dp) { save() }
+                PrimaryButton(tr("Save order"), Modifier.weight(1.6f), height = 48.dp) { save() }
             }
-            AssistantViewModel.Draft.Saving -> Text("Saving…", style = fig(14, FontWeight.SemiBold, Tokens.Muted))
-            AssistantViewModel.Draft.Cancelled -> Text("Not saved", style = fig(14, FontWeight.SemiBold, Tokens.Muted))
+            AssistantViewModel.Draft.Saving -> Text(tr("Saving…"), style = fig(14, FontWeight.SemiBold, Tokens.Muted))
+            AssistantViewModel.Draft.Cancelled -> Text(tr("Not saved"), style = fig(14, FontWeight.SemiBold, Tokens.Muted))
             AssistantViewModel.Draft.NeedsPlan -> {
-                Text("Your free orders are used up. Choose a plan to save more orders.", style = fig(14, FontWeight.SemiBold, Tokens.OrangeText))
+                Text(tr("Your free orders are used up. Choose a plan to save more orders."), style = fig(14, FontWeight.SemiBold, Tokens.OrangeText))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlineButton("Try again", Modifier.weight(1f), height = 48.dp) { save() }
-                    PrimaryButton("See plans", Modifier.weight(1.4f), height = 48.dp) {
+                    OutlineButton(tr("Try again"), Modifier.weight(1f), height = 48.dp) { save() }
+                    PrimaryButton(tr("See plans"), Modifier.weight(1.4f), height = 48.dp) {
                         Analytics.freeOrdersOverPlansTapped()
                         navigator.openNewOrder(from = "assistant")
                     }
@@ -367,11 +368,11 @@ private fun NewOrderCard(
             }
             is AssistantViewModel.Draft.Saved -> {
                 val o = Selectors.order(state, status.orderId)
-                DoneText("Saved ✓ Order #${o?.no() ?: status.orderId}")
+                DoneText(tr("Saved ✓ Order #{no}", "no" to (o?.no() ?: status.orderId)))
                 if (o != null && o.lines.isNotEmpty()) {
                     SendBillButtons(o.id, "${card.key}:bill", state, vm, shopVm, navigator, scope)
                 } else if (o != null) {
-                    OutlineButton("Open order", Modifier.fillMaxWidth(), height = 48.dp) { navigator.openOrder(o.id, "assistant") }
+                    OutlineButton(tr("Open order"), Modifier.fillMaxWidth(), height = 48.dp) { navigator.openOrder(o.id, "assistant") }
                 }
             }
         }
@@ -396,10 +397,10 @@ private fun SendBillButtons(
     var sending by remember { mutableStateOf(false) }
     LaunchedEffect(orderId) { shopVm.billUrl(orderId) } // the bill page link, fetched ahead
     val o = Selectors.order(state, orderId) ?: return
-    if (key in used || o.billSent) DoneText("Bill sent to ${Selectors.firstName(Selectors.customer(state, o.custId).name)} ✓")
+    if (key in used || o.billSent) DoneText(tr("Bill sent to {name} ✓", "name" to Selectors.firstName(Selectors.customer(state, o.custId).name)))
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlineButton("Open bill", Modifier.weight(1f), height = 48.dp) { navigator.openBill(o.id, "assistant") }
-        WaButton(if (sending) "Opening…" else "Send bill on WhatsApp", Modifier.weight(1.6f)) {
+        OutlineButton(tr("Open bill"), Modifier.weight(1f), height = 48.dp) { navigator.openBill(o.id, "assistant") }
+        WaButton(if (sending) tr("Opening…") else tr("Send bill on WhatsApp"), Modifier.weight(1.6f)) {
             if (sending) return@WaButton
             sending = true
             scope.launch {
@@ -422,9 +423,9 @@ private fun SendBillCard(
 ) {
     val o = Selectors.order(state, orderId)
     CardBox {
-        if (o == null) { Text("This order was deleted", style = fig(14, color = Tokens.Muted)); return@CardBox }
+        if (o == null) { Text(tr("This order was deleted"), style = fig(14, color = Tokens.Muted)); return@CardBox }
         val c = Selectors.customer(state, o.custId)
-        Text("Bill #${o.no()}", style = bric(18, FontWeight.Bold))
+        Text(tr("Bill #{no}", "no" to o.no()), style = bric(18, FontWeight.Bold))
         AmountRow(c.name, Money.rupees(LaundryMath.amtOf(o)), bold = true)
         Text(Selectors.itemsLabel(o) + " · " + Selectors.svcLabel(o), style = fig(13, color = Tokens.Muted), maxLines = 2, overflow = TextOverflow.Ellipsis)
         SendBillButtons(o.id, key, state, vm, shopVm, navigator, scope)
@@ -435,7 +436,7 @@ private fun SendBillCard(
 private fun StatusCard(orderIds: List<Int>, key: String, used: Set<String>, state: LaundryState, vm: AssistantViewModel) {
     val context = LocalContext.current
     CardBox {
-        Text(if (orderIds.size == 1) "Status update" else "Status updates · ${orderIds.size}", style = bric(18, FontWeight.Bold))
+        Text(if (orderIds.size == 1) tr("Status update") else tr("Status updates · {n}", "n" to orderIds.size), style = bric(18, FontWeight.Bold))
         orderIds.forEachIndexed { i, id ->
             val o = Selectors.order(state, id) ?: return@forEachIndexed
             val c = Selectors.customer(state, o.custId)
@@ -443,8 +444,8 @@ private fun StatusCard(orderIds: List<Int>, key: String, used: Set<String>, stat
             Text("#${o.no()} · ${c.name} · ${statusLabel(o.status)}", style = fig(15, FontWeight.Bold))
             Text(StatusMessage.text(state.shop.name, c.name, o).replace("*", ""), style = fig(13, color = Tokens.InkSecondary), maxLines = 3, overflow = TextOverflow.Ellipsis)
             val k = "$key:$id"
-            if (k in used) DoneText("WhatsApp opened ✓")
-            WaButton(if (k in used) "Send again" else "Send to ${Selectors.firstName(c.name)} on WhatsApp", Modifier.fillMaxWidth()) {
+            if (k in used) DoneText(tr("WhatsApp opened ✓"))
+            WaButton(if (k in used) tr("Send again") else tr("Send to {name} on WhatsApp", "name" to Selectors.firstName(c.name)), Modifier.fillMaxWidth()) {
                 openWhatsApp(context, StatusMessage.link(state.shop.name, c, o))
                 vm.used(k, "status_update", "Opened WhatsApp with the status update of #${o.no()} for ${c.name}")
             }
@@ -457,15 +458,15 @@ private fun ReminderCard(custId: String, key: String, used: Set<String>, state: 
     val context = LocalContext.current
     val c = state.customers.firstOrNull { it.id == custId }
     CardBox {
-        if (c == null) { Text("This customer was deleted", style = fig(14, color = Tokens.Muted)); return@CardBox }
+        if (c == null) { Text(tr("This customer was deleted"), style = fig(14, color = Tokens.Muted)); return@CardBox }
         val bal = Selectors.balance(state, custId)
-        Text("Khata reminder", style = bric(18, FontWeight.Bold))
-        AmountRow(c.name, if (bal > 0) "${Money.rupees(bal)} baaki" else "All clear", bold = true)
-        if (key in used) DoneText("WhatsApp opened ✓")
-        if (bal > 0) WaButton("Remind on WhatsApp", Modifier.fillMaxWidth()) {
+        Text(tr("Khata reminder"), style = bric(18, FontWeight.Bold))
+        AmountRow(c.name, if (bal > 0) tr("{amount} baaki", "amount" to Money.rupees(bal)) else tr("All clear"), bold = true)
+        if (key in used) DoneText(tr("WhatsApp opened ✓"))
+        if (bal > 0) WaButton(tr("Remind on WhatsApp"), Modifier.fillMaxWidth()) {
             Analytics.reminderSent(custId, bal)
             sendReminderOnWhatsApp(context, state, custId, bal)
-            shopVm.showInfo("Opening WhatsApp · reminder to ${Selectors.firstName(c.name)} for ${Money.rupees(bal)}")
+            shopVm.showInfo(tr("Opening WhatsApp · reminder to {name} for {amount}", "name" to Selectors.firstName(c.name), "amount" to Money.rupees(bal)))
             vm.used(key, "reminder", "Opened WhatsApp with a ${Money.rupees(bal)} baaki reminder for ${c.name}")
         }
     }
@@ -476,14 +477,14 @@ private fun MessageCard(card: AssistantCard.WhatsAppText, key: String, used: Set
     val context = LocalContext.current
     val c = card.custId?.let { id -> state.customers.firstOrNull { it.id == id } }
     CardBox {
-        Text("WhatsApp message", style = bric(18, FontWeight.Bold))
-        Text(if (c != null) "To ${c.name}" else "WhatsApp will ask: a chat, or My Status", style = fig(13, color = Tokens.Muted))
+        Text(tr("WhatsApp message"), style = bric(18, FontWeight.Bold))
+        Text(if (c != null) tr("To {name}", "name" to c.name) else tr("WhatsApp will ask: a chat, or My Status"), style = fig(13, color = Tokens.Muted))
         Box(
             Modifier.fillMaxWidth().heightIn(max = 220.dp).rounded(12.dp).background(WaBubble)
                 .verticalScroll(rememberScrollState()).padding(12.dp),
         ) { Text(card.text.replace("*", ""), style = fig(14, FontWeight.SemiBold)) }
-        if (key in used) DoneText("WhatsApp opened ✓")
-        WaButton(if (key in used) "Open again" else "Open WhatsApp", Modifier.fillMaxWidth()) {
+        if (key in used) DoneText(tr("WhatsApp opened ✓"))
+        WaButton(if (key in used) tr("Open again") else tr("Open WhatsApp"), Modifier.fillMaxWidth()) {
             val digits = c?.phone?.filter { it.isDigit() }?.takeLast(10).orEmpty()
             val text = Uri.encode(card.text)
             openWhatsApp(context, if (digits.length == 10) "https://wa.me/91$digits?text=$text" else "https://wa.me/?text=$text")
@@ -493,8 +494,8 @@ private fun MessageCard(card: AssistantCard.WhatsAppText, key: String, used: Set
 }
 
 internal fun statusLabel(s: OrderStatus) = when (s) {
-    OrderStatus.CREATED -> "To pick up"; OrderStatus.RECEIVED -> "Received"; OrderStatus.READY -> "Ready"
-    OrderStatus.DELIVERED -> "Delivered"; OrderStatus.CANCELLED -> "Cancelled"
+    OrderStatus.CREATED -> tr("To pick up"); OrderStatus.RECEIVED -> tr("Received"); OrderStatus.READY -> tr("Ready")
+    OrderStatus.DELIVERED -> tr("Delivered"); OrderStatus.CANCELLED -> tr("Cancelled")
 }
 
 // ---------------- input ----------------
@@ -513,27 +514,27 @@ private fun InputBar(
                 }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Box(Modifier.size(12.dp).rounded(999.dp).background(Tokens.ErrorRed))
-                    Text("Listening… 0:${secs.toString().padStart(2, '0')}", style = fig(16, FontWeight.Bold), modifier = Modifier.weight(1f))
-                    Text("Cancel", style = fig(15, FontWeight.Bold, Tokens.InkSecondary), modifier = Modifier.tap(onClick = onCancel).padding(horizontal = 8.dp, vertical = 12.dp))
-                    RoundButton(Tokens.ErrorRed, onStop) { Icon(Icons.Filled.Stop, "Stop", tint = Tokens.OnDark, modifier = Modifier.size(26.dp)) }
+                    Text(tr("Listening… {time}", "time" to "0:" + secs.toString().padStart(2, '0')), style = fig(16, FontWeight.Bold), modifier = Modifier.weight(1f))
+                    Text(tr("Cancel"), style = fig(15, FontWeight.Bold, Tokens.InkSecondary), modifier = Modifier.tap(onClick = onCancel).padding(horizontal = 8.dp, vertical = 12.dp))
+                    RoundButton(Tokens.ErrorRed, onStop) { Icon(Icons.Filled.Stop, tr("Stop"), tint = Tokens.OnDark, modifier = Modifier.size(26.dp)) }
                 }
             }
             AssistantViewModel.Voice.Hearing -> Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Getting your words…", style = fig(16, FontWeight.SemiBold, Tokens.Muted))
+                Text(tr("Getting your words…"), style = fig(16, FontWeight.SemiBold, Tokens.Muted))
             }
             AssistantViewModel.Voice.Idle -> Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 FieldBox(
-                    input, onInput, Modifier.weight(1f), placeholder = if (busy) "Wait for the answer…" else "Type here…",
+                    input, onInput, Modifier.weight(1f), placeholder = if (busy) tr("Wait for the answer…") else tr("Type here…"),
                     height = 56.dp, capitalization = KeyboardCapitalization.Sentences,
                     imeAction = ImeAction.Send, onImeAction = onSend,
                 )
                 if (input.isBlank()) {
                     RoundButton(if (busy) Tokens.BlueDisabled else Tokens.Blue, { if (!busy) onMic() }) {
-                        Icon(Icons.Filled.Mic, "Speak", tint = Tokens.OnDark, modifier = Modifier.size(28.dp))
+                        Icon(Icons.Filled.Mic, tr("Speak"), tint = Tokens.OnDark, modifier = Modifier.size(28.dp))
                     }
                 } else {
                     RoundButton(if (busy) Tokens.BlueDisabled else Tokens.Blue, { if (!busy) onSend() }) {
-                        Icon(Icons.AutoMirrored.Filled.Send, "Send", tint = Tokens.OnDark, modifier = Modifier.size(24.dp))
+                        Icon(Icons.AutoMirrored.Filled.Send, tr("Send"), tint = Tokens.OnDark, modifier = Modifier.size(24.dp))
                     }
                 }
             }

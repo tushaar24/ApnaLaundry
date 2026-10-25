@@ -50,6 +50,8 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dailyworks.apnalaundry.analytics.Analytics
+import com.dailyworks.apnalaundry.core.I18n
+import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.domain.BillDetails
 import com.dailyworks.apnalaundry.domain.BillDetails.withFields
 import com.dailyworks.apnalaundry.domain.BillReceipt
@@ -104,7 +106,8 @@ fun BillDesignScreen(shopVm: ShopViewModel, editing: Boolean, onBack: () -> Unit
     val order = remember(state.services, shop.expressPct) { BillDetails.sampleOrder(state.services, shop.expressPct, 1001) }
     val previewShop = shop.withFields(draft).copy(name = if (editing) BillDetails.cleanName(name).ifEmpty { shop.name } else shop.name)
     val receipts = remember(previewShop, order) {
-        BillDetails.TEMPLATES.map { (id, _) -> BillReceipt.sample(previewShop, order, id) }
+        // The bill document stays English (it matches the bill's web page).
+        I18n.english { BillDetails.TEMPLATES.map { (id, _) -> BillReceipt.sample(previewShop, order, id) } }
     }
     val images by rememberBillImages(shopVm, receipts, equalHeight = true, debounceMs = 120)
 
@@ -121,29 +124,29 @@ fun BillDesignScreen(shopVm: ShopViewModel, editing: Boolean, onBack: () -> Unit
     val added = BillDetails.addedCount(draft, loginPhone)
 
     StepScaffold(
-        bottomNote = if (editing) null else "You can change the design and details anytime in Settings.",
-        top = if (editing) ({ TopBar("Bill design & details", onBack = onBack) }) else null,
+        bottomNote = if (editing) null else tr("You can change the design and details anytime in Settings."),
+        top = if (editing) ({ TopBar(tr("Bill design & details"), onBack = onBack) }) else null,
         bottom = {
             if (editing) {
-                PrimaryButton("Save", height = 56.dp, enabled = BillDetails.isNameOk(name)) {
+                PrimaryButton(tr("Save"), height = 56.dp, enabled = BillDetails.isNameOk(name)) {
                     shopVm.updateShopDetails(name = BillDetails.cleanName(name), details = draft)
-                    shopVm.showInfo("Bill saved")
+                    shopVm.showInfo(tr("Bill saved"))
                     onDone()
                 }
             } else {
-                PrimaryButton("Start taking orders", height = 56.dp) { onDone() }
+                PrimaryButton(tr("Start taking orders"), height = 56.dp) { onDone() }
             }
         },
     ) {
         if (editing) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Laundry name", style = fig(13, FontWeight.Bold, Tokens.InkSecondary))
+                Text(tr("Laundry name"), style = fig(13, FontWeight.Bold, Tokens.InkSecondary))
                 FieldBox(name, { name = it.take(40) }, height = 56.dp, capitalization = KeyboardCapitalization.Words)
             }
         } else {
             StepBar(3, onBack)
-            Text("Your bill is ready", style = bric(28, FontWeight.Bold))
-            Text("Your name, rates and phone number are already on it.", style = fig(14, color = Tokens.Muted))
+            Text(tr("Your bill is ready"), style = bric(28, FontWeight.Bold))
+            Text(tr("Your name, rates and phone number are already on it."), style = fig(14, color = Tokens.Muted))
         }
 
         // design switcher
@@ -152,7 +155,7 @@ fun BillDesignScreen(shopVm: ShopViewModel, editing: Boolean, onBack: () -> Unit
                 .border(1.dp, Tokens.CardBorder, RoundedCornerShape(16.dp)).padding(6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            ArrowButton(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Previous design", enabled = index > 0) {
+            ArrowButton(Icons.AutoMirrored.Filled.KeyboardArrowLeft, tr("Previous design"), enabled = index > 0) {
                 scope.launch { pager.animateScrollToPage(index - 1) }
             }
             Column(
@@ -160,12 +163,12 @@ fun BillDesignScreen(shopVm: ShopViewModel, editing: Boolean, onBack: () -> Unit
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("DESIGN", style = fig(11, FontWeight.Bold, Tokens.Faint))
-                    Text(BillDetails.TEMPLATES[index].second, style = fig(14, FontWeight.Bold))
+                    Text(tr("DESIGN"), style = fig(11, FontWeight.Bold, Tokens.Faint))
+                    Text(tr(BillDetails.TEMPLATES[index].second), style = fig(14, FontWeight.Bold))
                 }
-                Text("${index + 1} of ${BillDetails.TEMPLATES.size} · swipe the bill to change", style = fig(12, color = Tokens.Muted), textAlign = TextAlign.Center)
+                Text(tr("{n} of {total} · swipe the bill to change", "n" to index + 1, "total" to BillDetails.TEMPLATES.size), style = fig(12, color = Tokens.Muted), textAlign = TextAlign.Center)
             }
-            ArrowButton(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Next design", enabled = index < BillDetails.TEMPLATES.lastIndex) {
+            ArrowButton(Icons.AutoMirrored.Filled.KeyboardArrowRight, tr("Next design"), enabled = index < BillDetails.TEMPLATES.lastIndex) {
                 scope.launch { pager.animateScrollToPage(index + 1) }
             }
         }
@@ -178,7 +181,7 @@ fun BillDesignScreen(shopVm: ShopViewModel, editing: Boolean, onBack: () -> Unit
             ) {
                 Icon(Icons.Filled.Add, null, tint = Tokens.Blue, modifier = Modifier.size(18.dp))
                 Text(
-                    "Add fields", style = fig(15, FontWeight.Bold, Tokens.Blue), textAlign = TextAlign.Center,
+                    tr("Add fields"), style = fig(15, FontWeight.Bold, Tokens.Blue), textAlign = TextAlign.Center,
                     maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
                 )
                 if (added > 0) {
@@ -195,14 +198,14 @@ fun BillDesignScreen(shopVm: ShopViewModel, editing: Boolean, onBack: () -> Unit
                     sendTestBillOnWhatsApp(context, receipt, shopVm.sampleBillUrl())
                     Analytics.testBillSent(BillDetails.TEMPLATES[index].first, editing)
                     tested = true
-                    shopVm.showInfo("Opening WhatsApp · pick who gets the test bill")
+                    shopVm.showInfo(tr("Opening WhatsApp · pick who gets the test bill"))
                 }
                 }.padding(horizontal = 8.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(painterResource(R.drawable.ic_whatsapp), null, tint = Color(0xFF25D366), modifier = Modifier.size(18.dp))
                 Text(
-                    if (tested) "Sent · again" else "Test on WhatsApp", style = fig(15, FontWeight.Bold, Tokens.Ink), textAlign = TextAlign.Center,
+                    if (tested) tr("Sent · again") else tr("Test on WhatsApp"), style = fig(15, FontWeight.Bold, Tokens.Ink), textAlign = TextAlign.Center,
                     maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
                 )
             }
@@ -223,7 +226,7 @@ fun BillDesignScreen(shopVm: ShopViewModel, editing: Boolean, onBack: () -> Unit
                 Box(Modifier.fillMaxWidth().height(520.dp).rounded(16.dp).background(Color.White))
             } else {
                 Image(
-                    img, contentDescription = "${BillDetails.TEMPLATES[page].second} bill design",
+                    img, contentDescription = tr("{design} bill design", "design" to tr(BillDetails.TEMPLATES[page].second)),
                     contentScale = ContentScale.FillWidth,
                     modifier = Modifier.fillMaxWidth().rounded(16.dp)
                         .border(1.dp, if (page == index) Tokens.Blue else Tokens.CardBorder, RoundedCornerShape(16.dp)),
@@ -234,8 +237,8 @@ fun BillDesignScreen(shopVm: ShopViewModel, editing: Boolean, onBack: () -> Unit
 
         Text(
             buildAnnotatedString {
-                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("Good to know: ") }
-                append("Express charge and discount are sample lines. They show on a bill only when you add them to an order — as a % or a fixed amount.")
+                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(tr("Good to know:") + " ") }
+                append(tr("Express charge and discount are sample lines. They show on a bill only when you add them to an order — as a % or a fixed amount."))
             },
             style = fig(13, color = Color(0xFF6B3A10)),
             modifier = Modifier.fillMaxWidth().rounded(14.dp).background(Color(0xFFFBEEDC)).padding(16.dp),

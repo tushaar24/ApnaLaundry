@@ -1,5 +1,7 @@
 package com.dailyworks.apnalaundry.domain
 
+import com.dailyworks.apnalaundry.core.tr
+import com.dailyworks.apnalaundry.core.i18n
 import java.net.URLEncoder
 import java.time.LocalDate
 import kotlin.math.roundToInt
@@ -14,17 +16,19 @@ object BillDetails {
     const val BOLD = "bold"
     const val RECEIPT = "receipt"
 
-    val TEMPLATES = listOf(CLASSIC to "Classic", BOLD to "Bold", RECEIPT to "Receipt")
+    // Names shown with tr() (i18n marks them for the catalogue); the design is saved by its id.
+    val TEMPLATES = listOf(CLASSIC to i18n("Classic"), BOLD to i18n("Bold"), RECEIPT to i18n("Receipt"))
 
     val STEPS = listOf("intro", "name", "services", "bill", "done")
 
     data class Term(val id: String, val text: String)
 
     val TERM_PRESETS = listOf(
-        Term("check", "Please check your clothes at delivery. No claims after."),
-        Term("fade", "Not responsible for colour fading or shrinkage."),
-        Term("pocket", "Please empty pockets. Not responsible for things left inside."),
-        Term("days", "Clothes not collected within 30 days are at the owner's risk."),
+        // Printed on bills in English (saved by id); the form shows them with tr().
+        Term("check", i18n("Please check your clothes at delivery. No claims after.")),
+        Term("fade", i18n("Not responsible for colour fading or shrinkage.")),
+        Term("pocket", i18n("Please empty pockets. Not responsible for things left inside.")),
+        Term("days", i18n("Clothes not collected within 30 days are at the owner's risk.")),
     )
 
     /** The editable bill details of a shop. */
@@ -52,7 +56,7 @@ object BillDetails {
 
     fun templateOrDefault(t: String) = if (TEMPLATES.any { it.first == t }) t else CLASSIC
     fun stepOrBlank(s: String) = if (s in STEPS) s else ""
-    fun templateLabel(t: String) = TEMPLATES.firstOrNull { it.first == t }?.second ?: "Classic"
+    fun templateLabel(t: String) = TEMPLATES.firstOrNull { it.first == t }?.second ?: i18n("Classic")
 
     // ── input clean-up ──
     fun cleanName(s: String) = s.trim().replace(Regex("\\s+"), " ").take(40)
@@ -81,21 +85,21 @@ object BillDetails {
     /** Live message under the GSTIN input; null while empty. Format-only. */
     fun gstinCheck(s: String): Check? = when {
         s.isEmpty() -> null
-        s.length != 15 -> Check(false, "A GSTIN has 15 characters — you typed ${s.length}")
-        !isGstinValid(s) -> Check(false, "This does not look like a GSTIN — please check it")
-        else -> Check(true, "Looks right — prints under your laundry name")
+        s.length != 15 -> Check(false, tr("A GSTIN has 15 characters — you typed {n}", "n" to s.length))
+        !isGstinValid(s) -> Check(false, tr("This does not look like a GSTIN — please check it"))
+        else -> Check(true, tr("Looks right — prints under your laundry name"))
     }
 
     fun emailCheck(s: String): Check? = when {
         s.isEmpty() -> null
-        !isEmailValid(s) -> Check(false, "An email looks like name@gmail.com — please check it")
-        else -> Check(true, "Looks right — prints under your laundry name")
+        !isEmailValid(s) -> Check(false, tr("An email looks like name@gmail.com — please check it"))
+        else -> Check(true, tr("Looks right — prints under your laundry name"))
     }
 
     fun upiCheck(s: String): Check? = when {
         s.isEmpty() -> null
-        !isUpiValid(s) -> Check(false, "A UPI ID looks like name@bank — please check it")
-        else -> Check(true, "A pay QR will print on every bill")
+        !isUpiValid(s) -> Check(false, tr("A UPI ID looks like name@bank — please check it"))
+        else -> Check(true, tr("A pay QR will print on every bill"))
     }
 
     /** "9876543210" -> "+91 98765 43210". */

@@ -75,6 +75,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dailyworks.apnalaundry.analytics.Analytics
+import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.ui.components.bric
 import com.dailyworks.apnalaundry.ui.components.fig
 import com.dailyworks.apnalaundry.ui.components.rounded
@@ -238,7 +239,7 @@ fun Spotlight(
             val skipBelow = alt != null && next != null
             val skip: @Composable (Modifier) -> Unit = { m ->
                 if (onSkip != null) Text(
-                    "Skip guide", style = fig(14, FontWeight.Bold, Tokens.Muted), maxLines = 2,
+                    tr("Skip guide"), style = fig(14, FontWeight.Bold, Tokens.Muted), maxLines = 2,
                     modifier = m.tap(onClick = onSkip).padding(vertical = 12.dp, horizontal = 2.dp),
                 )
             }
@@ -263,7 +264,7 @@ fun Spotlight(
                     ) { Text(next, style = fig(16, FontWeight.Bold, Tokens.OnDark), maxLines = 1, softWrap = false) }
                 }
                 if (next == null && alt == null && hole != null) {
-                    Text(if (below) "👆 Tap there" else "👇 Tap there", style = fig(15, FontWeight.Bold, Tokens.Blue), maxLines = 1, softWrap = false)
+                    Text((if (below) "👆 " else "👇 ") + tr("Tap there"), style = fig(15, FontWeight.Bold, Tokens.Blue), maxLines = 1, softWrap = false)
                 }
             }
             if (skipBelow) skip(Modifier)
@@ -298,7 +299,7 @@ fun TourTip(step: TourStep, modifier: Modifier = Modifier) {
 private fun CardHeader(step: TourStep, tint: Color) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Step ${step.part.n} of ${TourPart.COUNT} · ${step.part.label}", style = fig(13, FontWeight.Bold, tint))
+            Text(tr("Step {n} of {count} · {part}", "n" to step.part.n, "count" to TourPart.COUNT, "part" to tr(step.part.label)), style = fig(13, FontWeight.Bold, tint))
             Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                 repeat(TourPart.COUNT) { i ->
                     Box(
@@ -330,10 +331,10 @@ private fun SoundButton(step: TourStep) {
     ) {
         Icon(
             if (muted) Icons.AutoMirrored.Outlined.VolumeOff else Icons.AutoMirrored.Outlined.VolumeUp,
-            if (muted) "Turn sound on" else "Turn sound off",
+            if (muted) tr("Turn sound on") else tr("Turn sound off"),
             tint = if (muted) Tokens.InkSecondary else Tokens.Blue, modifier = Modifier.size(18.dp),
         )
-        Text(if (muted) "Sound off" else "Sound on", style = fig(13, FontWeight.Bold, if (muted) Tokens.InkSecondary else Tokens.Blue))
+        Text(if (muted) tr("Sound off") else tr("Sound on"), style = fig(13, FontWeight.Bold, if (muted) Tokens.InkSecondary else Tokens.Blue))
     }
 }
 

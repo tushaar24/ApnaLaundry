@@ -44,6 +44,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.core.AppDate
 import com.dailyworks.apnalaundry.core.Money
+import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.domain.CombinedBill
 import com.dailyworks.apnalaundry.domain.LaundryMath
 import com.dailyworks.apnalaundry.domain.LedgerKind
@@ -103,13 +104,14 @@ fun CustomerScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: Strin
                 }
                 Column(Modifier.weight(1f)) {
                     Text(c.name, style = bric(24, FontWeight.Bold), maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text("+91 ${Selectors.fmtPhone(c.phone)} · ${Selectors.countNoun(Selectors.orderCount(state, c), "order")}", style = fig(13, color = Tokens.Muted))
+                    val orderCount = Selectors.orderCount(state, c)
+                    Text("+91 ${Selectors.fmtPhone(c.phone)} · " + (if (orderCount == 1) tr("{n} order", "n" to orderCount) else tr("{n} orders", "n" to orderCount)), style = fig(13, color = Tokens.Muted))
                     if (c.address.isNotBlank()) Text(c.address, style = fig(13, color = Tokens.Muted), maxLines = 3, overflow = TextOverflow.Ellipsis)
                 }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlineButton("New order", Modifier.weight(1f), height = 48.dp) { navigator.openNewOrder(custId = custId, from = "customer") }
-                OutlineButton("Edit", Modifier.weight(1f), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) {
+                OutlineButton(tr("New order"), Modifier.weight(1f), height = 48.dp) { navigator.openNewOrder(custId = custId, from = "customer") }
+                OutlineButton(tr("Edit"), Modifier.weight(1f), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) {
                     active = ActiveSheet.CustomerForm(editId = custId, ctx = "list", trigger = "customer_page")
                 }
             }
@@ -119,21 +121,21 @@ fun CustomerScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: Strin
             val balBd = if (bal > 0) Tokens.OrangeBorder else if (bal < 0) Tokens.BlueBorder else Tokens.CardBorder
             val balFg = if (bal > 0) Tokens.OrangeDeep else if (bal < 0) Tokens.BlueText else Tokens.Ink
             Column(Modifier.fillMaxWidth().rounded(16.dp).background(balBg).border(1.dp, balBd, RoundedCornerShape(16.dp)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(if (bal > 0) "$nm has to pay you" else if (bal < 0) "$nm has paid extra (advance)" else "All clear", style = fig(14, FontWeight.SemiBold, balFg))
+                Text(if (bal > 0) tr("{name} has to pay you", "name" to nm) else if (bal < 0) tr("{name} has paid extra (advance)", "name" to nm) else tr("All clear"), style = fig(14, FontWeight.SemiBold, balFg))
                 FitText(Money.rupees(bal), style = bric(28, FontWeight.Bold, balFg))
                 Text(
-                    if (bal > 0) "Includes orders in progress at their current total."
-                    else if (bal < 0) "Used automatically on the next bill."
-                    else "Nothing to collect.",
+                    if (bal > 0) tr("Includes orders in progress at their current total.")
+                    else if (bal < 0) tr("Used automatically on the next bill.")
+                    else tr("Nothing to collect."),
                     style = fig(12, color = balFg),
                 )
                 if (bal > 0) {
                     Spacer(Modifier.height(2.dp))
-                    PrimaryButton("Receive payment", height = 48.dp) { active = ActiveSheet.Receive(custId) }
-                    OutlineButton("Remind on WhatsApp", Modifier.fillMaxWidth(), height = 48.dp, border = Tokens.OrangeBorder, fg = Tokens.OrangeText) {
+                    PrimaryButton(tr("Receive payment"), height = 48.dp) { active = ActiveSheet.Receive(custId) }
+                    OutlineButton(tr("Remind on WhatsApp"), Modifier.fillMaxWidth(), height = 48.dp, border = Tokens.OrangeBorder, fg = Tokens.OrangeText) {
                         Analytics.reminderSent(custId, bal)
                         sendReminderOnWhatsApp(context, state, custId, bal)
-                        shopVm.showInfo("Opening WhatsApp · reminder to $nm for ${Money.rupees(bal)}")
+                        shopVm.showInfo(tr("Opening WhatsApp · reminder to {name} for {amount}", "name" to nm, "amount" to Money.rupees(bal)))
                     }
                 }
             }
@@ -149,31 +151,31 @@ fun CustomerScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: Strin
                             Icon(Icons.Outlined.FileCopy, null, tint = Tokens.Blue, modifier = Modifier.size(22.dp))
                         }
                         Column(Modifier.weight(1f)) {
-                            Text("Combined bill", style = fig(15, FontWeight.Bold))
-                            Text("Many orders in one bill · pick a month or tick orders", style = fig(13, color = Tokens.Muted))
+                            Text(tr("Combined bill"), style = fig(15, FontWeight.Bold))
+                            Text(tr("Many orders in one bill · pick a month or tick orders"), style = fig(13, color = Tokens.Muted))
                         }
                         Icon(Icons.Outlined.ChevronRight, null, tint = Tokens.Faint, modifier = Modifier.size(22.dp))
                     }
                 }
             }
             Text(
-                "+ Add old khata from notebook", style = fig(14, FontWeight.Bold, Tokens.Blue),
+                tr("+ Add old khata from notebook"), style = fig(14, FontWeight.Bold, Tokens.Blue),
                 modifier = Modifier.tap { active = ActiveSheet.AddOld(custId) }.padding(vertical = 12.dp),
             )
 
             if (inProgress.isNotEmpty()) {
-                Text("ORDERS IN PROGRESS", style = fig(12, FontWeight.Bold, Tokens.Muted))
+                Text(tr("ORDERS IN PROGRESS"), style = fig(12, FontWeight.Bold, Tokens.Muted))
                 inProgress.forEach { o -> OrderMiniRow(state, o) { navigator.openOrder(o.id, "customer") } }
             }
 
-            Segmented(listOf("Khata" to (tab == "khata"), "Orders" to (tab == "orders"))) { tab = if (it == 0) "khata" else "orders" }
+            Segmented(listOf(tr("Khata") to (tab == "khata"), tr("Orders") to (tab == "orders"))) { tab = if (it == 0) "khata" else "orders" }
 
             if (tab == "khata") {
                 val rows = remember(state, custId) { khataRows(state, custId) }
-                if (rows.isEmpty()) Text("No khata entries yet", style = fig(14, color = Tokens.Muted))
+                if (rows.isEmpty()) Text(tr("No khata entries yet"), style = fig(14, color = Tokens.Muted))
                 rows.forEach { KhataRowView(it) }
             } else {
-                if (mine.isEmpty()) Text("No orders yet", style = fig(14, color = Tokens.Muted))
+                if (mine.isEmpty()) Text(tr("No orders yet"), style = fig(14, color = Tokens.Muted))
                 mine.forEach { o -> OrderMiniRow(state, o) { navigator.openOrder(o.id, "customer") } }
             }
         }
@@ -182,9 +184,9 @@ fun CustomerScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: Strin
     SheetHost(active, state, shopVm, navigator, onOpen = { active = it }, onDismiss = { active = null })
 }
 
-private fun methodName(m: PayMethod) = when (m) { PayMethod.CASH -> "Cash"; PayMethod.UPI -> "UPI"; else -> "" }
+private fun methodName(m: PayMethod) = when (m) { PayMethod.CASH -> tr("Cash"); PayMethod.UPI -> tr("UPI"); else -> "" }
 
-private fun balWord(b: Int) = if (b > 0) "Khata ${Money.rupees(b)}" else if (b < 0) "Advance ${Money.rupees(b)}" else "All clear"
+private fun balWord(b: Int) = if (b > 0) tr("Khata {amount}", "amount" to Money.rupees(b)) else if (b < 0) tr("Advance {amount}", "amount" to Money.rupees(b)) else tr("All clear")
 
 private fun khataRows(state: com.dailyworks.apnalaundry.domain.LaundryState, custId: String): List<KhataRow> {
     val led = state.ledger.filter { it.custId == custId }.sortedWith(compareBy({ it.date }, { it.ts }))
@@ -198,16 +200,16 @@ private fun khataRows(state: com.dailyworks.apnalaundry.domain.LaundryState, cus
             LedgerKind.BILL -> {
                 isAdd = true; run += e.amt
                 val o = Selectors.order(state, e.ref ?: -1)
-                title = "Bill · Order #${o?.no() ?: e.ref}"
+                title = tr("Bill · Order #{no}", "no" to (o?.no() ?: e.ref))
                 val desc = if (e.note.isNotBlank()) e.note else o?.let { "${Selectors.itemsLabel(it)} · ${Selectors.svcLabel(it)}" } ?: ""
-                sub = whenStr + (if (desc.isNotBlank()) " · $desc" else "") + (if (before < 0) " · ${Money.rupees(min(-before, e.amt))} advance used" else "")
+                sub = whenStr + (if (desc.isNotBlank()) " · $desc" else "") + (if (before < 0) " · " + tr("{amount} advance used", "amount" to Money.rupees(min(-before, e.amt))) else "")
             }
-            LedgerKind.OLD -> { isAdd = true; run += e.amt; title = "Old khata"; sub = "$whenStr · from notebook" }
-            LedgerKind.ADJ -> { isAdd = e.amt > 0; run += e.amt; title = "Bill changed · Order #${Selectors.order(state, e.ref ?: -1)?.no() ?: e.ref}"; sub = "$whenStr · order edited after delivery" }
+            LedgerKind.OLD -> { isAdd = true; run += e.amt; title = tr("Old khata"); sub = tr("{date} · from notebook", "date" to whenStr) }
+            LedgerKind.ADJ -> { isAdd = e.amt > 0; run += e.amt; title = tr("Bill changed · Order #{no}", "no" to (Selectors.order(state, e.ref ?: -1)?.no() ?: e.ref)); sub = tr("{date} · order edited after delivery", "date" to whenStr) }
             LedgerKind.GOT -> {
                 run -= e.amt
-                title = if (e.tag == PayTag.PRE) "Paid for order #${e.ref} · ${methodName(e.method)}" else "Got ${Money.rupees(e.amt)} · ${methodName(e.method)}"
-                sub = whenStr + (if (e.toAdv > 0) " · ${Money.rupees(e.toAdv)} kept as advance" else "")
+                title = if (e.tag == PayTag.PRE) tr("Paid for order #{no} · {method}", "no" to e.ref, "method" to methodName(e.method)) else tr("Got {amount} · {method}", "amount" to Money.rupees(e.amt), "method" to methodName(e.method))
+                sub = whenStr + (if (e.toAdv > 0) " · " + tr("{amount} kept as advance", "amount" to Money.rupees(e.toAdv)) else "")
             }
         }
         val fg = if (isAdd) Tokens.OrangeText else Tokens.BlueText
@@ -221,9 +223,9 @@ private fun khataRows(state: com.dailyworks.apnalaundry.domain.LaundryState, cus
     state.orders.filter { it.custId == custId && LaundryMath.isOpen(it) }.sortedBy { it.id }.forEach { o ->
         val amt = LaundryMath.amtOf(o)
         run += amt
-        val desc = if (o.lines.isNotEmpty()) "${Selectors.itemsLabel(o)} · ${Selectors.svcLabel(o)}" else "clothes not counted yet"
+        val desc = if (o.lines.isNotEmpty()) "${Selectors.itemsLabel(o)} · ${Selectors.svcLabel(o)}" else tr("clothes not counted yet")
         out += KhataRow(
-            title = "Order #${o.no()} · in progress",
+            title = tr("Order #{no} · in progress", "no" to o.no()),
             sub = AppDate.plain(o.createdOn.ifBlank { o.pickupDate }).substringAfter(", ") + " · $desc",
             amount = "+ " + Money.rupees(amt), amtColor = Tokens.OrangeText,
             after = balWord(run), isAdd = true, icBg = Tokens.OrangeLight, icFg = Tokens.OrangeText,
@@ -254,10 +256,10 @@ private fun OrderMiniRow(state: com.dailyworks.apnalaundry.domain.LaundryState, 
             Column(Modifier.weight(1f)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("#${o.no()}", style = fig(15, FontWeight.Bold), maxLines = 1, softWrap = false)
-                    Text(if (o.lines.isNotEmpty()) Money.rupees(LaundryMath.amtOf(o)) else "Not counted", style = fig(14, FontWeight.SemiBold, Tokens.InkSecondary), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(if (o.lines.isNotEmpty()) Money.rupees(LaundryMath.amtOf(o)) else tr("Not counted"), style = fig(14, FontWeight.SemiBold, Tokens.InkSecondary), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Text(
-                    AppDate.plain(o.pickupDate).substringAfter(", ") + " · " + (if (o.lines.isNotEmpty()) "${Selectors.itemsLabel(o)} · ${Selectors.svcLabel(o)}" else "Clothes counted at pickup"),
+                    AppDate.plain(o.pickupDate).substringAfter(", ") + " · " + (if (o.lines.isNotEmpty()) "${Selectors.itemsLabel(o)} · ${Selectors.svcLabel(o)}" else tr("Clothes counted at pickup")),
                     style = fig(12, color = Tokens.Muted), maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
             }
@@ -267,9 +269,9 @@ private fun OrderMiniRow(state: com.dailyworks.apnalaundry.domain.LaundryState, 
 }
 
 private fun statusStyle(s: OrderStatus): Triple<String, Color, Color> = when (s) {
-    OrderStatus.CREATED -> Triple("To pick up", Tokens.OrangeLight, Tokens.OrangeText)
-    OrderStatus.RECEIVED -> Triple("Received", Tokens.NeutralFill, Tokens.InkSecondary)
-    OrderStatus.READY -> Triple("Ready", Tokens.BlueLight, Tokens.BlueText)
-    OrderStatus.DELIVERED -> Triple("Delivered", Tokens.NeutralFill, Tokens.InkSecondary)
-    OrderStatus.CANCELLED -> Triple("Cancelled", Tokens.NeutralFill, Tokens.InkSecondary)
+    OrderStatus.CREATED -> Triple(tr("To pick up"), Tokens.OrangeLight, Tokens.OrangeText)
+    OrderStatus.RECEIVED -> Triple(tr("Received"), Tokens.NeutralFill, Tokens.InkSecondary)
+    OrderStatus.READY -> Triple(tr("Ready"), Tokens.BlueLight, Tokens.BlueText)
+    OrderStatus.DELIVERED -> Triple(tr("Delivered"), Tokens.NeutralFill, Tokens.InkSecondary)
+    OrderStatus.CANCELLED -> Triple(tr("Cancelled"), Tokens.NeutralFill, Tokens.InkSecondary)
 }

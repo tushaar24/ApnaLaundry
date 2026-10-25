@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.dailyworks.apnalaundry.core.Money
+import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.domain.LaundryState
 import com.dailyworks.apnalaundry.domain.PayMethod
 import com.dailyworks.apnalaundry.ui.Selectors
@@ -132,7 +133,7 @@ fun CustomerFormSheet(state: LaundryState, form: ActiveSheet.CustomerForm, vm: S
         scope.launch {
             val c = PhoneContacts.fromPickerUri(context, uri)
             Analytics.customerContactPicked("system", ok = c != null, alreadySaved = c != null && c.phone in savedPhones)
-            c?.let(::fill) ?: vm.showInfo("That contact has no 10-digit mobile number")
+            c?.let(::fill) ?: vm.showInfo(tr("That contact has no 10-digit mobile number"))
         }
     }
     val askContacts = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -155,7 +156,7 @@ fun CustomerFormSheet(state: LaundryState, form: ActiveSheet.CustomerForm, vm: S
     }
     val valid = missing() == "none"
 
-    AppBottomSheet(title = if (editing) "Edit customer" else "New customer", onDismiss = onDismiss) {
+    AppBottomSheet(title = if (editing) tr("Edit customer") else tr("New customer"), onDismiss = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (!editing && form.ctx == "order" && tour == TourStage.ORDER) TourTip(
                 when (flow) {
@@ -169,12 +170,12 @@ fun CustomerFormSheet(state: LaundryState, form: ActiveSheet.CustomerForm, vm: S
                     horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(Icons.Outlined.Contacts, null, tint = Tokens.Blue, modifier = Modifier.size(20.dp))
-                    Text("  Choose from contacts", style = fig(15, FontWeight.Bold, Tokens.Blue))
+                    Text("  " + tr("Choose from contacts"), style = fig(15, FontWeight.Bold, Tokens.Blue))
                 }
-                Text("or type the details", style = fig(12, color = Tokens.Muted), modifier = Modifier.align(Alignment.CenterHorizontally))
+                Text(tr("or type the details"), style = fig(12, color = Tokens.Muted), modifier = Modifier.align(Alignment.CenterHorizontally))
             }
-            Field("Name", name, { fieldEdited("name"); name = it }, "Customer name")
-            Field("Phone", phone, {
+            Field(tr("Name"), name, { fieldEdited("name"); name = it }, tr("Customer name"))
+            Field(tr("Phone"), phone, {
                 fieldEdited("phone")
                 val digits = it.filter { c -> c.isDigit() }
                 if (digits.length > 10 && !phoneTrimLogged) {
@@ -182,27 +183,27 @@ fun CustomerFormSheet(state: LaundryState, form: ActiveSheet.CustomerForm, vm: S
                     Analytics.customerPhoneTrimmed(digits.length, when { digits.startsWith("91") -> "91"; digits.startsWith("0") -> "0"; else -> "other" })
                 }
                 phone = digits.take(10)
-            }, "10-digit number", prefix = "+91", kb = KeyboardType.Phone)
+            }, tr("10-digit number"), prefix = "+91", kb = KeyboardType.Phone)
             if (dup != null) {
                 Row(Modifier.fillMaxWidth().rounded(12.dp).background(Tokens.OrangeLight).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Already saved as ${dup.name}", style = fig(14, FontWeight.SemiBold, Tokens.OrangeDeep), modifier = Modifier.weight(1f))
-                    Text("Use this", style = fig(14, FontWeight.Bold, Tokens.Blue), modifier = Modifier.tap { how = "used_existing"; form.onSaved(dup.id); onDismiss() })
+                    Text(tr("Already saved as {name}", "name" to dup.name), style = fig(14, FontWeight.SemiBold, Tokens.OrangeDeep), modifier = Modifier.weight(1f))
+                    Text(tr("Use this"), style = fig(14, FontWeight.Bold, Tokens.Blue), modifier = Modifier.tap { how = "used_existing"; form.onSaved(dup.id); onDismiss() })
                 }
             }
             if (addressShown) Column {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Address", style = fig(14, FontWeight.SemiBold), modifier = Modifier.weight(1f))
-                    Text(if (addrNeeded) "Needed for home pickup / delivery" else "Optional", style = fig(12, color = if (addrNeeded) Tokens.OrangeText else Tokens.Muted), textAlign = TextAlign.End)
+                    Text(tr("Address"), style = fig(14, FontWeight.SemiBold), modifier = Modifier.weight(1f))
+                    Text(if (addrNeeded) tr("Needed for home pickup / delivery") else tr("Optional"), style = fig(12, color = if (addrNeeded) Tokens.OrangeText else Tokens.Muted), textAlign = TextAlign.End)
                 }
                 Box(Modifier.height(6.dp))
-                FieldBox(address, { fieldEdited("address"); address = it.replace('\n', ' ') }, placeholder = "House, area, landmark", height = 80.dp, singleLine = false,
+                FieldBox(address, { fieldEdited("address"); address = it.replace('\n', ' ') }, placeholder = tr("House, area, landmark"), height = 80.dp, singleLine = false,
                     borderColor = if (addrNeeded && address.isBlank()) Tokens.OrangeBorder else Tokens.FieldBorder)
             }
             if (form.ctx == "list" && !editing) {
-                Field("Old khata from your notebook", oldBaaki, { fieldEdited("old_khata"); oldBaaki = it.filter { c -> c.isDigit() }.take(6) }, "0", prefix = "₹", kb = KeyboardType.Number)
+                Field(tr("Old khata from your notebook"), oldBaaki, { fieldEdited("old_khata"); oldBaaki = it.filter { c -> c.isDigit() }.take(6) }, "0", prefix = "₹", kb = KeyboardType.Number)
             }
             PrimaryButton(
-                if (editing) "Save changes" else "Save customer", enabled = valid, height = 56.dp,
+                if (editing) tr("Save changes") else tr("Save customer"), enabled = valid, height = 56.dp,
                 onDisabledClick = {
                     blockedTaps++
                     Analytics.customerSaveBlocked(missing(), form.ctx, name.trim().isNotEmpty(), phone.length, address.trim().isNotEmpty())
@@ -238,15 +239,15 @@ fun AddressFormSheet(state: LaundryState, form: ActiveSheet.AddressForm, vm: Sho
             Analytics.addressSheetClosed(form.trigger, how, (System.currentTimeMillis() - openedAt) / 1000, edited, address.isNotBlank(), blockedTaps)
         }
     }
-    AppBottomSheet(title = "Customer's address", subtitle = "${c.name} · for home pickup / delivery", onDismiss = onDismiss) {
+    AppBottomSheet(title = tr("Customer's address"), subtitle = tr("{name} · for home pickup / delivery", "name" to c.name), onDismiss = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (tour == TourStage.ORDER) TourTip(TourSteps.addressForm)
             FieldBox(
-                address, { edited = true; address = it.replace('\n', ' ') }, placeholder = "House, area, landmark", height = 96.dp, singleLine = false,
+                address, { edited = true; address = it.replace('\n', ' ') }, placeholder = tr("House, area, landmark"), height = 96.dp, singleLine = false,
                 borderColor = if (address.isBlank()) Tokens.OrangeBorder else Tokens.FieldBorder,
             )
             PrimaryButton(
-                "Save address", enabled = address.isNotBlank(), height = 56.dp,
+                tr("Save address"), enabled = address.isNotBlank(), height = 56.dp,
                 onDisabledClick = { blockedTaps++; Analytics.customerSaveBlocked("address", "address_sheet", true, c.phone.length, false) },
             ) {
                 how = "saved"
@@ -270,12 +271,12 @@ private fun ContactPickerSheet(state: LaundryState, onPick: (PhoneContact) -> Un
     val saved = remember(state.customers) { state.customers.map { it.phone }.toSet() }
     val q = query.trim().lowercase()
     val shown = all.orEmpty().filter { q.isEmpty() || it.name.lowercase().contains(q) || it.phone.contains(q.filter { c -> c.isDigit() }.ifEmpty { "\u0000" }) }
-    AppBottomSheet(title = "Choose from contacts", subtitle = "Tap a contact to fill the name and number.", onDismiss = { onBack(all?.size, query.isNotBlank()) }) {
+    AppBottomSheet(title = tr("Choose from contacts"), subtitle = tr("Tap a contact to fill the name and number."), onDismiss = { onBack(all?.size, query.isNotBlank()) }) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            FieldBox(query, { query = it }, placeholder = "Search name or number", height = 48.dp)
+            FieldBox(query, { query = it }, placeholder = tr("Search name or number"), height = 48.dp)
             when {
-                all == null -> Text("Loading contacts…", style = fig(14, color = Tokens.Muted), modifier = Modifier.padding(vertical = 24.dp))
-                shown.isEmpty() -> Text(if (all!!.isEmpty()) "No contacts with a 10-digit mobile number" else "No match", style = fig(14, color = Tokens.Muted), modifier = Modifier.padding(vertical = 24.dp))
+                all == null -> Text(tr("Loading contacts…"), style = fig(14, color = Tokens.Muted), modifier = Modifier.padding(vertical = 24.dp))
+                shown.isEmpty() -> Text(if (all!!.isEmpty()) tr("No contacts with a 10-digit mobile number") else tr("No match"), style = fig(14, color = Tokens.Muted), modifier = Modifier.padding(vertical = 24.dp))
                 else -> LazyColumn(Modifier.fillMaxWidth().heightIn(max = 420.dp)) {
                     items(shown, key = { it.phone }) { c ->
                         Row(
@@ -289,7 +290,7 @@ private fun ContactPickerSheet(state: LaundryState, onPick: (PhoneContact) -> Un
                                 Text(c.name, style = fig(15, FontWeight.SemiBold), maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Text("+91 ${Selectors.fmtPhone(c.phone)}", style = fig(13, color = Tokens.Muted))
                             }
-                            if (c.phone in saved) Text("Saved", style = fig(12, FontWeight.Bold, Tokens.Muted))
+                            if (c.phone in saved) Text(tr("Saved"), style = fig(12, FontWeight.Bold, Tokens.Muted))
                         }
                     }
                 }
@@ -316,28 +317,28 @@ fun ReceivePaymentSheet(state: LaundryState, custId: String, vm: ShopViewModel, 
     val left = bal - got
 
     val subtitle = when {
-        bal > 0 -> "${Selectors.firstName(c.name)} has to pay ${Money.rupees(bal)}"
-        bal < 0 -> "${Selectors.firstName(c.name)} already has ${Money.rupees(bal)} advance"
-        else -> "Nothing due. Anything you take becomes advance."
+        bal > 0 -> tr("{name} has to pay {amount}", "name" to Selectors.firstName(c.name), "amount" to Money.rupees(bal))
+        bal < 0 -> tr("{name} already has {amount} advance", "name" to Selectors.firstName(c.name), "amount" to Money.rupees(bal))
+        else -> tr("Nothing due. Anything you take becomes advance.")
     }
 
-    AppBottomSheet(title = "Receive payment", subtitle = subtitle, onDismiss = onDismiss) {
+    AppBottomSheet(title = tr("Receive payment"), subtitle = subtitle, onDismiss = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             FieldBox(amt, { amt = it.filter { ch -> ch.isDigit() }.take(6) }, prefix = "₹", height = 56.dp, keyboardType = KeyboardType.Number, textStyle = bric(22, FontWeight.Bold))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (bal > 0) PillChip("Full ${Money.rupees(bal)}", amt == bal.toString()) { amt = bal.toString() }
+                if (bal > 0) PillChip(tr("Full {amount}", "amount" to Money.rupees(bal)), amt == bal.toString()) { amt = bal.toString() }
                 listOf(100, 200, 500).forEach { v -> if (v != bal) PillChip(Money.rupees(v), amt == v.toString()) { amt = v.toString() } }
             }
             val (bg, fg, text) = when {
-                amt.isEmpty() -> Triple(Tokens.Bg, Tokens.Muted, "Type the amount you got")
-                left > 0 -> Triple(Tokens.OrangeLight, Tokens.OrangeDeep, "${Money.rupees(left)} will stay in khata")
-                left < 0 -> Triple(Tokens.BlueLight, Tokens.BlueText, "${Money.rupees(left)} extra — kept as advance for next bill")
-                else -> Triple(Tokens.NeutralFill, Tokens.Ink, "Full payment — all clear")
+                amt.isEmpty() -> Triple(Tokens.Bg, Tokens.Muted, tr("Type the amount you got"))
+                left > 0 -> Triple(Tokens.OrangeLight, Tokens.OrangeDeep, tr("{amount} will stay in khata", "amount" to Money.rupees(left)))
+                left < 0 -> Triple(Tokens.BlueLight, Tokens.BlueText, tr("{amount} extra — kept as advance for next bill", "amount" to Money.rupees(left)))
+                else -> Triple(Tokens.NeutralFill, Tokens.Ink, tr("Full payment — all clear"))
             }
             Box(Modifier.fillMaxWidth().rounded(12.dp).background(bg).padding(14.dp)) { Text(text, style = fig(14, FontWeight.SemiBold, fg)) }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PrimaryButton("Got cash", Modifier.weight(1f), enabled = got > 0, height = 56.dp) { vm.receivePayment(custId, got, PayMethod.CASH); onDismiss() }
-                PrimaryButton("Got UPI", Modifier.weight(1f), enabled = got > 0, height = 56.dp) { vm.receivePayment(custId, got, PayMethod.UPI); onDismiss() }
+                PrimaryButton(tr("Got cash"), Modifier.weight(1f), enabled = got > 0, height = 56.dp) { vm.receivePayment(custId, got, PayMethod.CASH); onDismiss() }
+                PrimaryButton(tr("Got UPI"), Modifier.weight(1f), enabled = got > 0, height = 56.dp) { vm.receivePayment(custId, got, PayMethod.UPI); onDismiss() }
             }
         }
     }
@@ -349,13 +350,13 @@ fun AddOldBaakiSheet(state: LaundryState, custId: String, vm: ShopViewModel, onD
     val bal = max(0, Selectors.balance(state, custId))
     var amt by remember { mutableStateOf("") }
     val got = amt.toIntOrNull() ?: 0
-    AppBottomSheet(title = "Add old khata", subtitle = "Money ${Selectors.firstName(c.name)} owed you before you started using the app", onDismiss = onDismiss) {
+    AppBottomSheet(title = tr("Add old khata"), subtitle = tr("Money {name} owed you before you started using the app", "name" to Selectors.firstName(c.name)), onDismiss = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             FieldBox(amt, { amt = it.filter { ch -> ch.isDigit() }.take(6) }, prefix = "₹", height = 56.dp, keyboardType = KeyboardType.Number, textStyle = bric(22, FontWeight.Bold))
             Box(Modifier.fillMaxWidth().rounded(12.dp).background(Tokens.Bg).padding(14.dp)) {
-                Text(if (amt.isEmpty()) "Khata now: ${Money.rupees(bal)}" else "Khata will become ${Money.rupees(bal + got)}", style = fig(14, FontWeight.SemiBold, Tokens.InkSecondary))
+                Text(if (amt.isEmpty()) tr("Khata now: {amount}", "amount" to Money.rupees(bal)) else tr("Khata will become {amount}", "amount" to Money.rupees(bal + got)), style = fig(14, FontWeight.SemiBold, Tokens.InkSecondary))
             }
-            PrimaryButton("Add old khata", enabled = got > 0, height = 56.dp) { vm.addOldBaaki(custId, got); onDismiss() }
+            PrimaryButton(tr("Add old khata"), enabled = got > 0, height = 56.dp) { vm.addOldBaaki(custId, got); onDismiss() }
         }
     }
 }

@@ -4,6 +4,7 @@ import android.app.Activity
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dailyworks.apnalaundry.analytics.Analytics
+import com.dailyworks.apnalaundry.core.i18n
 import com.dailyworks.apnalaundry.data.AuthRepository
 import com.google.firebase.auth.PhoneAuthCredential
 import kotlinx.coroutines.Job
@@ -18,6 +19,7 @@ data class AuthUiState(
     val otp: String = "",
     val step: Step = Step.PHONE,
     val loading: Boolean = false,
+    /** English (texts marked with i18n, or the server's); LoginScreen shows it through tr(). */
     val error: String? = null,
     val done: Boolean = false,
     val resendInSecs: Int = 0,
@@ -36,7 +38,7 @@ data class AuthUiState(
     val otpValid get() = otp.length == 6
 }
 
-private const val WRONG_OTP = "Wrong OTP. Check your SMS again."
+private val WRONG_OTP = i18n("Wrong OTP. Check your SMS again.")
 
 class AuthViewModel(private val auth: AuthRepository) : ViewModel() {
     private val _ui = MutableStateFlow(AuthUiState())
@@ -121,7 +123,7 @@ class AuthViewModel(private val auth: AuthRepository) : ViewModel() {
         val ch = challenge
         if (!s.otpValid || s.loading) return
         if (ch == null) {
-            _ui.value = s.copy(error = "Request a new OTP first")
+            _ui.value = s.copy(error = i18n("Request a new OTP first"))
             return
         }
         _ui.value = s.copy(loading = true, error = null)

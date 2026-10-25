@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.analytics.MetaEvents
+import com.dailyworks.apnalaundry.core.i18n
 import com.dailyworks.apnalaundry.data.Prefs
 import com.dailyworks.apnalaundry.data.billing.BillingRepository
 import com.dailyworks.apnalaundry.data.billing.BillingStatus
@@ -39,6 +40,8 @@ data class PaywallUiState(
     // the local pick.
     val purchasedPlan: String? = null,
     val busy: Boolean = false,
+    // English (texts marked with i18n); the screen shows it through tr() — the
+    // same text goes to analytics.
     val error: String? = null,
     // Razorpay Checkout came back without paying (failed, cancelled or Back) —
     // show the "try again" sheet over the plans.
@@ -189,12 +192,12 @@ class PaywallViewModel(
             try {
                 val res = repo.subscribe(planArg, trial = s.hasTrial)
                 if (!res.success || res.subscriptionId == null || res.keyId == null) {
-                    throw IllegalStateException(res.message ?: "Could not start subscription")
+                    throw IllegalStateException(res.message ?: i18n("Could not start subscription"))
                 }
                 // Checkout must match what the screen showed: no ₹2 trial unless this
                 // screen offered one (a server without the no-trial change would still
                 // add it), and a trial screen needs the server to have added it.
-                if ((res.trialAmount > 0) != s.hasTrial) throw IllegalStateException("Could not start your plan. Please try again later.")
+                if ((res.trialAmount > 0) != s.hasTrial) throw IllegalStateException(i18n("Could not start your plan. Please try again later."))
                 // The server decides the real plan (never trust the client for money).
                 _ui.value = _ui.value.copy(purchasedPlan = res.plan)
                 Analytics.checkoutStarted(res.plan, res.amount, res.trialAmount)
@@ -237,11 +240,11 @@ class PaywallViewModel(
             try {
                 Analytics.subscriptionCancelRequested(_ui.value.status?.subscription?.plan ?: "monthly")
                 val res = repo.cancel()
-                if (!res.success) throw IllegalStateException(res.message ?: "Could not cancel")
+                if (!res.success) throw IllegalStateException(res.message ?: i18n("Could not cancel"))
                 val status = runCatching { repo.status() }.getOrNull()
                 _ui.value = _ui.value.copy(status = status ?: _ui.value.status, busy = false)
             } catch (e: Exception) {
-                _ui.value = _ui.value.copy(busy = false, error = e.message ?: "Could not cancel — try again")
+                _ui.value = _ui.value.copy(busy = false, error = e.message ?: i18n("Could not cancel — try again"))
             }
         }
     }
@@ -271,14 +274,14 @@ class PaywallViewModel(
                 Analytics.checkoutUnconfirmed(purchasedOrSelected())
                 _ui.value = _ui.value.copy(
                     stage = PaywallStage.PLANS, busy = false,
-                    error = "Payment is processing. If it was approved, pull to refresh in a moment.",
+                    error = i18n("Payment is processing. If it was approved, pull to refresh in a moment."),
                 )
             }
         }
     }
 
     private fun onCheckoutFailed(code: Int, description: String?) {
-        val msg = description?.takeIf { it.isNotBlank() } ?: "Payment was not completed"
+        val msg = description?.takeIf { it.isNotBlank() } ?: i18n("Payment was not completed")
         Analytics.checkoutFailed(purchasedOrSelected(), msg)
         _ui.value = _ui.value.copy(stage = PaywallStage.PLANS, busy = false, error = msg)
     }

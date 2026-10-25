@@ -1,5 +1,6 @@
 package com.dailyworks.apnalaundry.ui
 
+import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.domain.Customer
 import com.dailyworks.apnalaundry.domain.LaundryMath
 import com.dailyworks.apnalaundry.domain.LaundryState
@@ -28,13 +29,13 @@ object Selectors {
 
     /** "3 items", "2 kg", "3 items + 2 kg", "Not itemised". */
     fun itemsLabel(o: Order): String {
-        if (o.lines.isEmpty()) return if (o.pieces > 0) "${o.pieces} pieces" else ""
-        if (o.lines.all { it.isQuick && it.qty == 0 }) return "Not itemised"
+        if (o.lines.isEmpty()) return if (o.pieces > 0) tr("{n} pieces", "n" to o.pieces) else ""
+        if (o.lines.all { it.isQuick && it.qty == 0 }) return tr("Not itemised")
         var pieces = 0; var kg = 0.0; var kgClothes = 0 // optional count of clothes in the by-weight bags
         o.lines.forEach { if (it.kg > 0) { kg += it.kg; kgClothes += it.qty } else pieces += it.qty }
         val parts = mutableListOf<String>()
-        if (pieces > 0) parts += "$pieces ${if (pieces == 1) "item" else "items"}"
-        if (kg > 0) parts += "${trimKg(kg)} kg" + if (kgClothes > 0) " ($kgClothes clothes)" else ""
+        if (pieces > 0) parts += if (pieces == 1) tr("{n} item", "n" to pieces) else tr("{n} items", "n" to pieces)
+        if (kg > 0) parts += if (kgClothes > 0) tr("{kg} kg ({n} clothes)", "kg" to trimKg(kg), "n" to kgClothes) else tr("{kg} kg", "kg" to trimKg(kg))
         return parts.joinToString(" + ")
     }
 
@@ -43,7 +44,8 @@ object Selectors {
 
     /** "Wash & Fold · 4 kg" or, with the clothes counted, "Wash & Fold · 4 kg · 12 clothes". */
     fun weightLabel(l: OrderLine): String =
-        "${l.serviceName} · ${trimKg(l.kg)} kg" + if (l.qty > 0) " · ${l.qty} ${if (l.qty == 1) "cloth" else "clothes"}" else ""
+        l.serviceName + " · " + tr("{kg} kg", "kg" to trimKg(l.kg)) +
+            if (l.qty > 0) " · " + (if (l.qty == 1) tr("{n} cloth", "n" to l.qty) else tr("{n} clothes", "n" to l.qty)) else ""
 
     /** A by-weight bag's clothes list: "Shirt × 3 · Pant × 2"; "" when not listed. */
     fun clothesList(l: OrderLine): String =
@@ -65,8 +67,18 @@ object Selectors {
         return (prefix + next).take(12)
     }
 
-    /** "1 order" / "3 orders" — counted label with the right plural. */
-    fun countNoun(n: Int, noun: String): String = "$n $noun${if (n == 1) "" else "s"}"
+    /**
+     * "1 order" / "3 orders" — counted label with the right plural, in the
+     * app's language. Each noun callers pass has its own pair of texts (a
+     * translation can't just add an "s"); an unknown noun stays English.
+     */
+    fun countNoun(n: Int, noun: String): String = when (noun) {
+        "order" -> if (n == 1) tr("{n} order", "n" to n) else tr("{n} orders", "n" to n)
+        "customer" -> if (n == 1) tr("{n} customer", "n" to n) else tr("{n} customers", "n" to n)
+        "item" -> if (n == 1) tr("{n} item", "n" to n) else tr("{n} items", "n" to n)
+        "bill" -> if (n == 1) tr("{n} bill", "n" to n) else tr("{n} bills", "n" to n)
+        else -> "$n $noun${if (n == 1) "" else "s"}"
+    }
 
     /** "4", "4.5", "7.3" — sums of kg are doubles (3.1 + 4.2 = 7.300000000000001), so round to 2 places. */
     fun trimKg(kg: Double): String =

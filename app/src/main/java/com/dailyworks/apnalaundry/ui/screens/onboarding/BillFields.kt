@@ -54,6 +54,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.domain.BillDetails
 import com.dailyworks.apnalaundry.ui.ShopViewModel
 import com.dailyworks.apnalaundry.ui.components.AppBottomSheet
@@ -96,20 +97,24 @@ fun FieldsSheet(shopVm: ShopViewModel, details: BillDetails.Fields, onChange: (B
     val terms = BillDetails.termLines(details.terms, details.termsCustom).size
     data class Row4(val key: FieldKey, val icon: ImageVector, val title: String, val empty: String, val set: String)
     val rows = listOf(
-        Row4(FieldKey.Upi, Icons.Outlined.QrCode2, "UPI QR on bill", "Customers scan and pay you. Money goes to your bank.",
-            if (BillDetails.isUpiValid(details.upiId)) "UPI · ${details.upiId}" else ""),
-        Row4(FieldKey.Logo, Icons.Outlined.Image, "Shop logo", "Your logo at the top of every bill", if (details.logoId.isNotEmpty()) "Logo added" else ""),
-        Row4(FieldKey.Address, Icons.Outlined.Place, "Shop address", "Helps new customers find your shop", details.address),
-        Row4(FieldKey.Terms, Icons.AutoMirrored.Outlined.List, "Terms & conditions", "e.g. not responsible for colour fading",
-            if (terms > 0) "$terms line${if (terms > 1) "s" else ""} at the bottom" else ""),
-        Row4(FieldKey.Gstin, Icons.Outlined.Badge, "GSTIN", "Only for GST-registered shops", if (BillDetails.isGstinValid(details.gstin)) details.gstin else ""),
-        Row4(FieldKey.Phone, Icons.Outlined.Call, "Phone number", "Customers call or WhatsApp you on this",
+        Row4(FieldKey.Upi, Icons.Outlined.QrCode2, tr("UPI QR on bill"), tr("Customers scan and pay you. Money goes to your bank."),
+            if (BillDetails.isUpiValid(details.upiId)) tr("UPI · {id}", "id" to details.upiId) else ""),
+        Row4(FieldKey.Logo, Icons.Outlined.Image, tr("Shop logo"), tr("Your logo at the top of every bill"), if (details.logoId.isNotEmpty()) tr("Logo added") else ""),
+        Row4(FieldKey.Address, Icons.Outlined.Place, tr("Shop address"), tr("Helps new customers find your shop"), details.address),
+        Row4(FieldKey.Terms, Icons.AutoMirrored.Outlined.List, tr("Terms & conditions"), tr("e.g. not responsible for colour fading"),
+            when {
+                terms > 1 -> tr("{n} lines at the bottom", "n" to terms)
+                terms > 0 -> tr("{n} line at the bottom", "n" to terms)
+                else -> ""
+            }),
+        Row4(FieldKey.Gstin, Icons.Outlined.Badge, tr("GSTIN"), tr("Only for GST-registered shops"), if (BillDetails.isGstinValid(details.gstin)) details.gstin else ""),
+        Row4(FieldKey.Phone, Icons.Outlined.Call, tr("Phone number"), tr("Customers call or WhatsApp you on this"),
             if (BillDetails.isPhoneValid(details.billPhone)) BillDetails.fmtBillPhone(details.billPhone) else ""),
-        Row4(FieldKey.Email, Icons.Outlined.Email, "Email address", "For customers who prefer to write to you",
+        Row4(FieldKey.Email, Icons.Outlined.Email, tr("Email address"), tr("For customers who prefer to write to you"),
             if (BillDetails.isEmailValid(details.email)) details.email else ""),
     )
 
-    AppBottomSheet(title = "Add fields to your bill", subtitle = "All optional. Your bill already works without these.", onDismiss = onClose) {
+    AppBottomSheet(title = tr("Add fields to your bill"), subtitle = tr("All optional. Your bill already works without these."), onDismiss = onClose) {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Column(Modifier.fillMaxWidth().rounded(16.dp).background(Tokens.Card).border(1.dp, Tokens.CardBorder, RoundedCornerShape(16.dp))) {
                 rows.forEachIndexed { i, r ->
@@ -129,12 +134,12 @@ fun FieldsSheet(shopVm: ShopViewModel, details: BillDetails.Fields, onChange: (B
                                 maxLines = 2, overflow = TextOverflow.Ellipsis,
                             )
                         }
-                        if (r.set.isEmpty()) Text("Add", style = fig(14, FontWeight.Bold, Tokens.Blue))
+                        if (r.set.isEmpty()) Text(tr("Add"), style = fig(14, FontWeight.Bold, Tokens.Blue))
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Tokens.Blue, modifier = Modifier.size(18.dp))
                     }
                 }
             }
-            PrimaryButton("Done", height = 56.dp) { onClose() }
+            PrimaryButton(tr("Done"), height = 56.dp) { onClose() }
         }
     }
 }
@@ -153,9 +158,9 @@ private fun autoFocus(): Modifier {
 private fun EditorFooter(canRemove: Boolean, onRemove: () -> Unit, onDone: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(top = 20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         if (canRemove) {
-            OutlineButton("Remove", Modifier.weight(1f), border = Tokens.Orange, fg = Tokens.DeleteRed) { onRemove() }
+            OutlineButton(tr("Remove"), Modifier.weight(1f), border = Tokens.Orange, fg = Tokens.DeleteRed) { onRemove() }
         }
-        Box(Modifier.weight(1f)) { PrimaryButton("Done", height = 56.dp) { onDone() } }
+        Box(Modifier.weight(1f)) { PrimaryButton(tr("Done"), height = 56.dp) { onDone() } }
     }
 }
 
@@ -164,7 +169,7 @@ private fun CheckLine(check: BillDetails.Check?) {
     if (check == null) return
     Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         if (check.ok) Icon(Icons.Filled.Check, null, tint = Green, modifier = Modifier.size(16.dp))
-        Text(check.message, style = fig(13, FontWeight.SemiBold, if (check.ok) Green else Tokens.OrangeText), modifier = Modifier.weight(1f, fill = false))
+        Text(tr(check.message), style = fig(13, FontWeight.SemiBold, if (check.ok) Green else Tokens.OrangeText), modifier = Modifier.weight(1f, fill = false))
     }
 }
 
@@ -172,17 +177,17 @@ private fun CheckLine(check: BillDetails.Check?) {
 private fun UpiEditor(value: String, onSave: (String) -> Unit, onBack: () -> Unit) {
     var v by remember { mutableStateOf(value) }
     val check = BillDetails.upiCheck(v)
-    AppBottomSheet(title = "UPI for payments", subtitle = "A pay QR prints on every bill, so customers pay you straight to your bank.", onDismiss = onBack) {
+    AppBottomSheet(title = tr("UPI for payments"), subtitle = tr("A pay QR prints on every bill, so customers pay you straight to your bank."), onDismiss = onBack) {
         Column {
-            Text("UPI ID", style = fig(13, FontWeight.Bold, Tokens.InkSecondary))
+            Text(tr("UPI ID"), style = fig(13, FontWeight.Bold, Tokens.InkSecondary))
             FieldBox(
                 v, { v = BillDetails.cleanUpi(it) }, Modifier.padding(top = 6.dp),
-                placeholder = "e.g. sharmalaundry@okaxis", height = 56.dp, keyboardType = KeyboardType.Email,
+                placeholder = tr("e.g. sharmalaundry@okaxis"), height = 56.dp, keyboardType = KeyboardType.Email,
                 fieldModifier = autoFocus(),
                 borderColor = if (check?.ok == false) Tokens.Orange else Tokens.FieldBorder,
             )
             CheckLine(check)
-            Text("Find it in GPay, PhonePe or Paytm — tap your photo at the top.", style = fig(13, color = Tokens.Muted), modifier = Modifier.padding(top = 8.dp))
+            Text(tr("Find it in GPay, PhonePe or Paytm — tap your photo at the top."), style = fig(13, color = Tokens.Muted), modifier = Modifier.padding(top = 8.dp))
             EditorFooter(value.isNotEmpty(), onRemove = { onSave("") }, onDone = { onSave(v) })
         }
     }
@@ -191,10 +196,10 @@ private fun UpiEditor(value: String, onSave: (String) -> Unit, onBack: () -> Uni
 @Composable
 private fun AddressEditor(value: String, onSave: (String) -> Unit, onBack: () -> Unit) {
     var v by remember { mutableStateOf(value) }
-    AppBottomSheet(title = "Shop address", subtitle = "Prints under your laundry name, so new customers can find you.", onDismiss = onBack) {
+    AppBottomSheet(title = tr("Shop address"), subtitle = tr("Prints under your laundry name, so new customers can find you."), onDismiss = onBack) {
         Column {
             FieldBox(
-                v, { v = it.take(120) }, placeholder = "Shop no., road, area, city", height = 104.dp, fieldModifier = autoFocus(),
+                v, { v = it.take(120) }, placeholder = tr("Shop no., road, area, city"), height = 104.dp, fieldModifier = autoFocus(),
                 singleLine = false, capitalization = KeyboardCapitalization.Words,
             )
             Text("${v.length}/120", style = fig(12, color = Tokens.Faint), modifier = Modifier.align(Alignment.End).padding(top = 4.dp))
@@ -207,10 +212,10 @@ private fun AddressEditor(value: String, onSave: (String) -> Unit, onBack: () ->
 private fun GstinEditor(value: String, onSave: (String) -> Unit, onBack: () -> Unit) {
     var v by remember { mutableStateOf(value) }
     val check = BillDetails.gstinCheck(v)
-    AppBottomSheet(title = "GSTIN", subtitle = "15 letters and numbers. Skip this if your shop is not GST registered.", onDismiss = onBack) {
+    AppBottomSheet(title = tr("GSTIN"), subtitle = tr("15 letters and numbers. Skip this if your shop is not GST registered."), onDismiss = onBack) {
         Column {
             FieldBox(
-                v, { v = BillDetails.cleanGstin(it) }, placeholder = "e.g. 27ABCDE1234F1Z5", height = 56.dp, fieldModifier = autoFocus(),
+                v, { v = BillDetails.cleanGstin(it) }, placeholder = tr("e.g. 27ABCDE1234F1Z5"), height = 56.dp, fieldModifier = autoFocus(),
                 capitalization = KeyboardCapitalization.Characters, textStyle = fig(18, FontWeight.Bold),
                 borderColor = if (check?.ok == false) Tokens.Orange else Tokens.FieldBorder,
             )
@@ -223,7 +228,7 @@ private fun GstinEditor(value: String, onSave: (String) -> Unit, onBack: () -> U
 @Composable
 private fun PhoneEditor(value: String, onSave: (String) -> Unit, onBack: () -> Unit) {
     var v by remember { mutableStateOf(value) }
-    AppBottomSheet(title = "Phone number on bill", subtitle = "Customers call or WhatsApp you on this number.", onDismiss = onBack) {
+    AppBottomSheet(title = tr("Phone number on bill"), subtitle = tr("Customers call or WhatsApp you on this number."), onDismiss = onBack) {
         Column {
             FieldBox(
                 v, { v = it.filter { c -> c.isDigit() }.take(10) }, prefix = "+91", placeholder = "98765 43210",
@@ -238,12 +243,12 @@ private fun PhoneEditor(value: String, onSave: (String) -> Unit, onBack: () -> U
 private fun EmailEditor(value: String, onSave: (String) -> Unit, onBack: () -> Unit) {
     var v by remember { mutableStateOf(value) }
     val check = BillDetails.emailCheck(v)
-    AppBottomSheet(title = "Email on bill", subtitle = "Prints under your laundry name, so customers can write to you.", onDismiss = onBack) {
+    AppBottomSheet(title = tr("Email on bill"), subtitle = tr("Prints under your laundry name, so customers can write to you."), onDismiss = onBack) {
         Column {
-            Text("Email address", style = fig(13, FontWeight.Bold, Tokens.InkSecondary))
+            Text(tr("Email address"), style = fig(13, FontWeight.Bold, Tokens.InkSecondary))
             FieldBox(
                 v, { v = BillDetails.cleanEmail(it) }, Modifier.padding(top = 6.dp),
-                placeholder = "e.g. sharmalaundry@gmail.com", height = 56.dp, keyboardType = KeyboardType.Email,
+                placeholder = tr("e.g. sharmalaundry@gmail.com"), height = 56.dp, keyboardType = KeyboardType.Email,
                 fieldModifier = autoFocus(),
                 borderColor = if (check?.ok == false) Tokens.Orange else Tokens.FieldBorder,
             )
@@ -257,7 +262,7 @@ private fun EmailEditor(value: String, onSave: (String) -> Unit, onBack: () -> U
 private fun TermsEditor(terms: List<String>, custom: String, onSave: (List<String>, String) -> Unit, onBack: () -> Unit) {
     var picked by remember { mutableStateOf(terms.toSet()) }
     var own by remember { mutableStateOf(custom) }
-    AppBottomSheet(title = "Terms & conditions", subtitle = "Small lines at the bottom of every bill. Tick the ones you want.", onDismiss = onBack) {
+    AppBottomSheet(title = tr("Terms & conditions"), subtitle = tr("Small lines at the bottom of every bill. Tick the ones you want."), onDismiss = onBack) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             BillDetails.TERM_PRESETS.forEach { t ->
                 val on = t.id in picked
@@ -272,11 +277,12 @@ private fun TermsEditor(terms: List<String>, custom: String, onSave: (List<Strin
                         checked = on, onCheckedChange = { picked = if (on) picked - t.id else picked + t.id },
                         colors = CheckboxDefaults.colors(checkedColor = Tokens.Blue),
                     )
-                    Text(t.text, style = fig(14, FontWeight.Medium), modifier = Modifier.weight(1f))
+                    // Shown in the app's language; the bill prints the English line (saved by id).
+                    Text(tr(t.text), style = fig(14, FontWeight.Medium), modifier = Modifier.weight(1f))
                 }
             }
-            Text("Your own line", style = fig(13, FontWeight.Bold, Tokens.InkSecondary), modifier = Modifier.padding(top = 8.dp))
-            FieldBox(own, { own = it.take(80) }, placeholder = "e.g. Sunday closed", height = 52.dp)
+            Text(tr("Your own line"), style = fig(13, FontWeight.Bold, Tokens.InkSecondary), modifier = Modifier.padding(top = 8.dp))
+            FieldBox(own, { own = it.take(80) }, placeholder = tr("e.g. Sunday closed"), height = 52.dp)
             EditorFooter(
                 canRemove = terms.isNotEmpty() || custom.isNotEmpty(),
                 onRemove = { onSave(emptyList(), "") },
@@ -300,7 +306,7 @@ private fun LogoEditor(shopVm: ShopViewModel, logoId: String, onChange: (String)
         scope.launch {
             shopVm.uploadLogo(uri)
                 .onSuccess { onChange(it) }
-                .onFailure { shopVm.showInfo(it.message?.takeIf { m -> m.isNotBlank() && m.length < 80 } ?: "Couldn't add the logo — check internet and try again") }
+                .onFailure { shopVm.showInfo(it.message?.takeIf { m -> m.isNotBlank() && m.length < 80 } ?: tr("Couldn't add the logo — check internet and try again")) }
             busy = false
         }
     }
@@ -309,7 +315,7 @@ private fun LogoEditor(shopVm: ShopViewModel, logoId: String, onChange: (String)
     var photoUri by remember { mutableStateOf<Uri?>(null) }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok -> if (ok) upload(photoUri) }
 
-    AppBottomSheet(title = "Shop logo", subtitle = "Prints at the top of every bill, next to your laundry name.", onDismiss = onBack) {
+    AppBottomSheet(title = tr("Shop logo"), subtitle = tr("Prints at the top of every bill, next to your laundry name."), onDismiss = onBack) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Box(
@@ -318,22 +324,22 @@ private fun LogoEditor(shopVm: ShopViewModel, logoId: String, onChange: (String)
                     contentAlignment = Alignment.Center,
                 ) {
                     when {
-                        busy -> Text("Adding…", style = fig(12, FontWeight.SemiBold, Tokens.Muted))
-                        logo != null -> Image(logo.asImageBitmap(), "Your shop logo", contentScale = ContentScale.Fit, modifier = Modifier.size(64.dp))
+                        busy -> Text(tr("Adding…"), style = fig(12, FontWeight.SemiBold, Tokens.Muted))
+                        logo != null -> Image(logo.asImageBitmap(), tr("Your shop logo"), contentScale = ContentScale.Fit, modifier = Modifier.size(64.dp))
                         else -> Icon(Icons.Outlined.Image, null, tint = Tokens.Faint, modifier = Modifier.size(28.dp))
                     }
                 }
                 Text(
-                    if (logoId.isNotEmpty()) "Looks good. It shows on all three designs. Tap below to change it."
-                    else "A square logo works best. A clear photo of your shop board also works.",
+                    if (logoId.isNotEmpty()) tr("Looks good. It shows on all three designs. Tap below to change it.")
+                    else tr("A square logo works best. A clear photo of your shop board also works."),
                     style = fig(14, color = Tokens.Muted), modifier = Modifier.weight(1f),
                 )
             }
             Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                PickerButton(Icons.Outlined.Image, "From gallery", Modifier.weight(1f).fillMaxHeight()) {
+                PickerButton(Icons.Outlined.Image, tr("From gallery"), Modifier.weight(1f).fillMaxHeight()) {
                     gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                 }
-                PickerButton(Icons.Outlined.PhotoCamera, "Take photo", Modifier.weight(1f).fillMaxHeight()) {
+                PickerButton(Icons.Outlined.PhotoCamera, tr("Take photo"), Modifier.weight(1f).fillMaxHeight()) {
                     val dir = File(context.cacheDir, "camera").apply { mkdirs() }
                     val file = File(dir, "logo-${System.currentTimeMillis()}.jpg")
                     val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
@@ -342,7 +348,7 @@ private fun LogoEditor(shopVm: ShopViewModel, logoId: String, onChange: (String)
                 }
             }
             Text(
-                "No logo? Skip this — your laundry name already looks good on the bill.",
+                tr("No logo? Skip this — your laundry name already looks good on the bill."),
                 style = fig(13, color = Tokens.Muted), modifier = Modifier.padding(top = 12.dp),
             )
             EditorFooter(logoId.isNotEmpty(), onRemove = { onChange(""); onBack() }, onDone = onBack)

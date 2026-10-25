@@ -8,7 +8,9 @@ import android.content.Intent
 import android.graphics.pdf.PdfDocument
 import android.net.Uri
 import androidx.core.content.FileProvider
+import com.dailyworks.apnalaundry.core.I18n
 import com.dailyworks.apnalaundry.core.Money
+import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.data.LogoStore
 import com.dailyworks.apnalaundry.domain.BillReceipt
 import com.dailyworks.apnalaundry.domain.CombinedBill
@@ -51,19 +53,19 @@ private fun pdfUri(context: Context, fileName: String, heightPt: Float, draw: (a
 
 private fun cachedLogo(logoId: String) = GlobalContext.get().get<LogoStore>().cached(logoId)
 
-/** Bill-<id>.pdf in the shop's design. */
-private fun billPdfUri(context: Context, state: LaundryState, o: Order): Uri {
+/** Bill-<id>.pdf in the shop's design (the bill document stays English, like its web page). */
+private fun billPdfUri(context: Context, state: LaundryState, o: Order): Uri = I18n.english {
     val receipt = BillReceipt.of(state, o)
     val logo = cachedLogo(receipt.logoId)
-    return pdfUri(context, "Bill-${o.no().replace('/', '-')}.pdf", BillRender.height(context, receipt, logo)) {
+    pdfUri(context, "Bill-${o.no().replace('/', '-')}.pdf", BillRender.height(context, receipt, logo)) {
         BillRender.drawPage(context, it, receipt, logo)
     }
 }
 
 /** Combined-bill-<FirstName>-<period>.pdf in the shop's design. */
-private fun combinedBillPdfUri(context: Context, r: CombinedReceipt): Uri {
+private fun combinedBillPdfUri(context: Context, r: CombinedReceipt): Uri = I18n.english {
     val logo = cachedLogo(r.logoId)
-    return pdfUri(context, CombinedBill.fileName(r.customerName, r.period), BillRender.height(context, r, logo)) {
+    pdfUri(context, CombinedBill.fileName(r.customerName, r.period), BillRender.height(context, r, logo)) {
         BillRender.drawPage(context, it, r, logo)
     }
 }
@@ -93,17 +95,17 @@ private fun pngUri(context: Context, fileName: String, heightPt: Float, draw: (a
     return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
 }
 
-private fun billPngUri(context: Context, state: LaundryState, o: Order): Uri {
+private fun billPngUri(context: Context, state: LaundryState, o: Order): Uri = I18n.english {
     val receipt = BillReceipt.of(state, o)
     val logo = cachedLogo(receipt.logoId)
-    return pngUri(context, "Bill-${o.no().replace('/', '-')}.png", BillRender.height(context, receipt, logo)) {
+    pngUri(context, "Bill-${o.no().replace('/', '-')}.png", BillRender.height(context, receipt, logo)) {
         BillRender.drawPage(context, it, receipt, logo)
     }
 }
 
-private fun combinedBillPngUri(context: Context, r: CombinedReceipt): Uri {
+private fun combinedBillPngUri(context: Context, r: CombinedReceipt): Uri = I18n.english {
     val logo = cachedLogo(r.logoId)
-    return pngUri(context, CombinedBill.fileName(r.customerName, r.period).removeSuffix(".pdf") + ".png", BillRender.height(context, r, logo)) {
+    pngUri(context, CombinedBill.fileName(r.customerName, r.period).removeSuffix(".pdf") + ".png", BillRender.height(context, r, logo)) {
         BillRender.drawPage(context, it, r, logo)
     }
 }
@@ -119,17 +121,25 @@ private val WHATSAPP_PACKAGES = listOf("com.whatsapp", "com.whatsapp.w4b")
  */
 private fun billCaption(state: LaundryState, o: Order, link: String?): String {
     val c = Selectors.customer(state, o.custId)
-    return "Hi ${Selectors.firstName(c.name)}, here is your bill for order #${o.no()} from *${state.shop.name}* — " +
-        "Total *${Money.rupees(LaundryMath.amtOf(o))}*." +
-        (if (link != null) "\n\nDownload PDF: $link" else "") +
-        "\n\nThank you!"
+    val hello = tr("Hi {name}, here is your bill for order #{no} from *{shop}* — Total *{amount}*.",
+        "name" to Selectors.firstName(c.name), "no" to o.no(), "shop" to state.shop.name, "amount" to Money.rupees(LaundryMath.amtOf(o)))
+    return hello +
+        (if (link != null) "\n\n" + tr("Download PDF: {link}", "link" to link) else "") +
+        "\n\n" + tr("Thank you!")
 }
 
 private fun combinedBillCaption(shopName: String, r: CombinedReceipt): String {
-    val period = if (r.period.isNotEmpty()) " for ${r.period}" else ""
-    val pay = if (r.fullyPaid) "All paid" else "To pay ${r.due}"
-    return "Hi ${Selectors.firstName(r.customerName)}, here is your combined bill from $shopName$period — " +
-        "${Selectors.countNoun(r.orders, "order")}, total ${r.total}. $pay. Thank you!"
+    val orders = if (r.orders == 1) tr("{n} order", "n" to r.orders) else tr("{n} orders", "n" to r.orders)
+    val name = Selectors.firstName(r.customerName)
+    val head = if (r.period.isNotEmpty()) {
+        tr("Hi {name}, here is your combined bill from {shop} for {period} — {orders}, total {total}.",
+            "name" to name, "shop" to shopName, "period" to r.period, "orders" to orders, "total" to r.total)
+    } else {
+        tr("Hi {name}, here is your combined bill from {shop} — {orders}, total {total}.",
+            "name" to name, "shop" to shopName, "orders" to orders, "total" to r.total)
+    }
+    val pay = if (r.fullyPaid) tr("All paid.") else tr("To pay {amount}.", "amount" to r.due)
+    return "$head $pay " + tr("Thank you!")
 }
 
 /**
@@ -169,13 +179,13 @@ private fun sendImageOnWhatsApp(context: Context, uri: Uri, phoneDigits: String,
         else -> {
             // Both installed, not chosen yet: ask once, remember for next time.
             android.app.AlertDialog.Builder(context)
-                .setTitle("Send bills from")
+                .setTitle(tr("Send bills from"))
                 .setItems(arrayOf("WhatsApp", "WhatsApp Business")) { _, which ->
                     val pkg = WHATSAPP_PACKAGES[which]
                     prefs.edit().putString("whatsapp_pkg", pkg).apply()
                     launch(pkg)
                 }
-                .setNegativeButton("Cancel", null)
+                .setNegativeButton(tr("Cancel"), null)
                 .show()
         }
     }
@@ -202,13 +212,13 @@ private fun phoneDigits(state: LaundryState, custId: String): String =
 suspend fun sendBillOnWhatsApp(context: Context, state: LaundryState, o: Order, link: String?) {
     // Drawing + saving the picture takes a moment on a cheap phone: off the main thread.
     val uri = withContext(Dispatchers.Default) { billPngUri(context, state, o) }
-    sendImageOnWhatsApp(context, uri, phoneDigits(state, o.custId), billCaption(state, o, link), "Send bill #${o.no()}")
+    sendImageOnWhatsApp(context, uri, phoneDigits(state, o.custId), billCaption(state, o, link), tr("Send bill #{no}", "no" to o.no()))
 }
 
 /** Renders the bill to a PDF and opens the share sheet (save or send). */
 suspend fun shareBillPdf(context: Context, state: LaundryState, o: Order) {
     val uri = withContext(Dispatchers.Default) { billPdfUri(context, state, o) }
-    sharePdf(context, uri, "Bill #${o.no()}")
+    sharePdf(context, uri, tr("Bill #{no}", "no" to o.no()))
 }
 
 /**
@@ -217,13 +227,13 @@ suspend fun shareBillPdf(context: Context, state: LaundryState, o: Order) {
  */
 suspend fun sendCombinedBillOnWhatsApp(context: Context, state: LaundryState, custId: String, r: CombinedReceipt) {
     val uri = withContext(Dispatchers.Default) { combinedBillPngUri(context, r) }
-    sendImageOnWhatsApp(context, uri, phoneDigits(state, custId), combinedBillCaption(state.shop.name, r), "Send combined bill")
+    sendImageOnWhatsApp(context, uri, phoneDigits(state, custId), combinedBillCaption(state.shop.name, r), tr("Send combined bill"))
 }
 
 /** The combined bill as a PDF in the share sheet (save or send). */
 suspend fun shareCombinedBillPdf(context: Context, r: CombinedReceipt) {
     val uri = withContext(Dispatchers.Default) { combinedBillPdfUri(context, r) }
-    sharePdf(context, uri, "Combined bill")
+    sharePdf(context, uri, tr("Combined bill"))
 }
 
 /**
@@ -234,14 +244,15 @@ suspend fun shareCombinedBillPdf(context: Context, r: CombinedReceipt) {
  */
 fun sendTestBillOnWhatsApp(context: Context, r: BillReceipt, link: String?) {
     val text = if (link != null) {
-        "Here is a sample bill from *${r.shopName}* — Total *${r.total}*.\n\nView / download the bill:\n$link\n\nThank you!"
+        tr("Here is a sample bill from *{shop}* — Total *{amount}*.", "shop" to r.shopName, "amount" to r.total) +
+            "\n\n" + tr("View / download the bill:") + "\n$link\n\n" + tr("Thank you!")
     } else buildString {
-        appendLine("*${r.shopName}* — sample bill")
+        appendLine(tr("*{shop}* — sample bill", "shop" to r.shopName))
         appendLine("${r.billNo} · ${r.date}")
         r.lines.forEach { appendLine("${it.item}  ${it.amount}") }
         r.extras.forEach { appendLine("${it.label}  ${it.value}") }
-        appendLine("*Total ${r.total}*")
-        append("Thank you!")
+        appendLine(tr("*Total {amount}*", "amount" to r.total))
+        append(tr("Thank you!"))
     }
     openWhatsApp(context, "https://wa.me/?text=${Uri.encode(text)}")
 }
@@ -254,8 +265,8 @@ private fun reminderText(state: LaundryState, custId: String, bal: Int): String 
         appendLine("*${state.shop.name}*")
         appendLine("+91 ${Selectors.fmtPhone(state.shop.billPhone.ifBlank { state.shop.phone })}")
         appendLine()
-        appendLine("${c.name}, a gentle reminder — your laundry balance is *${Money.rupees(bal)}*.")
-        append("Please clear it on your next visit. Thank you!")
+        appendLine(tr("{name}, a gentle reminder — your laundry balance is *{amount}*.", "name" to c.name, "amount" to Money.rupees(bal)))
+        append(tr("Please clear it on your next visit. Thank you!"))
     }
 }
 

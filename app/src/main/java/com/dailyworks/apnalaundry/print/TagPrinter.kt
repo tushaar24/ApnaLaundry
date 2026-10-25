@@ -11,6 +11,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
+import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.domain.LaundryTag
 import java.io.IOException
 import java.util.UUID
@@ -72,15 +73,15 @@ object TagPrinter {
         context: Context, address: String, name: String, tags: List<LaundryTag>, dots: Int,
         onProgress: (Int) -> Unit,
     ) = withContext(Dispatchers.IO) {
-        val bt = adapter(context) ?: throw PrintError("no_bluetooth", "This phone has no Bluetooth.")
-        if (!hasPermission(context)) throw PrintError("permission", "Bluetooth is not allowed for this app.")
-        if (!isOn(context)) throw PrintError("bluetooth_off", "Bluetooth is off. Turn it on and try again.")
+        val bt = adapter(context) ?: throw PrintError("no_bluetooth", tr("This phone has no Bluetooth."))
+        if (!hasPermission(context)) throw PrintError("permission", tr("Bluetooth is not allowed for this app."))
+        if (!isOn(context)) throw PrintError("bluetooth_off", tr("Bluetooth is off. Turn it on and try again."))
         // A running device search slows the connection down (stopping it needs a permission we don't ask for).
         runCatching { bt.cancelDiscovery() }
         val device = runCatching { bt.getRemoteDevice(address) }.getOrNull()
-            ?: throw PrintError("connect", "Printer not found. Tap ‘Change’ and choose it again.")
+            ?: throw PrintError("connect", tr("Printer not found. Tap ‘Change’ and choose it again."))
         val socket = connect(device)
-            ?: throw PrintError("connect", "Could not connect to $name. Switch the printer on, keep it near the phone, and try again.")
+            ?: throw PrintError("connect", tr("Could not connect to {printer}. Switch the printer on, keep it near the phone, and try again.", "printer" to name))
         try {
             val out = socket.outputStream
             out.write(EscPos.INIT)
@@ -91,7 +92,7 @@ object TagPrinter {
                 try {
                     out.write(bytes); out.flush()
                 } catch (e: IOException) {
-                    throw PrintError("write", "Printing stopped at tag ${i + 1} of ${tags.size}. Check the printer is on and has paper, then try again.")
+                    throw PrintError("write", tr("Printing stopped at tag {i} of {n}. Check the printer is on and has paper, then try again.", "i" to i + 1, "n" to tags.size))
                 }
                 // Cheap printers drop data sent faster than they print (~16 KB a second).
                 delay(bytes.size / 16L)
@@ -104,7 +105,7 @@ object TagPrinter {
         } catch (e: PrintError) {
             throw e
         } catch (e: Exception) {
-            throw PrintError("write", "Printing stopped. Check the printer is on and has paper, then try again.")
+            throw PrintError("write", tr("Printing stopped. Check the printer is on and has paper, then try again."))
         } finally {
             runCatching { socket.close() }
         }

@@ -33,6 +33,7 @@ import kotlinx.coroutines.launch
 import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.core.AppDate
 import com.dailyworks.apnalaundry.core.Money
+import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.domain.Gst
 import com.dailyworks.apnalaundry.domain.LaundryMath
 import com.dailyworks.apnalaundry.domain.OrderStatus
@@ -91,14 +92,15 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
                 .windowInsetsPadding(WindowInsets.systemBars)
                 .verticalScroll(rememberScrollState()),
         ) {
-            TopBar(title = "Bill", onBack = { if (from == "new") navigator.openHome() else navigator.back() })
+            TopBar(title = tr("Bill"), onBack = { if (from == "new") navigator.openHome() else navigator.back() })
 
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 // banner
                 Column(Modifier.fillMaxWidth().rounded(16.dp).background(Tokens.Ink).padding(16.dp)) {
-                    Text(if (from == "new") "Order #${o.no()} saved" else "Bill for order #${o.no()}", style = bric(20, FontWeight.Bold, Tokens.OnDark))
+                    Text(if (from == "new") tr("Order #{no} saved", "no" to o.no()) else tr("Bill for order #{no}", "no" to o.no()), style = bric(20, FontWeight.Bold, Tokens.OnDark))
                     Text(
-                        (if (o.lines.isNotEmpty()) "${Selectors.itemsLabel(o)} · " else "") + "Total ${Money.rupees(amt)}",
+                        if (o.lines.isNotEmpty()) tr("{items} · Total {amount}", "items" to Selectors.itemsLabel(o), "amount" to Money.rupees(amt))
+                        else tr("Total {amount}", "amount" to Money.rupees(amt)),
                         style = fig(13, FontWeight.SemiBold, Tokens.OnDarkFaint),
                     )
                 }
@@ -117,17 +119,18 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
                                 Money.rupees(l.amt),
                             )
                         }
-                        if (o.express && o.exAmt > 0) BillRow("Express", "+ ${Money.rupees(o.exAmt)}")
-                        if (o.fee > 0) BillRow("Pickup / delivery", "+ ${Money.rupees(o.fee)}")
-                        if (o.discount > 0) BillRow("Discount", "− ${Money.rupees(o.discount)}", Tokens.OrangeText)
+                        if (o.express && o.exAmt > 0) BillRow(tr("Express"), "+ ${Money.rupees(o.exAmt)}")
+                        if (o.fee > 0) BillRow(tr("Pickup / delivery"), "+ ${Money.rupees(o.fee)}")
+                        if (o.discount > 0) BillRow(tr("Discount"), "− ${Money.rupees(o.discount)}", Tokens.OrangeText)
                         if (gst.on && gst.mode == Gst.EXCL) BillRow(Gst.rowLabel(gst, markRounded = true), Gst.rowValue(gst))
                         Divider()
-                        BillRow("Total", Money.rupees(amt), bold = true)
+                        BillRow(tr("Total"), Money.rupees(amt), bold = true)
                         if (gst.on && gst.mode == Gst.INCL) Text(Gst.inclusiveLine(gst), style = fig(12, color = Tokens.Muted))
                         Text(
-                            if (o.deliveryDate.isNotBlank())
-                                (if (o.delivery == Route.HOME) "Delivery " else "Ready by ") + AppDate.short(o.deliveryDate) + (if (o.deliveryTime.isNotBlank()) " · ${o.deliveryTime}" else "")
-                            else "Delivery date not set yet",
+                            if (o.deliveryDate.isNotBlank()) {
+                                val whenText = AppDate.short(o.deliveryDate) + (if (o.deliveryTime.isNotBlank()) " · ${o.deliveryTime}" else "")
+                                if (o.delivery == Route.HOME) tr("Delivery {date}", "date" to whenText) else tr("Ready by {date}", "date" to whenText)
+                            } else tr("Delivery date not set yet"),
                             style = fig(13, color = Tokens.Muted),
                         )
                     }
@@ -135,16 +138,16 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
 
                 // send section
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Bill", style = fig(13, FontWeight.Bold, Tokens.Muted))
+                    Text(tr("Bill"), style = fig(13, FontWeight.Bold, Tokens.Muted))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlineButton("View bill", Modifier.weight(1f), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { active = ActiveSheet.BillView(o.id) }
-                        OutlineButton("Download", Modifier.weight(1f), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { Analytics.billDownloaded(o.id, "bill"); scope.launch { shareBillPdf(context, state, o) } }
+                        OutlineButton(tr("View bill"), Modifier.weight(1f), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { active = ActiveSheet.BillView(o.id) }
+                        OutlineButton(tr("Download"), Modifier.weight(1f), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { Analytics.billDownloaded(o.id, "bill"); scope.launch { shareBillPdf(context, state, o) } }
                     }
                     // The bill link can take a few seconds on a slow network: say so, and
                     // ignore more taps meanwhile (each would send it again).
                     var sending by remember { mutableStateOf(false) }
                     PrimaryButton(
-                        when { sending -> "Opening WhatsApp…"; o.billSent -> "Send again"; else -> "Send on WhatsApp" },
+                        when { sending -> tr("Opening WhatsApp…"); o.billSent -> tr("Send again"); else -> tr("Send on WhatsApp") },
                         Modifier.bringIntoViewRequester(sendInView).spotlightTarget(targets, "send"), enabled = !sending, height = 56.dp,
                     ) {
                         if (tourOn) { sentInTour = true; shopVm.setTour(TourStage.STATUS) }
@@ -154,7 +157,7 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
                         }
                     }
                     Text(
-                        if (o.billSent) "Sent to ${Selectors.firstName(c.name)} ✓" else "Not sent yet",
+                        if (o.billSent) tr("Sent to {name} ✓", "name" to Selectors.firstName(c.name)) else tr("Not sent yet"),
                         style = fig(13, FontWeight.Bold, if (o.billSent) Tokens.BlueText else Tokens.OrangeText),
                     )
                 }
@@ -162,8 +165,8 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
                 // tags for the clothes, on the Bluetooth printer
                 if (o.lines.isNotEmpty() && o.status != OrderStatus.CANCELLED) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Tags", style = fig(13, FontWeight.Bold, Tokens.Muted))
-                        OutlineButton("Print tags", Modifier.fillMaxWidth(), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) {
+                        Text(tr("Tags"), style = fig(13, FontWeight.Bold, Tokens.Muted))
+                        OutlineButton(tr("Print tags"), Modifier.fillMaxWidth(), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) {
                             active = ActiveSheet.PrintTags(o.id, "bill")
                         }
                     }
@@ -174,26 +177,26 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
                     AppCard {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             // The amount in the heading, so the two buttons stay short on any phone.
-                            Text("Paying now? ${Money.rupees(due)}", style = fig(15, FontWeight.Bold))
+                            Text(tr("Paying now? {amount}", "amount" to Money.rupees(due)), style = fig(15, FontWeight.Bold))
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlineButton("Got cash", Modifier.weight(1f), height = 48.dp) { shopVm.prepay(o.id, PayMethod.CASH) }
-                                OutlineButton("Got UPI", Modifier.weight(1f), height = 48.dp) { shopVm.prepay(o.id, PayMethod.UPI) }
+                                OutlineButton(tr("Got cash"), Modifier.weight(1f), height = 48.dp) { shopVm.prepay(o.id, PayMethod.CASH) }
+                                OutlineButton(tr("Got UPI"), Modifier.weight(1f), height = 48.dp) { shopVm.prepay(o.id, PayMethod.UPI) }
                             }
                         }
                     }
                 } else if (open && fullyPaid) {
                     Box(Modifier.fillMaxWidth().rounded(12.dp).background(Tokens.BlueLight).padding(14.dp)) {
-                        Text("Fully paid — nothing to collect at delivery", style = fig(14, FontWeight.SemiBold, Tokens.BlueText))
+                        Text(tr("Fully paid — nothing to collect at delivery"), style = fig(14, FontWeight.SemiBold, Tokens.BlueText))
                     }
                 }
 
                 Spacer(Modifier.height(4.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlineButton("Edit bill", Modifier.weight(1f), height = 56.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { navigator.openNewOrder(editId = o.id, from = "bill") }
-                    PrimaryButton("Done", Modifier.weight(1f), height = 56.dp) { if (from == "new") navigator.openHome() else navigator.back() }
+                    OutlineButton(tr("Edit bill"), Modifier.weight(1f), height = 56.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { navigator.openNewOrder(editId = o.id, from = "bill") }
+                    PrimaryButton(tr("Done"), Modifier.weight(1f), height = 56.dp) { if (from == "new") navigator.openHome() else navigator.back() }
                 }
                 Text(
-                    "Delete bill",
+                    tr("Delete bill"),
                     style = fig(14, FontWeight.Bold, Tokens.OrangeText),
                     modifier = Modifier.align(Alignment.CenterHorizontally).tap { active = ActiveSheet.DeleteOrder(o.id) }.padding(12.dp),
                 )
@@ -204,14 +207,14 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
             LaunchedEffect(Unit) { kotlinx.coroutines.delay(120); sendInView.bringIntoView() }
             Spotlight(
                 targets, "send", TourSteps.billSend,
-                alt = "Later", onAlt = { shopVm.setTour(TourStage.STATUS); navigator.openHome() },
+                alt = tr("Later"), onAlt = { shopVm.setTour(TourStage.STATUS); navigator.openHome() },
                 onSkip = { shopVm.tourSkip(TourSteps.billSend) },
             )
         } else if (sentInTour && tour == TourStage.STATUS && active == null) {
             // Back from WhatsApp: on to the order's status, on Home.
             Spotlight(
                 targets, null, TourSteps.billNext,
-                next = "Go to Home", onNext = { navigator.openHome() },
+                next = tr("Go to Home"), onNext = { navigator.openHome() },
                 onSkip = { shopVm.tourSkip(TourSteps.billNext) },
             )
         }
@@ -219,9 +222,12 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
     }
 }
 
-private fun routeLine(pickup: Route, delivery: Route): String =
-    (if (pickup == Route.HOME) "Picked up from home" else "Received at shop") + " → " +
-        (if (delivery == Route.HOME) "deliver to home" else "customer collects at shop")
+private fun routeLine(pickup: Route, delivery: Route): String = when {
+    pickup == Route.HOME && delivery == Route.HOME -> tr("Picked up from home → deliver to home")
+    pickup == Route.HOME -> tr("Picked up from home → customer collects at shop")
+    delivery == Route.HOME -> tr("Received at shop → deliver to home")
+    else -> tr("Received at shop → customer collects at shop")
+}
 
 /** A bill line: the label takes the room left, the amount always stays whole on the right. */
 @Composable

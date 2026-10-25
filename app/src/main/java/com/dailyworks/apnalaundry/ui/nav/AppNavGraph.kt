@@ -45,6 +45,7 @@ import com.dailyworks.apnalaundry.data.billing.BillingRepository
 import com.dailyworks.apnalaundry.data.experiments.ExperimentsRepository
 import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.push.DeepLinks
+import com.dailyworks.apnalaundry.core.tr
 import org.koin.compose.koinInject
 
 @Composable
@@ -168,7 +169,7 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
                         .onSuccess {
                             navigator.nav.navigate(Routes.LOGIN) { popUpTo(0) { inclusive = true } }
                         }
-                        .onFailure { shopVm.showInfo(it.message ?: "Couldn't log out — try again"); onFailed() }
+                        .onFailure { shopVm.showInfo(it.message ?: tr("Couldn't log out — try again")); onFailed() }
                 }
             })
         }

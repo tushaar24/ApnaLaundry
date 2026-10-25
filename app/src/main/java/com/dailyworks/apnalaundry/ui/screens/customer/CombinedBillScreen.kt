@@ -52,7 +52,9 @@ import androidx.compose.ui.unit.em
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.core.AppDate
+import com.dailyworks.apnalaundry.core.I18n
 import com.dailyworks.apnalaundry.core.Money
+import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.domain.BillDetails
 import com.dailyworks.apnalaundry.domain.CombinedBill
 import com.dailyworks.apnalaundry.domain.LaundryMath
@@ -109,7 +111,8 @@ fun CombinedBillScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: S
         ?: emptySet()
     val picked = all.filter { it.id in selected }
     val totals = CombinedBill.totals(picked)
-    val period = CombinedBill.period(preset, picked, today, from, to)
+    // Printed on the bill, which stays English (it matches the bill's web page).
+    val period = I18n.english { CombinedBill.period(preset, picked, today, from, to) }
 
     LaunchedEffect(Unit) { Analytics.screen("combined_bill") }
     BackHandler(enabled = preview) { preview = false }
@@ -131,10 +134,10 @@ fun CombinedBillScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: S
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Box(Modifier.size(44.dp).tap { if (preview) preview = false else navigator.back() }, contentAlignment = Alignment.Center) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Tokens.Ink, modifier = Modifier.size(24.dp))
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, tr("Back"), tint = Tokens.Ink, modifier = Modifier.size(24.dp))
             }
             Column(Modifier.weight(1f)) {
-                Text(if (preview) "Combined bill · preview" else "Combined bill", style = bric(22, FontWeight.Bold))
+                Text(if (preview) tr("Combined bill · preview") else tr("Combined bill"), style = bric(22, FontWeight.Bold))
                 Text("${c.name} · +91 ${Selectors.fmtPhone(c.phone)}", style = fig(14, color = Tokens.Muted), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
@@ -161,15 +164,17 @@ fun CombinedBillScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: S
             BottomBar {
                 Column(Modifier.weight(1f)) {
                     Text(
-                        if (picked.isEmpty()) "Nothing ticked" else "${Selectors.countNoun(picked.size, "order")} ticked",
+                        if (picked.isEmpty()) tr("Nothing ticked")
+                        else if (picked.size == 1) tr("{n} order ticked", "n" to picked.size)
+                        else tr("{n} orders ticked", "n" to picked.size),
                         style = fig(12, FontWeight.SemiBold, Tokens.Muted),
                     )
                     FitText(Money.rupees(totals.total), style = bric(22, FontWeight.Bold))
                     Text(
                         when {
-                            picked.isEmpty() -> "Tick at least one order"
-                            totals.due > 0 -> "${Money.rupees(totals.due)} to pay"
-                            else -> "All paid"
+                            picked.isEmpty() -> tr("Tick at least one order")
+                            totals.due > 0 -> tr("{amount} to pay", "amount" to Money.rupees(totals.due))
+                            else -> tr("All paid")
                         },
                         style = fig(13, FontWeight.Bold, when {
                             picked.isEmpty() -> Tokens.Muted
@@ -178,11 +183,12 @@ fun CombinedBillScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: S
                         }),
                     )
                 }
-                PrimaryButton("See bill", Modifier.width(128.dp), enabled = picked.isNotEmpty(), height = 56.dp) { preview = true }
+                PrimaryButton(tr("See bill"), Modifier.width(128.dp), enabled = picked.isNotEmpty(), height = 56.dp) { preview = true }
             }
         } else {
             val receipt = remember(state, custId, selected, period, showItems) {
-                CombinedBill.receipt(state, custId, picked, period, showItems)
+                // The bill document stays English, whatever the app's language.
+                I18n.english { CombinedBill.receipt(state, custId, picked, period, showItems) }
             }
             val image by rememberCombinedBillImage(shopVm, receipt)
             Column(
@@ -192,8 +198,8 @@ fun CombinedBillScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: S
                 AppCard {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Column(Modifier.weight(1f)) {
-                            Text("Show every item", style = fig(15, FontWeight.Bold))
-                            Text("Shirt × 4, Saree × 1… under each order", style = fig(13, color = Tokens.Muted))
+                            Text(tr("Show every item"), style = fig(15, FontWeight.Bold))
+                            Text(tr("Shirt × 4, Saree × 1… under each order"), style = fig(13, color = Tokens.Muted))
                         }
                         Toggle(on = showItems) { showItems = !showItems }
                     }
@@ -203,13 +209,13 @@ fun CombinedBillScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: S
                     Box(Modifier.fillMaxWidth().height(480.dp).rounded(16.dp).background(Tokens.Card).border(1.dp, Tokens.CardBorder, RoundedCornerShape(16.dp)))
                 } else {
                     Image(
-                        img, contentDescription = "Combined bill · ${receipt.totalLabel} ${receipt.total}",
+                        img, contentDescription = tr("Combined bill · {label} {amount}", "label" to receipt.totalLabel, "amount" to receipt.total),
                         modifier = Modifier.fillMaxWidth().rounded(16.dp).border(1.dp, Tokens.CardBorder, RoundedCornerShape(16.dp)),
                         contentScale = ContentScale.FillWidth,
                     )
                 }
                 Text(
-                    "Goes to $nm on WhatsApp as a picture, in your ${BillDetails.templateLabel(state.shop.billTemplate)} bill design.",
+                    tr("Goes to {name} on WhatsApp as a picture, in your {design} bill design.", "name" to nm, "design" to tr(BillDetails.templateLabel(state.shop.billTemplate))),
                     style = fig(13, color = Tokens.Muted),
                 )
             }
@@ -219,17 +225,23 @@ fun CombinedBillScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: S
                     Modifier.size(56.dp).rounded(14.dp).border(1.5.dp, Tokens.CardBorder, RoundedCornerShape(14.dp))
                         .tap { scope.launch { shareCombinedBillPdf(context, receipt) } },
                     contentAlignment = Alignment.Center,
-                ) { Icon(Icons.Outlined.Download, "Download", tint = Tokens.Ink, modifier = Modifier.size(24.dp)) }
+                ) { Icon(Icons.Outlined.Download, tr("Download"), tint = Tokens.Ink, modifier = Modifier.size(24.dp)) }
                 var sending by remember { mutableStateOf(false) }
-                PrimaryButton(if (sending) "Opening WhatsApp…" else "Send on WhatsApp", Modifier.weight(1f), enabled = !sending, height = 56.dp) {
+                PrimaryButton(if (sending) tr("Opening WhatsApp…") else tr("Send on WhatsApp"), Modifier.weight(1f), enabled = !sending, height = 56.dp) {
                     sending = true
                     scope.launch {
                         // Sent before leaving: leaving first would cancel it.
                         try { sendCombinedBillOnWhatsApp(context, state, custId, receipt) } finally { sending = false }
                         Analytics.combinedBillSent(custId, receipt.orders, receipt.totalAmount, receipt.dueAmount)
+                        val n = receipt.orders
                         shopVm.showInfo(
-                            "Opening WhatsApp · combined bill to $nm · ${Selectors.countNoun(receipt.orders, "order")}, " +
-                                if (receipt.fullyPaid) "all paid" else "${receipt.due} to pay",
+                            if (receipt.fullyPaid) {
+                                if (n == 1) tr("Opening WhatsApp · combined bill to {name} · {n} order, all paid", "name" to nm, "n" to n)
+                                else tr("Opening WhatsApp · combined bill to {name} · {n} orders, all paid", "name" to nm, "n" to n)
+                            } else {
+                                if (n == 1) tr("Opening WhatsApp · combined bill to {name} · {n} order, {amount} to pay", "name" to nm, "n" to n, "amount" to receipt.due)
+                                else tr("Opening WhatsApp · combined bill to {name} · {n} orders, {amount} to pay", "name" to nm, "n" to n, "amount" to receipt.due)
+                            },
                         )
                         navigator.back()
                     }
@@ -254,33 +266,35 @@ private fun PickOrders(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
-            "Put many orders in one bill and send it on WhatsApp. Good for customers who pay once a month.",
+            tr("Put many orders in one bill and send it on WhatsApp. Good for customers who pay once a month."),
             style = fig(14, color = Tokens.InkSecondary),
         )
-        Text("Which orders?", style = fig(13, FontWeight.Bold, Tokens.Muted))
+        Text(tr("Which orders?"), style = fig(13, FontWeight.Bold, Tokens.Muted))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            CombinedBill.Preset.entries.forEach { p -> PillChip(p.label, selected = preset == p) { onChip(p) } }
+            CombinedBill.Preset.entries.forEach { p -> PillChip(tr(p.label), selected = preset == p) { onChip(p) } }
         }
         if (preset == CombinedBill.Preset.CUSTOM) {
             val range = CombinedBill.range(CombinedBill.Preset.CUSTOM, today, from, to)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DateField("From", range.first, Modifier.weight(1f)) { showDatePicker(context, range.first, null, onFrom) }
-                DateField("To", range.second, Modifier.weight(1f)) { showDatePicker(context, range.second, null, onTo) }
+                DateField(tr("From"), range.first, Modifier.weight(1f)) { showDatePicker(context, range.first, null, onFrom) }
+                DateField(tr("To"), range.second, Modifier.weight(1f)) { showDatePicker(context, range.second, null, onTo) }
             }
         }
-        Text("Or tick the orders yourself below.", style = fig(13, color = Tokens.Muted))
+        Text(tr("Or tick the orders yourself below."), style = fig(13, color = Tokens.Muted))
 
         AppCard {
             Column {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        if (all.isEmpty()) "Orders" else "${Selectors.countNoun(all.size, "order")} from $nm",
+                        if (all.isEmpty()) tr("Orders")
+                        else if (all.size == 1) tr("{n} order from {name}", "n" to all.size, "name" to nm)
+                        else tr("{n} orders from {name}", "n" to all.size, "name" to nm),
                         style = fig(15, FontWeight.Bold), modifier = Modifier.weight(1f),
                     )
                     if (all.isNotEmpty()) {
                         val allOn = picked.size == all.size
                         Text(
-                            if (allOn) "Clear all" else "Select all",
+                            if (allOn) tr("Clear all") else tr("Select all"),
                             style = fig(14, FontWeight.Bold, Tokens.Blue),
                             modifier = Modifier.tap { onAll(!allOn) }.padding(start = 12.dp, top = 4.dp, bottom = 4.dp),
                         )
@@ -288,7 +302,7 @@ private fun PickOrders(
                 }
                 if (all.isEmpty()) {
                     Text(
-                        "No counted orders yet",
+                        tr("No counted orders yet"),
                         style = fig(14, color = Tokens.Muted),
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 20.dp),
                     )
@@ -304,7 +318,7 @@ private fun PickOrders(
                 }
             }
         }
-        Text("Cancelled orders and orders with no clothes counted yet are not listed.", style = fig(12, color = Tokens.Muted))
+        Text(tr("Cancelled orders and orders with no clothes counted yet are not listed."), style = fig(12, color = Tokens.Muted))
     }
 }
 

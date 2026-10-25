@@ -1,5 +1,7 @@
 package com.dailyworks.apnalaundry.ui.tour
 
+import com.dailyworks.apnalaundry.core.i18n
+import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.ui.components.SUPPORT_PHONE_SHOWN
 
 /**
@@ -10,15 +12,20 @@ import com.dailyworks.apnalaundry.ui.components.SUPPORT_PHONE_SHOWN
  * Words are for a small-town shop owner: short sentences, the exact button
  * name in quotes, never "highlighted" / "spotlight" / colours — a big arrow
  * points at the button instead.
+ *
+ * Cards are made when shown (getters / functions), so they speak the app's
+ * language of that moment. Button names go in as placeholders, translated
+ * through the button's own text, so the card names the button as the screen
+ * shows it.
  */
 
-/** The five parts the owner sees on every card ("Step 2 of 5 · Clothes ready"). */
+/** The five parts the owner sees on every card ("Step 2 of 5 · Clothes ready"); [label] is English, shown through tr(). */
 enum class TourPart(val n: Int, val key: String, val label: String) {
-    ORDER(1, "new_order", "New order"),
-    READY(2, "ready", "Clothes ready"),
-    DELIVER(3, "deliver", "Give clothes, take money"),
-    KHATA(4, "khata", "Khata"),
-    EARNINGS(5, "earnings", "Earnings");
+    ORDER(1, "new_order", i18n("New order")),
+    READY(2, "ready", i18n("Clothes ready")),
+    DELIVER(3, "deliver", i18n("Give clothes, take money")),
+    KHATA(4, "khata", i18n("Khata")),
+    EARNINGS(5, "earnings", i18n("Earnings"));
 
     companion object { const val COUNT = 5 }
 }
@@ -46,172 +53,194 @@ object TourSteps {
     // ---- part 1: new order ----
     fun homeNewOrder(button: String, firstOrder: Boolean) = TourStep(
         "home_new_order", TourPart.ORDER,
-        if (firstOrder) "Let's add your first order" else "Let's add an order",
-        "Tap ‘$button’.",
-        say = (if (firstOrder) "Welcome! Let's add your first order together. " else "Let's add an order together. ") + "Tap $button.",
+        if (firstOrder) tr("Let's add your first order") else tr("Let's add an order"),
+        tr("Tap ‘{button}’.", "button" to button),
+        say = if (firstOrder) tr("Welcome! Let's add your first order together. Tap {button}.", "button" to button)
+        else tr("Let's add an order together. Tap {button}.", "button" to button),
     )
 
     fun customer(hasCustomers: Boolean) = TourStep(
         "order_customer", TourPart.ORDER,
-        "Who gave the clothes?",
-        if (hasCustomers) "Type the customer's name to find them. New customer? Tap ‘Add new customer’."
-        else "Tap ‘Add new customer’ and save their name and phone number.",
+        tr("Who gave the clothes?"),
+        if (hasCustomers) tr("Type the customer's name to find them. New customer? Tap ‘{button}’.", "button" to tr("Add new customer"))
+        else tr("Tap ‘{button}’ and save their name and phone number.", "button" to tr("Add new customer")),
     )
 
-    val customerForm = TourStep(
+    val customerForm get() = TourStep(
         "order_customer_form", TourPart.ORDER,
-        "Save the customer",
-        "Tap ‘Choose from contacts’, or type the name and phone number. Then tap ‘Save customer’.",
+        tr("Save the customer"),
+        tr("Tap ‘{contacts}’, or type the name and phone number. Then tap ‘{save}’.",
+            "contacts" to tr("Choose from contacts"), "save" to tr("Save customer"),
+        ),
     )
 
     /** The first-customer test's v1 / v3 sheet: the same form, and it says the address can wait. */
-    val customerFormAddressOptional = TourStep(
+    val customerFormAddressOptional get() = TourStep(
         "order_customer_form", TourPart.ORDER,
-        "Save the customer",
-        "Tap ‘Choose from contacts’, or type the name and phone number. Address is optional. Then tap ‘Save customer’.",
+        tr("Save the customer"),
+        tr("Tap ‘{contacts}’, or type the name and phone number. Address is optional. Then tap ‘{save}’.",
+            "contacts" to tr("Choose from contacts"), "save" to tr("Save customer"),
+        ),
     )
 
-    val route = TourStep(
+    val route get() = TourStep(
         "order_route", TourPart.ORDER,
-        "Shop or home?",
-        "Customer came to your shop? Keep ‘At shop’. Going to their home? Tap ‘From home’ or ‘To home’.",
+        tr("Shop or home?"),
+        tr("Customer came to your shop? Keep ‘{at_shop}’. Going to their home? Tap ‘{from_home}’ or ‘{to_home}’.",
+            "at_shop" to tr("At shop"), "from_home" to tr("From home"), "to_home" to tr("To home"),
+        ),
     )
 
     /** v2 (no address on the customer sheet): choosing home asks for the address next. */
-    val routeAsksAddress = TourStep(
+    val routeAsksAddress get() = TourStep(
         "order_route", TourPart.ORDER,
-        "Shop or home?",
-        "Customer came to your shop? Keep ‘At shop’. Going to their home? Tap ‘From home’ or ‘To home’, then save their address.",
+        tr("Shop or home?"),
+        tr("Customer came to your shop? Keep ‘{at_shop}’. Going to their home? Tap ‘{from_home}’ or ‘{to_home}’, then save their address.",
+            "at_shop" to tr("At shop"), "from_home" to tr("From home"), "to_home" to tr("To home"),
+        ),
     )
 
     /** v2's address sheet. */
-    val addressForm = TourStep(
+    val addressForm get() = TourStep(
         "order_address_form", TourPart.ORDER,
-        "Add the address",
-        "Type the house, area and a landmark. Then tap ‘Save address’.",
+        tr("Add the address"),
+        tr("Type the house, area and a landmark. Then tap ‘{button}’.", "button" to tr("Save address")),
     )
 
-    val dates = TourStep(
+    val dates get() = TourStep(
         "order_dates", TourPart.ORDER,
-        "When will you give the clothes back?",
-        "Pickup is today. Add the delivery date if you know it. You can leave it empty.",
+        tr("When will you give the clothes back?"),
+        tr("Pickup is today. Add the delivery date if you know it. You can leave it empty."),
     )
 
-    val clothes = TourStep(
+    // ‘Wash & Iron’ is a default service: its name stays as the rate card shows it.
+    val clothes get() = TourStep(
         "order_clothes", TourPart.ORDER,
-        "Add the clothes",
-        "Tap a service like ‘Wash & Iron’. Then tap + for each cloth. The bill adds up by itself.\n\n" +
-            "Want to change a price, or add or delete a service? Tap ‘Edit services’.",
-        say = "Add the clothes. Tap a service, like Wash and Iron. Then tap plus for each cloth. The bill adds up by itself. " +
-            "Want to change a price, or add or delete a service? Tap Edit services.",
+        tr("Add the clothes"),
+        tr("Tap a service like ‘{service}’. Then tap + for each cloth. The bill adds up by itself.\n\nWant to change a price, or add or delete a service? Tap ‘{button}’.",
+            "service" to "Wash & Iron", "button" to tr("Edit services"),
+        ),
+        say = tr("Add the clothes. Tap a service, like {service}. Then tap plus for each cloth. The bill adds up by itself. Want to change a price, or add or delete a service? Tap {button}.",
+            "service" to "Wash and Iron", "button" to tr("Edit services"),
+        ),
     )
 
     fun save(button: String, needsCustomer: Boolean, needsClothes: Boolean, needsAddress: Boolean) = TourStep(
         "order_save", TourPart.ORDER,
-        "Save the order",
+        tr("Save the order"),
         when {
-            needsCustomer -> "Choose the customer first. Tap ‘Go back’."
-            needsClothes -> "Add at least one cloth first. Tap ‘Go back’."
-            needsAddress -> "Add the customer's address first. Tap ‘Go back’, then tap ‘Add’ next to Address."
-            else -> "Tap ‘$button’. Your bill will be ready."
+            needsCustomer -> tr("Choose the customer first. Tap ‘{button}’.", "button" to tr("Go back"))
+            needsClothes -> tr("Add at least one cloth first. Tap ‘{button}’.", "button" to tr("Go back"))
+            needsAddress -> tr("Add the customer's address first. Tap ‘{back}’, then tap ‘{add}’ next to {address}.",
+                "back" to tr("Go back"), "add" to tr("Add"), "address" to tr("Address"),
+            )
+            else -> tr("Tap ‘{button}’. Your bill will be ready.", "button" to button)
         },
     )
 
-    val billSend = TourStep(
+    val billSend get() = TourStep(
         "bill_send", TourPart.ORDER,
-        "Order saved! 🎉",
-        "This is the bill. Tap ‘Send on WhatsApp’ to send it to the customer.",
-        say = "Your order is saved! This is the bill. Tap Send on WhatsApp to send it to the customer.",
+        tr("Order saved!") + " 🎉",
+        tr("This is the bill. Tap ‘{button}’ to send it to the customer.", "button" to tr("Send on WhatsApp")),
+        say = tr("Your order is saved! This is the bill. Tap {button} to send it to the customer.", "button" to tr("Send on WhatsApp")),
     )
 
-    val billNext = TourStep(
+    val billNext get() = TourStep(
         "bill_next", TourPart.READY,
-        "Bill sent ✓",
-        "Next, see what to do when the clothes are washed.",
-        say = "Bill sent. Next, see what to do when the clothes are washed. Tap Go to Home.",
+        tr("Bill sent") + " ✓",
+        tr("Next, see what to do when the clothes are washed."),
+        say = tr("Bill sent. Next, see what to do when the clothes are washed. Tap {button}.", "button" to tr("Go to Home")),
     )
 
     // ---- parts 2–3: the order's status, on its card on Home ----
-    val pickedUp = TourStep(
+    val pickedUp get() = TourStep(
         "status_picked_up", TourPart.READY,
-        "Picked up the clothes?",
-        "When you bring the clothes from the customer's home, tap ‘Mark picked up’.",
+        tr("Picked up the clothes?"),
+        tr("When you bring the clothes from the customer's home, tap ‘{button}’.", "button" to tr("Mark picked up")),
     )
 
-    val markReady = TourStep(
+    val markReady get() = TourStep(
         "status_ready", TourPart.READY,
-        "Clothes washed?",
-        "When the clothes are washed and ironed, tap ‘Mark ready’. Not yet? Tap ‘Later’.",
+        tr("Clothes washed?"),
+        tr("When the clothes are washed and ironed, tap ‘{button}’. Not yet? Tap ‘{later}’.",
+            "button" to tr("Mark ready"), "later" to tr("Later"),
+        ),
     )
 
-    val readySheet = TourStep(
+    val readySheet get() = TourStep(
         "ready_sheet", TourPart.READY,
-        "When will you give them back?",
-        "Pick the day. Then tap ‘Mark ready’ at the bottom.",
+        tr("When will you give them back?"),
+        tr("Pick the day. Then tap ‘{button}’ at the bottom.", "button" to tr("Mark ready")),
     )
 
-    val markDelivered = TourStep(
+    val markDelivered get() = TourStep(
         "status_deliver", TourPart.DELIVER,
-        "Giving the clothes back?",
-        "When the customer takes the clothes, tap ‘Mark delivered’. Not yet? Tap ‘Later’.",
+        tr("Giving the clothes back?"),
+        tr("When the customer takes the clothes, tap ‘{button}’. Not yet? Tap ‘{later}’.",
+            "button" to tr("Mark delivered"), "later" to tr("Later"),
+        ),
     )
 
-    val paySheet = TourStep(
+    val paySheet get() = TourStep(
         "pay_sheet", TourPart.DELIVER,
-        "Did the customer pay?",
-        "Paid? Tap ‘Got cash’ or ‘Got UPI’. Will pay later? Tap ‘Nothing now · add all to khata’ at the bottom.",
-        say = "Did the customer pay? If yes, tap Got cash, or Got U P I. Will pay later? Tap Nothing now, add all to khata, at the bottom.",
+        tr("Did the customer pay?"),
+        tr("Paid? Tap ‘{cash}’ or ‘{upi}’. Will pay later? Tap ‘{khata}’ at the bottom.",
+            "cash" to tr("Got cash"), "upi" to tr("Got UPI"), "khata" to tr("Nothing now · add all to khata"),
+        ),
+        say = tr("Did the customer pay? If yes, tap Got cash, or Got U P I. Will pay later? Tap Nothing now, add all to khata, at the bottom."),
     )
 
     fun whatsAppPrompt(part: TourPart) = TourStep(
         "whatsapp_update", part,
-        "Tell the customer",
-        "Tap ‘Send on WhatsApp’ so the customer gets this message.",
+        tr("Tell the customer"),
+        tr("Tap ‘{button}’ so the customer gets this message.", "button" to tr("Send on WhatsApp")),
     )
 
     // ---- part 4: khata ----
-    val khataTab = TourStep(
+    val khataTab get() = TourStep(
         "khata_tab", TourPart.KHATA,
-        "Who has to pay you?",
-        "Tap ‘Customers’ below to see your khata.",
+        tr("Who has to pay you?"),
+        tr("Tap ‘{tab}’ below to see your khata.", "tab" to tr("Customers")),
     )
 
-    val khataTile = TourStep(
+    val khataTile get() = TourStep(
         "khata_tile", TourPart.KHATA,
-        "This is your khata",
-        "It shows the total money customers still have to pay you.",
+        tr("This is your khata"),
+        tr("It shows the total money customers still have to pay you."),
     )
 
-    val khataCustomer = TourStep(
+    val khataCustomer get() = TourStep(
         "khata_customer", TourPart.KHATA,
-        "Each customer's khata",
-        "Tap a customer to see what they owe. When they pay later, tap ‘Receive payment’ there.",
+        tr("Each customer's khata"),
+        tr("Tap a customer to see what they owe. When they pay later, tap ‘{button}’ there.", "button" to tr("Receive payment")),
     )
 
     // ---- part 5: earnings ----
-    val earningsTab = TourStep(
+    val earningsTab get() = TourStep(
         "earnings_tab", TourPart.EARNINGS,
-        "How much did you earn?",
-        "Tap ‘Earnings’ below.",
+        tr("How much did you earn?"),
+        tr("Tap ‘{tab}’ below.", "tab" to tr("Earnings")),
     )
 
-    val sales = TourStep(
+    val sales get() = TourStep(
         "earnings_sales", TourPart.EARNINGS,
-        "Your sales",
-        "This is the total of all your bills. Tap ‘This week’ or ‘This month’ to see more days.",
+        tr("Your sales"),
+        tr("This is the total of all your bills. Tap ‘{week}’ or ‘{month}’ to see more days.",
+            "week" to tr("This week"), "month" to tr("This month"),
+        ),
     )
 
-    val money = TourStep(
+    val money get() = TourStep(
         "earnings_money", TourPart.EARNINGS,
-        "Money you got",
-        "This is the money that came in. Cash and UPI are shown separately.",
-        say = "Money you got. This is the money that came in. Cash and U P I are shown separately.",
+        tr("Money you got"),
+        tr("This is the money that came in. Cash and UPI are shown separately."),
+        say = tr("Money you got. This is the money that came in. Cash and U P I are shown separately."),
     )
 
-    val done = TourStep(
+    val done get() = TourStep(
         "tour_done", TourPart.EARNINGS,
-        "You are ready! 🎉",
-        "Now you know the whole app. Need help? Call us on $SUPPORT_PHONE_SHOWN.",
-        say = "You are ready! Now you know the whole app. Need help? Call us on 7 6 7 6 3, 6 3 7 9 3.",
+        tr("You are ready!") + " 🎉",
+        tr("Now you know the whole app. Need help? Call us on {phone}.", "phone" to SUPPORT_PHONE_SHOWN),
+        say = tr("You are ready! Now you know the whole app. Need help? Call us on {phone}.", "phone" to "7 6 7 6 3, 6 3 7 9 3"),
     )
 }

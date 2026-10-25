@@ -47,6 +47,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dailyworks.apnalaundry.analytics.Analytics
+import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.data.LaundryRepository
 import com.dailyworks.apnalaundry.domain.BillDetails
 import com.dailyworks.apnalaundry.domain.SeedData
@@ -102,7 +103,7 @@ fun OnboardingFlow(shopVm: ShopViewModel, onFinished: () -> Unit) {
         finished = true
         shopVm.setOnboardingStep("done")
         Analytics.setupCompleted(state.services.size, state.shop.expressPct)
-        shopVm.showInfo("All set! Take your first order.")
+        shopVm.showInfo(tr("All set! Take your first order."))
         onFinished()
     }
 
@@ -141,7 +142,7 @@ fun OnboardingFlow(shopVm: ShopViewModel, onFinished: () -> Unit) {
     }
 }
 
-private val STEP_LABELS = listOf("Laundry name", "Services", "Your bill")
+private val STEP_LABELS: List<String> get() = listOf(tr("Laundry name"), tr("Services"), tr("Your bill"))
 
 /** "Step N of 3" with a back arrow (none on step 1), then three labelled segments (handoff §3). */
 @Composable
@@ -150,10 +151,10 @@ fun StepBar(step: Int, onBack: (() -> Unit)?) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.heightIn(min = 44.dp)) {
             if (onBack != null) {
                 Box(Modifier.size(44.dp).rounded(999.dp).tap(onClick = onBack), contentAlignment = Alignment.Center) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Tokens.Ink, modifier = Modifier.size(24.dp))
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, tr("Back"), tint = Tokens.Ink, modifier = Modifier.size(24.dp))
                 }
             }
-            Text("Step $step of 3", style = fig(14, FontWeight.SemiBold, Tokens.Muted))
+            Text(tr("Step {n} of 3", "n" to step), style = fig(14, FontWeight.SemiBold, Tokens.Muted))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             STEP_LABELS.forEachIndexed { i, label ->
@@ -217,17 +218,17 @@ private fun NameStep(initial: String, onNext: (String) -> Unit) {
     }
     fun next() { if (ok) onNext(name.trim()) }
 
-    StepScaffold(bottom = { PrimaryButton("Next", height = 56.dp, enabled = ok) { next() } }) {
+    StepScaffold(bottom = { PrimaryButton(tr("Next"), height = 56.dp, enabled = ok) { next() } }) {
         StepBar(1, onBack = null)
         Box(Modifier.size(64.dp).rounded(16.dp).background(Tokens.BlueLight), contentAlignment = Alignment.Center) {
             Icon(Icons.Outlined.Storefront, null, tint = Tokens.Blue, modifier = Modifier.size(32.dp))
         }
-        Text("What is your shop name?", style = bric(28, FontWeight.Bold))
-        Text("Your customers will see this name on their bill.", style = fig(15, color = Tokens.Muted))
+        Text(tr("What is your shop name?"), style = bric(28, FontWeight.Bold))
+        Text(tr("Your customers will see this name on their bill."), style = fig(15, color = Tokens.Muted))
         FieldBox(
             name, { name = it.take(40) },
             height = 56.dp, borderColor = Tokens.Blue, borderWidth = 2.dp,
-            fieldModifier = Modifier.focusRequester(focus).semantics { contentDescription = "Laundry name" },
+            fieldModifier = Modifier.focusRequester(focus).semantics { contentDescription = tr("Laundry name") },
             capitalization = KeyboardCapitalization.Words,
             imeAction = ImeAction.Next,
             onImeAction = { next() },

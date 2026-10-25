@@ -48,6 +48,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.core.AppDate
 import com.dailyworks.apnalaundry.core.Money
+import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.domain.EarningsMath
 import com.dailyworks.apnalaundry.domain.LaundryMath
 import com.dailyworks.apnalaundry.domain.LedgerEntry
@@ -140,14 +141,14 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
     fun m(n: Int): String = if (hidden) "₹ ••••" else Money.rupees(n)
 
     val periodLabel = when (period) {
-        "week" -> "${AppDate.plain(weekStart)} – ${AppDate.plain(today)}"
-        "month" -> "1 – ${AppDate.dayOfMonth(today)} ${AppDate.plain(today).split(" ").last()}"
-        "all" -> "All time"
-        "custom" -> if (customFrom == customTo) AppDate.plain(customFrom) else "${AppDate.plain(customFrom)} – ${AppDate.plain(customTo)}"
+        "week" -> tr("{from} – {to}", "from" to AppDate.plain(weekStart), "to" to AppDate.plain(today))
+        "month" -> tr("1 – {day} {month}", "day" to AppDate.dayOfMonth(today), "month" to AppDate.plain(today).split(" ").last())
+        "all" -> tr("All time")
+        "custom" -> if (customFrom == customTo) AppDate.plain(customFrom) else tr("{from} – {to}", "from" to AppDate.plain(customFrom), "to" to AppDate.plain(customTo))
         else -> AppDate.plain(today)
     }
     val periodTitle = when (period) {
-        "week" -> "This week"; "month" -> "This month"; "all" -> "All time"; "custom" -> periodLabel; else -> "Today"
+        "week" -> tr("This week"); "month" -> tr("This month"); "all" -> tr("All time"); "custom" -> periodLabel; else -> tr("Today")
     }
 
     // Orders in the period by their own date (same as Home's Orders / Sales
@@ -158,12 +159,12 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
     val sales = counted.sumOf { LaundryMath.amtOf(it.second) }
 
     val shareText = buildString {
-        append("${views.joinToString(" + ") { it.name }} — $periodLabel\n")
-        append("Money received: ₹${Money.grouping(e.received.toLong())}\n")
-        append("  Cash ₹${Money.grouping(e.cash.toLong())} · UPI ₹${Money.grouping(e.upi.toLong())}\n")
-        append("Orders delivered: ${e.ordersDelivered} (work ₹${Money.grouping(e.work.toLong())})\n")
-        append("Baaki added: ₹${Money.grouping(e.baakiAdded.toLong())} · Old baaki collected: ₹${Money.grouping(e.oldIn.toLong())}\n")
-        append("Total baaki in market: ₹${Money.grouping(e.baakiMarket.toLong())}")
+        append(tr("{shop} — {period}", "shop" to views.joinToString(" + ") { it.name }, "period" to periodLabel)).append("\n")
+        append(tr("Money received: {amount}", "amount" to "₹${Money.grouping(e.received.toLong())}")).append("\n")
+        append("  ").append(tr("Cash {cash} · UPI {upi}", "cash" to "₹${Money.grouping(e.cash.toLong())}", "upi" to "₹${Money.grouping(e.upi.toLong())}")).append("\n")
+        append(tr("Orders delivered: {n} (work {amount})", "n" to e.ordersDelivered, "amount" to "₹${Money.grouping(e.work.toLong())}")).append("\n")
+        append(tr("Baaki added: {added} · Old baaki collected: {collected}", "added" to "₹${Money.grouping(e.baakiAdded.toLong())}", "collected" to "₹${Money.grouping(e.oldIn.toLong())}")).append("\n")
+        append(tr("Total baaki in market: {amount}", "amount" to "₹${Money.grouping(e.baakiMarket.toLong())}"))
     }
 
     Column(
@@ -174,10 +175,10 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
             Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 14.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Earnings", style = bric(22, FontWeight.Bold), modifier = Modifier.weight(1f))
-            IconChip(if (hidden) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility, "Toggle amounts") { shopVm.toggleHideAmounts() }
+            Text(tr("Earnings"), style = bric(22, FontWeight.Bold), modifier = Modifier.weight(1f))
+            IconChip(if (hidden) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility, tr("Toggle amounts")) { shopVm.toggleHideAmounts() }
             Spacer(Modifier.width(8.dp))
-            IconChip(Icons.Outlined.Share, "Share") { Analytics.summaryShared(period); active = ActiveSheet.Share(shareText) }
+            IconChip(Icons.Outlined.Share, tr("Share")) { Analytics.summaryShared(period); active = ActiveSheet.Share(shareText) }
         }
 
         Column(
@@ -192,8 +193,8 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                         val n = picked.size.coerceAtLeast(1)
                         Analytics.earningsShopsChanged(if (picked.isEmpty()) "this" else if (n == shops.size) "all" else "some", n)
                     }
-                    PillChip("This shop", picked.isEmpty()) { pick(emptyList()) }
-                    PillChip("All shops", picked.size == shops.size) { pick(shops.map { it.id }) }
+                    PillChip(tr("This shop"), picked.isEmpty()) { pick(emptyList()) }
+                    PillChip(tr("All shops"), picked.size == shops.size) { pick(shops.map { it.id }) }
                     shops.forEachIndexed { i, s ->
                         PillChip(shopLabel(s, i), picked.isNotEmpty() && s.id in picked, Modifier.widthIn(max = 180.dp)) {
                             val base = picked.ifEmpty { listOf(activeId) }
@@ -211,9 +212,9 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                     Box(Modifier.size(84.dp).rounded(999.dp).background(Tokens.NeutralFill), contentAlignment = Alignment.Center) {
                         Icon(Icons.Outlined.BarChart, null, tint = Tokens.InkSecondary, modifier = Modifier.size(40.dp))
                     }
-                    Text("No earnings yet", style = bric(22, FontWeight.Bold))
+                    Text(tr("No earnings yet"), style = bric(22, FontWeight.Bold))
                     Text(
-                        "Take and deliver your first order — the money you receive shows up here.",
+                        tr("Take and deliver your first order — the money you receive shows up here."),
                         style = fig(14, color = Tokens.Muted), textAlign = TextAlign.Center,
                     )
                 }
@@ -222,17 +223,17 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
 
             // Wraps, so every period (Custom included) is visible on a phone.
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf("today" to "Today", "week" to "This week", "month" to "This month", "all" to "All time", "custom" to "Custom").forEach { (v, label) ->
+                listOf("today" to tr("Today"), "week" to tr("This week"), "month" to tr("This month"), "all" to tr("All time"), "custom" to tr("Custom")).forEach { (v, label) ->
                     PillChip(label, period == v) { period = v; payFilter = "all"; showAllOrders = false; Analytics.earningsPeriodChanged(v) }
                 }
             }
             if (period == "custom") {
                 // From / To: any dates; To never before From.
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    DateBox("From", customFrom, Modifier.weight(1f)) {
+                    DateBox(tr("From"), customFrom, Modifier.weight(1f)) {
                         showDatePicker(context, customFrom, null) { d -> customFrom = d; if (customTo < d) customTo = d; showAllOrders = false }
                     }
-                    DateBox("To", customTo, Modifier.weight(1f)) {
+                    DateBox(tr("To"), customTo, Modifier.weight(1f)) {
                         showDatePicker(context, customTo, customFrom) { d -> customTo = d; showAllOrders = false }
                     }
                 }
@@ -243,17 +244,17 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                 Modifier.fillMaxWidth().spotlightTarget(targets, "sales").rounded(18.dp).background(Tokens.Blue).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Text("Sales · $periodTitle", style = fig(13, FontWeight.SemiBold, Tokens.OnDark.copy(alpha = 0.8f)))
+                Text(tr("Sales · {period}", "period" to periodTitle), style = fig(13, FontWeight.SemiBold, Tokens.OnDark.copy(alpha = 0.8f)))
                 FitText(m(sales), style = bric(34, FontWeight.Bold, Tokens.OnDark))
-                Text("${counted.size} ${if (counted.size == 1) "order" else "orders"} · total of their bills", style = fig(13, FontWeight.SemiBold, Tokens.OnDark.copy(alpha = 0.8f)))
+                Text(if (counted.size == 1) tr("{n} order · total of their bills", "n" to counted.size) else tr("{n} orders · total of their bills", "n" to counted.size), style = fig(13, FontWeight.SemiBold, Tokens.OnDark.copy(alpha = 0.8f)))
             }
 
             // Every order in the period
-            Text("Orders · ${periodOrders.size}", style = fig(15, FontWeight.Bold))
+            Text(tr("Orders · {n}", "n" to periodOrders.size), style = fig(15, FontWeight.Bold))
             AppCard {
                 Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp)) {
                     if (periodOrders.isEmpty()) {
-                        Text("No orders in this period.", style = fig(14, color = Tokens.Muted), modifier = Modifier.padding(vertical = 16.dp))
+                        Text(tr("No orders in this period."), style = fig(14, color = Tokens.Muted), modifier = Modifier.padding(vertical = 16.dp))
                     }
                     val list = if (showAllOrders) periodOrders else periodOrders.take(5)
                     list.forEachIndexed { i, (v, o) ->
@@ -266,7 +267,7 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                     if (periodOrders.size > 5) {
                         Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Divider))
                         Text(
-                            if (showAllOrders) "Show less" else "Show all ${periodOrders.size} orders",
+                            if (showAllOrders) tr("Show less") else tr("Show all {n} orders", "n" to periodOrders.size),
                             style = fig(14, FontWeight.Bold, Tokens.Blue),
                             modifier = Modifier.fillMaxWidth().tap { showAllOrders = !showAllOrders }.padding(vertical = 14.dp),
                             textAlign = TextAlign.Center,
@@ -278,12 +279,12 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
             // Money received
             AppCard(Modifier.bringIntoViewRequester(moneyInView).spotlightTarget(targets, "money"), bg = Tokens.Ink, borderColor = Tokens.Ink) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Money received · $periodTitle", style = fig(13, FontWeight.SemiBold, Tokens.OnDarkMuted))
+                    Text(tr("Money received · {period}", "period" to periodTitle), style = fig(13, FontWeight.SemiBold, Tokens.OnDarkMuted))
                     FitText(m(e.received), style = bric(34, FontWeight.Bold, Tokens.OnDark))
                     Spacer(Modifier.height(6.dp))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        MoneySplit("Cash", m(e.cash), "Should be in your drawer", Modifier.weight(1f))
-                        MoneySplit("UPI", m(e.upi), "In your bank account", Modifier.weight(1f))
+                        MoneySplit(tr("Cash"), m(e.cash), tr("Should be in your drawer"), Modifier.weight(1f))
+                        MoneySplit(tr("UPI"), m(e.upi), tr("In your bank account"), Modifier.weight(1f))
                     }
                 }
             }
@@ -291,15 +292,15 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
             // How money came in
             AppCard {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text("How the money came in", style = fig(15, FontWeight.Bold))
+                    Text(tr("How the money came in"), style = fig(15, FontWeight.Bold))
                     Spacer(Modifier.height(4.dp))
-                    Line("Work done", m(e.work), null)
-                    Line("Went to khata", m(e.baakiAdded), "−")
-                    Line("Old baaki collected", m(e.oldIn), "+")
-                    Line("Advance taken", m(e.advIn), "+")
-                    Line(if (e.prepaid >= 0) "Paid before delivery" else "Paid on earlier days for these orders", m(e.prepaid), if (e.prepaid >= 0) "+" else "−")
+                    Line(tr("Work done"), m(e.work), null)
+                    Line(tr("Went to khata"), m(e.baakiAdded), "−")
+                    Line(tr("Old baaki collected"), m(e.oldIn), "+")
+                    Line(tr("Advance taken"), m(e.advIn), "+")
+                    Line(if (e.prepaid >= 0) tr("Paid before delivery") else tr("Paid on earlier days for these orders"), m(e.prepaid), if (e.prepaid >= 0) "+" else "−")
                     Box(Modifier.padding(vertical = 6.dp).fillMaxWidth().height(1.dp).background(Tokens.Divider))
-                    Line("Money received", m(e.received), null, bold = true)
+                    Line(tr("Money received"), m(e.received), null, bold = true)
                 }
             }
 
@@ -307,12 +308,13 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
             if (e.byService.isNotEmpty()) {
                 AppCard {
                     Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text("Work done by service", style = fig(15, FontWeight.Bold))
+                        Text(tr("Work done by service"), style = fig(15, FontWeight.Bold))
                         val maxAmt = max(1, e.byService.maxOf { it.amount })
                         e.byService.forEach { s ->
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text(s.label, style = fig(14, FontWeight.SemiBold), modifier = Modifier.weight(1f))
+                                    // Service names are the owner's data; the extras (express, pickup / delivery) are app text.
+                                    Text(if (s.isExtra) tr(s.label) else s.label, style = fig(14, FontWeight.SemiBold), modifier = Modifier.weight(1f))
                                     Text(m(s.amount) + if (!hidden) " · ${s.amount * 100 / max(1, e.work)}%" else "", style = fig(13, FontWeight.SemiBold, Tokens.Muted))
                                 }
                                 Box(Modifier.fillMaxWidth().height(8.dp).rounded(999.dp).background(Tokens.Divider)) {
@@ -325,7 +327,7 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                                 }
                             }
                         }
-                        if (e.discounts > 0) Text("− ${m(e.discounts)} discounts given", style = fig(13, FontWeight.SemiBold, Tokens.OrangeText))
+                        if (e.discounts > 0) Text(tr("− {amount} discounts given", "amount" to m(e.discounts)), style = fig(13, FontWeight.SemiBold, Tokens.OrangeText))
                     }
                 }
             }
@@ -333,9 +335,9 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
             // stats
             AppCard {
                 Row(Modifier.fillMaxWidth().padding(16.dp)) {
-                    Stat("Orders", e.ordersDelivered.toString(), Modifier.weight(1f))
-                    Stat("Pieces", Money.grouping(e.pieces.toLong()), Modifier.weight(1f))
-                    Stat("Weight", "${Selectors.trimKg(e.kg)} kg", Modifier.weight(1f))
+                    Stat(tr("Orders"), e.ordersDelivered.toString(), Modifier.weight(1f))
+                    Stat(tr("Pieces"), Money.grouping(e.pieces.toLong()), Modifier.weight(1f))
+                    Stat(tr("Weight"), tr("{kg} kg", "kg" to Selectors.trimKg(e.kg)), Modifier.weight(1f))
                 }
             }
 
@@ -343,8 +345,8 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
             AppCard(borderColor = Tokens.OrangeBorder, bg = Tokens.OrangeLight) {
                 Row(Modifier.fillMaxWidth().tap { navigator.openCustomers("baaki") }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Baaki in market ${m(e.baakiMarket)}", style = fig(16, FontWeight.Bold, Tokens.OrangeDeep))
-                        Text("${e.baakiCustomers} ${if (e.baakiCustomers == 1) "customer still has to pay" else "customers still have to pay"}", style = fig(13, color = Tokens.OrangeText))
+                        Text(tr("Baaki in market {amount}", "amount" to m(e.baakiMarket)), style = fig(16, FontWeight.Bold, Tokens.OrangeDeep))
+                        Text(if (e.baakiCustomers == 1) tr("{n} customer still has to pay", "n" to e.baakiCustomers) else tr("{n} customers still have to pay", "n" to e.baakiCustomers), style = fig(13, color = Tokens.OrangeText))
                     }
                     Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Tokens.OrangeText, modifier = Modifier.size(24.dp))
                 }
@@ -355,9 +357,9 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                 .sortedWith(compareByDescending<Pair<ShopView, LedgerEntry>> { it.second.date }.thenByDescending { it.second.ts })
                 .map { it }
             val shown = pays.filter { payFilter == "all" || it.second.method.name.equals(payFilter, true) }
-            Text("Payments received", style = fig(15, FontWeight.Bold))
+            Text(tr("Payments received"), style = fig(15, FontWeight.Bold))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf("all" to "All", "cash" to "Cash", "upi" to "UPI").forEach { (v, label) ->
+                listOf("all" to tr("All"), "cash" to tr("Cash"), "upi" to tr("UPI")).forEach { (v, label) ->
                     val count = if (v == "all") pays.size else pays.count { it.second.method.name.equals(v, true) }
                     PillChip("$label $count", payFilter == v) { payFilter = v }
                 }
@@ -367,7 +369,7 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
             AppCard {
                 Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp)) {
                     if (shown.isEmpty()) {
-                        Text("No payments in this period.", style = fig(14, color = Tokens.Muted), modifier = Modifier.padding(vertical = 16.dp))
+                        Text(tr("No payments in this period."), style = fig(14, color = Tokens.Muted), modifier = Modifier.padding(vertical = 16.dp))
                     }
                     (if (showAllPays) shown else shown.take(10)).forEachIndexed { i, (v, entry) ->
                         if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Divider))
@@ -376,7 +378,7 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                     if (shown.size > 10) {
                         Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Divider))
                         Text(
-                            if (showAllPays) "Show less" else "Show all ${shown.size} payments",
+                            if (showAllPays) tr("Show less") else tr("Show all {n} payments", "n" to shown.size),
                             style = fig(14, FontWeight.Bold, Tokens.Blue), textAlign = TextAlign.Center,
                             modifier = Modifier.fillMaxWidth().tap { showAllPays = !showAllPays }.padding(vertical = 14.dp),
                         )
@@ -394,19 +396,19 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
         when (if (noEarnings) 2 else earnStep) {
             0 -> Spotlight(
                 targets, "sales", TourSteps.sales,
-                next = "Next", onNext = { earnStep = 1 }, onSkip = { shopVm.tourSkip(TourSteps.sales) },
+                next = tr("Next"), onNext = { earnStep = 1 }, onSkip = { shopVm.tourSkip(TourSteps.sales) },
             )
             1 -> {
                 LaunchedEffect(Unit) { kotlinx.coroutines.delay(120); moneyInView.bringIntoView() }
                 Spotlight(
                     targets, "money", TourSteps.money,
-                    next = "Next", onNext = { earnStep = 2 }, onSkip = { shopVm.tourSkip(TourSteps.money) },
+                    next = tr("Next"), onNext = { earnStep = 2 }, onSkip = { shopVm.tourSkip(TourSteps.money) },
                 )
             }
             else -> Spotlight(
                 targets, null, TourSteps.done,
-                next = "Finish", onNext = { shopVm.tourFinished() },
-                alt = "Call us", onAlt = { Analytics.supportContacted("call", "tour_end"); callSupport(context) },
+                next = tr("Finish"), onNext = { shopVm.tourFinished() },
+                alt = tr("Call us"), onAlt = { Analytics.supportContacted("call", "tour_end"); callSupport(context) },
             )
         }
     }
@@ -451,18 +453,19 @@ private fun Stat(label: String, value: String, modifier: Modifier) {
 private fun PaymentRow(state: com.dailyworks.apnalaundry.domain.LaundryState, e: LedgerEntry, hidden: Boolean, onClick: () -> Unit) {
     val c = Selectors.customer(state, e.custId)
     val what = when (e.tag) {
-        PayTag.PRE -> "Paid before delivery · #${e.ref}"
+        PayTag.PRE -> tr("Paid before delivery · #{no}", "no" to e.ref)
         PayTag.DELIVER -> {
             val o = Selectors.order(state, e.ref ?: -1)
             val khata = if (o != null) LaundryMath.amtOf(o) - o.paid else 0
-            "Order #${e.ref} delivered" + if (khata > 0) " · ${if (hidden) "₹ ••••" else Money.rupees(khata)} to khata" else ""
+            if (khata > 0) tr("Order #{no} delivered · {amount} to khata", "no" to e.ref, "amount" to (if (hidden) "₹ ••••" else Money.rupees(khata)))
+            else tr("Order #{no} delivered", "no" to e.ref)
         }
         PayTag.RECEIVE -> when {
-            e.toOld > 0 && e.toAdv > 0 -> "Old baaki + advance"
-            e.toOld > 0 -> "Old baaki"
-            else -> "Advance"
+            e.toOld > 0 && e.toAdv > 0 -> tr("Old baaki + advance")
+            e.toOld > 0 -> tr("Old baaki")
+            else -> tr("Advance")
         }
-        else -> "Payment"
+        else -> tr("Payment")
     }
     Row(Modifier.fillMaxWidth().tap(onClick = onClick).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(34.dp).rounded(999.dp).background(if (e.method == PayMethod.CASH) Tokens.NeutralFill else Tokens.BlueLight), contentAlignment = Alignment.Center) {
@@ -498,7 +501,7 @@ private fun OrderRow(state: com.dailyworks.apnalaundry.domain.LaundryState, o: c
         Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
                 when {
-                    o.lines.isEmpty() -> "No bill yet"
+                    o.lines.isEmpty() -> tr("No bill yet")
                     hidden -> "₹ ••••"
                     else -> Money.rupees(LaundryMath.amtOf(o))
                 },
@@ -513,11 +516,11 @@ private fun OrderRow(state: com.dailyworks.apnalaundry.domain.LaundryState, o: c
 }
 
 private fun statusChip(s: com.dailyworks.apnalaundry.domain.OrderStatus): Triple<String, Color, Color> = when (s) {
-    com.dailyworks.apnalaundry.domain.OrderStatus.CREATED -> Triple("To pick up", Tokens.OrangeLight, Tokens.OrangeText)
-    com.dailyworks.apnalaundry.domain.OrderStatus.RECEIVED -> Triple("Received", Tokens.NeutralFill, Tokens.InkSecondary)
-    com.dailyworks.apnalaundry.domain.OrderStatus.READY -> Triple("Ready", Tokens.BlueLight, Tokens.BlueText)
-    com.dailyworks.apnalaundry.domain.OrderStatus.DELIVERED -> Triple("Delivered", Tokens.NeutralFill, Tokens.InkSecondary)
-    com.dailyworks.apnalaundry.domain.OrderStatus.CANCELLED -> Triple("Cancelled", Tokens.NeutralFill, Tokens.Muted)
+    com.dailyworks.apnalaundry.domain.OrderStatus.CREATED -> Triple(tr("To pick up"), Tokens.OrangeLight, Tokens.OrangeText)
+    com.dailyworks.apnalaundry.domain.OrderStatus.RECEIVED -> Triple(tr("Received"), Tokens.NeutralFill, Tokens.InkSecondary)
+    com.dailyworks.apnalaundry.domain.OrderStatus.READY -> Triple(tr("Ready"), Tokens.BlueLight, Tokens.BlueText)
+    com.dailyworks.apnalaundry.domain.OrderStatus.DELIVERED -> Triple(tr("Delivered"), Tokens.NeutralFill, Tokens.InkSecondary)
+    com.dailyworks.apnalaundry.domain.OrderStatus.CANCELLED -> Triple(tr("Cancelled"), Tokens.NeutralFill, Tokens.Muted)
 }
 
 /** A From / To box for the custom range; tap opens the date picker. */

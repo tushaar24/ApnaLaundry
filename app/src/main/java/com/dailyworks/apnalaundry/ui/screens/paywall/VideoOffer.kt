@@ -46,6 +46,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.core.view.WindowCompat
 import com.dailyworks.apnalaundry.analytics.Analytics
+import com.dailyworks.apnalaundry.core.i18n
+import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.ui.components.AppBottomSheet
 import com.dailyworks.apnalaundry.ui.components.bric
 import com.dailyworks.apnalaundry.ui.components.fig
@@ -58,12 +60,12 @@ private const val WAS_MONTHLY_PAISE = 49900
 
 private data class OfferFeature(val icon: ImageVector, val label: String)
 
-// Feature row under the video — four icons, two-line labels.
+// Feature row under the video — four icons, two-line labels (English, shown through tr).
 private val OFFER_FEATURES = listOf(
-    OfferFeature(Icons.AutoMirrored.Outlined.Chat, "Bills on WhatsApp"),
-    OfferFeature(Icons.AutoMirrored.Outlined.MenuBook, "Khata for customers"),
-    OfferFeature(Icons.AutoMirrored.Outlined.ReceiptLong, "Unlimited orders"),
-    OfferFeature(Icons.Outlined.BarChart, "Daily earnings"),
+    OfferFeature(Icons.AutoMirrored.Outlined.Chat, i18n("Bills on WhatsApp")),
+    OfferFeature(Icons.AutoMirrored.Outlined.MenuBook, i18n("Khata for customers")),
+    OfferFeature(Icons.AutoMirrored.Outlined.ReceiptLong, i18n("Unlimited orders")),
+    OfferFeature(Icons.Outlined.BarChart, i18n("Daily earnings")),
 )
 
 // UPI apps that support AutoPay mandates (text chips — no third-party logos).
@@ -106,17 +108,12 @@ internal fun VideoOffer(
     var faq by remember { mutableStateOf(false) }
     val yearly = ui.effectivePlan == PaywallPlan.ANNUAL
     val price = rupees(if (yearly) ui.annualAmount else ui.monthlyAmount)
-    val per = if (yearly) "a year" else "a month"
-    val slash = if (yearly) "/year" else "/month"
-    val every = if (yearly) "every year" else "every month"
     // Trial (paywall test, hard_trial): ₹2 today (refunded), the plan from [planFrom].
     val trial = ui.hasTrial
     val setup = rupees(ui.trialAmount)
     val days = ui.trialDays
-    val dayWord = if (days == 1) "1-day" else "$days-day"
     val planFrom = remember(days) {
-        java.time.LocalDate.now().plusDays(days.toLong())
-            .format(java.time.format.DateTimeFormatter.ofPattern("d MMM", java.util.Locale.ENGLISH))
+        java.time.LocalDate.now().plusDays(days.toLong()).let { "${it.dayOfMonth} ${monthName(it)}" }
     }
 
     // Light status-bar icons over the navy offer; restore on leave.
@@ -142,7 +139,7 @@ internal fun VideoOffer(
             }
             Spacer(Modifier.weight(1f))
             Text(
-                "FAQs",
+                tr("FAQs"),
                 style = fig(14, FontWeight.Bold, Pw.Text),
                 modifier = Modifier
                     .tap {
@@ -167,18 +164,26 @@ internal fun VideoOffer(
                 Spacer(Modifier.height(12.dp))
             }
             Text(
-                "• YOUR LAUNDRY SHOP APP •",
+                tr("• YOUR LAUNDRY SHOP APP •"),
                 style = fig(12, FontWeight.ExtraBold, Pw.Eyebrow).copy(letterSpacing = 0.16.em),
             )
             Spacer(Modifier.height(12.dp))
             Text(
-                if (trial) "Start your $dayWord FREE trial" else "Take unlimited orders",
+                when {
+                    !trial -> tr("Take unlimited orders")
+                    days == 1 -> tr("Start your 1-day FREE trial")
+                    else -> tr("Start your {n}-day FREE trial", "n" to days)
+                },
                 style = fig(19, FontWeight.Bold, Tokens.OnDark), textAlign = TextAlign.Center,
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                if (trial) "$setup today, refunded instantly · then $price $per"
-                else "Keep your shop running on the app for $price $per",
+                when {
+                    trial && yearly -> tr("{setup} today, refunded instantly · then {price} a year", "setup" to setup, "price" to price)
+                    trial -> tr("{setup} today, refunded instantly · then {price} a month", "setup" to setup, "price" to price)
+                    yearly -> tr("Keep your shop running on the app for {price} a year", "price" to price)
+                    else -> tr("Keep your shop running on the app for {price} a month", "price" to price)
+                },
                 style = fig(14, FontWeight.Normal, Pw.Text),
                 textAlign = TextAlign.Center,
             )
@@ -197,14 +202,14 @@ internal fun VideoOffer(
                             contentAlignment = Alignment.Center,
                         ) { Icon(f.icon, null, tint = Pw.Accent, modifier = Modifier.size(22.dp)) }
                         Spacer(Modifier.height(8.dp))
-                        Text(f.label, style = fig(12, FontWeight.SemiBold, Tokens.OnDark), textAlign = TextAlign.Center)
+                        Text(tr(f.label), style = fig(12, FontWeight.SemiBold, Tokens.OnDark), textAlign = TextAlign.Center)
                     }
                 }
             }
 
             Spacer(Modifier.height(28.dp))
             val plans = ui.offeredPlans
-            Text(if (plans.size > 1) "Pick your plan" else "Your plan", style = fig(16, FontWeight.Bold, Tokens.OnDark))
+            Text(if (plans.size > 1) tr("Pick your plan") else tr("Your plan"), style = fig(16, FontWeight.Bold, Tokens.OnDark))
             Spacer(Modifier.height(16.dp))
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 plans.forEach { p ->
@@ -215,16 +220,16 @@ internal fun VideoOffer(
                         val perMonth = rupees((ui.annualAmount / 1200.0).roundToInt() * 100)
                         val save = ui.monthlyAmount * 12 - ui.annualAmount
                         PlanCard(
-                            title = "Yearly", sub = "Pay once a year · just $perMonth a month",
-                            price = rupees(ui.annualAmount), slash = "/year", was = null,
+                            title = tr("Yearly"), sub = tr("Pay once a year · just {amount} a month", "amount" to perMonth),
+                            price = rupees(ui.annualAmount), slash = tr("/year"), was = null,
                             // Next to Monthly, say what Yearly saves (only when it does).
-                            badge = if (PaywallPlan.MONTHLY in plans && save > 0) "SAVE ${rupees(save)}" else null,
+                            badge = if (PaywallPlan.MONTHLY in plans && save > 0) tr("SAVE {amount}", "amount" to rupees(save)) else null,
                             selected = selected, onClick = onClick,
                         )
                     } else {
                         PlanCard(
-                            title = "Monthly", sub = "Pay every month",
-                            price = rupees(ui.monthlyAmount), slash = "/month",
+                            title = tr("Monthly"), sub = tr("Pay every month"),
+                            price = rupees(ui.monthlyAmount), slash = tr("/month"),
                             // Strike out the old price only while this one is lower.
                             was = if (ui.monthlyAmount < WAS_MONTHLY_PAISE) rupees(WAS_MONTHLY_PAISE) else null,
                             badge = null, selected = selected, onClick = onClick,
@@ -234,7 +239,7 @@ internal fun VideoOffer(
             }
 
             Spacer(Modifier.height(28.dp))
-            Text("Works with your UPI app", style = fig(16, FontWeight.Bold, Tokens.OnDark))
+            Text(tr("Works with your UPI app"), style = fig(16, FontWeight.Bold, Tokens.OnDark))
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 UPI_APPS.forEach { app ->
@@ -247,11 +252,11 @@ internal fun VideoOffer(
                 }
             }
             Spacer(Modifier.height(8.dp))
-            Text("and more", style = fig(13, FontWeight.Normal, Pw.Text))
+            Text(tr("and more"), style = fig(13, FontWeight.Normal, Pw.Text))
 
             ui.error?.let {
                 Spacer(Modifier.height(12.dp))
-                Text(it, style = fig(13, FontWeight.SemiBold, Pw.Eyebrow), textAlign = TextAlign.Center)
+                Text(tr(it), style = fig(13, FontWeight.SemiBold, Pw.Eyebrow), textAlign = TextAlign.Center)
             }
             Spacer(Modifier.height(20.dp))
         }
@@ -262,8 +267,14 @@ internal fun VideoOffer(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                if (trial) "$setup today (refunded) · $price$slash from $planFrom by UPI AutoPay · cancel anytime before"
-                else "Pays $price today, then $every by UPI AutoPay · cancel anytime",
+                when {
+                    trial && yearly -> tr("{setup} today (refunded) · {price}/year from {date} by UPI AutoPay · cancel anytime before",
+                        "setup" to setup, "price" to price, "date" to planFrom)
+                    trial -> tr("{setup} today (refunded) · {price}/month from {date} by UPI AutoPay · cancel anytime before",
+                        "setup" to setup, "price" to price, "date" to planFrom)
+                    yearly -> tr("Pays {price} today, then every year by UPI AutoPay · cancel anytime", "price" to price)
+                    else -> tr("Pays {price} today, then every month by UPI AutoPay · cancel anytime", "price" to price)
+                },
                 style = fig(12, FontWeight.Normal, Pw.Text),
                 textAlign = TextAlign.Center,
             )
@@ -277,9 +288,9 @@ internal fun VideoOffer(
             ) {
                 Text(
                     when {
-                        ui.busy -> "Starting…"
-                        trial -> "START FREE TRIAL"
-                        else -> "PAY $price & CONTINUE"
+                        ui.busy -> tr("Starting…")
+                        trial -> tr("START FREE TRIAL")
+                        else -> tr("PAY {price} & CONTINUE", "price" to price)
                     },
                     style = fig(16, FontWeight.ExtraBold, Tokens.OnDark),
                     textAlign = TextAlign.Center,
@@ -289,19 +300,39 @@ internal fun VideoOffer(
     }
 
     if (faq) {
-        AppBottomSheet(title = "Questions", onDismiss = { faq = false }) {
+        AppBottomSheet(title = tr("Questions"), onDismiss = { faq = false }) {
             Column(
                 Modifier.padding(horizontal = 20.dp).padding(bottom = 28.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 if (trial) {
-                    FaqItem("Why do I pay $setup today?", "It sets up UPI AutoPay for your plan, and it is refunded to you. You get the full app free for $days ${if (days == 1) "day" else "days"}.")
-                    FaqItem("When is my plan charged?", "On $planFrom, when the free ${if (days == 1) "day ends" else "days end"}: $price, then $every, by UPI AutoPay.")
+                    FaqItem(
+                        tr("Why do I pay {amount} today?", "amount" to setup),
+                        if (days == 1) tr("It sets up UPI AutoPay for your plan, and it is refunded to you. You get the full app free for 1 day.")
+                        else tr("It sets up UPI AutoPay for your plan, and it is refunded to you. You get the full app free for {n} days.", "n" to days),
+                    )
+                    FaqItem(
+                        tr("When is my plan charged?"),
+                        when {
+                            days == 1 && yearly -> tr("On {date}, when the free day ends: {price}, then every year, by UPI AutoPay.", "date" to planFrom, "price" to price)
+                            days == 1 -> tr("On {date}, when the free day ends: {price}, then every month, by UPI AutoPay.", "date" to planFrom, "price" to price)
+                            yearly -> tr("On {date}, when the free days end: {price}, then every year, by UPI AutoPay.", "date" to planFrom, "price" to price)
+                            else -> tr("On {date}, when the free days end: {price}, then every month, by UPI AutoPay.", "date" to planFrom, "price" to price)
+                        },
+                    )
                 } else {
-                    FaqItem("When is my plan charged?", "Today, then $price $every by UPI AutoPay.")
+                    FaqItem(
+                        tr("When is my plan charged?"),
+                        if (yearly) tr("Today, then {price} every year by UPI AutoPay.", "price" to price)
+                        else tr("Today, then {price} every month by UPI AutoPay.", "price" to price),
+                    )
                 }
-                FaqItem("Can I cancel?", "Yes, anytime from Settings. You keep the app until the ${if (yearly) "year" else "month"} you paid for ends.")
-                FaqItem("Which UPI apps work?", "Any UPI app that supports AutoPay — GPay, PhonePe, Paytm, BHIM and more.")
+                FaqItem(
+                    tr("Can I cancel?"),
+                    if (yearly) tr("Yes, anytime from Settings. You keep the app until the year you paid for ends.")
+                    else tr("Yes, anytime from Settings. You keep the app until the month you paid for ends."),
+                )
+                FaqItem(tr("Which UPI apps work?"), tr("Any UPI app that supports AutoPay — GPay, PhonePe, Paytm, BHIM and more."))
             }
         }
     }

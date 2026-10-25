@@ -30,6 +30,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.consumeWindowInsets
+import com.dailyworks.apnalaundry.core.I18n
+import com.dailyworks.apnalaundry.core.tr
+import com.dailyworks.apnalaundry.ui.components.LanguageChip
+import com.dailyworks.apnalaundry.ui.components.LanguagePickerDialog
+import com.dailyworks.apnalaundry.ui.components.applyLanguage
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -110,9 +116,14 @@ fun LoginScreen(onLoggedIn: () -> Unit, vm: AuthViewModel = koinViewModel()) {
     // First open: the notification permission (Android 13+), then Google's
     // number picker — one after the other, never both on screen. Kept at this
     // level so "Change number" (back from the OTP step) doesn't ask again.
+    // Before all that, the very first open asks the language (it can't be skipped);
+    // picking one redraws the screen in it. The chip at the top left changes it later.
+    val context = LocalContext.current
+    var pickLanguage by remember { mutableStateOf(!I18n.chosen(context)) }
+    var changeLanguage by remember { mutableStateOf(false) }
     val phoneHint = rememberPhoneHint(vm::onPhone)
     var askedOnOpen by rememberSaveable { mutableStateOf(false) }
-    if (!askedOnOpen) {
+    if (!askedOnOpen && !pickLanguage) {
         AskNotificationPermission(where = "login", onDone = {
             askedOnOpen = true
             if (vm.ui.value.phone.isEmpty()) phoneHint()
@@ -120,7 +131,20 @@ fun LoginScreen(onLoggedIn: () -> Unit, vm: AuthViewModel = koinViewModel()) {
     }
 
     Column(Modifier.fillMaxSize().background(Tokens.Blue).imePadding()) {
-        if (ui.step == AuthUiState.Step.PHONE) PhoneStep(ui, vm) else OtpStep(ui, vm)
+        Row(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(start = 16.dp, end = 16.dp, top = 10.dp)) {
+            LanguageChip(onClick = { changeLanguage = true }, onDark = true)
+        }
+        // The row above already sits below the status bar.
+        Column(Modifier.weight(1f).fillMaxWidth().consumeWindowInsets(WindowInsets.statusBars)) {
+            if (ui.step == AuthUiState.Step.PHONE) PhoneStep(ui, vm) else OtpStep(ui, vm)
+        }
+    }
+
+    if (pickLanguage) {
+        LanguagePickerDialog(onPick = { pickLanguage = false; applyLanguage(context, it, "login_first") }, onDismiss = null)
+    }
+    if (changeLanguage) {
+        LanguagePickerDialog(onPick = { changeLanguage = false; applyLanguage(context, it, "login") }, onDismiss = { changeLanguage = false })
     }
 }
 
@@ -161,20 +185,20 @@ private fun ColumnScope.PhoneStep(ui: AuthUiState, vm: AuthViewModel) {
                         if (maxHeight >= 72.dp) {
                             Image(
                                 painterResource(R.drawable.login_hero),
-                                contentDescription = "Ironed shirts on a rail, a stack of folded clothes and a phone showing a sent bill",
+                                contentDescription = tr("Ironed shirts on a rail, a stack of folded clothes and a phone showing a sent bill"),
                                 contentScale = ContentScale.Fit,
                                 modifier = Modifier.widthIn(max = 342.dp).fillMaxSize(),
                             )
                         }
                     }
                     if (!imeUp && h >= 500.dp * fs) {
-                        Text("Laundry Business Made Easy!", style = bric(34, FontWeight.Bold, Tokens.OnDark).copy(lineHeight = 36.sp))
+                        Text(tr("Laundry Business Made Easy!"), style = bric(34, FontWeight.Bold, Tokens.OnDark).copy(lineHeight = 36.sp))
                     }
                     if (!imeUp && h >= 680.dp * fs) {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Perk("Bills on WhatsApp")
-                            Perk("Pickup & delivery tracking")
-                            Perk("All your accounts in one place")
+                            Perk(tr("Bills on WhatsApp"))
+                            Perk(tr("Pickup & delivery tracking"))
+                            Perk(tr("All your accounts in one place"))
                         }
                     }
                 }
@@ -192,17 +216,17 @@ private fun PhoneSheet(ui: AuthUiState, vm: AuthViewModel) {
     val send = { activity?.let(vm::requestOtp); Unit }
     Sheet(Modifier.windowInsetsPadding(WindowInsets.navigationBars)) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Mobile number", style = fig(14, FontWeight.SemiBold))
+            Text(tr("Mobile number"), style = fig(14, FontWeight.SemiBold))
             // Focus (and so the keyboard) only when coming back via "Change number";
             // on first open the keyboard would collapse the hero straight away.
             PhoneField(ui.phone, vm::onPhone, onDone = send, autoFocus = ui.phone.isNotEmpty())
             if (ui.error != null) {
-                Text(ui.error!!, style = fig(14, FontWeight.SemiBold, Tokens.ErrorRed))
+                Text(tr(ui.error!!), style = fig(14, FontWeight.SemiBold, Tokens.ErrorRed))
             } else {
-                Text("The OTP will arrive by SMS", style = fig(14, color = Tokens.Muted))
+                Text(tr("The OTP will arrive by SMS"), style = fig(14, color = Tokens.Muted))
             }
         }
-        CtaButton(if (ui.loading) "Sending OTP…" else "Get started", enabled = ui.phoneValid && !ui.loading, onClick = send)
+        CtaButton(if (ui.loading) tr("Sending OTP…") else tr("Get started"), enabled = ui.phoneValid && !ui.loading, onClick = send)
         TermsLine()
     }
 }
@@ -225,31 +249,32 @@ private fun ColumnScope.OtpStep(ui: AuthUiState, vm: AuthViewModel) {
                         .tap(onClick = vm::backToPhone),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(painterResource(R.drawable.ic_login_back), "Back", tint = Tokens.OnDark, modifier = Modifier.size(22.dp))
+                    Icon(painterResource(R.drawable.ic_login_back), tr("Back"), tint = Tokens.OnDark, modifier = Modifier.size(22.dp))
                 }
                 BrandPill(small = true)
             }
             if (!compact) {
                 Image(
                     painterResource(R.drawable.login_otp),
-                    contentDescription = "An OTP arriving on a phone by SMS",
+                    contentDescription = tr("An OTP arriving on a phone by SMS"),
                     modifier = Modifier.size(200.dp, 140.dp),
                 )
             }
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Enter OTP", style = bric(34, FontWeight.Bold, Tokens.OnDark).copy(lineHeight = 36.sp))
+                Text(tr("Enter OTP"), style = bric(34, FontWeight.Bold, Tokens.OnDark).copy(lineHeight = 36.sp))
                 Text(
                     buildAnnotatedString {
-                        append("Sent by SMS to ")
-                        withStyle(SpanStyle(color = Tokens.OnDark, fontWeight = FontWeight.Bold)) {
-                            append("+91 ${ui.phone.take(5)} ${ui.phone.drop(5)}")
+                        appendFilled(tr("Sent by SMS to {phone}")) {
+                            withStyle(SpanStyle(color = Tokens.OnDark, fontWeight = FontWeight.Bold)) {
+                                append("+91 ${ui.phone.take(5)} ${ui.phone.drop(5)}")
+                            }
                         }
                         append(" · ")
                         val changeStyle = TextLinkStyles(
                             SpanStyle(color = Tokens.OnDark, fontWeight = FontWeight.SemiBold, textDecoration = TextDecoration.Underline),
                         )
                         withLink(LinkAnnotation.Clickable("change", changeStyle) { vm.backToPhone() }) {
-                            append("Change number")
+                            append(tr("Change number").replace(' ', '\u00A0'))
                         }
                     },
                     style = fig(16, color = Tokens.OnBlueMuted).copy(lineHeight = 23.sp),
@@ -269,10 +294,10 @@ private fun ColumnScope.OtpStep(ui: AuthUiState, vm: AuthViewModel) {
                 verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically),
             ) {
                 if (ui.resendInSecs > 0) {
-                    Text("Didn't get the OTP? You can resend in ${ui.resendInSecs} sec", style = fig(14, color = Tokens.Muted))
+                    Text(tr("Didn't get the OTP? You can resend in {n} sec", "n" to ui.resendInSecs), style = fig(14, color = Tokens.Muted))
                 } else {
-                    Text("Didn't get the OTP?", style = fig(14, FontWeight.SemiBold, Tokens.InkSecondary))
-                    ResendButton(if (ui.loading) "Sending…" else "Resend OTP", onClick = { activity?.let(vm::requestOtp) })
+                    Text(tr("Didn't get the OTP?"), style = fig(14, FontWeight.SemiBold, Tokens.InkSecondary))
+                    ResendButton(if (ui.loading) tr("Sending…") else tr("Resend OTP"), onClick = { activity?.let(vm::requestOtp) })
                 }
             }
         }
@@ -285,7 +310,7 @@ private fun ColumnScope.OtpStep(ui: AuthUiState, vm: AuthViewModel) {
             .windowInsetsPadding(WindowInsets.navigationBars)
             .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 32.dp),
     ) {
-        CtaButton(if (ui.loading) "Verifying…" else "Continue", enabled = ui.otpValid && ui.error == null && !ui.loading, onClick = vm::verify)
+        CtaButton(if (ui.loading) tr("Verifying…") else tr("Continue"), enabled = ui.otpValid && ui.error == null && !ui.loading, onClick = vm::verify)
     }
 }
 
@@ -372,7 +397,7 @@ private fun PhoneField(value: String, onChange: (String) -> Unit, onDone: () -> 
     ) {
         Text("+91", style = fig(18, FontWeight.SemiBold, Tokens.Muted))
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-            if (value.isEmpty()) Text("Mobile Number", style = textStyle.copy(color = Tokens.Placeholder), maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+            if (value.isEmpty()) Text(tr("Mobile Number"), style = textStyle.copy(color = Tokens.Placeholder), maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
             BasicTextField(
                 value = value,
                 onValueChange = onChange,
@@ -441,16 +466,31 @@ private fun TermsLine() {
     val link = TextLinkStyles(SpanStyle(color = Tokens.Blue, textDecoration = TextDecoration.Underline))
     Text(
         buildAnnotatedString {
-            append("By continuing, you agree to our ")
-            withLink(LinkAnnotation.Url("$SITE/terms", link)) { append("Terms") }
-            append(" and ")
-            withLink(LinkAnnotation.Url("$SITE/privacy", link)) { append("Privacy Policy") }
             // The WhatsApp opt-in Analytics.identify records (MSG-whatsapp).
-            append(", and to get updates on WhatsApp")
+            appendFilled(tr("By continuing, you agree to our {terms} and {privacy}, and to get updates on WhatsApp")) { key ->
+                when (key) {
+                    "terms" -> withLink(LinkAnnotation.Url("$SITE/terms", link)) { append(tr("Terms")) }
+                    "privacy" -> withLink(LinkAnnotation.Url("$SITE/privacy", link)) { append(tr("Privacy Policy")) }
+                }
+            }
         },
         style = fig(13, color = Tokens.Muted).copy(textAlign = TextAlign.Center),
         modifier = Modifier.fillMaxWidth(),
     )
+}
+
+/**
+ * Appends [text] (already through tr), drawing each {placeholder} in it with
+ * [part] — so a styled or linked word can sit wherever the language puts it.
+ */
+private fun AnnotatedString.Builder.appendFilled(text: String, part: AnnotatedString.Builder.(key: String) -> Unit) {
+    var at = 0
+    for (m in Regex("""\{(\w+)\}""").findAll(text)) {
+        append(text.substring(at, m.range.first))
+        part(m.groupValues[1])
+        at = m.range.last + 1
+    }
+    append(text.substring(at))
 }
 
 /**
@@ -506,18 +546,19 @@ private fun OtpStatus(ui: AuthUiState) {
     when {
         ui.error != null -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Icon(Icons.Outlined.ErrorOutline, null, tint = Tokens.ErrorRed, modifier = Modifier.size(18.dp))
-            val attempts = ui.attemptsRemaining?.takeIf { it < 5 }?.let { " · $it attempts left" } ?: ""
-            Text(ui.error + attempts, style = fig(14, FontWeight.SemiBold, Tokens.ErrorRed), modifier = Modifier.weight(1f, fill = false))
+            val attempts = ui.attemptsRemaining?.takeIf { it < 5 }
+            val error = tr(ui.error.orEmpty())
+            Text(if (attempts != null) tr("{error} · {n} attempts left", "error" to error, "n" to attempts) else error, style = fig(14, FontWeight.SemiBold, Tokens.ErrorRed), modifier = Modifier.weight(1f, fill = false))
         }
         ui.otpValid -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Box(Modifier.size(20.dp).background(Tokens.Green, CircleShape), contentAlignment = Alignment.Center) {
                 Icon(Icons.Filled.Check, null, tint = Tokens.OnDark, modifier = Modifier.size(16.dp))
             }
-            Text("OTP filled in", style = fig(14, FontWeight.SemiBold, Tokens.GreenText))
+            Text(tr("OTP filled in"), style = fig(14, FontWeight.SemiBold, Tokens.GreenText))
         }
         else -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             CircularProgressIndicator(Modifier.size(16.dp), color = Tokens.Blue, strokeWidth = 2.5.dp)
-            Text(if (ui.resent) "OTP sent again — check your SMS" else "Waiting for the OTP SMS", style = fig(14, color = Tokens.InkSecondary))
+            Text(if (ui.resent) tr("OTP sent again — check your SMS") else tr("Waiting for the OTP SMS"), style = fig(14, color = Tokens.InkSecondary))
         }
     }
 }

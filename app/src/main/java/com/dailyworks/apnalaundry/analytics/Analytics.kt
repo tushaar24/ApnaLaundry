@@ -468,6 +468,13 @@ object Analytics {
 
     fun orderSearchOpened() = track("Order Search Opened")
 
+    // ---- language ----
+    /** from / to: language codes (en, hi, ta…); where: login (first open or the top-left chip) | settings. Also sets profile Language. */
+    fun languageChanged(from: String, to: String, where: String) {
+        track("Language Changed", mapOf("from" to from, "to" to to, "where" to where))
+        updateProfile(mapOf("Language" to to))
+    }
+
     // ---- assistant ("Ask": Sarvam AI through our server) ----
     /** from: home | push. */
     fun assistantOpened(from: String) = track("Assistant Opened", mapOf("from" to from))
@@ -486,7 +493,10 @@ object Analytics {
     fun assistantVoice(seconds: Int, ok: Boolean, reason: String) =
         track("Assistant Voice", mapOf("seconds" to seconds, "ok" to ok, "reason" to reason.ifBlank { null }))
 
-    /** card: new_order | send_bill | status_update | reminder | whatsapp_message | mark_order. */
+    /** A reply said to tap a button but no tool made a card; it was sent back once to do it (or just answer). */
+    fun assistantNudged() = track("Assistant Nudged")
+
+    /** card: new_order | send_bill | status_update | reminder | whatsapp_message | change_status | payment | edit_order | rate_card | customer | old_baaki | delete_order. */
     fun assistantCardShown(card: String) = track("Assistant Card Shown", mapOf("card" to card))
 
     /** The owner tapped a card's button (order saved, WhatsApp opened, order marked). */

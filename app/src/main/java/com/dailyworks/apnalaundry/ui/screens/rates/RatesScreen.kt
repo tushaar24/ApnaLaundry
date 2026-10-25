@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dailyworks.apnalaundry.analytics.Analytics
+import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.data.LaundryRepository
 import com.dailyworks.apnalaundry.domain.SeedData
 import com.dailyworks.apnalaundry.domain.PricingMode
@@ -81,16 +82,16 @@ private sealed interface RatePage {
     data object Add : RatePage
 }
 
-private fun modeLabel(s: Service): String = if (s.mode == PricingMode.WEIGHT) "By weight" else "Per piece"
+private fun modeLabel(s: Service): String = if (s.mode == PricingMode.WEIGHT) tr("By weight") else tr("Per piece")
 
 private fun summaryLine(s: Service): String = if (s.mode == PricingMode.WEIGHT) {
-    val rate = if (s.ratePerKg != null) "₹${s.ratePerKg} per kg" else "Rate not set"
-    rate + (s.minKg?.takeIf { it > 0 }?.let { " · minimum ${Selectors.trimKg(it)} kg" } ?: "")
+    val rate = if (s.ratePerKg != null) tr("{rate} per kg", "rate" to "₹${s.ratePerKg}") else tr("Rate not set")
+    rate + (s.minKg?.takeIf { it > 0 }?.let { " · " + tr("minimum {kg} kg", "kg" to Selectors.trimKg(it)) } ?: "")
 } else {
     val priced = s.items.filter { it.price != null }
-    if (priced.isEmpty()) "No prices set yet — tap Edit"
+    if (priced.isEmpty()) tr("No prices set yet — tap Edit")
     else priced.take(3).joinToString(" · ") { "${it.name} ₹${it.price}" } +
-        (if (priced.size > 3) " · +${priced.size - 3} more" else "")
+        (if (priced.size > 3) " · " + tr("+{n} more", "n" to priced.size - 3) else "")
 }
 
 @Composable
@@ -163,7 +164,7 @@ private fun RateListPage(
     }
 
     Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars)) {
-        if (!setup) TopBar("Services", onBack = onBack)
+        if (!setup) TopBar(tr("Services"), onBack = onBack)
 
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 16.dp),
@@ -171,19 +172,19 @@ private fun RateListPage(
         ) {
             if (setupHeader != null) {
                 setupHeader()
-                Text("Setup Services", style = bric(28, FontWeight.Bold))
+                Text(tr("Setup Services"), style = bric(28, FontWeight.Bold))
                 Text(
-                    "These services and prices go on your bills. Check them once — change only what is different.",
+                    tr("These services and prices go on your bills. Check them once — change only what is different."),
                     style = fig(14, color = Tokens.Muted),
                 )
             } else {
                 InfoBox(
-                    "Change prices anytime",
-                    "Tap Edit on a service to change its prices. New prices apply to new orders only.",
+                    tr("Change prices anytime"),
+                    tr("Tap Edit on a service to change its prices. New prices apply to new orders only."),
                 )
             }
 
-            Text("YOUR SERVICES (${services.size})", style = fig(13, FontWeight.Bold, Tokens.InkSecondary))
+            Text(tr("YOUR SERVICES ({n})", "n" to services.size), style = fig(13, FontWeight.Bold, Tokens.InkSecondary))
 
             AddServiceCard(onAdd)
 
@@ -195,12 +196,12 @@ private fun RateListPage(
 
         Column(Modifier.fillMaxWidth().background(Tokens.Card)) {
             Text(
-                "Nothing else is needed. You can change prices anytime.",
+                tr("Nothing else is needed. You can change prices anytime."),
                 style = fig(13, color = Tokens.Muted),
                 modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp),
             )
             Box(Modifier.padding(16.dp)) {
-                PrimaryButton(if (setup) "Next: Your bill" else "Done", height = 56.dp) { commitAndDone() }
+                PrimaryButton(if (setup) tr("Next: Your bill") else tr("Done"), height = 56.dp) { commitAndDone() }
             }
         }
     }
@@ -236,13 +237,13 @@ private fun ServiceCard(s: Service, canDelete: Boolean, onEdit: () -> Unit, onDe
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Icon(Icons.Outlined.Edit, null, tint = Tokens.Blue, modifier = Modifier.size(18.dp))
-                Text("Edit", style = fig(15, FontWeight.Bold, Tokens.Blue))
+                Text(tr("Edit"), style = fig(15, FontWeight.Bold, Tokens.Blue))
             }
             if (canDelete) Box(
                 Modifier.size(44.dp).rounded(10.dp).border(1.dp, Tokens.OrangeBorder, RoundedCornerShape(10.dp)).tap(onClick = onDelete),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Outlined.DeleteOutline, "Delete ${s.name}", tint = Tokens.DeleteRed, modifier = Modifier.size(20.dp))
+                Icon(Icons.Outlined.DeleteOutline, tr("Delete {service}", "service" to s.name), tint = Tokens.DeleteRed, modifier = Modifier.size(20.dp))
             }
         }
         Box(Modifier.fillMaxWidth().rounded(10.dp).background(Tokens.NeutralFill).padding(horizontal = 12.dp, vertical = 10.dp)) {
@@ -262,11 +263,11 @@ private fun AddServiceCard(onAdd: () -> Unit) {
             Icon(Icons.Filled.Add, null, tint = Tokens.OnDark, modifier = Modifier.size(24.dp))
         }
         Column(Modifier.weight(1f)) {
-            Text("Add a new service", style = fig(16, FontWeight.Bold, Tokens.BlueText))
-            Text("Steam press, curtains, shoes… anything else you do", style = fig(13, color = Tokens.BlueText))
+            Text(tr("Add a new service"), style = fig(16, FontWeight.Bold, Tokens.BlueText))
+            Text(tr("Steam press, curtains, shoes… anything else you do"), style = fig(13, color = Tokens.BlueText))
         }
         Box(Modifier.rounded(10.dp).background(Tokens.Blue).padding(horizontal = 14.dp, vertical = 8.dp)) {
-            Text("Add", style = fig(14, FontWeight.Bold, Tokens.OnDark))
+            Text(tr("Add"), style = fig(14, FontWeight.Bold, Tokens.OnDark))
         }
     }
 }
@@ -282,14 +283,14 @@ private fun EditServicePage(
     BackHandler(onBack = onBack)
 
     Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars).imePadding()) {
-        TopBar("Edit service", onBack = onBack)
+        TopBar(tr("Edit service"), onBack = onBack)
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text("Change only what you need. Everything else can stay as it is.", style = fig(15, color = Tokens.Muted))
+            Text(tr("Change only what you need. Everything else can stay as it is."), style = fig(15, color = Tokens.Muted))
 
-            SectionCard("Service name") {
+            SectionCard(tr("Service name")) {
                 FieldBox(draft.name, { draft = draft.copy(name = it) }, height = 56.dp, borderColor = Tokens.FieldBorder, textStyle = fig(18, FontWeight.Bold))
             }
 
@@ -303,9 +304,9 @@ private fun EditServicePage(
 
         Row(Modifier.fillMaxWidth().background(Tokens.Card).padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             if (canDelete) {
-                OutlineButton("Delete", height = 56.dp, border = Tokens.OrangeBorder, fg = Tokens.DeleteRed, onClick = onDelete)
+                OutlineButton(tr("Delete"), height = 56.dp, border = Tokens.OrangeBorder, fg = Tokens.DeleteRed, onClick = onDelete)
             }
-            PrimaryButton("Save", Modifier.weight(1f), height = 56.dp) { onSave(draft) }
+            PrimaryButton(tr("Save"), Modifier.weight(1f), height = 56.dp) { onSave(draft) }
         }
     }
 }
@@ -330,15 +331,15 @@ private fun AddServicePage(existing: List<Service>, onAdd: (Service) -> Unit, on
     BackHandler(onBack = onBack)
 
     Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars).imePadding()) {
-        TopBar("Add new service", onBack = onBack)
+        TopBar(tr("Add new service"), onBack = onBack)
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            InfoBox("Add a new service", "Add only if you do a service that is not in your list. You can skip this and add it later too.")
+            InfoBox(tr("Add a new service"), tr("Add only if you do a service that is not in your list. You can skip this and add it later too."))
 
-            SectionCard("What is the service called?", "Type a name or tap one below.") {
-                FieldBox(draft.name, { draft = draft.copy(name = it) }, placeholder = "e.g. Steam Press", height = 56.dp)
+            SectionCard(tr("What is the service called?"), tr("Type a name or tap one below.")) {
+                FieldBox(draft.name, { draft = draft.copy(name = it) }, placeholder = tr("e.g. Steam Press"), height = 56.dp)
                 Spacer(Modifier.height(10.dp))
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     suggestions.forEach { name -> PillChip(name, draft.name == name) { draft = draft.copy(name = name) } }
@@ -355,7 +356,7 @@ private fun AddServicePage(existing: List<Service>, onAdd: (Service) -> Unit, on
 
         Box(Modifier.fillMaxWidth().background(Tokens.Card).padding(16.dp)) {
             val named = draft.name.isNotBlank()
-            PrimaryButton(if (named) "Add service" else "Type a name to add", enabled = named, height = 56.dp) {
+            PrimaryButton(if (named) tr("Add service") else tr("Type a name to add"), enabled = named, height = 56.dp) {
                 onAdd(
                     draft.copy(
                         name = draft.name.trim(),
@@ -387,17 +388,17 @@ private fun SectionCard(title: String, subtitle: String? = null, content: @Compo
 
 @Composable
 private fun ChargeByCard(draft: Service, onChange: (Service) -> Unit) {
-    SectionCard("How do you charge for this?") {
+    SectionCard(tr("How do you charge for this?")) {
         if (draft.lockedToPiece) {
             Row(
                 Modifier.fillMaxWidth().heightIn(min = 48.dp).rounded(11.dp).background(Tokens.NeutralFill).padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Icon(Icons.Outlined.Lock, null, tint = Tokens.InkSecondary, modifier = Modifier.size(16.dp))
-                Text("Dry cleaning is always per piece", style = fig(14, FontWeight.SemiBold, Tokens.InkSecondary))
+                Text(tr("Dry cleaning is always per piece"), style = fig(14, FontWeight.SemiBold, Tokens.InkSecondary))
             }
         } else {
-            Segmented(listOf("Per piece" to (draft.mode == PricingMode.PIECE), "By weight" to (draft.mode == PricingMode.WEIGHT))) { i ->
+            Segmented(listOf(tr("Per piece") to (draft.mode == PricingMode.PIECE), tr("By weight") to (draft.mode == PricingMode.WEIGHT))) { i ->
                 onChange(draft.copy(mode = if (i == 0) PricingMode.PIECE else PricingMode.WEIGHT))
             }
         }
@@ -407,9 +408,9 @@ private fun ChargeByCard(draft: Service, onChange: (Service) -> Unit) {
 @Composable
 private fun PerPieceCard(draft: Service, emptyHint: Boolean = false, onChange: (Service) -> Unit) {
     SectionCard(
-        "Price of each piece",
-        if (emptyHint) "Fill only the clothes you take. Leave the rest empty."
-        else "Leave it empty if you don't take that cloth. Empty ones won't show in orders.",
+        tr("Price of each piece"),
+        if (emptyHint) tr("Fill only the clothes you take. Leave the rest empty.")
+        else tr("Leave it empty if you don't take that cloth. Empty ones won't show in orders."),
     ) {
         draft.items.forEachIndexed { idx, item ->
             if (idx > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Divider))
@@ -436,7 +437,7 @@ private fun PerPieceCard(draft: Service, emptyHint: Boolean = false, onChange: (
                         .tap { onChange(draft.copy(items = draft.items.filterIndexed { j, _ -> j != idx })) },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Outlined.DeleteOutline, "Remove ${item.name}", tint = Tokens.DeleteRed, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Outlined.DeleteOutline, tr("Remove {item}", "item" to item.name), tint = Tokens.DeleteRed, modifier = Modifier.size(20.dp))
                 }
             }
         }
@@ -447,7 +448,7 @@ private fun PerPieceCard(draft: Service, emptyHint: Boolean = false, onChange: (
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FieldBox(
-                newName, { newName = it }, placeholder = "Add a cloth, e.g. Blazer", height = 48.dp, modifier = Modifier.weight(1f),
+                newName, { newName = it }, placeholder = tr("Add a cloth, e.g. Blazer"), height = 48.dp, modifier = Modifier.weight(1f),
                 imeAction = ImeAction.Done,
                 onImeAction = { if (canAdd) { onChange(draft.copy(items = draft.items + ServiceItem(name, null))); newName = "" } },
             )
@@ -463,32 +464,32 @@ private fun PerPieceCard(draft: Service, emptyHint: Boolean = false, onChange: (
             ) {
                 val c = if (canAdd) Tokens.Blue else Tokens.Muted
                 Icon(Icons.Filled.Add, null, tint = c, modifier = Modifier.size(18.dp))
-                Text("Add", style = fig(15, FontWeight.Bold, c))
+                Text(tr("Add"), style = fig(15, FontWeight.Bold, c))
             }
         }
         if (exists && name.isNotEmpty()) {
-            Text("$name is already in the list", style = fig(13, color = Tokens.Muted), modifier = Modifier.padding(top = 4.dp))
+            Text(tr("{item} is already in the list", "item" to name), style = fig(13, color = Tokens.Muted), modifier = Modifier.padding(top = 4.dp))
         }
     }
 }
 
 @Composable
 private fun ByWeightCard(draft: Service, onChange: (Service) -> Unit) {
-    SectionCard("Price by weight") {
-        Text("Rate for 1 kg", style = fig(14, FontWeight.Bold))
+    SectionCard(tr("Price by weight")) {
+        Text(tr("Rate for 1 kg"), style = fig(14, FontWeight.Bold))
         Spacer(Modifier.height(4.dp))
         FieldBox(
             draft.ratePerKg?.toString() ?: "",
             { onChange(draft.copy(ratePerKg = it.filter { c -> c.isDigit() }.toIntOrNull())) },
-            prefix = "₹", suffix = "per kg", height = 64.dp, borderColor = Tokens.Blue, borderWidth = 2.dp,
+            prefix = "₹", suffix = tr("per kg"), height = 64.dp, borderColor = Tokens.Blue, borderWidth = 2.dp,
             keyboardType = KeyboardType.Number, textStyle = bric(28, FontWeight.Bold),
         )
         Spacer(Modifier.height(10.dp))
         var minText by remember(draft.id) { mutableStateOf(draft.minKg?.takeIf { it > 0 }?.let(Selectors::trimKg) ?: "") }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Column(Modifier.weight(1f)) {
-                Text("Minimum weight (optional)", style = fig(15, FontWeight.Bold))
-                Text("Small bags are charged for this much", style = fig(13, color = Tokens.Muted))
+                Text(tr("Minimum weight (optional)"), style = fig(15, FontWeight.Bold))
+                Text(tr("Small bags are charged for this much"), style = fig(13, color = Tokens.Muted))
             }
             FieldBox(
                 minText,
@@ -499,7 +500,7 @@ private fun ByWeightCard(draft: Service, onChange: (Service) -> Unit) {
                     minText = clean.take(5)
                     onChange(draft.copy(minKg = minText.toDoubleOrNull()))
                 },
-                placeholder = "0", suffix = "kg", modifier = Modifier.width(100.dp), height = 52.dp,
+                placeholder = "0", suffix = tr("kg"), modifier = Modifier.width(100.dp), height = 52.dp,
                 keyboardType = KeyboardType.Decimal, textStyle = fig(16, FontWeight.Bold),
             )
         }
@@ -510,12 +511,12 @@ private fun ByWeightCard(draft: Service, onChange: (Service) -> Unit) {
 private fun ReadyInCard(current: Int?, onPick: (Int?) -> Unit) {
     var moreOpen by remember { mutableStateOf(current != null && current >= 4) }
     var moreText by remember { mutableStateOf(if (current != null && current >= 4) current.toString() else "") }
-    SectionCard("Ready in (optional)", "Fills the delivery date for you. Skip it if it changes every time.") {
+    SectionCard(tr("Ready in (optional)"), tr("Fills the delivery date for you. Skip it if it changes every time.")) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf(0 to "Same day", 1 to "1 day", 2 to "2 days", 3 to "3 days").forEach { (v, label) ->
+            listOf(0 to tr("Same day"), 1 to tr("1 day"), 2 to tr("2 days"), 3 to tr("3 days")).forEach { (v, label) ->
                 PillChip(label, current == v && !moreOpen) { onPick(if (current == v && !moreOpen) null else v); moreOpen = false }
             }
-            PillChip("More", moreOpen) {
+            PillChip(tr("More"), moreOpen) {
                 moreOpen = !moreOpen
                 onPick(if (moreOpen) moreText.toIntOrNull() else null)
             }
@@ -525,7 +526,7 @@ private fun ReadyInCard(current: Int?, onPick: (Int?) -> Unit) {
             FieldBox(
                 moreText,
                 { moreText = it.filter { c -> c.isDigit() }.take(2); onPick(moreText.toIntOrNull()) },
-                placeholder = "4", suffix = "days", modifier = Modifier.width(120.dp), height = 48.dp, keyboardType = KeyboardType.Number,
+                placeholder = "4", suffix = tr("days"), modifier = Modifier.width(120.dp), height = 48.dp, keyboardType = KeyboardType.Number,
             )
         }
     }

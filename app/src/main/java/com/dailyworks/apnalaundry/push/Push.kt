@@ -26,6 +26,7 @@ import com.clevertap.android.sdk.pushnotification.fcm.CTFcmMessageHandler
 import com.dailyworks.apnalaundry.MainActivity
 import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.R
+import com.dailyworks.apnalaundry.core.tr
 import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
@@ -49,8 +50,9 @@ object Push {
         // timer, rating, …). CTFcmMessageHandler below renders through this.
         CleverTapAPI.setNotificationHandler(PushTemplateNotificationHandler() as NotificationHandler)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(CHANNEL_ID, "Updates", NotificationManager.IMPORTANCE_DEFAULT)
-                .apply { description = "Tips and news from MyLaundry" }
+            // Re-creating it renames it: the next app start shows a changed language.
+            val channel = NotificationChannel(CHANNEL_ID, tr("Updates"), NotificationManager.IMPORTANCE_DEFAULT)
+                .apply { description = tr("Tips and news from MyLaundry") }
             context.getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
         FirebaseMessaging.getInstance().token

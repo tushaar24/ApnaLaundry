@@ -34,6 +34,8 @@ import androidx.compose.ui.unit.dp
 import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.core.AppDate
 import com.dailyworks.apnalaundry.core.Money
+import com.dailyworks.apnalaundry.core.i18n
+import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.domain.BillReceipt
 import com.dailyworks.apnalaundry.domain.LaundryMath
 import com.dailyworks.apnalaundry.domain.LaundryState
@@ -98,34 +100,34 @@ fun CollectPaymentSheet(state: LaundryState, orderId: Int, vm: ShopViewModel, on
     val left = due - got
     val tour by vm.tour.collectAsStateWithLifecycle()
 
-    AppBottomSheet(title = "Collect payment", subtitle = "From ${c.name} before handing over", onDismiss = onDismiss) {
+    AppBottomSheet(title = tr("Collect payment"), subtitle = tr("From {name} before handing over", "name" to c.name), onDismiss = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Column(Modifier.fillMaxWidth().rounded(14.dp).background(Tokens.Card).padding(14.dp)) {
                 MoneyRow(
-                    label = if (pre > 0) (if (billDue < 0) "Paid extra before (bill ${Money.rupees(total)})" else "This bill (after ${Money.rupees(pre)} paid)") else "This bill",
+                    label = if (pre > 0) (if (billDue < 0) tr("Paid extra before (bill {amount})", "amount" to Money.rupees(total)) else tr("This bill (after {amount} paid)", "amount" to Money.rupees(pre))) else tr("This bill"),
                     value = (if (billDue < 0) "− " else "") + Money.rupees(billDue),
                 )
                 if (oldBal != 0) MoneyRow(
-                    label = if (oldBal > 0) "Old baaki" else "Advance already paid",
+                    label = if (oldBal > 0) tr("Old baaki") else tr("Advance already paid"),
                     value = (if (oldBal > 0) "+ " else "− ") + Money.rupees(oldBal),
                     valueColor = if (oldBal > 0) Tokens.OrangeText else Tokens.BlueText,
                 )
                 Box(Modifier.padding(vertical = 6.dp).fillMaxWidth().height(1.dp).background(Tokens.Divider))
-                MoneyRow("Total to collect", Money.rupees(max(0, due)), bold = true)
+                MoneyRow(tr("Total to collect"), Money.rupees(max(0, due)), bold = true)
             }
 
             if (!split) {
                 FieldBox(value = payAmt, onValueChange = { payAmt = it.filter { ch -> ch.isDigit() }.take(6) }, prefix = "₹", height = 56.dp, keyboardType = KeyboardType.Number, textStyle = bric(22, FontWeight.Bold))
 
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    PillChip("Full ${Money.rupees(max(0, due))}", payAmt == max(0, due).toString()) { payAmt = max(0, due).toString() }
-                    if (oldBal > 0 && billDue > 0) PillChip("Only this bill ${Money.rupees(billDue)}", payAmt == billDue.toString()) { payAmt = billDue.toString() }
+                    PillChip(tr("Full {amount}", "amount" to Money.rupees(max(0, due))), payAmt == max(0, due).toString()) { payAmt = max(0, due).toString() }
+                    if (oldBal > 0 && billDue > 0) PillChip(tr("Only this bill {amount}", "amount" to Money.rupees(billDue)), payAmt == billDue.toString()) { payAmt = billDue.toString() }
                 }
             } else {
                 val target = payAmt.toIntOrNull() ?: max(0, due)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("Cash", style = fig(13, FontWeight.Bold, Tokens.Muted))
+                        Text(tr("Cash"), style = fig(13, FontWeight.Bold, Tokens.Muted))
                         FieldBox(
                             value = cashText,
                             onValueChange = {
@@ -136,7 +138,7 @@ fun CollectPaymentSheet(state: LaundryState, orderId: Int, vm: ShopViewModel, on
                         )
                     }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("UPI", style = fig(13, FontWeight.Bold, Tokens.Muted))
+                        Text(tr("UPI"), style = fig(13, FontWeight.Bold, Tokens.Muted))
                         FieldBox(
                             value = upiText,
                             onValueChange = { upiText = it.filter { ch -> ch.isDigit() }.take(6); upiTouched = true },
@@ -147,10 +149,10 @@ fun CollectPaymentSheet(state: LaundryState, orderId: Int, vm: ShopViewModel, on
             }
 
             val (prevBg, prevFg, prevText) = when {
-                (if (split) cashText.isEmpty() && upiText.isEmpty() else payAmt.isEmpty()) -> Triple(Tokens.Bg, Tokens.Muted, "Type the amount you got")
-                left > 0 -> Triple(Tokens.OrangeLight, Tokens.OrangeDeep, "${Money.rupees(left)} will stay in khata (baaki)")
-                left < 0 -> Triple(Tokens.BlueLight, Tokens.BlueText, "${Money.rupees(left)} extra — kept as advance")
-                else -> Triple(Tokens.NeutralFill, Tokens.Ink, "Full payment — all clear")
+                (if (split) cashText.isEmpty() && upiText.isEmpty() else payAmt.isEmpty()) -> Triple(Tokens.Bg, Tokens.Muted, tr("Type the amount you got"))
+                left > 0 -> Triple(Tokens.OrangeLight, Tokens.OrangeDeep, tr("{amount} will stay in khata (baaki)", "amount" to Money.rupees(left)))
+                left < 0 -> Triple(Tokens.BlueLight, Tokens.BlueText, tr("{amount} extra — kept as advance", "amount" to Money.rupees(left)))
+                else -> Triple(Tokens.NeutralFill, Tokens.Ink, tr("Full payment — all clear"))
             }
             Box(Modifier.fillMaxWidth().rounded(12.dp).background(prevBg).padding(14.dp)) {
                 Text(prevText, style = fig(14, FontWeight.SemiBold, prevFg))
@@ -161,17 +163,17 @@ fun CollectPaymentSheet(state: LaundryState, orderId: Int, vm: ShopViewModel, on
 
             if (!split) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PrimaryButton("Got cash", Modifier.weight(1f), enabled = got > 0, height = 56.dp) { vm.deliver(orderId, got, PayMethod.CASH); onDismiss() }
-                    PrimaryButton("Got UPI", Modifier.weight(1f), enabled = got > 0, height = 56.dp) { vm.deliver(orderId, got, PayMethod.UPI); onDismiss() }
+                    PrimaryButton(tr("Got cash"), Modifier.weight(1f), enabled = got > 0, height = 56.dp) { vm.deliver(orderId, got, PayMethod.CASH); onDismiss() }
+                    PrimaryButton(tr("Got UPI"), Modifier.weight(1f), enabled = got > 0, height = 56.dp) { vm.deliver(orderId, got, PayMethod.UPI); onDismiss() }
                 }
             } else {
                 PrimaryButton(
-                    if (got > 0) "Got ${Money.rupees(got)} (cash + UPI)" else "Type cash and UPI",
+                    if (got > 0) tr("Got {amount} (cash + UPI)", "amount" to Money.rupees(got)) else tr("Type cash and UPI"),
                     enabled = got > 0, height = 56.dp,
                 ) { vm.deliverSplit(orderId, cash, upi); onDismiss() }
             }
             Text(
-                if (split) "Back to one method" else "Part cash, part UPI",
+                if (split) tr("Back to one method") else tr("Part cash, part UPI"),
                 style = fig(14, FontWeight.Bold, Tokens.Blue),
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().tap {
@@ -183,7 +185,7 @@ fun CollectPaymentSheet(state: LaundryState, orderId: Int, vm: ShopViewModel, on
                 }.padding(vertical = 4.dp),
             )
             Box(Modifier.fillMaxWidth().height(48.dp).rounded(14.dp).background(Tokens.NeutralFill).tap { vm.deliver(orderId, 0, PayMethod.NONE); onDismiss() }, contentAlignment = Alignment.Center) {
-                Text("Nothing now · add all to khata", style = fig(15, FontWeight.Bold, Tokens.InkSecondary))
+                Text(tr("Nothing now · add all to khata"), style = fig(15, FontWeight.Bold, Tokens.InkSecondary))
             }
         }
     }
@@ -199,9 +201,9 @@ private fun DeliveryDateQuestion(o: Order, date: String, onDate: (String) -> Uni
     val context = LocalContext.current
     val today = AppDate.TODAY
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("When will it be delivered?", style = fig(15, FontWeight.Bold))
+        Text(tr("When will it be delivered?"), style = fig(15, FontWeight.Bold))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf("Today" to today, "Tomorrow" to AppDate.add(today, 1), "Day after" to AppDate.add(today, 2)).forEach { (label, iso) ->
+            listOf(tr("Today") to today, tr("Tomorrow") to AppDate.add(today, 1), tr("Day after") to AppDate.add(today, 2)).forEach { (label, iso) ->
                 PillChip(label, date == iso) { onDate(iso) }
             }
         }
@@ -215,11 +217,11 @@ private fun DeliveryDateQuestion(o: Order, date: String, onDate: (String) -> Uni
         ) {
             Icon(Icons.Outlined.CalendarMonth, null, tint = Tokens.Blue, modifier = Modifier.size(20.dp))
             Text(
-                if (date.isNotBlank()) "Delivery: ${AppDate.short(date)}" else "Pick a delivery date",
+                if (date.isNotBlank()) tr("Delivery: {date}", "date" to AppDate.short(date)) else tr("Pick a delivery date"),
                 style = fig(15, FontWeight.SemiBold, if (date.isNotBlank()) Tokens.Ink else Tokens.Muted),
                 modifier = Modifier.weight(1f),
             )
-            Text("Change", style = fig(14, FontWeight.Bold, Tokens.Blue))
+            Text(tr("Change"), style = fig(14, FontWeight.Bold, Tokens.Blue))
         }
     }
 }
@@ -231,11 +233,11 @@ fun ReadySheet(state: LaundryState, orderId: Int, vm: ShopViewModel, onDismiss: 
     val c = Selectors.customer(state, o.custId)
     var date by remember { mutableStateOf(o.deliveryDate) }
     val tour by vm.tour.collectAsStateWithLifecycle()
-    AppBottomSheet(title = "Mark ready", subtitle = "${c.name} · #${o.no()}", onDismiss = onDismiss) {
+    AppBottomSheet(title = tr("Mark ready"), subtitle = "${c.name} · #${o.no()}", onDismiss = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             if (tour == TourStage.STATUS) TourTip(TourSteps.readySheet)
             DeliveryDateQuestion(o, date) { date = it }
-            PrimaryButton(if (date.isBlank()) "Pick a delivery date" else "Mark ready", enabled = date.isNotBlank(), height = 56.dp) {
+            PrimaryButton(if (date.isBlank()) tr("Pick a delivery date") else tr("Mark ready"), enabled = date.isNotBlank(), height = 56.dp) {
                 if (date.isNotBlank()) { vm.markReady(orderId, date); onDismiss() }
             }
         }
@@ -251,19 +253,19 @@ fun CountClothesSheet(state: LaundryState, orderId: Int, next: OrderStatus, vm: 
     val askDate = next == OrderStatus.READY
     var date by remember { mutableStateOf(o.deliveryDate) }
 
-    AppBottomSheet(title = "Count clothes", subtitle = "${c.name} · #${o.no()}. The bill is made after this.", onDismiss = onDismiss) {
+    AppBottomSheet(title = tr("Count clothes"), subtitle = tr("{name} · #{no}. The bill is made after this.", "name" to c.name, "no" to o.no()), onDismiss = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             ClothesEditor(state.services, clothes, editablePrice = false)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Total", style = fig(15, FontWeight.SemiBold, Tokens.Muted))
+                Text(tr("Total"), style = fig(15, FontWeight.SemiBold, Tokens.Muted))
                 Text(Money.rupees(total), style = bric(24, FontWeight.Bold))
             }
             if (askDate) DeliveryDateQuestion(o, date) { date = it }
             PrimaryButton(
                 when {
-                    askDate && date.isBlank() -> "Pick a delivery date"
-                    next == OrderStatus.READY -> "Mark ready · make bill"
-                    else -> "Picked up · make bill"
+                    askDate && date.isBlank() -> tr("Pick a delivery date")
+                    next == OrderStatus.READY -> tr("Mark ready · make bill")
+                    else -> tr("Picked up · make bill")
                 },
                 enabled = total > 0 && (!askDate || date.isNotBlank()), height = 56.dp,
             ) { vm.saveCount(orderId, next, clothes.lines(state.services), if (askDate) date else ""); onSaved() }
@@ -281,8 +283,8 @@ fun RescheduleSheet(state: LaundryState, orderId: Int, kind: String, vm: ShopVie
     val base = if (isPickup) o.pickupDate else o.deliveryDate
     var date by remember { mutableStateOf(base) }
     var time by remember { mutableStateOf(if (isPickup) AppDate.to24h(o.pickupTime) else AppDate.to24h(o.deliveryTime)) }
-    val title = if (isPickup) "Reschedule pickup" else if (o.deliveryDate.isNotBlank()) "Reschedule delivery" else "Set delivery date"
-    val chips = listOf("Today" to AppDate.TODAY, "Tomorrow" to AppDate.add(AppDate.TODAY, 1), "Day after" to AppDate.add(AppDate.TODAY, 2))
+    val title = if (isPickup) tr("Reschedule pickup") else if (o.deliveryDate.isNotBlank()) tr("Reschedule delivery") else tr("Set delivery date")
+    val chips = listOf(tr("Today") to AppDate.TODAY, tr("Tomorrow") to AppDate.add(AppDate.TODAY, 1), tr("Day after") to AppDate.add(AppDate.TODAY, 2))
 
     AppBottomSheet(title = title, subtitle = "${c.name} · #${o.no()}", onDismiss = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -300,14 +302,14 @@ fun RescheduleSheet(state: LaundryState, orderId: Int, kind: String, vm: ShopVie
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Icon(Icons.Outlined.CalendarMonth, null, tint = Tokens.Blue, modifier = Modifier.size(20.dp))
-                Text(if (date.isNotBlank()) "Selected: ${AppDate.short(date)}" else "Pick a date", style = fig(15, FontWeight.SemiBold, if (date.isNotBlank()) Tokens.Ink else Tokens.Muted), modifier = Modifier.weight(1f))
-                Text("Change", style = fig(14, FontWeight.Bold, Tokens.Blue))
+                Text(if (date.isNotBlank()) tr("Selected: {date}", "date" to AppDate.short(date)) else tr("Pick a date"), style = fig(15, FontWeight.SemiBold, if (date.isNotBlank()) Tokens.Ink else Tokens.Muted), modifier = Modifier.weight(1f))
+                Text(tr("Change"), style = fig(14, FontWeight.Bold, Tokens.Blue))
             }
             if (isPickup && date.isNotBlank() && o.deliveryDate.isNotBlank() && o.ddAuto) {
                 val shift = AppDate.daysBetween(o.pickupDate, date)
-                Text("Delivery moves too: ${AppDate.short(AppDate.add(o.deliveryDate, shift))}", style = fig(13, color = Tokens.Muted))
+                Text(tr("Delivery moves too: {date}", "date" to AppDate.short(AppDate.add(o.deliveryDate, shift))), style = fig(13, color = Tokens.Muted))
             }
-            PrimaryButton(if (date.isBlank()) "Pick a date to save" else "Save", height = 56.dp, enabled = date.isNotBlank()) {
+            PrimaryButton(if (date.isBlank()) tr("Pick a date to save") else tr("Save"), height = 56.dp, enabled = date.isNotBlank()) {
                 if (date.isNotBlank()) { vm.reschedule(orderId, kind, date, time, notify = false); onDismiss() }
             }
         }
@@ -319,21 +321,26 @@ fun RescheduleSheet(state: LaundryState, orderId: Int, kind: String, vm: ShopVie
 fun DeleteOrderSheet(state: LaundryState, orderId: Int, vm: ShopViewModel, navigator: AppNavigator, onDismiss: () -> Unit) {
     val o = Selectors.order(state, orderId) ?: return onDismiss()
     val c = Selectors.customer(state, o.custId)
-    val what = if (o.lines.isNotEmpty()) "bill" else "order"
+    val isBill = o.lines.isNotEmpty()
     val paidAny = state.ledger.any { it.ref == o.id && it.kind == LedgerKind.GOT }
-    AppBottomSheet(title = "Delete $what #${o.no()}?", subtitle = "${c.name} · ${Money.rupees(LaundryMath.amtOf(o))}", onDismiss = onDismiss) {
+    val first = Selectors.firstName(c.name)
+    AppBottomSheet(title = if (isBill) tr("Delete bill #{no}?", "no" to o.no()) else tr("Delete order #{no}?", "no" to o.no()), subtitle = "${c.name} · ${Money.rupees(LaundryMath.amtOf(o))}", onDismiss = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text(
-                "The $what is removed from orders, earnings and ${Selectors.firstName(c.name)}'s khata" +
-                    (if (paidAny) ", along with the payments recorded on it" else "") + ". You can undo right after.",
+                when {
+                    isBill && paidAny -> tr("The bill is removed from orders, earnings and {name}'s khata, along with the payments recorded on it. You can undo right after.", "name" to first)
+                    isBill -> tr("The bill is removed from orders, earnings and {name}'s khata. You can undo right after.", "name" to first)
+                    paidAny -> tr("The order is removed from orders, earnings and {name}'s khata, along with the payments recorded on it. You can undo right after.", "name" to first)
+                    else -> tr("The order is removed from orders, earnings and {name}'s khata. You can undo right after.", "name" to first)
+                },
                 style = fig(14, FontWeight.SemiBold, Tokens.OrangeDeep),
                 modifier = Modifier.fillMaxWidth().rounded(12.dp).background(Tokens.OrangeLight).padding(14.dp),
             )
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(Modifier.weight(1f).height(56.dp).rounded(14.dp).background(Tokens.NeutralFill).tap { onDismiss() }, contentAlignment = Alignment.Center) {
-                    Text("Keep", style = fig(16, FontWeight.Bold, Tokens.InkSecondary))
+                    Text(tr("Keep"), style = fig(16, FontWeight.Bold, Tokens.InkSecondary))
                 }
-                PrimaryButton("Delete $what", Modifier.weight(1f), height = 56.dp, bg = Tokens.Orange) {
+                PrimaryButton(if (isBill) tr("Delete bill") else tr("Delete order"), Modifier.weight(1f), height = 56.dp, bg = Tokens.Orange) {
                     onDismiss()
                     vm.deleteOrder(orderId)
                     // The order's own screens would show "not found" — leave them.
@@ -350,22 +357,23 @@ fun CancelSheet(state: LaundryState, orderId: Int, vm: ShopViewModel, onDismiss:
     val o = Selectors.order(state, orderId) ?: return onDismiss()
     val c = Selectors.customer(state, o.custId)
     var reason by remember { mutableStateOf("") }
-    val reasons = listOf("Customer not home", "Customer cancelled", "Wrong address", "Other")
-    val word = if (o.status == OrderStatus.CREATED) "pickup" else "order"
+    // Saved on the order in English (cancelReason); shown in the app's language.
+    val reasons = listOf(i18n("Customer not home"), i18n("Customer cancelled"), i18n("Wrong address"), i18n("Other"))
+    val isPickup = o.status == OrderStatus.CREATED
 
-    AppBottomSheet(title = "Cancel $word?", subtitle = "${c.name} · #${o.no()}", onDismiss = onDismiss) {
+    AppBottomSheet(title = if (isPickup) tr("Cancel pickup?") else tr("Cancel order?"), subtitle = "${c.name} · #${o.no()}", onDismiss = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                reasons.forEach { r -> PillChip(r, reason == r) { reason = if (reason == r) "" else r } }
+                reasons.forEach { r -> PillChip(tr(r), reason == r) { reason = if (reason == r) "" else r } }
             }
             if (o.status == OrderStatus.DELIVERED) {
-                Text("The bill comes off the khata. Money already taken stays as ${Selectors.firstName(c.name)}'s advance.", style = fig(13, color = Tokens.Muted))
+                Text(tr("The bill comes off the khata. Money already taken stays as {name}'s advance.", "name" to Selectors.firstName(c.name)), style = fig(13, color = Tokens.Muted))
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(Modifier.weight(1f).height(56.dp).rounded(14.dp).background(Tokens.NeutralFill).tap { onDismiss() }, contentAlignment = Alignment.Center) {
-                    Text("Keep order", style = fig(16, FontWeight.Bold, Tokens.InkSecondary))
+                    Text(tr("Keep order"), style = fig(16, FontWeight.Bold, Tokens.InkSecondary))
                 }
-                PrimaryButton("Cancel $word", Modifier.weight(1f), height = 56.dp, bg = Tokens.Orange) { vm.cancelOrder(orderId, reason); onDismiss() }
+                PrimaryButton(if (isPickup) tr("Cancel pickup") else tr("Cancel order"), Modifier.weight(1f), height = 56.dp, bg = Tokens.Orange) { vm.cancelOrder(orderId, reason); onDismiss() }
             }
         }
     }
@@ -378,14 +386,14 @@ fun BillViewSheet(state: LaundryState, orderId: Int, vm: ShopViewModel, onDismis
     val total = LaundryMath.amtOf(o)
     LaunchedEffect(orderId) { Analytics.billViewed(orderId) }
     // The exact image customers get, in the shop's chosen design.
-    val images by rememberBillImages(vm, listOf(BillReceipt.of(state, o)), equalHeight = false)
-    AppBottomSheet(title = "Bill #${o.no()}", subtitle = "${c.name} · this is what the customer sees", onDismiss = onDismiss) {
+    val images by rememberBillImages(vm, listOf(com.dailyworks.apnalaundry.core.I18n.english { BillReceipt.of(state, o) }), equalHeight = false)
+    AppBottomSheet(title = tr("Bill #{no}", "no" to o.no()), subtitle = tr("{name} · this is what the customer sees", "name" to c.name), onDismiss = onDismiss) {
         val img = images?.firstOrNull()
         if (img == null) {
             Box(Modifier.fillMaxWidth().height(420.dp).rounded(16.dp).background(Tokens.Card))
         } else {
             Image(
-                img, contentDescription = "Bill #${o.no()} · total ${Money.rupees(total)}",
+                img, contentDescription = tr("Bill #{no} · total {amount}", "no" to o.no(), "amount" to Money.rupees(total)),
                 modifier = Modifier.fillMaxWidth().rounded(16.dp).border(1.dp, Tokens.CardBorder, RoundedCornerShape(16.dp)),
                 contentScale = ContentScale.FillWidth,
             )
@@ -424,11 +432,11 @@ fun ChangeStatusSheet(
     val o = Selectors.order(state, orderId) ?: return onDismiss()
     val c = Selectors.customer(state, o.custId)
     val steps = buildList {
-        if (o.pickup == Route.HOME) add(OrderStatus.CREATED to "To pick up")
-        add(OrderStatus.RECEIVED to "Received · clothes at shop")
-        add(OrderStatus.READY to "Ready")
-        add(OrderStatus.DELIVERED to "Delivered")
-        add(OrderStatus.CANCELLED to "Cancelled")
+        if (o.pickup == Route.HOME) add(OrderStatus.CREATED to tr("To pick up"))
+        add(OrderStatus.RECEIVED to tr("Received · clothes at shop"))
+        add(OrderStatus.READY to tr("Ready"))
+        add(OrderStatus.DELIVERED to tr("Delivered"))
+        add(OrderStatus.CANCELLED to tr("Cancelled"))
     }
     var sel by remember {
         mutableStateOf(
@@ -458,7 +466,7 @@ fun ChangeStatusSheet(
         }
     }
 
-    AppBottomSheet(title = "Change status", subtitle = "${c.name} · #${o.no()}", onDismiss = onDismiss) {
+    AppBottomSheet(title = tr("Change status"), subtitle = "${c.name} · #${o.no()}", onDismiss = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             steps.forEach { (st, label) ->
                 val current = st == o.status
@@ -483,20 +491,22 @@ fun ChangeStatusSheet(
                             if (current) Tokens.Muted else if (danger) Tokens.OrangeText else Tokens.Ink),
                         modifier = Modifier.weight(1f),
                     )
-                    if (current) Text("Current", style = fig(12, FontWeight.Bold, Tokens.Muted))
+                    if (current) Text(tr("Current"), style = fig(12, FontWeight.Bold, Tokens.Muted))
                 }
             }
             if (o.status == OrderStatus.DELIVERED && sel != OrderStatus.DELIVERED) {
                 Text(
-                    "Going back takes the bill off the khata. Money already taken stays with the order and counts when you deliver again.",
+                    tr("Going back takes the bill off the khata. Money already taken stays with the order and counts when you deliver again."),
                     style = fig(13, color = Tokens.Muted),
                 )
             }
             PrimaryButton(
                 when (sel) {
-                    OrderStatus.DELIVERED -> if (o.lines.isEmpty()) "Count clothes · deliver" else "Mark delivered"
-                    OrderStatus.CANCELLED -> "Cancel order"
-                    else -> "Move to " + steps.first { it.first == sel }.second.substringBefore(" ·")
+                    OrderStatus.DELIVERED -> if (o.lines.isEmpty()) tr("Count clothes · deliver") else tr("Mark delivered")
+                    OrderStatus.CANCELLED -> tr("Cancel order")
+                    OrderStatus.CREATED -> tr("Move to To pick up")
+                    OrderStatus.RECEIVED -> tr("Move to Received")
+                    OrderStatus.READY -> tr("Move to Ready")
                 },
                 height = 56.dp, bg = if (sel == OrderStatus.CANCELLED) Tokens.Orange else Tokens.Blue,
                 enabled = sel != o.status,

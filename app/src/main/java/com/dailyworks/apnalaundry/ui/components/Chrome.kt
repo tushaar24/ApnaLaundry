@@ -36,6 +36,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.dailyworks.apnalaundry.core.i18n
+import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.ui.theme.Tokens
 
 @Composable
@@ -54,7 +56,7 @@ fun TopBar(
     ) {
         if (onBack != null) {
             Box(Modifier.size(44.dp).tap(onClick = onBack), contentAlignment = Alignment.Center) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Tokens.Ink, modifier = Modifier.size(24.dp))
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, tr("Back"), tint = Tokens.Ink, modifier = Modifier.size(24.dp))
             }
         }
         Text(title, style = bric(22, FontWeight.Bold), modifier = Modifier.weight(1f))
@@ -79,11 +81,12 @@ fun AppCard(
     ) { content() }
 }
 
+/** [label] is English; shown with tr(label). */
 enum class NavTab(val label: String, val icon: ImageVector) {
-    ORDERS("Orders", Icons.AutoMirrored.Outlined.ReceiptLong),
-    CUSTOMERS("Customers", Icons.Outlined.People),
-    EARNINGS("Earnings", Icons.Outlined.BarChart),
-    SETTINGS("Settings", Icons.Outlined.Settings),
+    ORDERS(i18n("Orders"), Icons.AutoMirrored.Outlined.ReceiptLong),
+    CUSTOMERS(i18n("Customers"), Icons.Outlined.People),
+    EARNINGS(i18n("Earnings"), Icons.Outlined.BarChart),
+    SETTINGS(i18n("Settings"), Icons.Outlined.Settings),
 }
 
 @Composable
@@ -114,8 +117,8 @@ fun BottomNav(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
-                Icon(tab.icon, tab.label, tint = color, modifier = Modifier.size(24.dp))
-                Text(tab.label, style = fig(11, if (selected) FontWeight.Bold else FontWeight.SemiBold, color), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Icon(tab.icon, tr(tab.label), tint = color, modifier = Modifier.size(24.dp))
+                Text(tr(tab.label), style = fig(11, if (selected) FontWeight.Bold else FontWeight.SemiBold, color), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }
@@ -137,7 +140,7 @@ fun ToastBar(text: String, hasUndo: Boolean, onUndo: () -> Unit, modifier: Modif
             Box(
                 Modifier.heightIn(min = 48.dp).widthIn(min = 64.dp).rounded(10.dp).tap(onClick = onUndo).padding(horizontal = 12.dp),
                 contentAlignment = Alignment.Center,
-            ) { Text("Undo", style = fig(15, FontWeight.Bold, Tokens.BlueBar), maxLines = 1, softWrap = false) }
+            ) { Text(tr("Undo"), style = fig(15, FontWeight.Bold, Tokens.BlueBar), maxLines = 1, softWrap = false) }
         }
     }
 }
@@ -161,8 +164,8 @@ fun WhatsAppPromptDialog(
                 Modifier.weight(1f, fill = false).verticalScroll(androidx.compose.foundation.rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                Text("Tell the customer?", style = bric(22, FontWeight.Bold))
-                Text("Send this update on WhatsApp:", style = fig(14, color = Tokens.Muted))
+                Text(tr("Tell the customer?"), style = bric(22, FontWeight.Bold))
+                Text(tr("Send this update on WhatsApp:"), style = fig(14, color = Tokens.Muted))
                 Box(
                     Modifier.fillMaxWidth().heightIn(max = if (tip != null) 140.dp else 260.dp).rounded(14.dp)
                         .background(androidx.compose.ui.graphics.Color(0xFFE7F8EE))
@@ -176,12 +179,12 @@ fun WhatsAppPromptDialog(
                     Modifier.weight(1f).fillMaxHeight().heightIn(min = 48.dp).rounded(14.dp).background(Tokens.NeutralFill).tap(onClick = onDismiss)
                         .padding(horizontal = 8.dp, vertical = 6.dp),
                     contentAlignment = Alignment.Center,
-                ) { Text("Not now", style = fig(15, FontWeight.Bold, Tokens.InkSecondary), textAlign = TextAlign.Center, maxLines = 2) }
+                ) { Text(tr("Not now"), style = fig(15, FontWeight.Bold, Tokens.InkSecondary), textAlign = TextAlign.Center, maxLines = 2) }
                 Box(
                     Modifier.weight(1.4f).fillMaxHeight().heightIn(min = 48.dp).rounded(14.dp).background(androidx.compose.ui.graphics.Color(0xFF25D366)).tap(onClick = onSend)
                         .padding(horizontal = 8.dp, vertical = 6.dp),
                     contentAlignment = Alignment.Center,
-                ) { Text("Send on WhatsApp", style = fig(15, FontWeight.Bold, androidx.compose.ui.graphics.Color.White), textAlign = TextAlign.Center, maxLines = 2) }
+                ) { Text(tr("Send on WhatsApp"), style = fig(15, FontWeight.Bold, androidx.compose.ui.graphics.Color.White), textAlign = TextAlign.Center, maxLines = 2) }
             }
         }
     }

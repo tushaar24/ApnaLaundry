@@ -44,6 +44,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.core.Money
+import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.domain.Customer
 import com.dailyworks.apnalaundry.ui.Selectors
 import com.dailyworks.apnalaundry.ui.ShopViewModel
@@ -107,17 +108,17 @@ fun CustomersScreen(shopVm: ShopViewModel, navigator: AppNavigator, initialFilte
     Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars)) {
         Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Customers", style = bric(24, FontWeight.Bold), maxLines = 1)
-                Text(Selectors.countNoun(state.customers.size, "customer"), style = fig(13, color = Tokens.Muted), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(bottom = 3.dp))
+                Text(tr("Customers"), style = bric(24, FontWeight.Bold), maxLines = 1)
+                Text(if (state.customers.size == 1) tr("{n} customer", "n" to state.customers.size) else tr("{n} customers", "n" to state.customers.size), style = fig(13, color = Tokens.Muted), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(bottom = 3.dp))
             }
             if (!noCustomers) {
-                FieldBox(query, { query = it }, placeholder = "Search name or phone", height = 48.dp, leading = {
+                FieldBox(query, { query = it }, placeholder = tr("Search name or phone"), height = 48.dp, leading = {
                     Icon(Icons.Outlined.Search, null, tint = Tokens.Muted, modifier = Modifier.size(20.dp))
                 })
                 Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterTile("All", Money.grouping(state.customers.size.toLong()), "customers", Tokens.Ink, filter == "all", Modifier.weight(1f).fillMaxHeight()) { filter = "all" }
-                    FilterTile("Khata", Money.rupees(sumOwe), "${owe.size} to collect", Tokens.OrangeText, filter == "baaki", Modifier.weight(1f).fillMaxHeight().spotlightTarget(targets, "khata_tile")) { filter = if (filter == "baaki") "all" else "baaki" }
-                    FilterTile("Advance", Money.rupees(sumAdv), "${adv.size} paid extra", Tokens.BlueText, filter == "advance", Modifier.weight(1f).fillMaxHeight()) { filter = if (filter == "advance") "all" else "advance" }
+                    FilterTile(tr("All"), Money.grouping(state.customers.size.toLong()), tr("customers"), Tokens.Ink, filter == "all", Modifier.weight(1f).fillMaxHeight()) { filter = "all" }
+                    FilterTile(tr("Khata"), Money.rupees(sumOwe), tr("{n} to collect", "n" to owe.size), Tokens.OrangeText, filter == "baaki", Modifier.weight(1f).fillMaxHeight().spotlightTarget(targets, "khata_tile")) { filter = if (filter == "baaki") "all" else "baaki" }
+                    FilterTile(tr("Advance"), Money.rupees(sumAdv), tr("{n} paid extra", "n" to adv.size), Tokens.BlueText, filter == "advance", Modifier.weight(1f).fillMaxHeight()) { filter = if (filter == "advance") "all" else "advance" }
                 }
             }
         }
@@ -142,8 +143,8 @@ fun CustomersScreen(shopVm: ShopViewModel, navigator: AppNavigator, initialFilte
                 if (list.isEmpty()) {
                     item {
                         Column(Modifier.fillMaxWidth().padding(top = 40.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text(if (q.isNotEmpty()) "No customer found for “$q”" else "No customers here", style = fig(16, FontWeight.SemiBold), textAlign = TextAlign.Center)
-                            val label = if (q.isNotEmpty()) (if (qd.length >= 3) "Add customer with this number" else "Add “${q.replaceFirstChar { it.uppercase() }}” as customer") else "Add customer"
+                            Text(if (q.isNotEmpty()) tr("No customer found for “{query}”", "query" to q) else tr("No customers here"), style = fig(16, FontWeight.SemiBold), textAlign = TextAlign.Center)
+                            val label = if (q.isNotEmpty()) (if (qd.length >= 3) tr("Add customer with this number") else tr("Add “{name}” as customer", "name" to q.replaceFirstChar { it.uppercase() })) else tr("Add customer")
                             Box(Modifier.rounded(12.dp).background(Tokens.Blue).tap {
                                 active = ActiveSheet.CustomerForm(editId = null, ctx = "list", trigger = "list_with_query", prefillName = if (qd.length >= 3) "" else q.replaceFirstChar { it.uppercase() }, prefillPhone = if (qd.length >= 3) qd.takeLast(10) else "")
                             }.heightIn(min = 48.dp).padding(horizontal = 20.dp, vertical = 12.dp), contentAlignment = Alignment.Center) {
@@ -159,7 +160,7 @@ fun CustomersScreen(shopVm: ShopViewModel, navigator: AppNavigator, initialFilte
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Icon(Icons.Filled.Add, null, tint = Tokens.OnDark, modifier = Modifier.size(22.dp))
-                Text("Add customer", style = fig(16, FontWeight.Bold, Tokens.OnDark))
+                Text(tr("Add customer"), style = fig(16, FontWeight.Bold, Tokens.OnDark))
             }
         }
         BottomNav(current = NavTab.CUSTOMERS, itemModifier = { Modifier.spotlightTarget(targets, "nav_${it.name}") }, onSelect = navigator::selectTab)
@@ -169,12 +170,12 @@ fun CustomersScreen(shopVm: ShopViewModel, navigator: AppNavigator, initialFilte
         TourStage.KHATA -> when {
             noCustomers || khataStep == 0 -> Spotlight(
                 targets, "khata_tile", TourSteps.khataTile,
-                next = "Next", onNext = { if (noCustomers) shopVm.tourKhataDone() else khataStep = 1 },
+                next = tr("Next"), onNext = { if (noCustomers) shopVm.tourKhataDone() else khataStep = 1 },
                 onSkip = { shopVm.tourSkip(TourSteps.khataTile) },
             )
             else -> Spotlight(
                 targets, "khata_row", TourSteps.khataCustomer,
-                next = "Next", onNext = { shopVm.tourKhataDone() },
+                next = tr("Next"), onNext = { shopVm.tourKhataDone() },
                 onSkip = { shopVm.tourSkip(TourSteps.khataCustomer) },
             )
         }
@@ -196,14 +197,14 @@ private fun NoCustomers(modifier: Modifier, onAdd: () -> Unit) {
             Icon(Icons.Outlined.Groups, null, tint = Tokens.Blue, modifier = Modifier.size(44.dp))
         }
         Spacer(Modifier.height(20.dp))
-        Text("You have no customers added", style = bric(22, FontWeight.Bold), textAlign = TextAlign.Center)
+        Text(tr("You have no customers added"), style = bric(22, FontWeight.Bold), textAlign = TextAlign.Center)
         Spacer(Modifier.height(8.dp))
         Text(
-            "Add your customer's name and phone number once. Next time, just search and take their order.",
+            tr("Add your customer's name and phone number once. Next time, just search and take their order."),
             style = fig(15, color = Tokens.Muted), textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(24.dp))
-        PrimaryButton("Add customers", height = 56.dp, onClick = onAdd)
+        PrimaryButton(tr("Add customers"), height = 56.dp, onClick = onAdd)
     }
 }
 
@@ -234,14 +235,17 @@ private fun CustomerRow(state: com.dailyworks.apnalaundry.domain.LaundryState, c
                 Text(c.name, style = fig(16, FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 // The phone first: on a narrow phone it's the order history that gets cut.
                 Text(
-                    Selectors.fmtPhone(c.phone) + " · " + (if (count > 0) "Last order ${c.lastLabel} · $count orders" else "New customer"),
+                    Selectors.fmtPhone(c.phone) + " · " + (if (count > 0) tr("Last order {when} · {n} orders", "when" to lastLabel(c), "n" to count) else tr("New customer")),
                     style = fig(13, color = Tokens.Muted), maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
             }
             Column(horizontalAlignment = Alignment.End) {
                 if (bal != 0) Text(Money.rupees(bal), style = fig(16, FontWeight.Bold, avFg), maxLines = 1, softWrap = false)
-                Text(if (bal > 0) "khata" else if (bal < 0) "advance" else "All clear", style = fig(12, color = avFg), maxLines = 1, softWrap = false)
+                Text(if (bal > 0) tr("khata") else if (bal < 0) tr("advance") else tr("All clear"), style = fig(12, color = avFg), maxLines = 1, softWrap = false)
             }
         }
     }
 }
+
+/** The stored "Last order …" label: "Today" is the app's word (shown in the app's language); a date stays as stored. */
+private fun lastLabel(c: Customer): String = if (c.lastLabel == "Today") tr("Today") else c.lastLabel

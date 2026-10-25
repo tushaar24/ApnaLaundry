@@ -29,6 +29,8 @@ class ApnaLaundryApp : Application() {
         // (no-ops until the manifest account id/token are set).
         Analytics.registerLifecycle(this)
         super.onCreate()
+        // The language picked on this phone (English until one is), before any screen draws.
+        com.dailyworks.apnalaundry.core.I18n.init(this)
         CrashReporting.init()
         Analytics.init(this)
         MetaEvents.init(this)

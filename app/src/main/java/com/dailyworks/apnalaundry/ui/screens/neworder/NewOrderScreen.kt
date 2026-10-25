@@ -68,6 +68,7 @@ import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.data.experiments.CustomerFlow
 import com.dailyworks.apnalaundry.core.AppDate
 import com.dailyworks.apnalaundry.core.Money
+import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.domain.BillDetails
 import com.dailyworks.apnalaundry.domain.Gst
 import com.dailyworks.apnalaundry.domain.LaundryMath
@@ -338,11 +339,11 @@ fun NewOrderScreen(
     val needsClothes = editId == null && empty
     val ready = cust != null && (!anyHome || (cust.address.isNotBlank())) && !needsClothes
     val ctaLabel = when {
-        cust == null -> "Choose a customer"
-        anyHome && cust.address.isBlank() -> "Add address first"
-        editId != null -> "Save changes"
-        needsClothes -> "Add clothes first"
-        else -> "Save & make bill"
+        cust == null -> tr("Choose a customer")
+        anyHome && cust.address.isBlank() -> tr("Add address first")
+        editId != null -> tr("Save changes")
+        needsClothes -> tr("Add clothes first")
+        else -> tr("Save & make bill")
     }
 
     // Leaving without saving (back, or Home from a notification) → "New Order Abandoned".
@@ -372,7 +373,7 @@ fun NewOrderScreen(
 
     Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.statusBars).imePadding()) {
         TopBar(
-            title = if (editId != null) "Edit order" else "New order",
+            title = if (editId != null) tr("Edit order") else tr("New order"),
             onBack = { navigator.back() },
             trailing = { if (editingOrder != null) Text("#${editingOrder.no()}", style = fig(14, color = Tokens.Muted)) },
         )
@@ -385,13 +386,13 @@ fun NewOrderScreen(
             val serialFocus = remember { FocusRequester() }
             FieldBox(
                 serialText, { serialTouched = true; serialText = it.filter { c -> c.isLetterOrDigit() && c.code < 128 || c in "_/-" }.take(12) },
-                prefix = "# Serial no.", height = 48.dp,
+                prefix = tr("# Serial no."), height = 48.dp,
                 fieldModifier = Modifier.focusRequester(serialFocus),
-                trailing = { EditIcon("Edit serial no.") { serialFocus.requestFocus() } },
+                trailing = { EditIcon(tr("Edit serial no.")) { serialFocus.requestFocus() } },
             )
             // ---- customer ----
             Column(Modifier.tourTarget(targets, tourScroll, TOUR_CUSTOMER), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SectionLabel("Customer")
+                SectionLabel(tr("Customer"))
                 if (cust != null) {
                     Row(
                         Modifier.fillMaxWidth().rounded(14.dp).background(Tokens.BlueLight)
@@ -404,11 +405,11 @@ fun NewOrderScreen(
                             Text(cust.name, style = fig(16, FontWeight.Bold))
                             val bal = Selectors.balance(state, cust.id)
                             val meta = Selectors.fmtPhone(cust.phone) +
-                                " · ${if (Selectors.orderCount(state, cust) > 0) Selectors.countNoun(Selectors.orderCount(state, cust), "order") else "New customer"}" +
-                                (if (bal > 0) " · ${Money.rupees(bal)} baaki" else "")
+                                " · ${if (Selectors.orderCount(state, cust) > 0) ordersText(Selectors.orderCount(state, cust)) else tr("New customer")}" +
+                                (if (bal > 0) " · ${tr("{amount} baaki", "amount" to Money.rupees(bal))}" else "")
                             Text(meta, style = fig(13, color = Tokens.InkSecondary))
                         }
-                        if (editId == null) Text("Change", style = fig(14, FontWeight.Bold, Tokens.Blue), modifier = Modifier.tap { custId = null; query = "" })
+                        if (editId == null) Text(tr("Change"), style = fig(14, FontWeight.Bold, Tokens.Blue), modifier = Modifier.tap { custId = null; query = "" })
                     }
                 } else {
                     val q = query.trim()
@@ -419,8 +420,8 @@ fun NewOrderScreen(
                         FieldBox(query, {
                             if (!searchLogged && it.isNotBlank()) { searchLogged = true; Analytics.customerSearchUsed() }
                             query = it
-                        }, placeholder = "Search name or phone number", height = 52.dp, borderColor = Color.Transparent, borderWidth = 0.dp)
-                        if (q.isEmpty()) SectionLabel("Recent customers", Modifier.padding(start = 14.dp, top = 6.dp))
+                        }, placeholder = tr("Search name or phone number"), height = 52.dp, borderColor = Color.Transparent, borderWidth = 0.dp)
+                        if (q.isEmpty()) SectionLabel(tr("Recent customers"), Modifier.padding(start = 14.dp, top = 6.dp))
                         results.forEach { r ->
                             Row(Modifier.fillMaxWidth().tap {
                                 Analytics.customerSelected(if (q.isEmpty()) "recent" else "search", q.length)
@@ -432,11 +433,11 @@ fun NewOrderScreen(
                                     Text(r.name, style = fig(15, FontWeight.Bold))
                                     Text(Selectors.fmtPhone(r.phone), style = fig(13, color = Tokens.Muted))
                                 }
-                                Text(if (Selectors.orderCount(state, r) > 0) Selectors.countNoun(Selectors.orderCount(state, r), "order") else "New", style = fig(12, color = Tokens.Muted))
+                                Text(if (Selectors.orderCount(state, r) > 0) ordersText(Selectors.orderCount(state, r)) else tr("New"), style = fig(12, color = Tokens.Muted))
                             }
                         }
                         Box(Modifier.padding(10.dp)) {
-                            val label = if (q.isEmpty()) "Add new customer" else "Add “$q” as new customer"
+                            val label = if (q.isEmpty()) tr("Add new customer") else tr("Add “{name}” as new customer", "name" to q)
                             Box(
                                 Modifier.fillMaxWidth().heightIn(min = 48.dp).rounded(12.dp).border(1.5.dp, Tokens.Blue, RoundedCornerShape(12.dp))
                                     .tap {
@@ -462,22 +463,22 @@ fun NewOrderScreen(
                     Analytics.orderRouteChanged(leg, if (to == Route.HOME) "home" else "shop", cust != null, cust?.address?.isNotBlank() == true)
                     if (noAddress && to == Route.HOME && cust != null && cust.address.isBlank()) askAddress(cust.id, "route")
                 }
-                RouteChoice("Pickup", pickup, "At shop", "From home") { if (it != pickup) { pickup = it; routeChanged("pickup", it) } }
-                RouteChoice("Delivery", delivery, "At shop", "To home") { if (it != delivery) { delivery = it; routeChanged("delivery", it) } }
+                RouteChoice(tr("Pickup"), pickup, tr("At shop"), tr("From home")) { if (it != pickup) { pickup = it; routeChanged("pickup", it) } }
+                RouteChoice(tr("Delivery"), delivery, tr("At shop"), tr("To home")) { if (it != delivery) { delivery = it; routeChanged("delivery", it) } }
                 if (anyHome) {
                     AppCard {
                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
-                                    Text("Address", style = fig(13, FontWeight.Bold, Tokens.InkSecondary))
-                                    Text(cust?.address?.ifBlank { "No address saved yet" } ?: "Choose a customer first", style = fig(14, color = if (cust?.address?.isNotBlank() == true) Tokens.InkSecondary else Tokens.OrangeText))
+                                    Text(tr("Address"), style = fig(13, FontWeight.Bold, Tokens.InkSecondary))
+                                    Text(cust?.address?.ifBlank { tr("No address saved yet") } ?: tr("Choose a customer first"), style = fig(14, color = if (cust?.address?.isNotBlank() == true) Tokens.InkSecondary else Tokens.OrangeText))
                                 }
-                                if (cust != null) Text(if (cust.address.isNotBlank()) "Change" else "Add", style = fig(14, FontWeight.Bold, Tokens.Blue), modifier = Modifier.tap {
+                                if (cust != null) Text(if (cust.address.isNotBlank()) tr("Change") else tr("Add"), style = fig(14, FontWeight.Bold, Tokens.Blue), modifier = Modifier.tap {
                                     if (noAddress) askAddress(cust.id, "address_card")
                                     else active = ActiveSheet.CustomerForm(editId = cust.id, ctx = "order", needAddress = true, trigger = "address_card", onSaved = { custId = it })
                                 })
                             }
-                            FieldBox(feeText, { feeText = it.filter { c -> c.isDigit() }.take(4) }, prefix = "₹", placeholder = "Pickup / delivery charge (optional)", height = 48.dp, keyboardType = KeyboardType.Number)
+                            FieldBox(feeText, { feeText = it.filter { c -> c.isDigit() }.take(4) }, prefix = "₹", placeholder = tr("Pickup / delivery charge (optional)"), height = 48.dp, keyboardType = KeyboardType.Number)
                         }
                     }
                 }
@@ -486,7 +487,7 @@ fun NewOrderScreen(
             // ---- dates ----
             Column(Modifier.tourTarget(targets, tourScroll, TOUR_DATES), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 DateRow(
-                    label = "Pickup",
+                    label = tr("Pickup"),
                     seedIso = pickupDate,
                     dateText = AppDate.short(pickupDate),
                     dateIsSet = true,
@@ -498,9 +499,9 @@ fun NewOrderScreen(
                 )
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     DateRow(
-                        label = "Delivery",
+                        label = tr("Delivery"),
                         seedIso = if (dropIso.isNotBlank()) dropIso else AppDate.add(pickupDate, 1),
-                        dateText = if (dropIso.isNotBlank()) AppDate.short(dropIso) else "Add date (optional)",
+                        dateText = if (dropIso.isNotBlank()) AppDate.short(dropIso) else tr("Add date (optional)"),
                         dateIsSet = dropIso.isNotBlank(),
                         minIso = pickupDate,
                         time24 = deliveryTime,
@@ -508,15 +509,15 @@ fun NewOrderScreen(
                         onPickTime = { deliveryTime = it },
                     )
                     val hint = when {
-                        cleared -> "No delivery date. You can set it later from the ⋯ menu."
-                        manual -> "You set this date."
-                        basis != null -> "Set automatically: ${basis.name} is ready ${tatText(basis.readyInDays ?: 0)}."
-                        else -> "Optional — leave empty if you don't know yet."
+                        cleared -> tr("No delivery date. You can set it later from the ⋯ menu.")
+                        manual -> tr("You set this date.")
+                        basis != null -> autoDateHint(basis.name, basis.readyInDays ?: 0)
+                        else -> tr("Optional — leave empty if you don't know yet.")
                     }
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(hint, style = fig(13, color = Tokens.Muted), modifier = Modifier.weight(1f))
-                        if (dropIso.isNotBlank()) Text("Remove date", style = fig(13, FontWeight.Bold, Tokens.Blue), modifier = Modifier.tap { nDD = "none" })
-                        else if (cleared) Text("Use automatic", style = fig(13, FontWeight.Bold, Tokens.Blue), modifier = Modifier.tap { nDD = "" })
+                        if (dropIso.isNotBlank()) Text(tr("Remove date"), style = fig(13, FontWeight.Bold, Tokens.Blue), modifier = Modifier.tap { nDD = "none" })
+                        else if (cleared) Text(tr("Use automatic"), style = fig(13, FontWeight.Bold, Tokens.Blue), modifier = Modifier.tap { nDD = "" })
                     }
                 }
             }
@@ -524,13 +525,13 @@ fun NewOrderScreen(
             // ---- clothes ----
             Column(Modifier.tourTarget(targets, tourScroll, TOUR_CLOTHES), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(Modifier.fillMaxWidth().padding(end = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                    SectionLabel("Clothes")
+                    SectionLabel(tr("Clothes"))
                     Row(
                         Modifier.height(36.dp).rounded(999.dp).background(Tokens.BlueLight).tap { editingRates = true }.padding(horizontal = 14.dp),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         Icon(Icons.Outlined.Edit, null, tint = Tokens.Blue, modifier = Modifier.size(16.dp))
-                        Text("Edit services", style = fig(13, FontWeight.Bold, Tokens.Blue))
+                        Text(tr("Edit services"), style = fig(13, FontWeight.Bold, Tokens.Blue))
                     }
                 }
                 ClothesEditor(services, clothes, editablePrice = true, onAddItem = { svc, name, price ->
@@ -540,18 +541,18 @@ fun NewOrderScreen(
                     else svc.items + ServiceItem(name, price)
                     shopVm.upsertService(svc.copy(items = items))
                     clothes.bump(svc.id, name, 1)
-                    shopVm.showInfo("$name · ₹$price added to ${svc.name}")
+                    shopVm.showInfo(tr("{item} · {amount} added to {service}", "item" to name, "amount" to "₹$price", "service" to svc.name))
                 })
                 if (showQuickBox) {
                     AppCard {
                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                Text("Quick bill", style = fig(15, FontWeight.Bold), modifier = Modifier.weight(1f))
-                                Text("Remove", style = fig(13, FontWeight.Bold, Tokens.Blue), modifier = Modifier.tap { showQuickBox = false; quickAmt = ""; quickPcs = "" })
+                                Text(tr("Quick bill"), style = fig(15, FontWeight.Bold), modifier = Modifier.weight(1f))
+                                Text(tr("Remove"), style = fig(13, FontWeight.Bold, Tokens.Blue), modifier = Modifier.tap { showQuickBox = false; quickAmt = ""; quickPcs = "" })
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                FieldBox(quickAmt, { quickAmt = it.filter { c -> c.isDigit() }.take(6) }, prefix = "₹", placeholder = "Amount", modifier = Modifier.weight(1f), height = 48.dp, keyboardType = KeyboardType.Number)
-                                FieldBox(quickPcs, { quickPcs = it.filter { c -> c.isDigit() }.take(3) }, placeholder = "Pieces", modifier = Modifier.weight(1f), height = 48.dp, keyboardType = KeyboardType.Number)
+                                FieldBox(quickAmt, { quickAmt = it.filter { c -> c.isDigit() }.take(6) }, prefix = "₹", placeholder = tr("Amount"), modifier = Modifier.weight(1f), height = 48.dp, keyboardType = KeyboardType.Number)
+                                FieldBox(quickPcs, { quickPcs = it.filter { c -> c.isDigit() }.take(3) }, placeholder = tr("Pieces"), modifier = Modifier.weight(1f), height = 48.dp, keyboardType = KeyboardType.Number)
                             }
                         }
                     }
@@ -560,28 +561,28 @@ fun NewOrderScreen(
 
             // ---- extras ----
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                SectionLabel("Extras")
+                SectionLabel(tr("Extras"))
                 ExtraCard(
-                    title = "Express order", sub = "Washed first · charge extra", accent = Tokens.Orange, titleColor = Tokens.OrangeText,
+                    title = tr("Express order"), sub = tr("Washed first · charge extra"), accent = Tokens.Orange, titleColor = Tokens.OrangeText,
                     on = express, onToggle = { express = !express },
                     isPct = exIsPct, onMode = { exIsPct = it },
                     value = if (exIsPct) exPctText else exAmtText,
                     onChange = { if (exIsPct) exPctText = it else exAmtText = it },
                     effect = when {
-                        exAmt > 0 -> "Adds ${Money.rupees(exAmt)} to the bill"
-                        exIsPct && clothesTotal == 0 -> "Worked out from the clothes once they're counted"
-                        else -> "Type the express charge"
+                        exAmt > 0 -> tr("Adds {amount} to the bill", "amount" to Money.rupees(exAmt))
+                        exIsPct && clothesTotal == 0 -> tr("Worked out from the clothes once they're counted")
+                        else -> tr("Type the express charge")
                     },
                 )
                 ExtraCard(
-                    title = "Discount", sub = "Take money off this bill", accent = Green, titleColor = Green,
+                    title = tr("Discount"), sub = tr("Take money off this bill"), accent = Green, titleColor = Green,
                     on = discOn, onToggle = { discOn = !discOn; discountText = "" },
                     isPct = discIsPct, onMode = { discIsPct = it; discountText = "" },
                     value = discountText, onChange = { discountText = it },
                     effect = when {
-                        discount > 0 -> "Takes ${Money.rupees(discount)} off the bill"
-                        discIsPct && clothesTotal == 0 -> "Worked out from the clothes once they're counted"
-                        else -> "Type the discount"
+                        discount > 0 -> tr("Takes {amount} off the bill", "amount" to Money.rupees(discount))
+                        discIsPct && clothesTotal == 0 -> tr("Worked out from the clothes once they're counted")
+                        else -> tr("Type the discount")
                     },
                 )
                 GstCard(
@@ -590,18 +591,18 @@ fun NewOrderScreen(
                     pctText = gstPctText, onPct = { changeGst(pctText = it) },
                     hint = Gst.hint(gstOn, gstPct, gstMode),
                     noGstin = gstOn && !BillDetails.isGstinValid(state.shop.gstin),
-                    footnote = if (editId != null) "Changes here apply to this order only." else "Saved for your next orders. You can change it on any order.",
+                    footnote = if (editId != null) tr("Changes here apply to this order only.") else tr("Saved for your next orders. You can change it on any order."),
                 )
             }
 
             // ---- note ----
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SectionLabel("Note")
+                SectionLabel(tr("Note"))
                 Box(
                     Modifier.fillMaxWidth().heightIn(min = 72.dp).rounded(12.dp).background(Tokens.Card)
                         .border(1.5.dp, Tokens.FieldBorder, RoundedCornerShape(12.dp)).padding(horizontal = 14.dp, vertical = 12.dp),
                 ) {
-                    if (note.isEmpty()) Text("Optional — e.g. Starch the shirts, stain on the collar", style = fig(16, color = Tokens.Faint))
+                    if (note.isEmpty()) Text(tr("Optional — e.g. Starch the shirts, stain on the collar"), style = fig(16, color = Tokens.Faint))
                     androidx.compose.foundation.text.BasicTextField(
                         value = note,
                         onValueChange = { note = it.take(500) },
@@ -619,17 +620,17 @@ fun NewOrderScreen(
             if (clothesTotal > 0) {
                 AppCard {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        BillLine("Clothes", Money.rupees(clothesTotal))
-                        if (exAmt > 0) BillLine("Express", "+ ${Money.rupees(exAmt)}")
-                        if (fee > 0) BillLine("Pickup / delivery", "+ ${Money.rupees(fee)}")
-                        if (discount > 0) BillLine("Discount", "− ${Money.rupees(discount)}", Tokens.OrangeText)
+                        BillLine(tr("Clothes"), Money.rupees(clothesTotal))
+                        if (exAmt > 0) BillLine(tr("Express"), "+ ${Money.rupees(exAmt)}")
+                        if (fee > 0) BillLine(tr("Pickup / delivery"), "+ ${Money.rupees(fee)}")
+                        if (discount > 0) BillLine(tr("Discount"), "− ${Money.rupees(discount)}", Tokens.OrangeText)
                         if (gst.on && gst.mode == Gst.EXCL) {
                             BillLine(Gst.rowLabel(gst), Gst.rowValue(gst))
-                            if (gst.roundOffPaise != 0L) BillLine("Round off", Gst.roundOffValue(gst))
+                            if (gst.roundOffPaise != 0L) BillLine(tr("Round off"), Gst.roundOffValue(gst))
                         }
                         Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Divider))
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("Total", style = fig(16, FontWeight.Bold))
+                            Text(tr("Total"), style = fig(16, FontWeight.Bold))
                             Text(Money.rupees(grand), style = bric(22, FontWeight.Bold))
                         }
                         if (gst.on && gst.mode == Gst.INCL) Text(Gst.inclusiveLine(gst), style = fig(12, color = Tokens.Muted))
@@ -699,9 +700,9 @@ fun NewOrderScreen(
                 targets, "tour_$tourStep", step,
                 next = when (tourStep) {
                     TOUR_CUSTOMER -> null // the owner taps the real thing
-                    TOUR_SAVE -> if (ready) null else "Go back"
-                    TOUR_CLOTHES -> if (empty) null else "Done" // an order needs clothes
-                    else -> "Next"
+                    TOUR_SAVE -> if (ready) null else tr("Go back")
+                    TOUR_CLOTHES -> if (empty) null else tr("Done") // an order needs clothes
+                    else -> tr("Next")
                 },
                 onNext = {
                     tourStep = when {
@@ -747,7 +748,15 @@ private const val TOUR_SAVE = 4
 private fun Modifier.tourTarget(targets: SpotlightTargets, scroll: List<BringIntoViewRequester>, step: Int): Modifier =
     bringIntoViewRequester(scroll[step]).spotlightTarget(targets, "tour_$step")
 
-private fun tatText(n: Int): String = when (n) { 0 -> "same day"; 1 -> "in 1 day"; else -> "in $n days" }
+/** The delivery date hint when a service's "Ready in" set it: whole sentences, so each language can order the words. */
+private fun autoDateHint(service: String, n: Int): String = when (n) {
+    0 -> tr("Set automatically: {service} is ready same day.", "service" to service)
+    1 -> tr("Set automatically: {service} is ready in 1 day.", "service" to service)
+    else -> tr("Set automatically: {service} is ready in {n} days.", "service" to service, "n" to n)
+}
+
+/** "1 order" / "5 orders". */
+private fun ordersText(n: Int): String = if (n == 1) tr("{n} order", "n" to n) else tr("{n} orders", "n" to n)
 
 @Composable
 private fun Avatar(initials: String, small: Boolean = false) {
@@ -812,7 +821,7 @@ private fun DateRow(
                 modifier = m,
                 icon = Icons.Outlined.Schedule,
                 iconTint = if (time24.isNotBlank()) Tokens.InkSecondary else Tokens.Muted,
-                text = if (time24.isNotBlank()) AppDate.to12h(time24) else "Add time",
+                text = if (time24.isNotBlank()) AppDate.to12h(time24) else tr("Add time"),
                 isSet = time24.isNotBlank(),
             ) { showTimePicker(context, time24, onPickTime) }
         }
@@ -915,7 +924,7 @@ private fun ExtraCard(
                 Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Divider))
                 Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(Modifier.fillMaxWidth().rounded(12.dp).background(Tokens.SegTrack).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        listOf(true to "Perc %", false to "Fixed ₹").forEach { (pct, label) ->
+                        listOf(true to tr("Perc %"), false to tr("Fixed ₹")).forEach { (pct, label) ->
                             val sel = isPct == pct
                             Box(
                                 Modifier.weight(1f).height(40.dp).rounded(9.dp).background(if (sel) Tokens.Card else Color.Transparent).tap { onMode(pct) },
@@ -926,7 +935,7 @@ private fun ExtraCard(
                     FieldBox(
                         value, { onChange(it.filter { c -> c.isDigit() }.take(if (isPct) 3 else 5)) },
                         prefix = if (isPct) null else "₹", suffix = if (isPct) "%" else null,
-                        placeholder = if (isPct) "e.g. 50" else "e.g. 100",
+                        placeholder = if (isPct) tr("e.g. 50") else tr("e.g. 100"),
                         height = 48.dp, keyboardType = KeyboardType.Number,
                     )
                     Text(effect, style = fig(13, FontWeight.SemiBold, if (value.isNotEmpty()) accent else Tokens.Muted))
@@ -953,7 +962,7 @@ private fun GstCard(
         Column(Modifier.fillMaxWidth()) {
             Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("GST", style = fig(15, FontWeight.Bold))
+                    Text(tr("GST"), style = fig(15, FontWeight.Bold))
                     Text(hint, style = fig(13, color = Tokens.Muted))
                 }
                 Toggle(on) { onToggle() }
@@ -964,8 +973,8 @@ private fun GstCard(
                     // Exclusive / Inclusive
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf(
-                            Triple(Gst.EXCL, "Exclusive", "Add GST on top"),
-                            Triple(Gst.INCL, "Inclusive", "GST is in my price"),
+                            Triple(Gst.EXCL, tr("Exclusive"), tr("Add GST on top")),
+                            Triple(Gst.INCL, tr("Inclusive"), tr("GST is in my price")),
                         ).forEach { (m, label, sub) ->
                             val sel = mode == m
                             Column(
@@ -983,7 +992,7 @@ private fun GstCard(
                     }
                     // Rate: quick chips or a typed %
                     FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("GST rate", style = fig(14, FontWeight.Bold), modifier = Modifier.align(Alignment.CenterVertically).padding(end = 4.dp))
+                        Text(tr("GST rate"), style = fig(14, FontWeight.Bold), modifier = Modifier.align(Alignment.CenterVertically).padding(end = 4.dp))
                         Gst.RATE_CHIPS.forEach { r -> PillChip("${Gst.fmtPct(r)}%", selected = pct == r) { onPct(Gst.fmtPct(r)) } }
                         FieldBox(
                             pctText, { onPct(it.filter { c -> c.isDigit() || c == '.' }.take(5)) },
@@ -993,7 +1002,7 @@ private fun GstCard(
                     }
                     if (noGstin) {
                         Text(
-                            "Your GSTIN is not on the bill yet. Add it in Settings → Bill design & details.",
+                            tr("Your GSTIN is not on the bill yet. Add it in Settings → Bill design & details."),
                             style = fig(13, color = Tokens.OrangeDeep),
                             modifier = Modifier.fillMaxWidth().rounded(10.dp).background(Tokens.OrangeLight).padding(horizontal = 10.dp, vertical = 8.dp),
                         )

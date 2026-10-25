@@ -34,6 +34,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.dailyworks.apnalaundry.ui.screens.bill.openWhatsApp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.domain.LaundryState
 import com.dailyworks.apnalaundry.domain.OrderStatus
 import com.dailyworks.apnalaundry.ui.Selectors
@@ -69,26 +70,26 @@ fun OrderMenuSheet(
 
     AppBottomSheet(title = c.name, subtitle = "#${o.no()} · +91 ${Selectors.fmtPhone(c.phone)}", onDismiss = onDismiss) {
         Column {
-            MenuRow(Icons.Outlined.Visibility, "View order details") { onDismiss(); navigator.openOrder(o.id) }
-            if (o.lines.isNotEmpty()) MenuRow(Icons.AutoMirrored.Outlined.ReceiptLong, "View / send bill") { onDismiss(); navigator.openBill(o.id) }
+            MenuRow(Icons.Outlined.Visibility, tr("View order details")) { onDismiss(); navigator.openOrder(o.id) }
+            if (o.lines.isNotEmpty()) MenuRow(Icons.AutoMirrored.Outlined.ReceiptLong, tr("View / send bill")) { onDismiss(); navigator.openBill(o.id) }
             // Tags once the clothes are counted (a cancelled order has nothing to tag).
             if (o.lines.isNotEmpty() && o.status != OrderStatus.CANCELLED)
-                MenuRow(Icons.Outlined.Print, "Print tags") { onOpen(ActiveSheet.PrintTags(o.id, "menu")) }
-            MenuRow(Icons.Outlined.Edit, "Edit order / bill") { onDismiss(); navigator.openNewOrder(editId = o.id, from = "home") }
+                MenuRow(Icons.Outlined.Print, tr("Print tags")) { onOpen(ActiveSheet.PrintTags(o.id, "menu")) }
+            MenuRow(Icons.Outlined.Edit, tr("Edit order / bill")) { onDismiss(); navigator.openNewOrder(editId = o.id, from = "home") }
             // Any state to any state — forward, backward, delivered included.
-            MenuRow(Icons.Outlined.SwapVert, "Change status") { onOpen(ActiveSheet.ChangeStatus(o.id)) }
+            MenuRow(Icons.Outlined.SwapVert, tr("Change status")) { onOpen(ActiveSheet.ChangeStatus(o.id)) }
             if (o.status == OrderStatus.CREATED)
-                MenuRow(Icons.Outlined.CalendarMonth, "Reschedule pickup") { onOpen(ActiveSheet.Reschedule(o.id, "pickup")) }
+                MenuRow(Icons.Outlined.CalendarMonth, tr("Reschedule pickup")) { onOpen(ActiveSheet.Reschedule(o.id, "pickup")) }
             if (o.status == OrderStatus.CREATED || o.status == OrderStatus.RECEIVED || o.status == OrderStatus.READY)
-                MenuRow(Icons.Outlined.LocalShipping, if (o.deliveryDate.isNotBlank()) "Reschedule delivery" else "Set delivery date") { onOpen(ActiveSheet.Reschedule(o.id, "drop")) }
-            MenuRow(Icons.Outlined.Person, "Open customer khata") { onDismiss(); navigator.openCustomer(o.custId, "home") }
-            MenuRow(Icons.Filled.Call, "Call ${Selectors.firstName(c.name)}") {
+                MenuRow(Icons.Outlined.LocalShipping, if (o.deliveryDate.isNotBlank()) tr("Reschedule delivery") else tr("Set delivery date")) { onOpen(ActiveSheet.Reschedule(o.id, "drop")) }
+            MenuRow(Icons.Outlined.Person, tr("Open customer khata")) { onDismiss(); navigator.openCustomer(o.custId, "home") }
+            MenuRow(Icons.Filled.Call, tr("Call {name}", "name" to Selectors.firstName(c.name))) {
                 onDismiss()
                 runCatching { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:+91${c.phone}"))) }
             }
             if (o.status == OrderStatus.CREATED || o.status == OrderStatus.RECEIVED || o.status == OrderStatus.READY)
-                MenuRow(Icons.Outlined.Cancel, if (o.status == OrderStatus.CREATED) "Cancel this pickup" else "Cancel order", danger = true) { onOpen(ActiveSheet.Cancel(o.id)) }
-            MenuRow(Icons.Outlined.DeleteOutline, if (o.lines.isNotEmpty()) "Delete bill" else "Delete order", danger = true) {
+                MenuRow(Icons.Outlined.Cancel, if (o.status == OrderStatus.CREATED) tr("Cancel this pickup") else tr("Cancel order"), danger = true) { onOpen(ActiveSheet.Cancel(o.id)) }
+            MenuRow(Icons.Outlined.DeleteOutline, if (o.lines.isNotEmpty()) tr("Delete bill") else tr("Delete order"), danger = true) {
                 onOpen(ActiveSheet.DeleteOrder(o.id))
             }
         }
@@ -98,13 +99,13 @@ fun OrderMenuSheet(
 @Composable
 fun ShareSummarySheet(text: String, vm: ShopViewModel, onDismiss: () -> Unit) {
     val context = LocalContext.current
-    AppBottomSheet(title = "Share summary", onDismiss = onDismiss) {
+    AppBottomSheet(title = tr("Share summary"), onDismiss = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Box(Modifier.fillMaxWidth().rounded(14.dp).background(Tokens.Card).padding(14.dp)) {
                 Text(text, style = fig(14, FontWeight.SemiBold, Tokens.InkSecondary))
             }
-            PrimaryButton("Send on WhatsApp", height = 56.dp) {
-                vm.showInfo("Opening WhatsApp with this message…")
+            PrimaryButton(tr("Send on WhatsApp"), height = 56.dp) {
+                vm.showInfo(tr("Opening WhatsApp with this message…"))
                 // No number: WhatsApp asks which chat to send the summary to.
                 openWhatsApp(context, "https://wa.me/?text=${Uri.encode(text)}")
                 onDismiss()

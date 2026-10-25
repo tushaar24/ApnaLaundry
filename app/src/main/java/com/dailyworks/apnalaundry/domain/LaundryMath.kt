@@ -1,5 +1,6 @@
 package com.dailyworks.apnalaundry.domain
 
+import com.dailyworks.apnalaundry.core.tr
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -124,8 +125,8 @@ object LaundryMath {
         (max(kg, minKg) * ratePerKg).roundToInt()
 
     fun paymentLabel(paid: Int, total: Int): String = when {
-        paid >= total && total > 0 -> "Paid"
-        paid > 0 -> "Part paid"
-        else -> "In khata"
+        paid >= total && total > 0 -> tr("Paid")
+        paid > 0 -> tr("Part paid")
+        else -> tr("In khata")
     }
 }

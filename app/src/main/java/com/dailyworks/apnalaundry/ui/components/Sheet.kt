@@ -38,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.ui.theme.Tokens
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
@@ -111,9 +112,9 @@ fun Stepper(
     modifier: Modifier = Modifier,
 ) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        StepButton(Icons.Filled.Remove, "Decrease", bg = Tokens.NeutralFill, fg = Tokens.InkSecondary, enabled = qty > 0, onClick = onDec)
+        StepButton(Icons.Filled.Remove, tr("Decrease"), bg = Tokens.NeutralFill, fg = Tokens.InkSecondary, enabled = qty > 0, onClick = onDec)
         Text(qty.toString(), style = fig(16, FontWeight.Bold), textAlign = TextAlign.Center, maxLines = 1, softWrap = false, modifier = Modifier.widthIn(min = 20.dp))
-        StepButton(Icons.Filled.Add, "Increase", bg = if (qty > 0) Tokens.Blue else Tokens.BlueLight, fg = if (qty > 0) Tokens.OnDark else Tokens.Blue, enabled = true, onClick = onInc)
+        StepButton(Icons.Filled.Add, tr("Increase"), bg = if (qty > 0) Tokens.Blue else Tokens.BlueLight, fg = if (qty > 0) Tokens.OnDark else Tokens.Blue, enabled = true, onClick = onInc)
     }
 }
 

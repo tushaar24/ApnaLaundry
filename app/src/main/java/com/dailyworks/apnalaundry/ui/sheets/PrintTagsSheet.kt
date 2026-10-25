@@ -46,6 +46,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.dailyworks.apnalaundry.analytics.Analytics
+import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.domain.LaundryState
 import com.dailyworks.apnalaundry.domain.LaundryTags
 import com.dailyworks.apnalaundry.print.TagPrefs
@@ -116,40 +117,40 @@ fun PrintTagsSheet(state: LaundryState, orderId: Int, from: String, vm: ShopView
             try {
                 TagPrinter.print(context, p.address, p.name, tags, dots) { sent = it }
                 Analytics.tagsPrinted(o.id, tags.size, if (perPiece) "piece" else "order", if (wide) "80mm" else "58mm", from)
-                vm.showInfo(if (tags.size == 1) "1 tag printed" else "${tags.size} tags printed")
+                vm.showInfo(if (tags.size == 1) tr("1 tag printed") else tr("{n} tags printed", "n" to tags.size))
                 if (open.get()) onDismiss()
             } catch (e: TagPrinter.PrintError) {
                 error = e.message
                 Analytics.tagsPrintFailed(o.id, e.reason, from)
                 // The sheet is gone: say it here, or the owner never learns the tags didn't print.
-                if (!open.get()) vm.showInfo("Tags not printed · ${e.message}")
+                if (!open.get()) vm.showInfo(tr("Tags not printed · {reason}", "reason" to e.message))
             } finally {
                 printing = false
             }
         }
     }
 
-    AppBottomSheet(title = "Print tags", subtitle = "${c.name} · #${o.no()}", onDismiss = onDismiss) {
+    AppBottomSheet(title = tr("Print tags"), subtitle = "${c.name} · #${o.no()}", onDismiss = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             when {
-                !hasBluetooth -> Notice("This phone has no Bluetooth, so it can't reach a printer.")
+                !hasBluetooth -> Notice(tr("This phone has no Bluetooth, so it can't reach a printer."))
 
                 !permitted -> {
                     Notice(
-                        if (!asked) "To find your printer, tap ‘Allow Bluetooth’. Then tap ‘Allow’ when the phone asks."
-                        else "Bluetooth is not allowed yet. Tap ‘Allow Bluetooth’ again, or open phone settings → Permissions → Nearby devices → Allow.",
+                        if (!asked) tr("To find your printer, tap ‘Allow Bluetooth’. Then tap ‘Allow’ when the phone asks.")
+                        else tr("Bluetooth is not allowed yet. Tap ‘Allow Bluetooth’ again, or open phone settings → Permissions → Nearby devices → Allow."),
                     )
-                    PrimaryButton("Allow Bluetooth", height = 56.dp) {
+                    PrimaryButton(tr("Allow Bluetooth"), height = 56.dp) {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) askPermission.launch(Manifest.permission.BLUETOOTH_CONNECT)
                     }
-                    if (asked) OutlineButton("Open phone settings", Modifier.fillMaxWidth(), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) {
+                    if (asked) OutlineButton(tr("Open phone settings"), Modifier.fillMaxWidth(), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) {
                         openAppSettings(context)
                     }
                 }
 
                 !on -> {
-                    Notice("Bluetooth is off. Turn it on to print.")
-                    PrimaryButton("Turn on Bluetooth", height = 56.dp) {
+                    Notice(tr("Bluetooth is off. Turn it on to print."))
+                    PrimaryButton(tr("Turn on Bluetooth"), height = 56.dp) {
                         runCatching { turnOn.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)) }
                             .onFailure { openBluetoothSettings(context) }
                     }
@@ -176,26 +177,26 @@ fun PrintTagsSheet(state: LaundryState, orderId: Int, from: String, vm: ShopView
                         Icon(Icons.Outlined.Print, null, tint = Tokens.Blue, modifier = Modifier.size(24.dp))
                         Column(Modifier.weight(1f)) {
                             Text(printer.name, style = fig(15, FontWeight.Bold))
-                            Text(if (wide) "3 inch paper" else "2 inch paper", style = fig(13, color = Tokens.Muted))
+                            Text(if (wide) tr("3 inch paper") else tr("2 inch paper"), style = fig(13, color = Tokens.Muted))
                         }
                         Text(
-                            "Change", style = fig(14, FontWeight.Bold, Tokens.Blue),
+                            tr("Change"), style = fig(14, FontWeight.Bold, Tokens.Blue),
                             modifier = Modifier.tap(enabled = !printing) { choosing = true }.padding(4.dp),
                         )
                     }
 
                     // How many
-                    Text("How many tags?", style = fig(15, FontWeight.Bold))
+                    Text(tr("How many tags?"), style = fig(15, FontWeight.Bold))
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        PillChip("One for each cloth · $pieces", perPiece) { if (!printing) { perPiece = true; saved.perPiece = true } }
-                        PillChip("One for the order", !perPiece) { if (!printing) { perPiece = false; saved.perPiece = false } }
+                        PillChip(tr("One for each cloth · {n}", "n" to pieces), perPiece) { if (!printing) { perPiece = true; saved.perPiece = true } }
+                        PillChip(tr("One for the order"), !perPiece) { if (!printing) { perPiece = false; saved.perPiece = false } }
                     }
 
                     // What it looks like
                     preview?.let { img ->
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text(
-                                if (tags.size > 1) "Tag 1 of ${tags.size} looks like this" else "Your tag looks like this",
+                                if (tags.size > 1) tr("Tag 1 of {n} looks like this", "n" to tags.size) else tr("Your tag looks like this"),
                                 style = fig(13, FontWeight.SemiBold, Tokens.Muted),
                             )
                             Box(
@@ -203,7 +204,7 @@ fun PrintTagsSheet(state: LaundryState, orderId: Int, from: String, vm: ShopView
                                     .border(1.dp, Tokens.CardBorder, RoundedCornerShape(12.dp)).padding(vertical = 12.dp),
                                 contentAlignment = Alignment.Center,
                             ) {
-                                Image(img, contentDescription = "Tag for order #${o.no()}", modifier = Modifier.size(width = 220.dp, height = (220f * img.height / img.width).dp), contentScale = ContentScale.Fit)
+                                Image(img, contentDescription = tr("Tag for order #{no}", "no" to o.no()), modifier = Modifier.size(width = 220.dp, height = (220f * img.height / img.width).dp), contentScale = ContentScale.Fit)
                             }
                         }
                     }
@@ -218,16 +219,16 @@ fun PrintTagsSheet(state: LaundryState, orderId: Int, from: String, vm: ShopView
                     val n = tags.size
                     PrimaryButton(
                         when {
-                            printing && sent == null -> "Connecting to printer…"
-                            printing -> "Printing ${minOf((sent ?: 0) + 1, n)} of $n…"
-                            error != null -> "Try again"
-                            n == 1 -> "Print 1 tag"
-                            else -> "Print $n tags"
+                            printing && sent == null -> tr("Connecting to printer…")
+                            printing -> tr("Printing {i} of {n}…", "i" to minOf((sent ?: 0) + 1, n), "n" to n)
+                            error != null -> tr("Try again")
+                            n == 1 -> tr("Print 1 tag")
+                            else -> tr("Print {n} tags", "n" to n)
                         },
                         enabled = !printing && n > 0, height = 56.dp,
                     ) { print() }
                     Text(
-                        "Tear or cut along the dashed line between tags.",
+                        tr("Tear or cut along the dashed line between tags."),
                         style = fig(13, color = Tokens.Muted), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
                     )
                 }
@@ -244,9 +245,9 @@ private fun PrinterPicker(
 ) {
     val context = LocalContext.current
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("Choose your printer", style = fig(15, FontWeight.Bold))
+        Text(tr("Choose your printer"), style = fig(15, FontWeight.Bold))
         if (devices.isEmpty()) {
-            Notice("No printer found. Switch on the printer, tap ‘Pair a printer’, and tap the printer’s name. If it asks for a PIN, type 0000 or 1234. Then come back here.")
+            Notice(tr("No printer found. Switch on the printer, tap ‘Pair a printer’, and tap the printer’s name. If it asks for a PIN, type 0000 or 1234. Then come back here."))
         } else {
             devices.forEach { d ->
                 val on = d.address == selected
@@ -264,21 +265,21 @@ private fun PrinterPicker(
                     )
                     Column(Modifier.weight(1f)) {
                         Text(d.name, style = fig(15, FontWeight.Bold))
-                        Text(if (d.isPrinter) "Printer" else "Other device", style = fig(12, color = Tokens.Muted))
+                        Text(if (d.isPrinter) tr("Printer") else tr("Other device"), style = fig(12, color = Tokens.Muted))
                     }
-                    if (on) Text("Chosen", style = fig(12, FontWeight.Bold, Tokens.BlueText))
+                    if (on) Text(tr("Chosen"), style = fig(12, FontWeight.Bold, Tokens.BlueText))
                 }
             }
         }
-        OutlineButton("Pair a printer", Modifier.fillMaxWidth(), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) {
+        OutlineButton(tr("Pair a printer"), Modifier.fillMaxWidth(), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) {
             openBluetoothSettings(context)
         }
-        Text("Paper size", style = fig(15, FontWeight.Bold))
+        Text(tr("Paper size"), style = fig(15, FontWeight.Bold))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            PillChip("2 inch · 58 mm", !wide) { onWide(false) }
-            PillChip("3 inch · 80 mm", wide) { onWide(true) }
+            PillChip(tr("2 inch · 58 mm"), !wide) { onWide(false) }
+            PillChip(tr("3 inch · 80 mm"), wide) { onWide(true) }
         }
-        if (onDone != null) PrimaryButton("Done", height = 56.dp) { onDone() }
+        if (onDone != null) PrimaryButton(tr("Done"), height = 56.dp) { onDone() }
     }
 }
 

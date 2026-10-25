@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dailyworks.apnalaundry.data.CmdResult
 import android.net.Uri
+import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.data.LaundryRepository
 import com.dailyworks.apnalaundry.data.LogoStore
 import com.dailyworks.apnalaundry.data.sync.SyncApi
@@ -215,7 +216,7 @@ class ShopViewModel(
             invalidateUndo()
             Analytics.shopDeleted(shopDir.shops.value.size)
             onDone(null)
-        }.onFailure { onDone("Couldn't delete the shop — check internet and try again") }
+        }.onFailure { onDone(tr("Couldn't delete the shop — check internet and try again")) }
     }
 
     /**
@@ -244,7 +245,7 @@ class ShopViewModel(
             sync.requestSync()
             onDone(null)
         }.onFailure { e ->
-            onDone(if (e is com.dailyworks.apnalaundry.data.sync.PlanRequiredException) "plan" else "Couldn't add the shop — check internet and try again")
+            onDone(if (e is com.dailyworks.apnalaundry.data.sync.PlanRequiredException) "plan" else tr("Couldn't add the shop — check internet and try again"))
         }
     }
 
@@ -420,7 +421,7 @@ class ShopViewModel(
             // The order / customer may have been deleted on another device while
             // its screen or sheet was open — tell the owner instead of crashing.
             val r = try { block() } catch (e: NoSuchElementException) {
-                CmdResult("That was changed on another device — please check and try again")
+                CmdResult(tr("That was changed on another device — please check and try again"))
             }
             publish(r)
             sync.requestSync()

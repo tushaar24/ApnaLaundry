@@ -41,6 +41,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.compose.PlayerSurface
 import androidx.media3.ui.compose.SURFACE_TYPE_TEXTURE_VIEW
 import com.dailyworks.apnalaundry.analytics.Analytics
+import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.ui.components.tap
 
 // Paywall intro video, streamed from the URL the server sends (/billing/status paywallVideoUrl).
@@ -147,7 +148,7 @@ fun PaywallVideo(url: String, paused: Boolean, modifier: Modifier = Modifier) {
                 Box(
                     Modifier.size(56.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.6f)),
                     contentAlignment = Alignment.Center,
-                ) { Icon(Icons.Filled.PlayArrow, "Play", tint = Color.White, modifier = Modifier.size(32.dp)) }
+                ) { Icon(Icons.Filled.PlayArrow, tr("Play"), tint = Color.White, modifier = Modifier.size(32.dp)) }
             }
         }
 
@@ -167,7 +168,7 @@ fun PaywallVideo(url: String, paused: Boolean, modifier: Modifier = Modifier) {
         ) {
             Icon(
                 if (muted) Icons.AutoMirrored.Outlined.VolumeOff else Icons.AutoMirrored.Outlined.VolumeUp,
-                if (muted) "Unmute" else "Mute",
+                if (muted) tr("Unmute") else tr("Mute"),
                 tint = Color.White,
                 modifier = Modifier.size(20.dp),
             )

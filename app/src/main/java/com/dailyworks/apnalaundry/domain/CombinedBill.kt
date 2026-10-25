@@ -1,5 +1,7 @@
 package com.dailyworks.apnalaundry.domain
 
+import com.dailyworks.apnalaundry.core.i18n
+import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.core.AppDate
 import com.dailyworks.apnalaundry.core.Money
 import com.dailyworks.apnalaundry.ui.Selectors
@@ -16,13 +18,13 @@ import java.time.YearMonth
  */
 object CombinedBill {
 
-    /** Which orders a chip ticks. [CUSTOM] uses the From / To dates. */
+    /** Which orders a chip ticks. [CUSTOM] uses the From / To dates. [label] is shown with tr(). */
     enum class Preset(val label: String) {
-        CUSTOM("Custom dates"),
-        D7("Last 7 days"),
-        D30("Last 30 days"),
-        MONTH("This month"),
-        LAST("Last month"),
+        CUSTOM(i18n("Custom dates")),
+        D7(i18n("Last 7 days")),
+        D30(i18n("Last 30 days")),
+        MONTH(i18n("This month")),
+        LAST(i18n("Last month")),
     }
 
     /**
@@ -73,27 +75,28 @@ object CombinedBill {
         return when {
             o.status != OrderStatus.DELIVERED -> Tag(
                 when {
-                    paid >= amt -> "Paid · not delivered"
-                    o.status == OrderStatus.READY -> "Ready · not delivered"
-                    else -> "In progress"
+                    paid >= amt -> tr("Paid · not delivered")
+                    o.status == OrderStatus.READY -> tr("Ready · not delivered")
+                    else -> tr("In progress")
                 },
                 TagKind.OPEN,
             )
-            paid >= amt -> Tag("Paid", TagKind.PAID)
-            else -> Tag("${Money.rupees(amt - paid)} due", TagKind.DUE)
+            paid >= amt -> Tag(tr("Paid"), TagKind.PAID)
+            else -> Tag(tr("{amount} due", "amount" to Money.rupees(amt - paid)), TagKind.DUE)
         }
     }
 
+    // Shown with tr() (the bill builds inside I18n.english, so it prints English).
     private val MONTHS = listOf(
-        "January", "February", "March", "April", "May", "June",
-        "July", "August", "September", "October", "November", "December",
+        i18n("January"), i18n("February"), i18n("March"), i18n("April"), i18n("May"), i18n("June"),
+        i18n("July"), i18n("August"), i18n("September"), i18n("October"), i18n("November"), i18n("December"),
     )
 
     /** "16 Sep" */
     fun dayMonth(iso: String): String = AppDate.plain(iso).substringAfter(", ")
 
     /** "September 2026" */
-    fun monthName(iso: String): String = "${MONTHS[LocalDate.parse(iso).monthValue - 1]} ${iso.take(4)}"
+    fun monthName(iso: String): String = "${tr(MONTHS[LocalDate.parse(iso).monthValue - 1])} ${iso.take(4)}"
 
     /** "16 Sep 2026" */
     fun dayMonthYear(iso: String): String = "${dayMonth(iso)} ${iso.take(4)}"

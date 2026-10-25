@@ -1,6 +1,7 @@
 package com.dailyworks.apnalaundry.domain
 
 import com.dailyworks.apnalaundry.core.Money
+import com.dailyworks.apnalaundry.core.tr
 import kotlin.math.abs
 
 /**
@@ -81,7 +82,8 @@ object Gst {
 
     /** App screens: the GST row above the total (exclusive). [markRounded] folds the round-off into the label. */
     fun rowLabel(g: Breakdown, markRounded: Boolean = false): String =
-        "GST ${fmtPct(g.pct)}% (CGST + SGST)" + (if (markRounded && g.roundOffPaise != 0L) " · rounded" else "")
+        if (markRounded && g.roundOffPaise != 0L) tr("GST {pct}% (CGST + SGST) · rounded", "pct" to fmtPct(g.pct))
+        else tr("GST {pct}% (CGST + SGST)", "pct" to fmtPct(g.pct))
 
     fun rowValue(g: Breakdown): String = "+ ${Money.paise(g.taxPaise)}"
 
@@ -89,14 +91,15 @@ object Gst {
 
     /** App screens: the small line under the total (inclusive). */
     fun inclusiveLine(g: Breakdown): String =
-        "Includes GST ${fmtPct(g.pct)}%: ${Money.paise(g.taxPaise)} · taxable ${Money.paise(g.taxablePaise)}"
+        tr("Includes GST {pct}%: {tax} · taxable {taxable}", "pct" to fmtPct(g.pct), "tax" to Money.paise(g.taxPaise), "taxable" to Money.paise(g.taxablePaise))
 
-    /** Printed bill: the note under the total (inclusive). */
+    /** Printed bill: the note under the total (inclusive). Bill only, so always English. */
     fun billNote(g: Breakdown): String =
         "Price includes GST ${fmtPct(g.pct)}%: taxable ${Money.paise(g.taxablePaise)} + CGST ${Money.paise(g.cgstPaise)} + SGST ${Money.paise(g.sgstPaise)}"
 
     /** New-order card: what the switch does right now. */
     fun hint(on: Boolean, pct: Double, mode: String): String =
-        if (!on) "Add GST to this bill"
-        else "${fmtPct(pct)}% · " + (if (mode == INCL) "already in your price" else "added on top of the price")
+        if (!on) tr("Add GST to this bill")
+        else if (mode == INCL) tr("{pct}% · already in your price", "pct" to fmtPct(pct))
+        else tr("{pct}% · added on top of the price", "pct" to fmtPct(pct))
 }

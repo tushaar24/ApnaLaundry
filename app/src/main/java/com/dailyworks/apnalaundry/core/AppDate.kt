@@ -26,9 +26,18 @@ object AppDate {
     /** True after 9 PM — ready-messages are queued for 9 AM. */
     fun isLateNight(): Boolean = NOW_MINUTES >= 21 * 60
 
-    private val MON = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
-    private val DAY_SHORT = listOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
-    private val DAY_LONG = listOf("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
+    // English words, shown through tr() (the bill builds its dates inside I18n.english).
+    private val MON = listOf(
+        i18n("Jan"), i18n("Feb"), i18n("Mar"), i18n("Apr"), i18n("May"), i18n("Jun"),
+        i18n("Jul"), i18n("Aug"), i18n("Sep"), i18n("Oct"), i18n("Nov"), i18n("Dec"),
+    )
+    private val DAY_SHORT = listOf(i18n("Sun"), i18n("Mon"), i18n("Tue"), i18n("Wed"), i18n("Thu"), i18n("Fri"), i18n("Sat"))
+    private val DAY_LONG = listOf(
+        i18n("Sunday"), i18n("Monday"), i18n("Tuesday"), i18n("Wednesday"), i18n("Thursday"), i18n("Friday"), i18n("Saturday"),
+    )
+
+    private fun mon(d: LocalDate): String = tr(MON[d.monthValue - 1])
+    private fun dayShort(d: LocalDate): String = tr(DAY_SHORT[dayIndex(d)])
 
     fun parse(iso: String): LocalDate = LocalDate.parse(iso)
     fun iso(d: LocalDate): String = d.toString()
@@ -43,31 +52,31 @@ object AppDate {
     fun rel(iso: String, today: String = TODAY): String? {
         val df = daysBetween(today, iso)
         return when (df) {
-            0 -> "Today"; 1 -> "Tomorrow"; -1 -> "Yesterday"; else -> null
+            0 -> tr("Today"); 1 -> tr("Tomorrow"); -1 -> tr("Yesterday"); else -> null
         }
     }
 
     /** "Sunday, 27 Sep" / "Today, 25 Sep" */
     fun long(iso: String, today: String = TODAY): String {
         val d = parse(iso)
-        val prefix = rel(iso, today) ?: DAY_LONG[dayIndex(d)]
-        return "$prefix, ${d.dayOfMonth} ${MON[d.monthValue - 1]}"
+        val prefix = rel(iso, today) ?: tr(DAY_LONG[dayIndex(d)])
+        return "$prefix, ${d.dayOfMonth} ${mon(d)}"
     }
 
     /** "Sun, 27 Sep" / "Today, 25 Sep" */
     fun short(iso: String, today: String = TODAY): String {
         val d = parse(iso)
-        val prefix = rel(iso, today) ?: DAY_SHORT[dayIndex(d)]
-        return "$prefix, ${d.dayOfMonth} ${MON[d.monthValue - 1]}"
+        val prefix = rel(iso, today) ?: dayShort(d)
+        return "$prefix, ${d.dayOfMonth} ${mon(d)}"
     }
 
     /** "Fri, 25 Sep" — never relative. */
     fun plain(iso: String): String {
         val d = parse(iso)
-        return "${DAY_SHORT[dayIndex(d)]}, ${d.dayOfMonth} ${MON[d.monthValue - 1]}"
+        return "${dayShort(d)}, ${d.dayOfMonth} ${mon(d)}"
     }
 
-    fun dayName(iso: String): String = DAY_SHORT[dayIndex(parse(iso))]
+    fun dayName(iso: String): String = dayShort(parse(iso))
     fun dayOfMonth(iso: String): Int = parse(iso).dayOfMonth
 
     /** 24h "HH:mm" -> "5:00 PM". Blank in -> blank out. */

@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dailyworks.apnalaundry.core.I18n
 import com.dailyworks.apnalaundry.data.LogoStore
 import com.dailyworks.apnalaundry.domain.BillReceipt
 import com.dailyworks.apnalaundry.domain.CombinedReceipt
@@ -36,13 +37,13 @@ fun rememberCombinedBillImage(shopVm: ShopViewModel, receipt: CombinedReceipt): 
     val tick by shopVm.logoTick.collectAsStateWithLifecycle()
     return produceState<ImageBitmap?>(initialValue = null, receipt, tick) {
         value = withContext(Dispatchers.Default) {
-            BillRender.render(context, receipt, shopVm.logos.cached(receipt.logoId)).asImageBitmap()
+            I18n.english { BillRender.render(context, receipt, shopVm.logos.cached(receipt.logoId)) }.asImageBitmap()
         }
     }
 }
 
-/** Every receipt drawn; with [equalHeight] all stretch to the tallest. */
-fun renderAll(context: Context, logos: LogoStore, receipts: List<BillReceipt>, equalHeight: Boolean): List<Bitmap> {
+/** Every receipt drawn (in English, like the bill's web page); with [equalHeight] all stretch to the tallest. */
+fun renderAll(context: Context, logos: LogoStore, receipts: List<BillReceipt>, equalHeight: Boolean): List<Bitmap> = I18n.english {
     val h = if (equalHeight) receipts.maxOf { BillRender.height(context, it, logos.cached(it.logoId)) } else 0f
-    return receipts.map { BillRender.render(context, it, logos.cached(it.logoId), h) }
+    receipts.map { BillRender.render(context, it, logos.cached(it.logoId), h) }
 }

@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.core.AppDate
 import com.dailyworks.apnalaundry.core.Money
+import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.domain.LaundryMath
 import com.dailyworks.apnalaundry.domain.LaundryState
 import com.dailyworks.apnalaundry.domain.OrderStatus
@@ -50,7 +51,7 @@ private fun Bullet(text: String) = Text("• $text", style = fig(14, FontWeight.
 @Composable
 private fun MethodPicker(method: PayMethod, onPick: (PayMethod) -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        listOf(PayMethod.CASH to "Cash", PayMethod.UPI to "UPI").forEach { (m, label) ->
+        listOf(PayMethod.CASH to tr("Cash"), PayMethod.UPI to tr("UPI")).forEach { (m, label) ->
             val on = m == method
             Box(
                 Modifier.heightIn(min = 40.dp).rounded(999.dp).background(if (on) Tokens.Ink else Tokens.Card)
@@ -63,9 +64,9 @@ private fun MethodPicker(method: PayMethod, onPick: (PayMethod) -> Unit) {
 }
 
 private fun khataWords(bal: Int) = when {
-    bal > 0 -> "${Money.rupees(bal)} baaki"
-    bal < 0 -> "${Money.rupees(bal)} advance"
-    else -> "all clear"
+    bal > 0 -> tr("{amount} baaki", "amount" to Money.rupees(bal))
+    bal < 0 -> tr("{amount} advance", "amount" to Money.rupees(bal))
+    else -> tr("all clear")
 }
 
 @Composable
@@ -76,7 +77,7 @@ internal fun StatusChangeCard(
     val o = Selectors.order(state, card.orderId)
     var method by remember { mutableStateOf(card.payments.singleOrNull()?.first ?: PayMethod.CASH) }
     CardBox {
-        if (o == null) { Muted("This order was deleted"); return@CardBox }
+        if (o == null) { Muted(tr("This order was deleted")); return@CardBox }
         val c = Selectors.customer(state, o.custId)
         val to = statusLabel(card.to)
         Text("#${o.no()} · ${c.name}", style = bric(18, FontWeight.Bold))
@@ -87,26 +88,26 @@ internal fun StatusChangeCard(
             val oldBal = LaundryMath.balance(o.custId, state.ledger, state.orders, o.id)
             val got = pays.sumOf { it.second }
             val alloc = LaundryMath.deliverAllocation(total, o.pre, oldBal, got)
-            AmountRow("Bill", Money.rupees(total))
-            if (o.pre > 0) AmountRow("Paid before", Money.rupees(o.pre))
-            if (pays.isEmpty()) Muted("Nothing paid now — all on khata")
-            else pays.forEach { (m, amt) -> AmountRow("Got now · ${if (m == PayMethod.UPI) "UPI" else "Cash"}", Money.rupees(amt), bold = true) }
+            AmountRow(tr("Bill"), Money.rupees(total))
+            if (o.pre > 0) AmountRow(tr("Paid before"), Money.rupees(o.pre))
+            if (pays.isEmpty()) Muted(tr("Nothing paid now — all on khata"))
+            else pays.forEach { (m, amt) -> AmountRow(if (m == PayMethod.UPI) tr("Got now · UPI") else tr("Got now · Cash"), Money.rupees(amt), bold = true) }
             if (card.payments.size == 1) MethodPicker(method) { method = it }
-            Muted("Khata after: ${khataWords(alloc.newBalance)}")
+            Muted(tr("Khata after: {khata}", "khata" to khataWords(alloc.newBalance)))
         }
-        if (o.status == OrderStatus.DELIVERED) Muted("Its bill comes off the khata; payments stay as paid in advance.")
-        if (card.to == OrderStatus.READY && card.deliveryDate.isNotBlank()) Muted("Delivery ${AppDate.short(card.deliveryDate)}")
-        if (card.to == OrderStatus.CANCELLED && card.reason.isNotBlank()) Muted("Reason: ${card.reason}")
+        if (o.status == OrderStatus.DELIVERED) Muted(tr("Its bill comes off the khata; payments stay as paid in advance."))
+        if (card.to == OrderStatus.READY && card.deliveryDate.isNotBlank()) Muted(tr("Delivery {date}", "date" to AppDate.short(card.deliveryDate)))
+        if (card.to == OrderStatus.CANCELLED && card.reason.isNotBlank()) Muted(tr("Reason: {reason}", "reason" to tr(card.reason)))
         when {
-            key in used || o.status == card.to -> DoneText("Done ✓ $to")
+            key in used || o.status == card.to -> DoneText(tr("Done ✓ {status}", "status" to to))
             else -> PrimaryButton(
-                AssistantTools.statusButton(o.status, card.to),
+                tr(AssistantTools.statusButton(o.status, card.to)),
                 Modifier.fillMaxWidth(), height = 48.dp, bg = if (card.to == OrderStatus.CANCELLED) Tokens.Orange else Tokens.Blue,
             ) {
                 val now = Selectors.order(shopVm.state.value, o.id) ?: return@PrimaryButton
                 val needsClothes = now.lines.isEmpty() && (card.to == OrderStatus.DELIVERED ||
                     (card.to == OrderStatus.READY && LaundryMath.isOpen(now)) || (card.to == OrderStatus.RECEIVED && now.status == OrderStatus.CREATED))
-                if (needsClothes) { shopVm.showInfo("Add the clothes to order #${now.no()} first"); return@PrimaryButton }
+                if (needsClothes) { shopVm.showInfo(tr("Add the clothes to order #{no} first", "no" to now.no())); return@PrimaryButton }
                 when {
                     card.to == OrderStatus.CANCELLED -> shopVm.cancelOrder(now.id, card.reason)
                     card.to == OrderStatus.DELIVERED -> {
@@ -136,14 +137,14 @@ internal fun PaymentCard(
     var method by remember { mutableStateOf(card.method) }
     val c = state.customers.firstOrNull { it.id == card.custId }
     CardBox {
-        if (c == null) { Muted("This customer was deleted"); return@CardBox }
+        if (c == null) { Muted(tr("This customer was deleted")); return@CardBox }
         val o = card.orderId?.let { Selectors.order(state, it) }
-        Text("Payment · ${c.name}", style = bric(18, FontWeight.Bold))
-        AmountRow(if (o != null) "On order #${o.no()} (paid in advance)" else "To khata", Money.rupees(card.amount), bold = true)
+        Text(tr("Payment · {name}", "name" to c.name), style = bric(18, FontWeight.Bold))
+        AmountRow(if (o != null) tr("On order #{no} (paid in advance)", "no" to o.no()) else tr("To khata"), Money.rupees(card.amount), bold = true)
         MethodPicker(method) { method = it }
-        Muted("Khata after: ${khataWords(Selectors.balance(state, c.id) - card.amount)}")
-        if (key in used) DoneText("Recorded ✓")
-        else PrimaryButton("Got ${Money.rupees(card.amount)} ${if (method == PayMethod.UPI) "UPI" else "cash"}", Modifier.fillMaxWidth(), height = 48.dp) {
+        Muted(tr("Khata after: {khata}", "khata" to khataWords(Selectors.balance(state, c.id) - card.amount)))
+        if (key in used) DoneText(tr("Recorded ✓"))
+        else PrimaryButton(if (method == PayMethod.UPI) tr("Got {amount} UPI", "amount" to Money.rupees(card.amount)) else tr("Got {amount} cash", "amount" to Money.rupees(card.amount)), Modifier.fillMaxWidth(), height = 48.dp) {
             val now = card.orderId?.let { Selectors.order(shopVm.state.value, it) }
             if (now != null && LaundryMath.isOpen(now)) shopVm.prepayPart(now.id, card.amount, method)
             else shopVm.receivePayment(c.id, card.amount, method)
@@ -159,19 +160,19 @@ internal fun EditOrderCard(
 ) {
     val o = Selectors.order(state, card.orderId)
     CardBox {
-        if (o == null) { Muted("This order was deleted"); return@CardBox }
-        Text("Edit order #${o.no()} · ${Selectors.customer(state, o.custId).name}", style = bric(18, FontWeight.Bold))
+        if (o == null) { Muted(tr("This order was deleted")); return@CardBox }
+        Text(tr("Edit order #{no} · {name}", "no" to o.no(), "name" to Selectors.customer(state, o.custId).name), style = bric(18, FontWeight.Bold))
         card.changes.forEach { Bullet(it) }
         Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Divider))
-        AmountRow("Total", "${Money.rupees(card.before)} → ${Money.rupees(card.after)}", bold = true)
+        AmountRow(tr("Total"), "${Money.rupees(card.before)} → ${Money.rupees(card.after)}", bold = true)
         if (o.status == OrderStatus.DELIVERED && card.after != card.before) {
-            Muted("Khata ${if (card.after > card.before) "+" else "−"}${Money.rupees(kotlin.math.abs(card.after - card.before))} (delivered order)")
+            Muted(tr("Khata {change} (delivered order)", "change" to (if (card.after > card.before) "+" else "−") + Money.rupees(kotlin.math.abs(card.after - card.before))))
         }
-        if (key in used) DoneText("Saved ✓")
-        else PrimaryButton("Save changes", Modifier.fillMaxWidth(), height = 48.dp) {
+        if (key in used) DoneText(tr("Saved ✓"))
+        else PrimaryButton(tr("Save changes"), Modifier.fillMaxWidth(), height = 48.dp) {
             // Worked out again on the order as it is now, so an earlier change isn't undone.
             val plan = runCatching { AssistantTools(shopVm.state.value).planEdit(card.args) }.getOrElse {
-                shopVm.showInfo(it.message ?: "Couldn't change the order"); return@PrimaryButton
+                shopVm.showInfo(it.message ?: tr("Couldn't change the order")); return@PrimaryButton
             }
             val n = plan.order; val e = plan.edit
             shopVm.saveOrder(
@@ -192,21 +193,21 @@ internal fun RateChangeCard(
 ) {
     val deleting = card.args["action"]?.toString()?.contains("delete_service") == true
     CardBox {
-        Text(if (card.isNew) "New service" else "Rate card", style = bric(18, FontWeight.Bold))
+        Text(if (card.isNew) tr("New service") else tr("Rate card"), style = bric(18, FontWeight.Bold))
         card.summary.forEach { Bullet(it) }
-        if (!card.isNew && !deleting) Muted("Old orders keep their prices.")
-        if (key in used) DoneText("Saved ✓")
+        if (!card.isNew && !deleting) Muted(tr("Old orders keep their prices."))
+        if (key in used) DoneText(tr("Saved ✓"))
         else PrimaryButton(
-            when { deleting -> "Delete service"; card.isNew -> "Add service"; else -> "Save to rate card" },
+            when { deleting -> tr("Delete service"); card.isNew -> tr("Add service"); else -> tr("Save to rate card") },
             Modifier.fillMaxWidth(), height = 48.dp, bg = if (deleting) Tokens.Orange else Tokens.Blue,
         ) {
             val plan = runCatching { AssistantTools(shopVm.state.value).planRate(card.args) }.getOrElse {
-                shopVm.showInfo(it.message ?: "Couldn't change the rate card"); return@PrimaryButton
+                shopVm.showInfo(it.message ?: tr("Couldn't change the rate card")); return@PrimaryButton
             }
             plan.service?.let { s ->
                 shopVm.upsertService(s)
                 if (plan.isNew) Analytics.serviceAdded(s.mode.name) else Analytics.serviceEdited(s.id)
-                shopVm.showInfo(if (plan.isNew) "${s.name} added to your services" else "${s.name} updated")
+                shopVm.showInfo(if (plan.isNew) tr("{service} added to your services", "service" to s.name) else tr("{service} updated", "service" to s.name))
             }
             plan.deleteId?.let { shopVm.deleteService(it) }
             vm.used(key, "rate_card", "Rate card: " + plan.summary.joinToString("; "))
@@ -219,12 +220,12 @@ internal fun SaveCustomerCard(
     card: AssistantCard.SaveCustomer, key: String, used: Set<String>, vm: AssistantViewModel, shopVm: ShopViewModel,
 ) {
     CardBox {
-        Text(if (card.editId == null) "New customer" else "Customer · ${card.name}", style = bric(18, FontWeight.Bold))
+        Text(if (card.editId == null) tr("New customer") else tr("Customer · {name}", "name" to card.name), style = bric(18, FontWeight.Bold))
         card.changes.forEach { Bullet(it) }
-        if (key in used) DoneText("Saved ✓")
-        else PrimaryButton(if (card.editId == null) "Add customer" else "Save", Modifier.fillMaxWidth(), height = 48.dp) {
+        if (key in used) DoneText(tr("Saved ✓"))
+        else PrimaryButton(if (card.editId == null) tr("Add customer") else tr("Save"), Modifier.fillMaxWidth(), height = 48.dp) {
             val dup = shopVm.state.value.customers.firstOrNull { it.phone == card.phone && it.id != card.editId }
-            if (dup != null) { shopVm.showInfo("${Selectors.fmtPhone(card.phone)} is already saved for ${dup.name}"); return@PrimaryButton }
+            if (dup != null) { shopVm.showInfo(tr("{phone} is already saved for {name}", "phone" to Selectors.fmtPhone(card.phone), "name" to dup.name)); return@PrimaryButton }
             shopVm.saveCustomer(card.editId, card.name, card.phone, card.address, card.oldBaaki, fromList = card.editId == null) {
                 vm.used(key, "customer", (if (card.editId == null) "Added customer " else "Updated customer ") + card.name)
             }
@@ -238,12 +239,12 @@ internal fun OldBaakiCard(
 ) {
     val c = state.customers.firstOrNull { it.id == card.custId }
     CardBox {
-        if (c == null) { Muted("This customer was deleted"); return@CardBox }
-        Text("Old baaki · ${c.name}", style = bric(18, FontWeight.Bold))
-        AmountRow("Add to khata", "+ ${Money.rupees(card.amount)}", bold = true)
-        Muted("Khata after: ${khataWords(Selectors.balance(state, c.id) + if (key in used) 0 else card.amount)}")
-        if (key in used) DoneText("Added ✓")
-        else PrimaryButton("Add ${Money.rupees(card.amount)} baaki", Modifier.fillMaxWidth(), height = 48.dp) {
+        if (c == null) { Muted(tr("This customer was deleted")); return@CardBox }
+        Text(tr("Old baaki · {name}", "name" to c.name), style = bric(18, FontWeight.Bold))
+        AmountRow(tr("Add to khata"), "+ ${Money.rupees(card.amount)}", bold = true)
+        Muted(tr("Khata after: {khata}", "khata" to khataWords(Selectors.balance(state, c.id) + if (key in used) 0 else card.amount)))
+        if (key in used) DoneText(tr("Added ✓"))
+        else PrimaryButton(tr("Add {amount} baaki", "amount" to Money.rupees(card.amount)), Modifier.fillMaxWidth(), height = 48.dp) {
             shopVm.addOldBaaki(c.id, card.amount)
             vm.used(key, "old_baaki", "Added ${Money.rupees(card.amount)} old baaki for ${c.name}")
         }
@@ -256,12 +257,12 @@ internal fun DeleteOrderCard(
 ) {
     val o = Selectors.order(state, card.orderId)
     CardBox {
-        if (o == null) { DoneText(if (key in used) "Deleted ✓" else "Already deleted"); return@CardBox }
+        if (o == null) { DoneText(if (key in used) tr("Deleted ✓") else tr("Already deleted")); return@CardBox }
         val c = Selectors.customer(state, o.custId)
-        Text("Delete order #${o.no()} · ${c.name}?", style = bric(18, FontWeight.Bold))
-        AmountRow("${Selectors.itemsLabel(o).ifBlank { "No clothes" }} · ${statusLabel(o.status)}", Money.rupees(LaundryMath.amtOf(o)))
-        Muted("Its bill and payments come off the khata. You can Undo right after.")
-        PrimaryButton("Delete order", Modifier.fillMaxWidth(), height = 48.dp, bg = Tokens.DeleteRed) {
+        Text(tr("Delete order #{no} · {name}?", "no" to o.no(), "name" to c.name), style = bric(18, FontWeight.Bold))
+        AmountRow("${Selectors.itemsLabel(o).ifBlank { tr("No clothes") }} · ${statusLabel(o.status)}", Money.rupees(LaundryMath.amtOf(o)))
+        Muted(tr("Its bill and payments come off the khata. You can Undo right after."))
+        PrimaryButton(tr("Delete order"), Modifier.fillMaxWidth(), height = 48.dp, bg = Tokens.DeleteRed) {
             shopVm.deleteOrder(o.id)
             vm.used(key, "delete_order", "Deleted order #${o.no()} of ${c.name}")
         }

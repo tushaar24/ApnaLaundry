@@ -1,5 +1,6 @@
 package com.dailyworks.apnalaundry.domain
 
+import com.dailyworks.apnalaundry.core.i18n
 import kotlin.math.max
 
 /**
@@ -80,8 +81,8 @@ object EarningsMath {
         svc.filterValues { it > 0 }.forEach { (id, amt) ->
             shares += ServiceShare(LaundryMath.serviceName(id, state.services), amt, isExtra = false)
         }
-        if (express > 0) shares += ServiceShare("Express charges", express, isExtra = true)
-        if (fee > 0) shares += ServiceShare("Pickup / delivery charges", fee, isExtra = true)
+        if (express > 0) shares += ServiceShare(i18n("Express charges"), express, isExtra = true)
+        if (fee > 0) shares += ServiceShare(i18n("Pickup / delivery charges"), fee, isExtra = true)
         shares.sortWith(compareBy({ it.isExtra }, { -it.amount }))
 
         val baakiCust = state.customers.filter {

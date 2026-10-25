@@ -44,6 +44,7 @@ import kotlinx.coroutines.launch
 import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.core.AppDate
 import com.dailyworks.apnalaundry.core.Money
+import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.domain.Gst
 import com.dailyworks.apnalaundry.domain.LaundryMath
 import com.dailyworks.apnalaundry.domain.OrderStatus
@@ -83,12 +84,12 @@ fun OrderDetailScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: I
     LaunchedEffect(Unit) { Analytics.screen("order_detail") }
 
     val cancelled = o.status == OrderStatus.CANCELLED
-    val labels = if (o.pickup == Route.HOME) listOf("To pick up", "Received", "Ready", "Delivered") else listOf("Received", "Ready", "Delivered")
+    val labels = if (o.pickup == Route.HOME) listOf(tr("To pick up"), tr("Received"), tr("Ready"), tr("Delivered")) else listOf(tr("Received"), tr("Ready"), tr("Delivered"))
     val keys = if (o.pickup == Route.HOME) listOf(OrderStatus.CREATED, OrderStatus.RECEIVED, OrderStatus.READY, OrderStatus.DELIVERED) else listOf(OrderStatus.RECEIVED, OrderStatus.READY, OrderStatus.DELIVERED)
     val idx = if (cancelled) -1 else keys.indexOf(o.status)
 
     val actLabel = when (o.status) {
-        OrderStatus.CREATED -> "Mark picked up"; OrderStatus.RECEIVED -> "Mark ready"; OrderStatus.READY -> "Mark delivered"; else -> ""
+        OrderStatus.CREATED -> tr("Mark picked up"); OrderStatus.RECEIVED -> tr("Mark ready"); OrderStatus.READY -> tr("Mark delivered"); else -> ""
     }
 
     fun onAct() {
@@ -106,7 +107,7 @@ fun OrderDetailScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: I
         ) {
             TopBar(title = "#${o.no()}", onBack = { navigator.back() }, trailing = {
                 Box(Modifier.size(44.dp).tap { active = ActiveSheet.Menu(o.id) }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.MoreVert, "More", tint = Tokens.Ink, modifier = Modifier.size(22.dp))
+                    Icon(Icons.Filled.MoreVert, tr("More"), tint = Tokens.Ink, modifier = Modifier.size(22.dp))
                 }
             })
 
@@ -128,7 +129,7 @@ fun OrderDetailScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: I
                         Modifier.fillMaxWidth().rounded(12.dp).background(androidx.compose.ui.graphics.Color(0xFFFFF8DC))
                             .border(1.dp, androidx.compose.ui.graphics.Color(0xFFF0D98A), RoundedCornerShape(12.dp)).padding(14.dp),
                     ) {
-                        Text("Note", style = fig(12, FontWeight.Bold, androidx.compose.ui.graphics.Color(0xFF8A6D00)))
+                        Text(tr("Note"), style = fig(12, FontWeight.Bold, androidx.compose.ui.graphics.Color(0xFF8A6D00)))
                         Text(o.note, style = fig(15, FontWeight.SemiBold))
                     }
                 }
@@ -152,7 +153,7 @@ fun OrderDetailScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: I
                     }
                 } else {
                     Box(Modifier.fillMaxWidth().rounded(12.dp).background(Tokens.NeutralFill).tap { active = ActiveSheet.ChangeStatus(o.id) }.padding(14.dp)) {
-                        Text("Cancelled" + (if (o.cancelReason.isNotBlank()) " · ${o.cancelReason}" else "") + " · tap to change", style = fig(15, FontWeight.SemiBold, Tokens.InkSecondary))
+                        Text(if (o.cancelReason.isNotBlank()) tr("Cancelled · {reason} · tap to change", "reason" to o.cancelReason) else tr("Cancelled · tap to change"), style = fig(15, FontWeight.SemiBold, Tokens.InkSecondary))
                     }
                 }
 
@@ -161,7 +162,7 @@ fun OrderDetailScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: I
                     PrimaryButton(actLabel, height = 56.dp) { onAct() }
                 } else if (o.status == OrderStatus.DELIVERED) {
                     Box(Modifier.fillMaxWidth().rounded(12.dp).background(Tokens.BlueLight).tap { active = ActiveSheet.ChangeStatus(o.id) }.padding(14.dp)) {
-                        Text("Delivered" + (if (o.doneAt.isNotBlank()) " · ${o.doneAt}" else "") + " · tap to change", style = fig(14, FontWeight.SemiBold, Tokens.BlueText))
+                        Text(if (o.doneAt.isNotBlank()) tr("Delivered · {date} · tap to change", "date" to o.doneAt) else tr("Delivered · tap to change"), style = fig(14, FontWeight.SemiBold, Tokens.BlueText))
                     }
                 }
 
@@ -174,55 +175,65 @@ fun OrderDetailScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: I
                                     Column(Modifier.weight(1f)) {
                                         Text(if (l.kg > 0) Selectors.weightLabel(l) else "${l.itemName} × ${l.qty}", style = fig(15, FontWeight.SemiBold))
                                         Text(
-                                            if (l.kg > 0) Selectors.clothesList(l).ifEmpty { l.serviceName } else "${l.serviceName} · ₹${l.price} each",
+                                            if (l.kg > 0) Selectors.clothesList(l).ifEmpty { l.serviceName } else tr("{service} · {price} each", "service" to l.serviceName, "price" to "₹${l.price}"),
                                             style = fig(12, color = Tokens.Muted),
                                         )
                                     }
                                     Text(Money.rupees(l.amt), style = fig(15, FontWeight.SemiBold), maxLines = 1, softWrap = false)
                                 }
                             }
-                            if (o.express && o.exAmt > 0) DetailRow("Express", "+ ${Money.rupees(o.exAmt)}")
-                            if (o.fee > 0) DetailRow("Pickup / delivery", "+ ${Money.rupees(o.fee)}")
-                            if (o.discount > 0) DetailRow("Discount", "− ${Money.rupees(o.discount)}", Tokens.OrangeText)
+                            if (o.express && o.exAmt > 0) DetailRow(tr("Express"), "+ ${Money.rupees(o.exAmt)}")
+                            if (o.fee > 0) DetailRow(tr("Pickup / delivery"), "+ ${Money.rupees(o.fee)}")
+                            if (o.discount > 0) DetailRow(tr("Discount"), "− ${Money.rupees(o.discount)}", Tokens.OrangeText)
                             if (gst.on && gst.mode == Gst.EXCL) DetailRow(Gst.rowLabel(gst, markRounded = true), Gst.rowValue(gst))
                             Box(Modifier.fillMaxWidth().padding(vertical = 4.dp).height(1.dp).background(Tokens.Divider))
-                            DetailRow("Total", Money.rupees(amt), bold = true)
+                            DetailRow(tr("Total"), Money.rupees(amt), bold = true)
                             if (gst.on && gst.mode == Gst.INCL) Text(Gst.inclusiveLine(gst), style = fig(12, color = Tokens.Muted))
                             Text(paymentText(o, amt), style = fig(13, FontWeight.SemiBold, if (o.status == OrderStatus.DELIVERED && o.paid < amt) Tokens.OrangeText else Tokens.BlueText))
                         }
                     }
                     // bill actions
-                    if (o.billSent) OutlineButton("Bill sent ✓ · Send again", Modifier.fillMaxWidth(), height = 48.dp, border = Tokens.BlueBorder, fg = Tokens.BlueText) { sendOnWhatsApp(o) }
-                    else PrimaryButton("Send bill on WhatsApp", height = 48.dp) { sendOnWhatsApp(o) }
+                    if (o.billSent) OutlineButton(tr("Bill sent ✓ · Send again"), Modifier.fillMaxWidth(), height = 48.dp, border = Tokens.BlueBorder, fg = Tokens.BlueText) { sendOnWhatsApp(o) }
+                    else PrimaryButton(tr("Send bill on WhatsApp"), height = 48.dp) { sendOnWhatsApp(o) }
                     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlineButton("View bill", Modifier.weight(1f).fillMaxHeight(), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { active = ActiveSheet.BillView(o.id) }
-                        OutlineButton("Download", Modifier.weight(1f).fillMaxHeight(), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { Analytics.billDownloaded(o.id, "order_detail"); scope.launch { shareBillPdf(context, state, o) } }
+                        OutlineButton(tr("View bill"), Modifier.weight(1f).fillMaxHeight(), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { active = ActiveSheet.BillView(o.id) }
+                        OutlineButton(tr("Download"), Modifier.weight(1f).fillMaxHeight(), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { Analytics.billDownloaded(o.id, "order_detail"); scope.launch { shareBillPdf(context, state, o) } }
                     }
                     // Tags for the clothes, on the Bluetooth printer.
                     if (!cancelled) {
-                        OutlineButton("Print tags", Modifier.fillMaxWidth(), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) {
+                        OutlineButton(tr("Print tags"), Modifier.fillMaxWidth(), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) {
                             active = ActiveSheet.PrintTags(o.id, "order_detail")
                         }
                     }
                 } else {
                     Box(Modifier.fillMaxWidth().rounded(12.dp).background(Tokens.Card).padding(14.dp)) {
-                        Text("Bill after clothes are counted", style = fig(14, FontWeight.SemiBold, Tokens.Muted))
+                        Text(tr("Bill after clothes are counted"), style = fig(14, FontWeight.SemiBold, Tokens.Muted))
                     }
                 }
 
                 // pickup / delivery info
                 AppCard {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        InfoRow("Pickup", (if (o.pickup == Route.HOME) "From home · " else "At shop · ") + AppDate.short(o.pickupDate) + (if (o.pickupTime.isNotBlank()) " · ${o.pickupTime}" else ""))
-                        InfoRow("Delivery", (if (o.delivery == Route.HOME) "To home · " else "At shop · ") + (if (o.deliveryDate.isNotBlank()) AppDate.short(o.deliveryDate) + (if (o.deliveryTime.isNotBlank()) " · ${o.deliveryTime}" else "") else "date not set"))
-                        if (o.pickup == Route.HOME || o.delivery == Route.HOME) InfoRow("Address", c.address.ifBlank { "No address saved" })
+                        val pickupWhen = AppDate.short(o.pickupDate) + (if (o.pickupTime.isNotBlank()) " · ${o.pickupTime}" else "")
+                        InfoRow(tr("Pickup"), if (o.pickup == Route.HOME) tr("From home · {date}", "date" to pickupWhen) else tr("At shop · {date}", "date" to pickupWhen))
+                        val deliveryWhen = if (o.deliveryDate.isNotBlank()) AppDate.short(o.deliveryDate) + (if (o.deliveryTime.isNotBlank()) " · ${o.deliveryTime}" else "") else null
+                        InfoRow(
+                            tr("Delivery"),
+                            when {
+                                o.delivery == Route.HOME && deliveryWhen != null -> tr("To home · {date}", "date" to deliveryWhen)
+                                o.delivery == Route.HOME -> tr("To home · date not set")
+                                deliveryWhen != null -> tr("At shop · {date}", "date" to deliveryWhen)
+                                else -> tr("At shop · date not set")
+                            },
+                        )
+                        if (o.pickup == Route.HOME || o.delivery == Route.HOME) InfoRow(tr("Address"), c.address.ifBlank { tr("No address saved") })
                     }
                 }
 
                 // manage
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlineButton("Edit", Modifier.weight(1f), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { navigator.openNewOrder(editId = o.id, from = "order") }
-                    OutlineButton("More", Modifier.weight(1f), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { active = ActiveSheet.Menu(o.id) }
+                    OutlineButton(tr("Edit"), Modifier.weight(1f), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { navigator.openNewOrder(editId = o.id, from = "order") }
+                    OutlineButton(tr("More"), Modifier.weight(1f), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { active = ActiveSheet.Menu(o.id) }
                 }
                 Spacer(Modifier.height(24.dp))
             }
@@ -235,14 +246,14 @@ private fun paymentText(o: com.dailyworks.apnalaundry.domain.Order, amt: Int): S
     o.status == OrderStatus.DELIVERED -> {
         val k = amt - o.paid
         when {
-            k <= 0 -> "Paid ${Money.rupees(amt)}"
-            o.paid > 0 -> "Paid ${Money.rupees(o.paid)} · ${Money.rupees(k)} went to khata"
-            else -> "${Money.rupees(amt)} went to khata"
+            k <= 0 -> tr("Paid {amount}", "amount" to Money.rupees(amt))
+            o.paid > 0 -> tr("Paid {paid} · {due} went to khata", "paid" to Money.rupees(o.paid), "due" to Money.rupees(k))
+            else -> tr("{amount} went to khata", "amount" to Money.rupees(amt))
         }
     }
-    o.lines.isEmpty() -> "Bill after clothes are counted"
-    o.pre >= amt -> "Paid in advance"
-    else -> "To be paid at delivery"
+    o.lines.isEmpty() -> tr("Bill after clothes are counted")
+    o.pre >= amt -> tr("Paid in advance")
+    else -> tr("To be paid at delivery")
 }
 
 @Composable

@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.dailyworks.apnalaundry.core.Money
+import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.domain.ClothCount
 import com.dailyworks.apnalaundry.domain.OrderLine
 import com.dailyworks.apnalaundry.domain.PricingMode
@@ -169,10 +170,10 @@ fun ClothesEditor(
                     val has = amt > 0
                     val sel = state.selected == s.id
                     val sub = when {
-                        has && s.mode == PricingMode.WEIGHT -> "${trimK(kg)} kg"
-                        has -> "$n ${if (n == 1) "item" else "items"}"
-                        s.mode == PricingMode.WEIGHT -> "By weight"
-                        else -> "Tap to add"
+                        has && s.mode == PricingMode.WEIGHT -> tr("{kg} kg", "kg" to trimK(kg))
+                        has -> if (n == 1) tr("{n} item", "n" to n) else tr("{n} items", "n" to n)
+                        s.mode == PricingMode.WEIGHT -> tr("By weight")
+                        else -> tr("Tap to add")
                     }
                     ServiceTile(
                         name = s.name, sub = sub, selected = sel, hasAmount = has,
@@ -211,7 +212,7 @@ fun ClothesEditor(
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     FieldBox(
                         value = w, onValueChange = { state.setWeight(cur.id, it.filter { ch -> ch.isDigit() || ch == '.' }) },
-                        modifier = Modifier.weight(1f), placeholder = "0", suffix = "kg", height = 56.dp,
+                        modifier = Modifier.weight(1f), placeholder = "0", suffix = tr("kg"), height = 56.dp,
                         keyboardType = KeyboardType.Decimal, prefix = null,
                     )
                     Spacer8()
@@ -220,17 +221,18 @@ fun ClothesEditor(
                 val listed = state.bagCount(cur.id)
                 if (listed > 0) {
                     // Counted from the list below.
-                    Text("$listed ${if (listed == 1) "cloth" else "clothes"} in this bag", style = fig(15, FontWeight.SemiBold, Tokens.InkSecondary))
+                    Text(if (listed == 1) tr("{n} cloth in this bag", "n" to listed) else tr("{n} clothes in this bag", "n" to listed), style = fig(15, FontWeight.SemiBold, Tokens.InkSecondary))
                 } else {
                     val pc = state.pcs[cur.id] ?: ""
                     FieldBox(
                         value = pc, onValueChange = { state.setPcs(cur.id, it.filter { ch -> ch.isDigit() }.take(4)) },
-                        placeholder = "Number of clothes (optional)", suffix = if (pc.isNotEmpty()) "clothes" else null,
+                        placeholder = tr("Number of clothes (optional)"), suffix = if (pc.isNotEmpty()) tr("clothes") else null,
                         height = 48.dp, keyboardType = KeyboardType.Number,
                     )
                 }
                 Text(
-                    "₹$rate per kg." + (if (min > 0) " Bags under ${trimK(min)} kg are charged for ${trimK(min)} kg." else ""),
+                    if (min > 0) tr("{rate} per kg. Bags under {min} kg are charged for {min} kg.", "rate" to "₹$rate", "min" to trimK(min))
+                    else tr("{rate} per kg.", "rate" to "₹$rate"),
                     style = fig(13, color = Tokens.Muted),
                 )
                 BagClothes(cur, state, clothNames(services))
@@ -262,7 +264,7 @@ private fun BagClothes(svc: Service, state: ClothesState, names: List<String>) {
     var open by remember(svc.id) { mutableStateOf(inBag.isNotEmpty()) }
     if (!open) {
         Text(
-            "+ Add list of clothes (optional)", style = fig(15, FontWeight.Bold, Tokens.Blue),
+            tr("+ Add list of clothes (optional)"), style = fig(15, FontWeight.Bold, Tokens.Blue),
             modifier = Modifier.tap { open = true }.padding(vertical = 12.dp),
         )
         return
@@ -280,9 +282,9 @@ private fun BagClothes(svc: Service, state: ClothesState, names: List<String>) {
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Clothes in this bag", style = fig(15, FontWeight.Bold), modifier = Modifier.weight(1f))
+            Text(tr("Clothes in this bag"), style = fig(15, FontWeight.Bold), modifier = Modifier.weight(1f))
             Spacer(Modifier.width(8.dp))
-            Text("Count only, no price", style = fig(12, color = Tokens.Muted), textAlign = TextAlign.End, modifier = Modifier.widthIn(max = 120.dp))
+            Text(tr("Count only, no price"), style = fig(12, color = Tokens.Muted), textAlign = TextAlign.End, modifier = Modifier.widthIn(max = 120.dp))
         }
         inBag.forEach { (name, n) ->
             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -292,7 +294,7 @@ private fun BagClothes(svc: Service, state: ClothesState, names: List<String>) {
         }
         val left = names.filter { n -> inBag.keys.none { it.equals(n, ignoreCase = true) } }
         if (left.isNotEmpty()) {
-            Text(if (inBag.isEmpty()) "Tap a cloth to add it" else "Add more", style = fig(12, FontWeight.Bold, Tokens.Muted))
+            Text(if (inBag.isEmpty()) tr("Tap a cloth to add it") else tr("Add more"), style = fig(12, FontWeight.Bold, Tokens.Muted))
             androidx.compose.foundation.layout.FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
@@ -301,14 +303,14 @@ private fun BagClothes(svc: Service, state: ClothesState, names: List<String>) {
         }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FieldBox(
-                other, { other = it.take(30) }, Modifier.weight(1f), placeholder = "Other cloth, e.g. Curtain", height = 48.dp,
+                other, { other = it.take(30) }, Modifier.weight(1f), placeholder = tr("Other cloth, e.g. Curtain"), height = 48.dp,
                 imeAction = androidx.compose.ui.text.input.ImeAction.Done, onImeAction = { addOther() },
             )
             Box(
                 Modifier.height(48.dp).rounded(10.dp).background(if (clean.isNotEmpty()) Tokens.Blue else Tokens.NeutralFill)
                     .tap(enabled = clean.isNotEmpty()) { addOther() }.padding(horizontal = 16.dp),
                 contentAlignment = Alignment.Center,
-            ) { Text("Add", style = fig(14, FontWeight.Bold, if (clean.isNotEmpty()) Tokens.OnDark else Tokens.Muted)) }
+            ) { Text(tr("Add"), style = fig(14, FontWeight.Bold, if (clean.isNotEmpty()) Tokens.OnDark else Tokens.Muted)) }
         }
     }
 }
@@ -365,7 +367,7 @@ private fun ItemRow(
                         modifier = Modifier.width(104.dp), keyboardType = KeyboardType.Number,
                         textStyle = fig(16, FontWeight.Bold), contentPadding = 10.dp,
                     )
-                    if (changed) Text("rate ₹$base", style = fig(12, FontWeight.SemiBold, Tokens.OrangeText), maxLines = 1, softWrap = false)
+                    if (changed) Text(tr("rate {amount}", "amount" to "₹$base"), style = fig(12, FontWeight.SemiBold, Tokens.OrangeText), maxLines = 1, softWrap = false)
                 }
             } else {
                 Text("₹$base", style = fig(14, FontWeight.SemiBold, Tokens.Muted))
@@ -397,23 +399,23 @@ private fun AddItemRow(svc: Service, onAdd: (String, Int) -> Unit) {
             .border(1.5.dp, Tokens.BlueBorder, RoundedCornerShape(14.dp)).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text("Add a cloth to ${svc.name}", style = fig(13, FontWeight.Bold, Tokens.BlueText))
-        FieldBox(name, { name = it.take(30) }, Modifier.fillMaxWidth(), placeholder = "Cloth name, e.g. Blazer", height = 48.dp)
+        Text(tr("Add a cloth to {service}", "service" to svc.name), style = fig(13, FontWeight.Bold, Tokens.BlueText))
+        FieldBox(name, { name = it.take(30) }, Modifier.fillMaxWidth(), placeholder = tr("Cloth name, e.g. Blazer"), height = 48.dp)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FieldBox(
                 if (priced) (existing!!.price ?: 0).toString() else price,
                 { if (!priced) price = it.filter { c -> c.isDigit() }.take(5) },
-                Modifier.weight(1f), prefix = "₹", placeholder = "Price", height = 48.dp, keyboardType = KeyboardType.Number,
+                Modifier.weight(1f), prefix = "₹", placeholder = tr("Price"), height = 48.dp, keyboardType = KeyboardType.Number,
                 imeAction = androidx.compose.ui.text.input.ImeAction.Done, onImeAction = { add() },
             )
             Box(
                 Modifier.height(48.dp).widthIn(min = 88.dp).rounded(10.dp).background(if (ok) Tokens.Blue else Tokens.NeutralFill).tap(enabled = ok) { add() }
                     .padding(horizontal = 16.dp),
                 contentAlignment = Alignment.Center,
-            ) { Text("Add", style = fig(14, FontWeight.Bold, if (ok) Tokens.OnDark else Tokens.Muted)) }
+            ) { Text(tr("Add"), style = fig(14, FontWeight.Bold, if (ok) Tokens.OnDark else Tokens.Muted)) }
         }
         Text(
-            if (priced) "Already in your services list — Add puts 1 in this order." else "Saved to your services list and added to this order.",
+            if (priced) tr("Already in your services list — Add puts 1 in this order.") else tr("Saved to your services list and added to this order."),
             style = fig(12, color = Tokens.BlueText),
         )
     }

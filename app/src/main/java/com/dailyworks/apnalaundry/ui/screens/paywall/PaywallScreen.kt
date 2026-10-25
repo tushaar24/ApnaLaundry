@@ -57,10 +57,10 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.style.TextAlign
 import androidx.core.view.WindowCompat
 import com.dailyworks.apnalaundry.analytics.Analytics
+import com.dailyworks.apnalaundry.core.i18n
+import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.ui.components.AppBottomSheet
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
@@ -95,10 +95,19 @@ internal fun rupees(paise: Int): String {
     return "₹$sb"
 }
 
+// Month words for the paywall's dates: English, shown through tr() (the same words as AppDate's).
+private val MONTHS = listOf(
+    i18n("Jan"), i18n("Feb"), i18n("Mar"), i18n("Apr"), i18n("May"), i18n("Jun"),
+    i18n("Jul"), i18n("Aug"), i18n("Sep"), i18n("Oct"), i18n("Nov"), i18n("Dec"),
+)
+
+/** "Oct", in the app's language. */
+internal fun monthName(date: LocalDate): String = tr(MONTHS[date.monthValue - 1])
+
 /** "13 Oct 2027": the end of the period paid for today (a year or a month from now). */
 private fun validTill(annual: Boolean): String {
     val d = LocalDate.now().let { if (annual) it.plusYears(1) else it.plusMonths(1) }
-    return d.format(DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH))
+    return "${d.dayOfMonth} ${monthName(d)} ${d.year}"
 }
 
 /** What the paywall says, by why it opened. */
@@ -106,31 +115,32 @@ private data class OfferCopy(val tag: String?, val title: String, val body: Stri
 
 private fun offerCopy(from: String, orders: Int?, freeOrders: Int?): OfferCopy = when (from) {
     "free_orders" -> OfferCopy(
-        if (orders != null && freeOrders != null) "${minOf(orders, freeOrders)} of $freeOrders free orders used" else "Free orders used",
-        "Your free orders are finished",
-        "Pick a plan to take new orders. Your old orders and khata are safe.",
+        if (orders != null && freeOrders != null) tr("{used} of {free} free orders used", "used" to minOf(orders, freeOrders), "free" to freeOrders)
+        else tr("Free orders used"),
+        tr("Your free orders are finished"),
+        tr("Pick a plan to take new orders. Your old orders and khata are safe."),
     )
     "plan_ended" -> OfferCopy(
-        "Plan ended",
-        "Your plan has ended",
-        "Pick a plan to take new orders in your shops. Your old orders and khata are safe.",
+        tr("Plan ended"),
+        tr("Your plan has ended"),
+        tr("Pick a plan to take new orders in your shops. Your old orders and khata are safe."),
     )
     "add_shop" -> OfferCopy(
         null,
-        "Add more shops",
-        "Pick a plan to add more shops — each shop keeps its own customers, khata and bills.",
+        tr("Add more shops"),
+        tr("Pick a plan to add more shops — each shop keeps its own customers, khata and bills."),
     )
-    else -> OfferCopy(null, "Pick your plan", "Unlimited orders and bills on WhatsApp for your shop.")
+    else -> OfferCopy(null, tr("Pick your plan"), tr("Unlimited orders and bills on WhatsApp for your shop."))
 }
 
 /** The ✓ list: what the plan gives (shops first when that's why they're here). */
 private fun offerFeatures(from: String): List<String> = buildList {
-    if (from == "add_shop") add("Unlimited shops")
-    add("Unlimited orders")
-    add("Bills on WhatsApp")
-    add("Khata for every customer")
-    add("Daily earnings — cash and UPI")
-    if (from != "add_shop") add("Unlimited shops")
+    if (from == "add_shop") add(tr("Unlimited shops"))
+    add(tr("Unlimited orders"))
+    add(tr("Bills on WhatsApp"))
+    add(tr("Khata for every customer"))
+    add(tr("Daily earnings — cash and UPI"))
+    if (from != "add_shop") add(tr("Unlimited shops"))
 }
 
 /**
@@ -225,7 +235,7 @@ fun PaywallScreen(
                         Box(
                             Modifier.padding(top = 6.dp).offset(x = (-12).dp).size(44.dp).tap(onClick = closeOffer),
                             contentAlignment = Alignment.Center,
-                        ) { Icon(Icons.Filled.Close, "Close", tint = Tokens.Ink, modifier = Modifier.size(24.dp)) }
+                        ) { Icon(Icons.Filled.Close, tr("Close"), tint = Tokens.Ink, modifier = Modifier.size(24.dp)) }
                     } else {
                         Spacer(Modifier.height(20.dp))
                     }
@@ -260,35 +270,35 @@ fun PaywallScreen(
                     PlanCard(
                         selected = annual,
                         onSelect = { vm.selectPlan(PaywallPlan.ANNUAL) },
-                        name = "Yearly",
-                        note = "Only ${rupees(perMonth)} a month",
+                        name = tr("Yearly"),
+                        note = tr("Only {amount} a month", "amount" to rupees(perMonth)),
                         price = rupees(ui.annualAmount),
-                        per = "/year",
+                        per = tr("/year"),
                         was = rupees(WAS_ANNUAL * 100),
-                        badge = "BEST VALUE · SAVE ${rupees(saveVsMonthly)}",
+                        badge = tr("BEST VALUE · SAVE {amount}", "amount" to rupees(saveVsMonthly)),
                     )
                     Spacer(Modifier.height(12.dp))
                     PlanCard(
                         selected = !annual,
                         onSelect = { vm.selectPlan(PaywallPlan.MONTHLY) },
-                        name = "Monthly",
-                        note = "Pay every month",
+                        name = tr("Monthly"),
+                        note = tr("Pay every month"),
                         price = rupees(ui.monthlyAmount),
-                        per = "/month",
+                        per = tr("/month"),
                         was = rupees(WAS_MONTHLY * 100),
                         badge = null,
                     )
                     Spacer(Modifier.height(16.dp))
                     Text(
-                        if (annual) "You save ${rupees(saveVsMonthly)} vs paying monthly (${rupees(ui.monthlyAmount * 12)} a year)"
-                        else "Pick Yearly and save ${rupees(saveVsMonthly)} a year",
+                        if (annual) tr("You save {amount} vs paying monthly ({yearly} a year)", "amount" to rupees(saveVsMonthly), "yearly" to rupees(ui.monthlyAmount * 12))
+                        else tr("Pick Yearly and save {amount} a year", "amount" to rupees(saveVsMonthly)),
                         style = fig(13, FontWeight.SemiBold, Tokens.BlueText),
                         textAlign = TextAlign.Center,
                         modifier = Modifier.fillMaxWidth(),
                     )
                     ui.error?.let {
                         Spacer(Modifier.height(12.dp))
-                        Text(it, style = fig(13, FontWeight.SemiBold, Tokens.OrangeText), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                        Text(tr(it), style = fig(13, FontWeight.SemiBold, Tokens.OrangeText), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                     }
                     Spacer(Modifier.height(20.dp))
                 }
@@ -308,9 +318,9 @@ fun PaywallScreen(
                     ) {
                         Text(
                             when {
-                                ui.busy -> "Starting…"
-                                annual -> "Pay ${rupees(ui.annualAmount)} for 1 year"
-                                else -> "Pay ${rupees(ui.monthlyAmount)} for 1 month"
+                                ui.busy -> tr("Starting…")
+                                annual -> tr("Pay {amount} for 1 year", "amount" to rupees(ui.annualAmount))
+                                else -> tr("Pay {amount} for 1 month", "amount" to rupees(ui.monthlyAmount))
                             },
                             style = fig(16, FontWeight.Bold, Tokens.OnDark),
                             textAlign = TextAlign.Center,
@@ -318,7 +328,7 @@ fun PaywallScreen(
                     }
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "Valid till ${validTill(annual)} · UPI, card or net banking",
+                        tr("Valid till {date} · UPI, card or net banking", "date" to validTill(annual)),
                         style = fig(12, FontWeight.Normal, Tokens.Muted),
                         textAlign = TextAlign.Center,
                     )
@@ -354,10 +364,12 @@ private fun RetrySheet(
     busy: Boolean, onRetry: (PaywallPlan) -> Unit, onDismiss: () -> Unit,
 ) {
     val trial = rupees(trialAmount)
-    val freeDays = if (trialDays == 1) "1 free day is" else "$trialDays free days are"
-    val sameDays = if (trialDays == 1) "Same free day" else "Same $trialDays free days"
     AppBottomSheet(
-        title = if (hasTrial) "Your $freeDays waiting" else "Your payment didn't go through",
+        title = when {
+            !hasTrial -> tr("Your payment didn't go through")
+            trialDays == 1 -> tr("Your 1 free day is waiting")
+            else -> tr("Your {n} free days are waiting", "n" to trialDays)
+        },
         onDismiss = onDismiss,
         leading = {
             Box(
@@ -368,8 +380,8 @@ private fun RetrySheet(
     ) {
         Column {
             Text(
-                if (hasTrial) "The $trial didn't go through, so nothing was charged. Try once more — the $trial is refunded instantly and the full app opens right away."
-                else "Nothing was charged. Try once more and the full app opens right away.",
+                if (hasTrial) tr("The {amount} didn't go through, so nothing was charged. Try once more — the {amount} is refunded instantly and the full app opens right away.", "amount" to trial)
+                else tr("Nothing was charged. Try once more and the full app opens right away."),
                 style = fig(15, FontWeight.Normal, Tokens.Muted),
             )
             if (plan == PaywallPlan.ANNUAL && monthlyOffered) {
@@ -379,26 +391,29 @@ private fun RetrySheet(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Tokens.BlueLight)
                         .border(2.dp, Tokens.Blue, RoundedCornerShape(16.dp)).padding(horizontal = 16.dp, vertical = 12.dp),
                 ) {
-                    Text("RECOMMENDED", style = fig(11, FontWeight.Bold, Tokens.Blue))
+                    Text(tr("RECOMMENDED"), style = fig(11, FontWeight.Bold, Tokens.Blue))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
-                        Text("Try the Monthly plan", style = fig(16, FontWeight.Bold, Tokens.BlueText), modifier = Modifier.weight(1f))
-                        Text("${rupees(monthlyAmount)}/month", style = bric(18, FontWeight.Bold, Tokens.BlueText), maxLines = 1, softWrap = false)
+                        Text(tr("Try the Monthly plan"), style = fig(16, FontWeight.Bold, Tokens.BlueText), modifier = Modifier.weight(1f))
+                        Text(tr("{amount}/month", "amount" to rupees(monthlyAmount)), style = bric(18, FontWeight.Bold, Tokens.BlueText), maxLines = 1, softWrap = false)
                     }
                     Text(
-                        if (hasTrial) "$sameDays, $trial refunded instantly — then a smaller monthly payment."
-                        else "A smaller payment today, then every month.",
+                        when {
+                            !hasTrial -> tr("A smaller payment today, then every month.")
+                            trialDays == 1 -> tr("Same free day, {amount} refunded instantly — then a smaller monthly payment.", "amount" to trial)
+                            else -> tr("Same {n} free days, {amount} refunded instantly — then a smaller monthly payment.", "n" to trialDays, "amount" to trial)
+                        },
                         style = fig(13, color = Tokens.BlueText),
                     )
                 }
                 Spacer(Modifier.height(16.dp))
-                PrimaryButton(text = "Switch to Monthly", enabled = !busy) { onRetry(PaywallPlan.MONTHLY) }
+                PrimaryButton(text = tr("Switch to Monthly"), enabled = !busy) { onRetry(PaywallPlan.MONTHLY) }
                 Box(
                     Modifier.fillMaxWidth().height(48.dp).tap(enabled = !busy) { onRetry(PaywallPlan.ANNUAL) },
                     contentAlignment = Alignment.Center,
-                ) { Text("Try Yearly again", style = fig(14, FontWeight.Bold, Tokens.Muted)) }
+                ) { Text(tr("Try Yearly again"), style = fig(14, FontWeight.Bold, Tokens.Muted)) }
             } else {
                 Spacer(Modifier.height(20.dp))
-                PrimaryButton(text = "Try again", enabled = !busy) { onRetry(plan) }
+                PrimaryButton(text = tr("Try again"), enabled = !busy) { onRetry(plan) }
             }
         }
     }
@@ -465,18 +480,18 @@ private fun WaitingView(onBack: () -> Unit) {
     ) {
         CircularProgressIndicator(color = Tokens.Blue)
         Spacer(Modifier.height(16.dp))
-        Text("Confirming your subscription…", style = bric(22, FontWeight.Bold), textAlign = TextAlign.Center)
+        Text(tr("Confirming your subscription…"), style = bric(22, FontWeight.Bold), textAlign = TextAlign.Center)
         Spacer(Modifier.height(8.dp))
         Text(
-            "We're confirming the UPI AutoPay approval. This updates automatically — it only takes a moment.",
+            tr("We're confirming the UPI AutoPay approval. This updates automatically — it only takes a moment."),
             style = fig(14, FontWeight.Normal, Tokens.Muted),
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(12.dp))
-        Text("Waiting for confirmation…", style = fig(13, FontWeight.Normal, Tokens.Faint))
+        Text(tr("Waiting for confirmation…"), style = fig(13, FontWeight.Normal, Tokens.Faint))
         Spacer(Modifier.height(8.dp))
         Text(
-            "Back to plans",
+            tr("Back to plans"),
             style = fig(14, FontWeight.Bold, Tokens.Blue),
             modifier = Modifier.tap(onClick = onBack).padding(horizontal = 12.dp, vertical = 14.dp),
         )
@@ -497,8 +512,7 @@ internal fun fmtChargeDate(iso: String?): String {
     val date = runCatching { java.time.OffsetDateTime.parse(iso).atZoneSameInstant(java.time.ZoneId.systemDefault()).toLocalDate() }
         .recoverCatching { java.time.LocalDate.parse(iso.take(10)) }
         .getOrNull() ?: return ""
-    val mon = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")[date.monthValue - 1]
-    return "${date.dayOfMonth} $mon ${date.year}"
+    return "${date.dayOfMonth} ${monthName(date)} ${date.year}"
 }
 
 @Composable
@@ -517,7 +531,8 @@ private fun SummaryRow(k: String, v: String, last: Boolean = false) {
 private fun ActiveView(ui: PaywallUiState, onClose: () -> Unit, onCancel: () -> Unit) {
     var confirming by remember { mutableStateOf(false) }
     val sub = ui.status?.subscription
-    val planName = if (sub?.plan == "annual") "Yearly" else "Monthly"
+    val yearlyPlan = sub?.plan == "annual"
+    val planName = if (yearlyPlan) tr("Yearly") else tr("Monthly")
     // Cancelled, still inside the period it paid for: say until when; no Cancel.
     val cancelled = sub?.status == "cancelled"
     val until = if (cancelled) fmtChargeDate(accessUntilIso(sub)) else ""
@@ -528,7 +543,7 @@ private fun ActiveView(ui: PaywallUiState, onClose: () -> Unit, onCancel: () -> 
                 .size(48.dp)
                 .tap(onClick = onClose),
             contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Filled.Close, contentDescription = "Close", tint = Tokens.Ink, modifier = Modifier.size(24.dp)) }
+        ) { Icon(Icons.Filled.Close, contentDescription = tr("Close"), tint = Tokens.Ink, modifier = Modifier.size(24.dp)) }
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -538,11 +553,22 @@ private fun ActiveView(ui: PaywallUiState, onClose: () -> Unit, onCancel: () -> 
                 contentAlignment = Alignment.Center,
             ) { Icon(Icons.Outlined.Check, null, tint = if (cancelled) Tokens.InkSecondary else Tokens.OnDark, modifier = Modifier.size(34.dp)) }
             Spacer(Modifier.height(16.dp))
-            Text(if (cancelled) "$planName plan is cancelled" else "$planName plan is active", style = bric(24, FontWeight.Bold), textAlign = TextAlign.Center)
+            Text(
+                when {
+                    cancelled && yearlyPlan -> tr("Yearly plan is cancelled")
+                    cancelled -> tr("Monthly plan is cancelled")
+                    yearlyPlan -> tr("Yearly plan is active")
+                    else -> tr("Monthly plan is active")
+                },
+                style = bric(24, FontWeight.Bold), textAlign = TextAlign.Center,
+            )
             Spacer(Modifier.height(8.dp))
             Text(
-                if (cancelled) "It still works" + (if (until.isNotEmpty()) " till $until" else " till the end of the period you paid for") + ". You won't be charged again."
-                else "Unlimited orders. Nothing to do here.",
+                when {
+                    !cancelled -> tr("Unlimited orders. Nothing to do here.")
+                    until.isNotEmpty() -> tr("It still works till {date}. You won't be charged again.", "date" to until)
+                    else -> tr("It still works till the end of the period you paid for. You won't be charged again.")
+                },
                 style = fig(14, FontWeight.Normal, Tokens.Muted),
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
@@ -553,25 +579,29 @@ private fun ActiveView(ui: PaywallUiState, onClose: () -> Unit, onCancel: () -> 
                     .border(1.dp, Tokens.CardBorder, RoundedCornerShape(16.dp)),
             ) {
                 val next = fmtChargeDate(sub?.chargeAt)
-                SummaryRow("Plan", planName)
-                SummaryRow("Amount", "${rupees(sub?.amount ?: 0)}${if (sub?.plan == "annual") "/year" else "/month"}")
-                if (cancelled) { if (until.isNotEmpty()) SummaryRow("Works till", until) }
-                else if (next.isNotEmpty()) SummaryRow("Next charge", next)
-                SummaryRow("Status", if (cancelled) "Cancelled" else if (sub?.status == "pending") "Payment retrying" else "Active", last = true)
+                SummaryRow(tr("Plan"), planName)
+                SummaryRow(
+                    tr("Amount"),
+                    if (yearlyPlan) tr("{amount}/year", "amount" to rupees(sub?.amount ?: 0))
+                    else tr("{amount}/month", "amount" to rupees(sub?.amount ?: 0)),
+                )
+                if (cancelled) { if (until.isNotEmpty()) SummaryRow(tr("Works till"), until) }
+                else if (next.isNotEmpty()) SummaryRow(tr("Next charge"), next)
+                SummaryRow(tr("Status"), if (cancelled) tr("Cancelled") else if (sub?.status == "pending") tr("Payment retrying") else tr("Active"), last = true)
             }
             if ((sub?.trialAmount ?: 0) > 0) {
                 Spacer(Modifier.height(8.dp))
-                Text("Started with the ₹2 trial.", style = fig(12, FontWeight.Normal, Tokens.Muted))
+                Text(tr("Started with the {amount} trial.", "amount" to "₹2"), style = fig(12, FontWeight.Normal, Tokens.Muted))
             }
             ui.error?.let {
                 Spacer(Modifier.height(8.dp))
-                Text(it, style = fig(13, FontWeight.SemiBold, Tokens.OrangeText), textAlign = TextAlign.Center)
+                Text(tr(it), style = fig(13, FontWeight.SemiBold, Tokens.OrangeText), textAlign = TextAlign.Center)
             }
             Spacer(Modifier.height(24.dp))
             if (cancelled) {
-                Text("After that, the app asks you to pick a plan again.", style = fig(13, FontWeight.Normal, Tokens.Muted), textAlign = TextAlign.Center, modifier = Modifier.padding(12.dp))
+                Text(tr("After that, the app asks you to pick a plan again."), style = fig(13, FontWeight.Normal, Tokens.Muted), textAlign = TextAlign.Center, modifier = Modifier.padding(12.dp))
             } else if (confirming) {
-                Text("Cancel the plan? New orders stop when it ends.", style = fig(14, FontWeight.SemiBold), textAlign = TextAlign.Center)
+                Text(tr("Cancel the plan? New orders stop when it ends."), style = fig(14, FontWeight.SemiBold), textAlign = TextAlign.Center)
                 Spacer(Modifier.height(10.dp))
                 Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Box(
@@ -579,16 +609,16 @@ private fun ActiveView(ui: PaywallUiState, onClose: () -> Unit, onCancel: () -> 
                             .border(1.5.dp, Tokens.Orange, RoundedCornerShape(14.dp))
                             .tap { if (!ui.busy) onCancel() }.padding(horizontal = 8.dp, vertical = 6.dp),
                         contentAlignment = Alignment.Center,
-                    ) { Text(if (ui.busy) "Cancelling…" else "Yes, cancel", style = fig(15, FontWeight.Bold, Tokens.OrangeText), textAlign = TextAlign.Center) }
+                    ) { Text(if (ui.busy) tr("Cancelling…") else tr("Yes, cancel"), style = fig(15, FontWeight.Bold, Tokens.OrangeText), textAlign = TextAlign.Center) }
                     Box(
                         Modifier.weight(1f).fillMaxHeight().heightIn(min = 48.dp).clip(RoundedCornerShape(14.dp)).background(Tokens.Blue)
                             .tap { confirming = false }.padding(horizontal = 8.dp, vertical = 6.dp),
                         contentAlignment = Alignment.Center,
-                    ) { Text("Keep plan", style = fig(15, FontWeight.Bold, Tokens.OnDark), textAlign = TextAlign.Center) }
+                    ) { Text(tr("Keep plan"), style = fig(15, FontWeight.Bold, Tokens.OnDark), textAlign = TextAlign.Center) }
                 }
             } else {
                 Text(
-                    "Cancel subscription",
+                    tr("Cancel subscription"),
                     style = fig(14, FontWeight.Bold, Tokens.Muted),
                     modifier = Modifier.tap { confirming = true }.padding(horizontal = 12.dp, vertical = 14.dp),
                 )

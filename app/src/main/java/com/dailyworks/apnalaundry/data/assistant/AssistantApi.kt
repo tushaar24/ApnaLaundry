@@ -38,13 +38,26 @@ data class ChatResponse(
 )
 
 @Serializable
-private data class ChatRequest(val messages: JsonArray, val tools: JsonArray)
+private data class ChatRequest(
+    val messages: JsonArray,
+    val tools: JsonArray,
+    // "required" = the model must call a tool this round; null = it decides. A server
+    // from before this ignores it (always lets the model decide).
+    val tool_choice: String? = null,
+)
 
 @Serializable
 data class TranscribeResponse(val success: Boolean = false, val transcript: String? = null, val code: String? = null)
 
 @Serializable
-private data class TranscribeRequest(val audio: String, val mime: String)
+private data class TranscribeRequest(
+    val audio: String,
+    val mime: String,
+    // The app's language (Sarvam code, e.g. ta-IN) and how to write it; a server
+    // from before these ignores them (auto-detect, English letters).
+    val language: String? = null,
+    val mode: String? = null,
+)
 
 /** Why a call to the assistant failed, in words the owner sees. */
 class AssistantException(val code: String) : Exception(code)
@@ -72,12 +85,12 @@ class AssistantApi(
     }
 
     /** One round of the conversation: the reply text, or the tools it wants run. */
-    suspend fun chat(messages: List<JsonObject>, tools: JsonArray): AssistantMessage {
+    suspend fun chat(messages: List<JsonObject>, tools: JsonArray, mustUseTool: Boolean = false): AssistantMessage {
         val res = authed { t ->
             client.post("$base/chat") {
                 bearerAuth(t)
                 contentType(ContentType.Application.Json)
-                setBody(ChatRequest(JsonArray(messages), tools))
+                setBody(ChatRequest(JsonArray(messages), tools, if (mustUseTool) "required" else null))
                 timeout { requestTimeoutMillis = 40_000 }
             }
         }
@@ -93,7 +106,13 @@ class AssistantApi(
             client.post("$base/transcribe") {
                 bearerAuth(t)
                 contentType(ContentType.Application.Json)
-                setBody(TranscribeRequest(b64, "audio/mp4"))
+                // English: auto-detect, Hindi etc. in English letters (as before). Another
+                // language: listen for it, its own script with English words kept ("3 shirt").
+                val lang = com.dailyworks.apnalaundry.core.I18n.language
+                setBody(
+                    if (lang == com.dailyworks.apnalaundry.core.AppLanguage.EN) TranscribeRequest(b64, "audio/mp4")
+                    else TranscribeRequest(b64, "audio/mp4", language = lang.speech, mode = "codemix"),
+                )
                 timeout { requestTimeoutMillis = 40_000 }
             }
         }

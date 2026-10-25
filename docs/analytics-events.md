@@ -208,7 +208,16 @@ Sarvam AI through `/api/laundry/assistant`. It is shown only where the server's 
 | `Assistant Failed` | `reason` (`network`\|`server`\|`limit`\|`off`\|`login`) | no reply (the owner sees why) |
 | `Assistant Voice` | `seconds`, `ok`, `reason` (`short`\|`empty`\|`mic`\|`network`\|`server`\|`limit`\|`off`) | a voice note was stopped and turned (or not) into words |
 | `Assistant Card Shown` | `card` (`new_order`\|`send_bill`\|`status_update`\|`reminder`\|`whatsapp_message`\|`mark_order`) | a reply put a card to tap |
-| `Assistant Card Used` | `card` | its button was tapped: order saved, WhatsApp opened, order marked |
+| `Assistant Card Used` | `card` | its button was tapped: order saved, WhatsApp opened, status changed, payment recorded… |
+| `Assistant Nudged` | — | a reply said to tap a button but no tool made a card; it was sent back once to act (or just answer) |
+
+### Language (Android 1.0.16, 2026-10-25)
+
+The app comes in English + 10 Indian languages (`docs/i18n.md`). The choice is saved on the phone, not the account. Profile property **`Language`** = the code (`en`, `hi`, `ta`…).
+
+| Event | Properties | Fired when |
+| ----- | ---------- | ---------- |
+| `Language Changed` | `from`, `to` (codes), `where` (`login_first` = the picker on the first open \| `login` = the chip at the top left \| `settings`) | a language was picked (also the first pick) |
 
 The underlying actions still fire their usual events: `Order Saved`, `Bill Sent`, `Reminder Sent`, `Order Marked Ready`, and so on.
 

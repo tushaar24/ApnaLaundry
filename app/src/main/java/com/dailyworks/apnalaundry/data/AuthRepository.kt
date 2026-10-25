@@ -4,6 +4,8 @@ import android.app.Activity
 import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.analytics.CrashReporting
 import com.dailyworks.apnalaundry.analytics.MetaEvents
+import com.dailyworks.apnalaundry.core.i18n
+import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.data.remote.AuthApi
 import com.dailyworks.apnalaundry.data.remote.CredentialsResponse
 import com.dailyworks.apnalaundry.data.remote.FirebasePhoneAuth
@@ -65,6 +67,7 @@ class AuthRepository(
         ) : Challenge
     }
 
+    /** [message] is English (marked with i18n — analytics logs it); LoginScreen shows it through tr(). */
     class AuthException(
         message: String,
         val attemptsRemaining: Int? = null,
@@ -93,7 +96,7 @@ class AuthRepository(
                 backendChallenge(phone, body, sms = true)
             // The server's own limits (cooldown, daily cap) stand.
             body?.code != null && body.code != OTP_UNAVAILABLE ->
-                throw AuthException(body.message ?: "Couldn't send OTP — try again")
+                throw AuthException(body.message ?: i18n("Couldn't send OTP — try again"))
             else -> requestFirebaseOtp(activity, phone, (previous as? Challenge.Firebase)?.resendToken, onAutoVerified)
         }
     }
@@ -102,7 +105,7 @@ class AuthRepository(
         val reply = runCatching { api.requestOtp(phone) }.getOrElse { throw AuthException(OFFLINE) }
         val body = reply.body
         if (body?.success != true || body.challengeId == null || body.challengeToken == null) {
-            throw AuthException(body?.message ?: "Couldn't send OTP — try again")
+            throw AuthException(body?.message ?: i18n("Couldn't send OTP — try again"))
         }
         return backendChallenge(phone, body, sms = false)
     }
@@ -151,7 +154,7 @@ class AuthRepository(
             if (body?.success != true) {
                 val attempts = body?.attemptsRemaining
                 throw AuthException(
-                    body?.message ?: "Verification failed — try again",
+                    body?.message ?: i18n("Verification failed — try again"),
                     attemptsRemaining = attempts,
                     wrongCode = attempts != null && attempts > 0,
                 )
@@ -159,7 +162,7 @@ class AuthRepository(
             finishLogin(body)
         }
         is Challenge.Firebase ->
-            if (challenge.verificationId.isEmpty()) Result.failure(AuthException("Request a new OTP first"))
+            if (challenge.verificationId.isEmpty()) Result.failure(AuthException(i18n("Request a new OTP first")))
             else verifyCredential(firebase.credential(challenge.verificationId, otp))
     }
 
@@ -173,31 +176,31 @@ class AuthRepository(
         val reply = runCatching { api.firebaseLogin(idToken, prefs.deviceId()) }
             .getOrElse { throw AuthException(OFFLINE) }
         val body = reply.body
-        if (body?.success != true) throw AuthException(body?.message ?: "Verification failed — try again")
+        if (body?.success != true) throw AuthException(body?.message ?: i18n("Verification failed — try again"))
         finishLogin(body)
     }
 
     private fun sendError(e: FirebaseException) = AuthException(
         when (e) {
             is FirebaseNetworkException -> OFFLINE
-            is FirebaseTooManyRequestsException -> "Too many OTP requests — try again later"
-            is FirebaseAuthInvalidCredentialsException -> "Enter a valid 10-digit mobile number"
-            else -> "Couldn't send OTP — try again"
+            is FirebaseTooManyRequestsException -> i18n("Too many OTP requests — try again later")
+            is FirebaseAuthInvalidCredentialsException -> i18n("Enter a valid 10-digit mobile number")
+            else -> i18n("Couldn't send OTP — try again")
         },
     )
 
     private fun verifyError(e: FirebaseException) = when {
         e is FirebaseNetworkException -> AuthException(OFFLINE)
-        e is FirebaseTooManyRequestsException -> AuthException("Too many attempts — try again later")
+        e is FirebaseTooManyRequestsException -> AuthException(i18n("Too many attempts — try again later"))
         e is FirebaseAuthInvalidCredentialsException && e.errorCode == "ERROR_SESSION_EXPIRED" ->
-            AuthException("OTP expired — request a new one")
-        e is FirebaseAuthInvalidCredentialsException -> AuthException("Wrong OTP", wrongCode = true)
-        else -> AuthException("Verification failed — try again")
+            AuthException(i18n("OTP expired — request a new one"))
+        e is FirebaseAuthInvalidCredentialsException -> AuthException(i18n("Wrong OTP"), wrongCode = true)
+        else -> AuthException(i18n("Verification failed — try again"))
     }
 
     /** Server credentials in hand: store them, then the initial sync / seed. */
     private suspend fun finishLogin(body: CredentialsResponse) {
-        val user = body.user ?: throw AuthException("Verification failed — try again")
+        val user = body.user ?: throw AuthException(i18n("Verification failed — try again"))
 
         // Local data left over from a DIFFERENT account (e.g. a dead session
         // followed by logging in with another number) must never be pushed
@@ -211,9 +214,9 @@ class AuthRepository(
         }
 
         prefs.setCredentials(
-            access = body.accessToken ?: throw AuthException("Verification failed — try again"),
+            access = body.accessToken ?: throw AuthException(i18n("Verification failed — try again")),
             accessExpiresAt = parseIsoMs(body.accessExpiresAt),
-            refresh = body.refreshToken ?: throw AuthException("Verification failed — try again"),
+            refresh = body.refreshToken ?: throw AuthException(i18n("Verification failed — try again")),
             userId = user.id,
             phone = user.phone,
         )
@@ -259,7 +262,7 @@ class AuthRepository(
     }
 
     private companion object {
-        const val OFFLINE = "No internet — check your connection and try again"
+        val OFFLINE = i18n("No internet — check your connection and try again")
         const val RESEND_COOLDOWN_MS = 30_000L
         /** The server couldn't send its SMS: fall back to Firebase. */
         const val OTP_UNAVAILABLE = "OTP_UNAVAILABLE"
@@ -278,7 +281,8 @@ class AuthRepository(
             val r = syncManager.syncNow()
             val authDead = (r as? SyncManager.Result.Error)?.authDead == true
             if (!authDead && syncManager.hasPendingChanges()) {
-                throw AuthException("Couldn't sync your latest changes — check internet and try again")
+                // Shown as is by the logout message (AppNavGraph; not logged): translated here.
+                throw AuthException(tr("Couldn't sync your latest changes — check internet and try again"))
             }
         }
         prefs.accessToken.first()?.let { token ->

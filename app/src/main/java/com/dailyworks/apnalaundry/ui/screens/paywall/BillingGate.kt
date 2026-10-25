@@ -21,6 +21,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.ui.components.PrimaryButton
 import com.dailyworks.apnalaundry.ui.components.bric
 import com.dailyworks.apnalaundry.ui.components.fig
@@ -37,14 +38,14 @@ internal fun CheckFailed(onRetry: () -> Unit) {
         Modifier.fillMaxSize().background(Tokens.Bg).padding(horizontal = 32.dp),
         verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("Can't check your subscription", style = bric(22, FontWeight.Bold), textAlign = TextAlign.Center)
+        Text(tr("Can't check your subscription"), style = bric(22, FontWeight.Bold), textAlign = TextAlign.Center)
         Spacer(Modifier.height(8.dp))
         Text(
-            "Check your internet connection and try again.",
+            tr("Check your internet connection and try again."),
             style = fig(14, color = Tokens.Muted), textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(20.dp))
-        PrimaryButton("Try again", height = 52.dp, onClick = onRetry)
+        PrimaryButton(tr("Try again"), height = 52.dp, onClick = onRetry)
     }
 }
 
@@ -59,6 +60,6 @@ fun ShopLoader() {
             Icon(Icons.Outlined.LocalLaundryService, null, tint = Tokens.OnDark, modifier = Modifier.size(30.dp))
         }
         Spacer(Modifier.height(16.dp))
-        Text("Loading your shop…", style = fig(14, FontWeight.SemiBold, Tokens.Muted))
+        Text(tr("Loading your shop…"), style = fig(14, FontWeight.SemiBold, Tokens.Muted))
     }
 }

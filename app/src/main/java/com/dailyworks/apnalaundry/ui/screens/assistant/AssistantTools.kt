@@ -2,6 +2,8 @@ package com.dailyworks.apnalaundry.ui.screens.assistant
 
 import com.dailyworks.apnalaundry.core.AppDate
 import com.dailyworks.apnalaundry.core.Money
+import com.dailyworks.apnalaundry.core.i18n
+import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.domain.Customer
 import com.dailyworks.apnalaundry.domain.EarningsMath
 import com.dailyworks.apnalaundry.domain.LaundryMath
@@ -529,7 +531,7 @@ class AssistantTools(private val st: LaundryState, private val today: String = A
         val dd = a.date("delivery_date")?.takeIf { it >= today } ?: ""
         val reason = a.str("reason").trim().take(100)
         out["shown_to_owner"] = JsonPrimitive(true)
-        out["button"] = JsonPrimitive(statusButton(o.status, to))
+        out["button"] = JsonPrimitive(tr(statusButton(o.status, to)))
         out["next"] = JsonPrimitive("Not changed yet. Tell them (\"you\"): check and tap '${statusButton(o.status, to)}'.")
         return ToolOutcome(JsonObject(out).toString(), AssistantCard.StatusChange(o.id, to, payments, dd, reason))
     }
@@ -584,15 +586,15 @@ class AssistantTools(private val st: LaundryState, private val today: String = A
                 val l = lines[i]; lines[i] = l.copy(qty = l.qty + qty, price = rate, amt = (l.qty + qty) * rate)
             } else lines += OrderLine(svc.id, svc.name, item.name, qty, rate, item.price ?: 0, 0.0, qty * rate)
             used += svc
-            changes += "+ ${item.name} × $qty (${svc.name}) ₹${qty * rate}"
+            changes += tr("+ {item} × {n} ({service}) {amount}", "item" to item.name, "n" to qty, "service" to svc.name, "amount" to "₹${qty * rate}")
         }
         for (el in (a["remove_items"] as? JsonArray).orEmpty()) {
             val x = el as? JsonObject ?: continue
             val i = lineIndex(lines, x.str("service_id"), x.str("item")) ?: fail("No \"${x.str("item")}\" on order #${o.no()}. It has: " + lines.joinToString(", ") { "${it.itemName} × ${it.qty} (${it.serviceName})" })
             val l = lines[i]
             val n = x.int("qty")
-            if (n == null || n >= l.qty || l.kg > 0) { lines.removeAt(i); changes += "− ${l.itemName} (${l.serviceName})" }
-            else { lines[i] = l.copy(qty = l.qty - n, amt = (l.qty - n) * l.price); changes += "− ${l.itemName} × $n (${l.serviceName})" }
+            if (n == null || n >= l.qty || l.kg > 0) { lines.removeAt(i); changes += tr("− {item} ({service})", "item" to l.itemName, "service" to l.serviceName) }
+            else { lines[i] = l.copy(qty = l.qty - n, amt = (l.qty - n) * l.price); changes += tr("− {item} × {n} ({service})", "item" to l.itemName, "n" to n, "service" to l.serviceName) }
         }
         for (el in (a["set_rates"] as? JsonArray).orEmpty()) {
             val x = el as? JsonObject ?: continue
@@ -601,7 +603,7 @@ class AssistantTools(private val st: LaundryState, private val today: String = A
             val l = lines[i]
             if (l.kg > 0) fail("${l.serviceName} is by weight — its rate is per kg on the rate card")
             lines[i] = l.copy(price = rate, amt = l.qty * rate)
-            changes += "${l.itemName} rate ₹${l.price} → ₹$rate (this order)"
+            changes += tr("{item} rate {old} → {new} (this order)", "item" to l.itemName, "old" to "₹${l.price}", "new" to "₹$rate")
         }
         for (el in (a["weights"] as? JsonArray).orEmpty()) {
             val x = el as? JsonObject ?: continue
@@ -610,34 +612,34 @@ class AssistantTools(private val st: LaundryState, private val today: String = A
                 ?: st.services.filter { it.mode == PricingMode.WEIGHT }.singleOrNull()
                 ?: fail("Which by-weight service? " + st.services.filter { it.mode == PricingMode.WEIGHT }.joinToString(", ") { "${it.id} (${it.name})" })
             val i = lines.indexOfFirst { it.serviceId == svc.id && it.kg > 0 }
-            if (kg <= 0) { if (i >= 0) { lines.removeAt(i); changes += "− ${svc.name} by weight" }; continue }
+            if (kg <= 0) { if (i >= 0) { lines.removeAt(i); changes += tr("− {service} by weight", "service" to svc.name) }; continue }
             val rate = svc.ratePerKg ?: 0
             val l = OrderLine(svc.id, svc.name, "By weight", if (i >= 0) lines[i].qty else 0, rate, rate, kg, LaundryMath.weightAmount(kg, rate, svc.minKg ?: 0.0), clothes = if (i >= 0) lines[i].clothes else emptyList())
             if (i >= 0) lines[i] = l else lines += l
             used += svc
-            changes += "${svc.name} ${Selectors.trimKg(kg)} kg"
+            changes += tr("{service} {kg} kg", "service" to svc.name, "kg" to Selectors.trimKg(kg))
         }
 
         var express = o.express; var exPct = o.exPct; var exAmt = o.exAmt
         a.bool("express")?.let { on ->
             if (on != o.express) {
                 express = on; exPct = if (on) st.shop.expressPct else 0; exAmt = 0
-                changes += if (on) "Express on (${st.shop.expressPct}%)" else "Express off"
+                changes += if (on) tr("Express on ({pct}%)", "pct" to st.shop.expressPct) else tr("Express off")
             }
         }
         var discount = o.discount; var discPct = o.discPct
-        a.int("discount_pct")?.let { p -> discPct = p.coerceIn(0, 100); discount = 0; changes += "Discount $discPct%" }
-        a.int("discount")?.let { d -> if (a.int("discount_pct") == null) { discount = maxOf(0, d); discPct = 0; changes += "Discount ₹$discount" } }
+        a.int("discount_pct")?.let { p -> discPct = p.coerceIn(0, 100); discount = 0; changes += tr("Discount {pct}%", "pct" to discPct) }
+        a.int("discount")?.let { d -> if (a.int("discount_pct") == null) { discount = maxOf(0, d); discPct = 0; changes += tr("Discount {amount}", "amount" to "₹$discount") } }
         var pickupDate = o.pickupDate
-        a.date("pickup_date")?.let { pickupDate = it; changes += "Pickup ${AppDate.short(it)}" }
+        a.date("pickup_date")?.let { pickupDate = it; changes += tr("Pickup {date}", "date" to AppDate.short(it)) }
         var deliveryDate = o.deliveryDate; var ddAuto = o.ddAuto
-        a.date("delivery_date")?.let { deliveryDate = it; ddAuto = false; changes += "Ready by ${AppDate.short(it)}" }
+        a.date("delivery_date")?.let { deliveryDate = it; ddAuto = false; changes += tr("Ready by {date}", "date" to AppDate.short(it)) }
         if (deliveryDate.isBlank() && used.isNotEmpty()) {
             // First clothes on a pickup order: the ready date from the longest ready time, as New order does.
             used.filter { it.readyInDays != null }.maxByOrNull { it.readyInDays ?: 0 }?.let { deliveryDate = AppDate.add(today, it.readyInDays ?: 0); ddAuto = true }
         }
         var note = o.note
-        if (a.containsKey("note")) { note = a.str("note").trim().take(500); changes += if (note.isBlank()) "Note removed" else "Note: $note" }
+        if (a.containsKey("note")) { note = a.str("note").trim().take(500); changes += if (note.isBlank()) tr("Note removed") else tr("Note: {note}", "note" to note) }
         if (changes.isEmpty()) fail("Nothing to change — say what to add, remove or change")
 
         val kept = o.lines.filter { !it.isQuick && it.serviceId !in onCard }
@@ -692,29 +694,29 @@ class AssistantTools(private val st: LaundryState, private val today: String = A
                 if (hit != null) {
                     val old = s.items[hit]
                     val items = s.items.toMutableList().also { it[hit] = old.copy(price = price) }
-                    card(s.copy(items = items), null, false, listOf("${s.name} · ${old.name}: " + (old.price?.takeIf { it > 0 }?.let { "₹$it → " } ?: "") + "₹$price"))
+                    card(s.copy(items = items), null, false, listOf(old.price?.takeIf { it > 0 }?.let { tr("{service} · {item}: {old} → {new}", "service" to s.name, "item" to old.name, "old" to "₹$it", "new" to "₹$price") } ?: tr("{service} · {item}: {new}", "service" to s.name, "item" to old.name, "new" to "₹$price")))
                 } else {
                     val nice = name.split(" ").joinToString(" ") { w -> w.replaceFirstChar { it.uppercase() } }
-                    card(s.copy(items = s.items + com.dailyworks.apnalaundry.domain.ServiceItem(nice, price)), null, false, listOf("${s.name} · new item $nice ₹$price"))
+                    card(s.copy(items = s.items + com.dailyworks.apnalaundry.domain.ServiceItem(nice, price)), null, false, listOf(tr("{service} · new item {item} {amount}", "service" to s.name, "item" to nice, "amount" to "₹$price")))
                 }
             }
             "remove_item" -> {
                 val s = svc() ?: fail("Which service? $services")
                 val i = matchItemIndex(s, a.str("item")) ?: fail("\"${a.str("item")}\" isn't on ${s.name}")
                 val items = s.items.toMutableList().also { it[i] = it[i].copy(price = null) }
-                card(s.copy(items = items), null, false, listOf("${s.name} · ${s.items[i].name} removed (not offered)"))
+                card(s.copy(items = items), null, false, listOf(tr("{service} · {item} removed (not offered)", "service" to s.name, "item" to s.items[i].name)))
             }
             "set_weight_rate" -> {
                 val s = svc()?.takeIf { it.mode == PricingMode.WEIGHT } ?: st.services.filter { it.mode == PricingMode.WEIGHT }.singleOrNull()
                     ?: fail("Which by-weight service? $services")
                 val rate = a.int("rate_per_kg") ?: s.ratePerKg ?: fail("What rate per kg?")
                 val min = a.dbl("min_kg") ?: s.minKg
-                card(s.copy(ratePerKg = rate, minKg = min), null, false, listOf("${s.name}: ₹${s.ratePerKg ?: 0}/kg → ₹$rate/kg" + (min?.let { " · min ${Selectors.trimKg(it)} kg" } ?: "")))
+                card(s.copy(ratePerKg = rate, minKg = min), null, false, listOf(tr("{service}: {old}/kg → {new}/kg", "service" to s.name, "old" to "₹${s.ratePerKg ?: 0}", "new" to "₹$rate") + (min?.let { " · " + tr("min {kg} kg", "kg" to Selectors.trimKg(it)) } ?: "")))
             }
             "set_ready_days" -> {
                 val s = svc() ?: fail("Which service? $services")
                 val d = a.int("ready_in_days")?.takeIf { it in 0..60 }
-                card(s.copy(readyInDays = d), null, false, listOf("${s.name}: ready in " + (d?.let { "$it day" + if (it == 1) "" else "s" } ?: "— (no ready time)")))
+                card(s.copy(readyInDays = d), null, false, listOf(when { d == null -> tr("{service}: no ready time", "service" to s.name); d == 1 -> tr("{service}: ready in {n} day", "service" to s.name, "n" to d); else -> tr("{service}: ready in {n} days", "service" to s.name, "n" to d) }))
             }
             "rename_service" -> {
                 val s = svc() ?: fail("Which service? $services")
@@ -723,11 +725,14 @@ class AssistantTools(private val st: LaundryState, private val today: String = A
             }
             "add_service" -> {
                 val n = a.str("name").trim().take(40).ifBlank { fail("What is the service called?") }
+                // Made-up placeholders ("how do I add a service?" isn't a request to add one).
+                if (norm(n) in setOf("newservice", "service", "nayaservice", "myservice")) fail("Ask the owner what the new service is called and its prices — don't make them up")
                 if (st.services.any { norm(it.name) == norm(n) }) fail("$n is already on the rate card")
                 val weight = a.str("mode") == "weight"
                 val given = (a["items"] as? JsonArray).orEmpty().mapNotNull { el ->
                     val x = el as? JsonObject ?: return@mapNotNull null
                     val nm = x.str("item").trim(); val p = x.int("price")
+                    if (Regex("item\\s*\\d*", RegexOption.IGNORE_CASE).matches(nm.trim())) fail("Ask the owner which items and prices — don't make them up")
                     if (nm.isBlank() || p == null || p <= 0) null else com.dailyworks.apnalaundry.domain.ServiceItem(nm.replaceFirstChar { it.uppercase() }, p)
                 }
                 if (!weight && given.isEmpty()) fail("Which items and prices? e.g. Shirt ₹40, Pant ₹40")
@@ -743,12 +748,12 @@ class AssistantTools(private val st: LaundryState, private val today: String = A
                     readyInDays = a.int("ready_in_days")?.takeIf { it in 0..60 }, lockedToPiece = false,
                     items = if (weight) emptyList() else given + base, sortOrder = st.services.size,
                 )
-                card(s, null, true, listOf("New service: $n") + if (weight) listOf("₹${s.ratePerKg}/kg" + (s.minKg?.let { ", min ${Selectors.trimKg(it)} kg" } ?: "")) else given.map { "${it.name} ₹${it.price}" })
+                card(s, null, true, listOf(tr("New service: {service}", "service" to n)) + if (weight) listOf("₹${s.ratePerKg}/kg" + (s.minKg?.let { ", " + tr("min {kg} kg", "kg" to Selectors.trimKg(it)) } ?: "")) else given.map { "${it.name} ₹${it.price}" })
             }
             "delete_service" -> {
                 val s = svc() ?: fail("Which service? $services")
                 if (st.services.size <= 1) fail("Keep at least one service")
-                card(null, s.id, false, listOf("Delete ${s.name} (old orders keep it)"))
+                card(null, s.id, false, listOf(tr("Delete {service} (old orders keep it)", "service" to s.name)))
             }
             else -> fail("action must be set_price, add_item, remove_item, set_weight_rate, set_ready_days, rename_service, add_service or delete_service")
         }
@@ -774,11 +779,11 @@ class AssistantTools(private val st: LaundryState, private val today: String = A
         if (name.isBlank()) return err("Customer's name?")
         if (phone.length != 10) return err("A 10-digit mobile number is needed")
         st.customers.firstOrNull { it.phone == phone && it.id != c?.id }?.let { return err("$phone is already saved for ${it.name} (${it.id})") }
-        val changes = if (c == null) listOfNotNull("New customer: $name · ${Selectors.fmtPhone(phone)}", address.takeIf { it.isNotBlank() }?.let { "Address: $it" })
+        val changes = if (c == null) listOfNotNull(tr("New customer: {name} · {phone}", "name" to name, "phone" to Selectors.fmtPhone(phone)), address.takeIf { it.isNotBlank() }?.let { tr("Address: {address}", "address" to it) })
         else listOfNotNull(
-            if (name != c.name) "Name: ${c.name} → $name" else null,
-            if (phone != c.phone) "Phone: ${Selectors.fmtPhone(c.phone)} → ${Selectors.fmtPhone(phone)}" else null,
-            if (address != c.address) "Address: ${address.ifBlank { "(none)" }}" else null,
+            if (name != c.name) tr("Name: {old} → {new}", "old" to c.name, "new" to name) else null,
+            if (phone != c.phone) tr("Phone: {old} → {new}", "old" to Selectors.fmtPhone(c.phone), "new" to Selectors.fmtPhone(phone)) else null,
+            if (address != c.address) (if (address.isBlank()) tr("Address removed") else tr("Address: {address}", "address" to address)) else null,
         )
         if (changes.isEmpty()) return err("Nothing to change")
         val baaki = if (c == null) maxOf(0, a.int("old_baaki") ?: 0) else 0
@@ -786,7 +791,7 @@ class AssistantTools(private val st: LaundryState, private val today: String = A
             put("shown_to_owner", true); putJsonArray("change") { changes.forEach { add(JsonPrimitive(it)) } }
             if (baaki > 0) put("old_baaki", baaki)
             put("next", "Not saved yet. Tell them (\"you\"): check and tap Save.")
-        }.toString(), AssistantCard.SaveCustomer(c?.id, name, phone, address, baaki, changes + listOfNotNull(if (baaki > 0) "Old baaki ₹$baaki" else null)))
+        }.toString(), AssistantCard.SaveCustomer(c?.id, name, phone, address, baaki, changes + listOfNotNull(if (baaki > 0) tr("Old baaki {amount}", "amount" to "₹$baaki") else null)))
     }
 
     private fun addOldBaaki(a: JsonObject): ToolOutcome {
@@ -1001,11 +1006,11 @@ class AssistantTools(private val st: LaundryState, private val today: String = A
 
         /** The status card's button — the same words the model is told to use. */
         fun statusButton(from: OrderStatus, to: OrderStatus) = when (to) {
-            OrderStatus.DELIVERED -> "Mark delivered"
-            OrderStatus.CANCELLED -> "Cancel order"
-            OrderStatus.CREATED -> "Move to To pick up"
-            OrderStatus.RECEIVED -> if (from == OrderStatus.CREATED) "Mark picked up" else "Move to Received"
-            OrderStatus.READY -> "Mark ready"
+            OrderStatus.DELIVERED -> i18n("Mark delivered")
+            OrderStatus.CANCELLED -> i18n("Cancel order")
+            OrderStatus.CREATED -> i18n("Move to To pick up")
+            OrderStatus.RECEIVED -> if (from == OrderStatus.CREATED) i18n("Mark picked up") else i18n("Move to Received")
+            OrderStatus.READY -> i18n("Mark ready")
         }
 
         fun statusWord(s: OrderStatus) = when (s) {
@@ -1072,6 +1077,23 @@ class AssistantTools(private val st: LaundryState, private val today: String = A
         private const val DATE = "yyyy-MM-dd"
         private const val CUST_NAME = "Or just the customer's name as the owner said it — the app finds them"
         private const val CUST_PHONE = "Or their number (full, or the last 4 digits) — the app finds them"
+
+        /** The plain-answer tool, offered only when a tool call is required (the no-card retry). */
+        const val REPLY = "reply"
+
+        /** The words of a [REPLY] call. */
+        fun replyText(args: String): String =
+            runCatching { (Json.parseToJsonElement(args).jsonObject["text"] as? JsonPrimitive)?.contentOrNull }.getOrNull().orEmpty()
+
+        val SCHEMA_WITH_REPLY: JsonArray by lazy {
+            JsonArray(
+                SCHEMA + fn(
+                    REPLY,
+                    "Your words to the owner: an answer, a how-to explanation, or a question back. Use it when nothing in the shop needs to change or be sent right now (including \"how do I…\" questions). Never use it to say something was changed or to tell them to tap a button.",
+                    obj("text" to s("What to say"), required = listOf("text")),
+                ),
+            )
+        }
 
         /** The tools, in the OpenAI / Sarvam function-calling shape. */
         val SCHEMA: JsonArray = buildJsonArray {

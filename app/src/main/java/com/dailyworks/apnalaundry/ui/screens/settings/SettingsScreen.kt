@@ -35,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dailyworks.apnalaundry.analytics.Analytics
+import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.ui.ShopViewModel
 import com.dailyworks.apnalaundry.ui.components.AppCard
 import com.dailyworks.apnalaundry.ui.components.BottomNav
@@ -81,7 +82,7 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text("Settings", style = bric(28, FontWeight.Bold))
+            Text(tr("Settings"), style = bric(28, FontWeight.Bold))
 
             // Your shops (multi-shop): switch / add another (paid)
             val planUi by paywallVm.ui.collectAsStateWithLifecycle()
@@ -94,7 +95,7 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
 
             // Shop name
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SectionLabel("Shop name")
+                SectionLabel(tr("Shop name"))
                 FieldBox(
                     value = name,
                     onValueChange = {
@@ -115,11 +116,33 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column {
-                        Text("Services", style = fig(16, FontWeight.Bold))
-                        Text("Prices for each service", style = fig(13, color = Tokens.Muted))
+                        Text(tr("Services"), style = fig(16, FontWeight.Bold))
+                        Text(tr("Prices for each service"), style = fig(13, color = Tokens.Muted))
                     }
-                    Text("Edit", style = fig(15, FontWeight.Bold, Tokens.Blue))
+                    Text(tr("Edit"), style = fig(15, FontWeight.Bold, Tokens.Blue))
                 }
+            }
+
+            // Language: the whole app (and Ask) in it; saved on this phone.
+            var languageOpen by remember { mutableStateOf(false) }
+            AppCard {
+                Row(
+                    Modifier.fillMaxWidth().tap { languageOpen = true }.padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(com.dailyworks.apnalaundry.core.tr("Language"), style = fig(16, FontWeight.Bold))
+                        Text(com.dailyworks.apnalaundry.core.I18n.language.native, style = fig(13, color = Tokens.Muted))
+                    }
+                    Text(com.dailyworks.apnalaundry.core.tr("Change"), style = fig(15, FontWeight.Bold, Tokens.Blue))
+                }
+            }
+            if (languageOpen) {
+                com.dailyworks.apnalaundry.ui.components.LanguagePickerDialog(
+                    onPick = { languageOpen = false; com.dailyworks.apnalaundry.ui.components.applyLanguage(context, it, "settings") },
+                    onDismiss = { languageOpen = false },
+                )
             }
 
             // Bill design & details (same screen as onboarding step 3)
@@ -130,10 +153,10 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text("Bill design & details", style = fig(16, FontWeight.Bold))
-                        Text("Design, logo, UPI QR, address, email, GSTIN, terms", style = fig(13, color = Tokens.Muted))
+                        Text(tr("Bill design & details"), style = fig(16, FontWeight.Bold))
+                        Text(tr("Design, logo, UPI QR, address, email, GSTIN, terms"), style = fig(13, color = Tokens.Muted))
                     }
-                    Text("Edit", style = fig(15, FontWeight.Bold, Tokens.Blue))
+                    Text(tr("Edit"), style = fig(15, FontWeight.Bold, Tokens.Blue))
                 }
             }
 
@@ -154,16 +177,16 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
                             // One text, so "Cancelled" wraps as a word, not letter by letter.
                             Text(
                                 buildAnnotatedString {
-                                    append(if (billing.status?.subscription?.plan == "annual") "Yearly plan" else "Monthly plan")
-                                    if (billing.inGrace) withStyle(SpanStyle(color = Tokens.OrangeText)) { append(" · Cancelled") }
+                                    append(if (billing.status?.subscription?.plan == "annual") tr("Yearly plan") else tr("Monthly plan"))
+                                    if (billing.inGrace) withStyle(SpanStyle(color = Tokens.OrangeText)) { append(" · " + tr("Cancelled")) }
                                 },
                                 style = fig(16, FontWeight.Bold),
                             )
                             Text(
                                 when {
-                                    !billing.inGrace -> "Unlimited orders"
-                                    until.isNotEmpty() -> "Works till $until"
-                                    else -> "Works till the end of the paid period"
+                                    !billing.inGrace -> tr("Unlimited orders")
+                                    until.isNotEmpty() -> tr("Works till {date}", "date" to until)
+                                    else -> tr("Works till the end of the paid period")
                                 },
                                 style = fig(13, color = Tokens.Muted),
                             )
@@ -174,19 +197,19 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
             }
 
             // Help: talk to us, or walk through the app again with the guide.
-            SectionLabel("Help")
+            SectionLabel(tr("Help"))
             AppCard {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Column {
-                        Text("Need help? Talk to us", style = fig(16, FontWeight.Bold))
+                        Text(tr("Need help? Talk to us"), style = fig(16, FontWeight.Bold))
                         Text(SUPPORT_PHONE_SHOWN, style = fig(14, color = Tokens.Muted))
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlineButton("Call us", Modifier.weight(1f), height = 48.dp) {
+                        OutlineButton(tr("Call us"), Modifier.weight(1f), height = 48.dp) {
                             Analytics.supportContacted("call", "settings")
                             callSupport(context)
                         }
-                        PrimaryButton("WhatsApp us", Modifier.weight(1f), height = 48.dp, bg = WhatsAppGreen) {
+                        PrimaryButton(tr("WhatsApp us"), Modifier.weight(1f), height = 48.dp, bg = WhatsAppGreen) {
                             Analytics.supportContacted("whatsapp", "settings")
                             whatsAppSupport(context, shop.name)
                         }
@@ -205,17 +228,17 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text("How to use the app", style = fig(16, FontWeight.Bold))
-                        Text("Step by step, with sound: new order, ready, money, khata, earnings", style = fig(13, color = Tokens.Muted))
+                        Text(tr("How to use the app"), style = fig(16, FontWeight.Bold))
+                        Text(tr("Step by step, with sound: new order, ready, money, khata, earnings"), style = fig(13, color = Tokens.Muted))
                     }
-                    Text("Show me", style = fig(15, FontWeight.Bold, Tokens.Blue))
+                    Text(tr("Show me"), style = fig(15, FontWeight.Bold, Tokens.Blue))
                 }
             }
 
             // Phone
             AppCard {
                 Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Phone", style = fig(15, FontWeight.SemiBold, Tokens.Muted))
+                    Text(tr("Phone"), style = fig(15, FontWeight.SemiBold, Tokens.Muted))
                     Text("+91 ${shop.phone}", style = fig(15, FontWeight.Bold), maxLines = 1, softWrap = false)
                 }
             }
@@ -223,8 +246,8 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
             // Coming later
             AppCard(bg = Tokens.NeutralFill, borderColor = Tokens.NeutralFill) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Coming later", style = fig(13, FontWeight.Bold, Tokens.Muted))
-                    Text("Staff logins · Hindi", style = fig(14, color = Tokens.InkSecondary))
+                    Text(tr("Coming later"), style = fig(13, FontWeight.Bold, Tokens.Muted))
+                    Text(tr("Staff logins"), style = fig(14, color = Tokens.InkSecondary))
                 }
             }
 
@@ -235,7 +258,7 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
                 },
                 contentAlignment = Alignment.Center,
             ) {
-                Text(if (loggingOut) "Logging out…" else "Log out / restart", style = fig(15, FontWeight.Bold, Tokens.OrangeText))
+                Text(if (loggingOut) tr("Logging out…") else tr("Log out / restart"), style = fig(15, FontWeight.Bold, Tokens.OrangeText))
             }
             Spacer(Modifier.height(8.dp))
         }
