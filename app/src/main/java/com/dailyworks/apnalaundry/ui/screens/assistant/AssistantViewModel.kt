@@ -29,6 +29,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
@@ -124,7 +125,7 @@ class AssistantViewModel(
                         history += buildJsonObject {
                             put("role", "tool")
                             put("tool_call_id", call.id.ifBlank { "call_${rounds}_$i" })
-                            put("content", out.json)
+                            put("content", if (out.card != null) waitingForTap(out.json) else out.json)
                         }
                     }
                 }
@@ -293,13 +294,22 @@ class AssistantViewModel(
             appendLine("- Reply in the same language AND the same letters as the owner's last message. Written in English letters (even Hindi words, like \"aaj kitna kamaya\") → reply in English letters (Hinglish), never Devanagari. Written in Devanagari → Devanagari. English → English. Short and simple: 1-4 lines. No tables, no headings, no markdown; a few \"• \" lines are fine.")
             appendLine("- Money as ₹ with Indian commas (₹1,25,000). Baaki = money a customer still owes (their khata). Advance = they paid extra.")
             appendLine("- ALWAYS use the tools for shop data. Never guess customers, orders, prices or numbers.")
-            appendLine("- Find a customer with find_customers first. One match, or exact_match → that's the customer, go ahead. Several → ask which one (name + last 4 phone digits). None → ask whether it's a new customer.")
-            appendLine("- New order: once the customer and clothes are clear, call create_order straight away — don't ask \"shall I make it?\"; its card with the Save order button IS the confirmation. Items come from the rate card below (service_id + item); \"press\" = iron. If the owner didn't say the service and the item is in more than one, ask. A new customer needs a name and a 10-digit mobile. Then say \"Check and tap Save order\". Never say it is saved.")
+            appendLine("- Customers: for any action just pass customer_name (and customer_phone if the owner said a number). The app checks whether they are already saved — by number, then name — and takes them automatically; for a new order with someone not saved, they become a new customer (needs a 10-digit number: ask if missing). If the app says several match, ask which one (name + last 4 digits). Use find_customers only to look someone up.")
+            appendLine("- New order: once the customer and clothes are clear, call create_order straight away — don't ask \"shall I make it?\"; its card with the Save order button IS the confirmation. Items come from the rate card below (service_id + item); \"press\" = iron. If the owner didn't say the service and the item is in more than one, ask. Then say \"Check and tap Save order\". Never say it is saved.")
             appendLine("- Bills, status updates, reminders, any WhatsApp message: send_bill / send_status_update / send_khata_reminder / whatsapp_message. They show a WhatsApp button the owner taps — never say a message was sent or WhatsApp was opened.")
             appendLine("- Never mention tool names or ids (find_orders, c12…) — speak like a helper in the shop.")
             appendLine("- \"Last order\" of a customer = their newest order (find_orders with customer_id).")
             appendLine("- Order statuses: to_pick_up (home pickup not done), received (at the shop, being washed), ready, delivered, cancelled.")
-            appendLine("- mark_order can mark picked up or ready. Delivering (with payment), cancelling, editing or deleting an order is done by opening the order in the app — tell the owner that.")
+            appendLine("- You can change anything in the shop:")
+            appendLine("  • change_status: any status, forward or back (delivered → ready, cancelled → received…). For delivered you need what the customer paid now: if the owner didn't say, ask \"Kitna mila — cash ya UPI? Ya sab khata mein?\". \"Paid\" / \"pura paisa\" = paid_full.")
+            appendLine("  • record_payment: \"paid\" / \"part paid\" / \"300 diye\" on an order, or a khata payment.")
+            appendLine("  • edit_order: add or remove clothes, this order's rate for an item, kg, express, discount, dates, note. An order with no clothes yet must get them (edit_order) before it can be ready or delivered.")
+            appendLine("  • edit_rate_card: change a price, add / remove an item, add a new service, per-kg rate, ready days, rename or delete a service.")
+            appendLine("  • save_customer (new customer or change name / phone / address), add_old_baaki.")
+            appendLine("  • Cancel = change_status to cancelled (the order stays, marked cancelled). delete_order only when they say delete / mita do / galti se bana — never for cancel.")
+            appendLine("  Several changes at once = several tool calls.")
+            appendLine("- IMPORTANT: a change happens ONLY when the owner taps the button on its card. So never write \"ho gaya\", \"kar diya\", \"add ho gaya\", \"done\", \"saved\", \"marked\". Say what the card will do and ask them to tap. Wrong: \"Shirt ka rate ₹12 kar diya.\" Right: \"Shirt ka rate ₹12 karne ke liye 'Save to rate card' tap karo.\" Wrong: \"2 pant add ho gaye.\" Right: \"2 pant jodne ke liye 'Save changes' tap karo.\"")
+            appendLine("- Never ask the owner for a customer_id, order id or service id — look them up yourself (find_customers, find_orders, the rate card). Ask only for things only they know: which customer when several match, amounts, cash or UPI.")
             appendLine("- Only this shop's laundry work. For anything else, say politely you can only help with the shop.")
             appendLine()
             appendLine("Rate card (service_id: name — items):")
@@ -314,6 +324,16 @@ class AssistantViewModel(
         }
         return msg("system", text.trim())
     }
+
+    /** A card's tool result, marked so the model never says "ho gaya" before the owner taps. */
+    private fun waitingForTap(json: String): String = runCatching {
+        JsonObject(
+            kotlinx.serialization.json.Json.parseToJsonElement(json).jsonObject + mapOf(
+                "done" to JsonPrimitive(false),
+                "say" to JsonPrimitive("Nothing has happened yet — it happens only when they tap the button on the card. Don't say ho gaya / kar diya / done; ask them to tap."),
+            ),
+        ).toString()
+    }.getOrDefault(json)
 
     private fun clean(s: String?): String = s.orEmpty()
         .replace("**", "")
@@ -336,7 +356,7 @@ class AssistantViewModel(
 
     companion object {
         /** Model calls per question: answer, or tools then answer (a new order may take 3). */
-        private const val MAX_ROUNDS = 5
+        private const val MAX_ROUNDS = 6
         private const val MAX_VOICE_MS = 25_000L
 
         fun cardName(c: AssistantCard) = when (c) {
@@ -345,7 +365,13 @@ class AssistantViewModel(
             is AssistantCard.StatusUpdates -> "status_update"
             is AssistantCard.Reminder -> "reminder"
             is AssistantCard.WhatsAppText -> "whatsapp_message"
-            is AssistantCard.MarkOrder -> "mark_order"
+            is AssistantCard.StatusChange -> "change_status"
+            is AssistantCard.Payment -> "payment"
+            is AssistantCard.EditOrder -> "edit_order"
+            is AssistantCard.RateChange -> "rate_card"
+            is AssistantCard.SaveCustomer -> "customer"
+            is AssistantCard.OldBaaki -> "old_baaki"
+            is AssistantCard.DeleteOrder -> "delete_order"
         }
     }
 }

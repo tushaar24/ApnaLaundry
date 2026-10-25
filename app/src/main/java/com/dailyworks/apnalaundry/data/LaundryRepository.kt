@@ -387,6 +387,43 @@ class LaundryRepository(private val shops: ShopDirectory) {
         return CmdResult("Got ${money(due)} ${if (method == PayMethod.UPI) "UPI" else "cash"} · order fully paid", undo)
     }
 
+    /**
+     * Part (or full) payment on an order before delivery (the assistant: "Ramesh
+     * ne 200 de diye"). Up to what's still due goes on the order as paid in
+     * advance (a PRE entry, like [prepay]); anything over it is a khata payment —
+     * old baaki first, then advance.
+     */
+    suspend fun prepayPart(orderId: Int, amount: Int, method: PayMethod): CmdResult {
+        val undo = snapshot()
+        val st = current()
+        val o = st.orders.first { it.id == orderId }
+        val due = LaundryMath.amtOf(o) - o.pre
+        if (!LaundryMath.isOpen(o) || amount <= 0) return CmdResult("Nothing to record on order #${o.no()}")
+        val onOrder = minOf(amount, maxOf(0, due))
+        val extra = amount - onOrder
+        db.withTransaction {
+            if (onOrder > 0) {
+                ledgerDao.insert(mkEntry(o.custId, LedgerKind.GOT, onOrder, method, PayTag.PRE, cover = onOrder, ref = o.id).toEntity())
+                putOrder(o.copy(pre = o.pre + onOrder).toEntity())
+            }
+            if (extra > 0) {
+                // The order itself is paid off, so its total no longer counts against the rest.
+                val oldBal = LaundryMath.balance(o.custId, st.ledger, st.orders, o.id)
+                val (toOld, toAdv) = LaundryMath.receiveAllocation(oldBal, extra)
+                ledgerDao.insert(mkEntry(o.custId, LedgerKind.GOT, extra, method, PayTag.RECEIVE, toOld = toOld, toAdv = toAdv).toEntity())
+            }
+        }
+        if (onOrder > 0) Analytics.paymentReceived(onOrder, method, "prepay", o.custId, o.id)
+        if (extra > 0) Analytics.paymentReceived(extra, method, "khata", o.custId, null)
+        val left = due - onOrder
+        val how = if (method == PayMethod.UPI) "UPI" else "cash"
+        return CmdResult(
+            "Got ${money(amount)} $how · order #${o.no()} " + (if (left > 0) "${money(left)} still due" else "fully paid") +
+                (if (extra > 0) " · ${money(extra)} to khata" else ""),
+            undo,
+        )
+    }
+
     suspend fun cancelOrder(orderId: Int, reason: String): CmdResult {
         val undo = snapshot()
         val st = current()

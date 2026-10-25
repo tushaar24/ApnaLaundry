@@ -217,6 +217,7 @@ private fun BubbleView(b: AssistantViewModel.Bubble, state: LaundryState, vm: As
                 Modifier.widthIn(max = 320.dp).rounded(16.dp).background(Tokens.Card)
                     .border(1.dp, Tokens.CardBorder, RoundedCornerShape(16.dp)).padding(horizontal = 14.dp, vertical = 10.dp),
             ) { Text(b.text, style = fig(15)) }
+            if (b.cards.isNotEmpty()) Text("👇 Nothing changes until you tap the button", style = fig(13, FontWeight.SemiBold, Tokens.Muted))
             b.cards.forEachIndexed { i, c -> CardView(c, "${b.id}:$i", state, vm, shopVm, navigator) }
         }
         AssistantViewModel.Who.ERROR -> Box(
@@ -248,19 +249,25 @@ private fun CardView(card: AssistantCard, key: String, state: LaundryState, vm: 
         is AssistantCard.StatusUpdates -> StatusCard(card.orderIds, key, used, state, vm)
         is AssistantCard.Reminder -> ReminderCard(card.custId, key, used, state, vm, shopVm)
         is AssistantCard.WhatsAppText -> MessageCard(card, key, used, state, vm)
-        is AssistantCard.MarkOrder -> MarkCard(card, key, used, state, vm, shopVm)
+        is AssistantCard.StatusChange -> StatusChangeCard(card, key, used, state, vm, shopVm)
+        is AssistantCard.Payment -> PaymentCard(card, key, used, state, vm, shopVm)
+        is AssistantCard.EditOrder -> EditOrderCard(card, key, used, state, vm, shopVm)
+        is AssistantCard.RateChange -> RateChangeCard(card, key, used, vm, shopVm)
+        is AssistantCard.SaveCustomer -> SaveCustomerCard(card, key, used, vm, shopVm)
+        is AssistantCard.OldBaaki -> OldBaakiCard(card, key, used, state, vm, shopVm)
+        is AssistantCard.DeleteOrder -> DeleteOrderCard(card, key, used, state, vm, shopVm)
     }
 }
 
 @Composable
-private fun CardBox(content: @Composable () -> Unit) {
+internal fun CardBox(content: @Composable () -> Unit) {
     AppCard(Modifier.fillMaxWidth()) {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { content() }
     }
 }
 
 @Composable
-private fun AmountRow(label: String, amount: String, bold: Boolean = false) {
+internal fun AmountRow(label: String, amount: String, bold: Boolean = false) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(label, style = fig(if (bold) 16 else 14, if (bold) FontWeight.Bold else FontWeight.Normal), modifier = Modifier.weight(1f))
         Text(amount, style = if (bold) bric(20, FontWeight.Bold) else fig(14, FontWeight.SemiBold))
@@ -272,7 +279,7 @@ private fun WaButton(text: String, modifier: Modifier = Modifier, height: androi
     PrimaryButton(text, modifier, height = height, bg = WaGreen, onClick = onClick)
 
 @Composable
-private fun DoneText(text: String) = Text(text, style = fig(14, FontWeight.Bold, Tokens.GreenText))
+internal fun DoneText(text: String) = Text(text, style = fig(14, FontWeight.Bold, Tokens.GreenText))
 
 @Composable
 private fun NewOrderCard(
@@ -282,6 +289,7 @@ private fun NewOrderCard(
     val drafts by vm.drafts.collectAsStateWithLifecycle()
     val d = card.draft
     val existing = d.custId?.let { id -> state.customers.firstOrNull { it.id == id } }
+        ?: state.customers.firstOrNull { d.custId == null && d.newPhone.length == 10 && it.phone == d.newPhone }
     val name = existing?.name ?: d.newName
     val phone = existing?.phone ?: d.newPhone
     val status = drafts[card.key]
@@ -301,9 +309,11 @@ private fun NewOrderCard(
                 note = d.note,
             ) { res -> vm.orderSaved(card.key, res.orderId, name, d.total) }
         }
+        // A new customer saved meanwhile (their own card, or another phone) is taken, never added twice.
         val c = d.custId?.let { id -> st.customers.firstOrNull { it.id == id } }
+            ?: st.customers.firstOrNull { d.custId == null && d.newPhone.length == 10 && it.phone == d.newPhone }
         when {
-            d.custId == null -> shopVm.saveCustomer(null, d.newName, d.newPhone, d.address, 0, fromList = false) { id -> saveOrder(id) }
+            c == null && d.custId == null -> shopVm.saveCustomer(null, d.newName, d.newPhone, d.address, 0, fromList = false) { id -> saveOrder(id) }
             c == null -> vm.draft(card.key, AssistantViewModel.Draft.Cancelled) // deleted on another phone meanwhile
             d.address.isNotBlank() && c.address.isBlank() ->
                 shopVm.saveCustomer(c.id, c.name, c.phone, d.address, 0, fromList = false) { id -> saveOrder(id) }
@@ -369,7 +379,7 @@ private fun NewOrderCard(
 }
 
 @Composable
-private fun Tag(text: String) {
+internal fun Tag(text: String) {
     Box(Modifier.rounded(999.dp).background(Tokens.BlueLight).padding(horizontal = 10.dp, vertical = 4.dp)) {
         Text(text, style = fig(12, FontWeight.Bold, Tokens.BlueText))
     }
@@ -482,27 +492,7 @@ private fun MessageCard(card: AssistantCard.WhatsAppText, key: String, used: Set
     }
 }
 
-@Composable
-private fun MarkCard(card: AssistantCard.MarkOrder, key: String, used: Set<String>, state: LaundryState, vm: AssistantViewModel, shopVm: ShopViewModel) {
-    val o = Selectors.order(state, card.orderId)
-    CardBox {
-        if (o == null) { Text("This order was deleted", style = fig(14, color = Tokens.Muted)); return@CardBox }
-        val c = Selectors.customer(state, o.custId)
-        val word = if (card.to == OrderStatus.READY) "ready" else "picked up"
-        Text("#${o.no()} · ${c.name}", style = bric(18, FontWeight.Bold))
-        Text("Now: ${statusLabel(o.status)}" + if (card.to == OrderStatus.READY && card.deliveryDate.isNotBlank()) " · delivery ${AppDate.short(card.deliveryDate)}" else "", style = fig(14, color = Tokens.InkSecondary))
-        when {
-            key in used || o.status == card.to -> DoneText("Marked $word ✓")
-            !LaundryMath.isOpen(o) -> Text("It's ${statusLabel(o.status).lowercase()} — open the order to change it", style = fig(14, color = Tokens.Muted))
-            else -> PrimaryButton("Mark $word", Modifier.fillMaxWidth(), height = 48.dp) {
-                if (card.to == OrderStatus.READY) shopVm.markReady(o.id, card.deliveryDate) else shopVm.markPickedUp(o.id)
-                vm.used(key, "mark_order", "Marked order #${o.no()} of ${c.name} $word")
-            }
-        }
-    }
-}
-
-private fun statusLabel(s: OrderStatus) = when (s) {
+internal fun statusLabel(s: OrderStatus) = when (s) {
     OrderStatus.CREATED -> "To pick up"; OrderStatus.RECEIVED -> "Received"; OrderStatus.READY -> "Ready"
     OrderStatus.DELIVERED -> "Delivered"; OrderStatus.CANCELLED -> "Cancelled"
 }
