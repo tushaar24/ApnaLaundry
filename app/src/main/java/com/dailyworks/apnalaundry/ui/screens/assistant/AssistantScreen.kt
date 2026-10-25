@@ -121,6 +121,8 @@ fun AssistantScreen(shopVm: ShopViewModel, navigator: AppNavigator, from: String
     val prefs: com.dailyworks.apnalaundry.data.Prefs = org.koin.compose.koinInject()
     val speakOn by prefs.assistantSpeak.collectAsStateWithLifecycle(initialValue = true)
     val scope = rememberCoroutineScope()
+    // Ready before the first answer (usually already, from app start): no wait for the engine.
+    LaunchedEffect(speakOn) { if (speakOn) speaker.warmUp(forAsk = true) }
     var lastRead by rememberSaveable { mutableLongStateOf(0L) }
     LaunchedEffect(bubbles.lastOrNull()?.id, speakOn) {
         val b = bubbles.lastOrNull() ?: return@LaunchedEffect

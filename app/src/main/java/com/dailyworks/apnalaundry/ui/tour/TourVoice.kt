@@ -49,11 +49,32 @@ class TourVoice(context: Context, private val prefs: Prefs) {
     private var repeatJob: Job? = null
 
     /**
-     * Starts the engine (and picks the voice) ahead of the first card, so its
-     * words don't wait 1–3 s for the engine on a budget phone.
+     * Starts the engine, picks the voice and loads it ahead of the first words, so
+     * they don't wait 1–3 s for the engine on a budget phone. [forAsk]: for Ask's
+     * replies, which the guide's mute doesn't stop (owner, 2026-10-25: Ask's first
+     * answer was slow to speak). Safe to call often; a language change loads the
+     * new voice.
      */
-    fun warmUp() {
-        if (tts == null && !muted.value) create()
+    fun warmUp(forAsk: Boolean = false) {
+        if (!forAsk && muted.value) return
+        val engine = tts ?: create()
+        if (ready) preload(engine)
+    }
+
+    private var preloadedFor: AppLanguage? = null
+
+    /**
+     * Engines load a language's voice on its first words. A short line written to a
+     * file — never played — loads it now instead. Skipped with words already waiting
+     * (they load it) or the phone has no voice for the language.
+     */
+    private fun preload(engine: TextToSpeech) {
+        val lang = I18n.language
+        if (preloadedFor == lang || pending != null || !pickVoice(engine)) return
+        preloadedFor = lang
+        runCatching {
+            engine.synthesizeToFile(com.dailyworks.apnalaundry.core.tr("OK"), android.os.Bundle(), java.io.File(app.cacheDir, "tts_warm.wav"), WARM_UP)
+        }
     }
 
     /** Owners whose words play once, never repeated (Ask's replies). */
@@ -192,6 +213,7 @@ class TourVoice(context: Context, private val prefs: Prefs) {
         engine.setOnUtteranceProgressListener(progress)
         pickVoice(engine)
         ready = true
+        if (pending == null) preload(engine)
         pending?.let { (words, owner) -> if (speaking == owner) speak(engine, words, owner) }
         pending = null
     }
@@ -212,5 +234,7 @@ class TourVoice(context: Context, private val prefs: Prefs) {
         /** Pause before a card's words play again. */
         const val REPEAT_AFTER_MS = 5_000L
         const val STOP_GRACE_MS = 300L
+        /** The [preload] line's id — not an owner, so it never repeats or counts as speaking. */
+        const val WARM_UP = "warm_up"
     }
 }
