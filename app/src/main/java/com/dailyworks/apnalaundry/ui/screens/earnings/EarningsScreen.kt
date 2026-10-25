@@ -387,7 +387,7 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
             }
         }
 
-        BottomNav(current = NavTab.EARNINGS, onNewOrder = { navigator.openNewOrder(from = "nav") }, onSelect = navigator::selectTab)
+        BottomNav(current = NavTab.EARNINGS, onSelect = navigator::selectTab)
     }
 
     if (tour == TourStage.EARNINGS && active == null) {
