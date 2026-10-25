@@ -114,3 +114,19 @@ What it adds:
 - the patch is `2026-10-25-backend-assistant-languages.patch`, smoke-tested locally against Sarvam.
 
 Checked on prod with the demo account: `tool_choice: required` → `tool_calls`; `/assistant/config`, `/experiments`, `/billing/status`, `/shops`, `/sync/pull` → 200.
+
+## Answers read aloud (25 Oct)
+
+Ask reads each new answer once with the phone's own text-to-speech, in the app's language. It uses `TourVoice.read`: no repeat, and the guide's mute doesn't apply.
+- **The 🔊 at the top** turns reading on or off. It's on by default and saved as Prefs `assistant_speak`.
+- **The 🔊 next to an answer** plays that answer again.
+- **Stopping:** reading stops when the mic is tapped (so the phone never records its own voice), when a question is sent, or when you leave Ask.
+- **Silence:** a phone with no voice for the language stays silent.
+
+## Website + test phone (25 Oct)
+
+- **Invoice bill design on mylaundry.work:** 5 files replaced via `2026-10-25-web-invoice-bill-deploy.sh`. The live copies were checked equal to the repo before. Backup: `~/apnalaundry-web-filebak/20261025-122253/files.tar`.
+- **9818012136 is the owner's test phone:**
+  - added to `EXCLUDED_PHONES` in `~/laundry-dashboard/server.js` (backup `server.js.bak.<stamp>`);
+  - added as `LAUNDRY_SUPPORT_HIDDEN_PHONES=9818012136` in `backend/.env` (backup `.env.bak-testphone-<stamp>`);
+  - `laundry-dash` and `backend` were recreated.

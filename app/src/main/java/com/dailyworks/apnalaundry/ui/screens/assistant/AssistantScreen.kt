@@ -1,5 +1,8 @@
 package com.dailyworks.apnalaundry.ui.screens.assistant
 
+import androidx.compose.material.icons.automirrored.outlined.VolumeOff
+import androidx.compose.material.icons.automirrored.outlined.VolumeUp
+import androidx.compose.runtime.mutableLongStateOf
 import android.Manifest
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -111,6 +114,18 @@ fun AssistantScreen(shopVm: ShopViewModel, navigator: AppNavigator, from: String
     val context = LocalContext.current
     var input by rememberSaveable { mutableStateOf("") }
     val listState = rememberLazyListState()
+    // Answers read out loud with the phone's text-to-speech, in the app's language (switch at the top).
+    val speaker: com.dailyworks.apnalaundry.ui.tour.TourVoice = org.koin.compose.koinInject()
+    val prefs: com.dailyworks.apnalaundry.data.Prefs = org.koin.compose.koinInject()
+    val speakOn by prefs.assistantSpeak.collectAsStateWithLifecycle(initialValue = true)
+    val scope = rememberCoroutineScope()
+    var lastRead by rememberSaveable { mutableLongStateOf(0L) }
+    LaunchedEffect(bubbles.lastOrNull()?.id, speakOn) {
+        val b = bubbles.lastOrNull() ?: return@LaunchedEffect
+        if (b.id <= lastRead) return@LaunchedEffect
+        lastRead = b.id // each answer once — not again when reading is switched on later
+        if (speakOn && b.who == AssistantViewModel.Who.ASSISTANT) speaker.read(b.text, "ask:${b.id}")
+    }
 
     LaunchedEffect(Unit) { Analytics.screen("assistant"); Analytics.assistantOpened(from) }
     // Newest message (or "Thinking…") in sight.
@@ -118,22 +133,39 @@ fun AssistantScreen(shopVm: ShopViewModel, navigator: AppNavigator, from: String
         val n = bubbles.size + if (busy) 1 else 0
         if (n > 0) listState.animateScrollToItem(n - 1)
     }
-    // Leaving mid-note: the mic stops.
-    DisposableEffect(Unit) { onDispose { vm.cancelVoice() } }
+    // Leaving mid-note: the mic stops, and so does the reading.
+    DisposableEffect(Unit) { onDispose { vm.cancelVoice(); speaker.stopAll() } }
 
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) vm.startVoice() else shopVm.showInfo(tr("Allow the microphone to speak — or type instead"))
     }
     val startMic = {
+        speaker.stopAll() // never record the phone's own voice
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) vm.startVoice()
         else micPermission.launch(Manifest.permission.RECORD_AUDIO)
     }
     val send = { via: String ->
-        if (input.isNotBlank() && !busy) { vm.ask(input, via); input = "" }
+        if (input.isNotBlank() && !busy) { speaker.stopAll(); vm.ask(input, via); input = "" }
     }
 
     Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.ime))) {
         TopBar(tr("Ask"), onBack = { navigator.back() }, trailing = {
+            // Read answers out loud: on / off (remembered).
+            Box(
+                Modifier.size(44.dp).rounded(999.dp).background(if (speakOn) Tokens.BlueLight else Tokens.NeutralFill)
+                    .tap {
+                        val on = !speakOn
+                        if (!on) speaker.stopAll()
+                        scope.launch { prefs.setAssistantSpeak(on) }
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    if (speakOn) Icons.AutoMirrored.Outlined.VolumeUp else Icons.AutoMirrored.Outlined.VolumeOff,
+                    if (speakOn) tr("Stop reading answers aloud") else tr("Read answers aloud"),
+                    tint = if (speakOn) Tokens.Blue else Tokens.InkSecondary, modifier = Modifier.size(22.dp),
+                )
+            }
             if (bubbles.isNotEmpty() && !busy) {
                 Text(tr("New chat"), style = fig(15, FontWeight.Bold, Tokens.Blue), modifier = Modifier.tap { vm.clear() }.padding(horizontal = 8.dp, vertical = 12.dp))
             }
@@ -151,7 +183,7 @@ fun AssistantScreen(shopVm: ShopViewModel, navigator: AppNavigator, from: String
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    items(bubbles, key = { it.id }) { b -> BubbleView(b, state, vm, shopVm, navigator) }
+                    items(bubbles, key = { it.id }) { b -> BubbleView(b, state, vm, shopVm, navigator) { speaker.read(b.text, "ask:${b.id}") } }
                     if (busy) item(key = "thinking") { Thinking() }
                 }
             }
@@ -206,7 +238,10 @@ private fun Chip(label: String, onClick: () -> Unit) {
 // ---------------- messages ----------------
 
 @Composable
-private fun BubbleView(b: AssistantViewModel.Bubble, state: LaundryState, vm: AssistantViewModel, shopVm: ShopViewModel, navigator: AppNavigator) {
+private fun BubbleView(
+    b: AssistantViewModel.Bubble, state: LaundryState, vm: AssistantViewModel, shopVm: ShopViewModel, navigator: AppNavigator,
+    onRead: () -> Unit,
+) {
     when (b.who) {
         AssistantViewModel.Who.OWNER -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             Box(
@@ -214,10 +249,16 @@ private fun BubbleView(b: AssistantViewModel.Bubble, state: LaundryState, vm: As
             ) { Text(b.text, style = fig(15, FontWeight.SemiBold, Tokens.OnDark)) }
         }
         AssistantViewModel.Who.ASSISTANT -> Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(
-                Modifier.widthIn(max = 320.dp).rounded(16.dp).background(Tokens.Card)
-                    .border(1.dp, Tokens.CardBorder, RoundedCornerShape(16.dp)).padding(horizontal = 14.dp, vertical = 10.dp),
-            ) { Text(b.text, style = fig(15)) }
+            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Box(
+                    Modifier.widthIn(max = 300.dp).rounded(16.dp).background(Tokens.Card)
+                        .border(1.dp, Tokens.CardBorder, RoundedCornerShape(16.dp)).padding(horizontal = 14.dp, vertical = 10.dp),
+                ) { Text(b.text, style = fig(15)) }
+                // Hear this answer (again).
+                Box(Modifier.size(36.dp).rounded(999.dp).background(Tokens.NeutralFill).tap(onClick = onRead), contentAlignment = Alignment.Center) {
+                    Icon(Icons.AutoMirrored.Outlined.VolumeUp, tr("Read aloud"), tint = Tokens.InkSecondary, modifier = Modifier.size(18.dp))
+                }
+            }
             if (b.cards.isNotEmpty()) Text(tr("👇 Nothing changes until you tap the button"), style = fig(13, FontWeight.SemiBold, Tokens.Muted))
             b.cards.forEachIndexed { i, c -> CardView(c, "${b.id}:$i", state, vm, shopVm, navigator) }
         }

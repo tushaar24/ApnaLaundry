@@ -56,6 +56,28 @@ class TourVoice(context: Context, private val prefs: Prefs) {
         if (tts == null && !muted.value) create()
     }
 
+    /** Owners whose words play once, never repeated (Ask's replies). */
+    private val once = mutableSetOf<String>()
+
+    /**
+     * Ask: reads an answer out loud once, in the app's language — no repeat,
+     * and the guide's mute doesn't apply (Ask has its own switch; the caller
+     * checks it).
+     */
+    fun read(text: String, owner: String) {
+        once += owner
+        speaking = owner
+        stopJob?.cancel()
+        repeatJob?.cancel()
+        scope.launch {
+            val words = spoken(text)
+            if (words.isBlank() || speaking != owner) return@launch
+            lastSaid = owner to words
+            val engine = tts ?: create()
+            if (ready) speak(engine, words, owner) else pending = words to owner
+        }
+    }
+
     /** Says [text] (replacing anything being said), unless muted. */
     fun say(text: String, owner: String) {
         // Claimed now, so a stop(owner) before the words start still cancels them.
@@ -146,7 +168,7 @@ class TourVoice(context: Context, private val prefs: Prefs) {
         // words cut off by another card end in onStop, not here.
         override fun onDone(utteranceId: String?) {
             val id = utteranceId ?: return
-            scope.launch(Dispatchers.Main) { if (speaking == id) repeatLater(id) }
+            scope.launch(Dispatchers.Main) { if (speaking == id && id !in once) repeatLater(id) }
         }
 
         @Deprecated("Deprecated in Java")
