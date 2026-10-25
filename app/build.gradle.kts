@@ -69,6 +69,14 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+    // The app's language is picked inside it (core/I18n), not from the phone's, so the
+    // Play bundle must keep every language's resources (Android's own pickers and
+    // texts in that language) instead of installing only the phone's.
+    bundle {
+        language {
+            enableSplit = false
+        }
+    }
 }
 
 ksp {
