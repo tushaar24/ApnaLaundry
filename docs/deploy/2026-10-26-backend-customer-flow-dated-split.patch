@@ -1,0 +1,51 @@
+--- a/backend/routes/laundry-experiments.js	2026-10-26 11:10:53
++++ b/backend/routes/laundry-experiments.js	2026-10-26 11:10:53
+@@ -31,6 +31,10 @@
+ // stable hash of the user id. LAUNDRY_CUSTOMER_FLOW_FORCE='{"<10-digit phone>":"v2_no_address"}'
+ // pins QA phones to a variant (start / version rules ignored). Saved to
+ // CleverTap as Customer_Flow (the app stamps it on every event as customer_flow).
++// Later splits (2026-10-26) move only NEW accounts:
++//   LAUNDRY_CUSTOMER_FLOW_SPLITS='[{"from":"<ISO time>","split":[10,45,45]}]'
++// An account created at/after a `from` uses that split (the latest that applies);
++// older accounts keep LAUNDRY_CUSTOMER_FLOW_SPLIT, so their variant never changes.
+ 
+ const router = express.Router();
+ router.use(requireLaundryAuth);
+@@ -51,10 +55,25 @@
+   return Number.isFinite(t) ? t : null;
+ }
+ 
+-function customerFlowSplit() {
++function validSplit(parts) {
++  return Array.isArray(parts) && parts.length === CUSTOMER_FLOWS.length && parts.every((n) => Number.isFinite(n) && n >= 0) && parts.some((n) => n > 0);
++}
++
++function customerFlowSplit(createdAt) {
++  let dated = [];
++  try {
++    dated = JSON.parse(process.env.LAUNDRY_CUSTOMER_FLOW_SPLITS || '[]');
++  } catch {
++    dated = [];
++  }
++  const t = new Date(createdAt).getTime();
++  const applies = (Array.isArray(dated) ? dated : [])
++    .map((s) => ({ from: Date.parse((s && s.from) || ''), split: ((s && s.split) || []).map((x) => parseInt(x, 10)) }))
++    .filter((s) => Number.isFinite(s.from) && validSplit(s.split) && t >= s.from)
++    .sort((a, b) => a.from - b.from);
++  if (applies.length) return applies[applies.length - 1].split;
+   const parts = String(process.env.LAUNDRY_CUSTOMER_FLOW_SPLIT || '').split(',').map((x) => parseInt(x, 10));
+-  const ok = parts.length === CUSTOMER_FLOWS.length && parts.every((n) => Number.isFinite(n) && n >= 0) && parts.some((n) => n > 0);
+-  return ok ? parts : [34, 33, 33];
++  return validSplit(parts) ? parts : [34, 33, 33];
+ }
+ 
+ function customerFlowForce() {
+@@ -75,7 +94,7 @@
+   if (start === null) return null;
+   if (user.signupPlatform !== 'android' || !(Number(user.signupAppVersion) >= CUSTOMER_FLOW_MIN_APP)) return null;
+   if (!(new Date(user.createdAt).getTime() >= start)) return null;
+-  const split = customerFlowSplit();
++  const split = customerFlowSplit(user.createdAt);
+   const total = split.reduce((a, n) => a + n, 0);
+   let b = (bucket(CUSTOMER_FLOW_TEST, user.id) * total) / 100;
+   for (let i = 0; i < split.length; i++) {

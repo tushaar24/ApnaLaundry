@@ -85,3 +85,13 @@ Seeing a 40% → 55% lift in "saved an order" needs about 170 owners per arm (95
 - **Live since 2026-10-25T14:23:57Z (19:53 IST)**, as server commit `029bcbe`. The dry run passed first (new 1.0.15+ accounts split about 1035 / 1011 / 954).
 - **Checked afterwards:** older accounts get the same `/experiments` as before.
 - **App:** 1.0.15 was never released, so the variants reach owners with the 1.0.16 release.
+
+## Split changed 2026-10-26 11:11 IST (owner): v1 10% / v2 45% / v3 45%, new sign-ups only
+
+- **Why:** v1 converted worst. From the customer sheet to a first customer: v1 5/11, v2 10/11, v3 8/10. From customer to order: v1 1/5, v2 8/10, v3 8/9.
+- **How:** the new `LAUNDRY_CUSTOMER_FLOW_SPLITS=[{"from":"2026-10-26T05:41:47Z","split":[10,45,45]}]` applies only to accounts created at or after `from`. Older accounts keep `LAUNDRY_CUSTOMER_FLOW_SPLIT=34,33,33`.
+- **Code:** patch `2026-10-26-backend-customer-flow-dated-split.patch`, deployed with `2026-10-26-customer-flow-dated-split-deploy.sh` as server commit `6a6bb76`.
+- **Checked before:** with real accounts, all 46 shops in the test kept their variant.
+- **Checked after:** the shops in the test are unchanged (v1 13, v2 16, v3 17, test phones included); new sign-ups land about 10/46/44.
+- **Backup:** `~/backend-filebak/<ts>-customer-flow-dated-split/`.
+- **Rollback:** copy `.env` and `laundry-experiments.js` back, then `docker compose -f docker-compose.prod.yml up -d --build backend`.
