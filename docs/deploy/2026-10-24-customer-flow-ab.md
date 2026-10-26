@@ -95,3 +95,9 @@ Seeing a 40% → 55% lift in "saved an order" needs about 170 owners per arm (95
 - **Checked after:** the shops in the test are unchanged (v1 13, v2 16, v3 17, test phones included); new sign-ups land about 10/46/44.
 - **Backup:** `~/backend-filebak/<ts>-customer-flow-dated-split/`.
 - **Rollback:** copy `.env` and `laundry-experiments.js` back, then `docker compose -f docker-compose.prod.yml up -d --build backend`.
+
+## Split changed again 2026-10-26 23:04 IST (owner): v1 0% / v2 45% / v3 55%, new sign-ups only
+
+- A second dated entry was appended to `LAUNDRY_CUSTOMER_FLOW_SPLITS` (`from` 2026-10-26T17:34:15Z) and the backend recreated (no code change).
+- Checked after: existing accounts unchanged (v1 20, v2 44, v3 39 incl. test phones); a sign-up now lands about 45/55 on v2/v3, never v1.
+- Backup: `backend/.env.bak-cf-0-45-55-20261026-173415`.
