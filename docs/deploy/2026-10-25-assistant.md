@@ -139,3 +139,20 @@ Ask reads each new answer once with the phone's own text-to-speech, in the app's
   - **To change the video:** edit `LAUNDRY_DEMO_VIDEO_URL`, then `docker compose -f docker-compose.prod.yml up -d backend`.
   - **The app** fetches the link at start and keeps the last one in Prefs `demo_video_url`. With no saved link, or when the call fails, it uses the built-in `https://youtu.be/Z5Si-Uw8euo`. Older apps never call the route.
 - **Ask before the first order:** a shop with no orders sees only "Let's create your first order" (mic + type). The prompt keeps the model on creating that order. Everything is as before once there's one order (prod `9352d9a`).
+
+## Saving what owners ask (26 Oct, staged)
+
+- **Owner asked (26 Oct):** keep what owners ask Ask in a table. Before this, only lengths and tool names reached CleverTap, and the server logged nothing but timing.
+- **Table `laundry_assistant_logs`:** one row per relay call:
+  - `kind`: `question` | `tool_round` | `nudge` | `voice`;
+  - `question`: the owner's words, or the voice transcript;
+  - `reply`;
+  - `tools`: the names of the tools it ran;
+  - `status`, `language`, `app_version`, `ms`, tokens, `shop_id`.
+- **What is NOT stored:** the rest of the conversation, meaning the shop data the app sends along. The app's automatic "[App] …" retry is not counted as a question.
+- **Safety:** the insert is fire-and-forget and can never fail a request. `LAUNDRY_ASSISTANT_LOG=0` stops it.
+- **Deploy:** patch `2026-10-26-backend-assistant-log.patch` (route + schema + migration) with `2026-10-26-assistant-log-deploy.sh`.
+  - Run with `DRY_RUN=1` first. On 26 Oct it passed: route syntax OK, schema valid, live DB at 28 migrations with none pending.
+  - The real run applies the migration, rebuilds the backend, and sends one live question as the demo account to check that a row is saved (then deletes it).
+  - No app change is needed.
+- **Privacy:** questions can contain customer names and numbers. Mention it in the privacy policy, and in Play Data safety under user content.

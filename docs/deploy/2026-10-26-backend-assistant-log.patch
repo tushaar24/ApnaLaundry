@@ -1,0 +1,162 @@
+diff -ruN a/backend/prisma/migrations/20261026120000_laundry_assistant_logs/migration.sql b/backend/prisma/migrations/20261026120000_laundry_assistant_logs/migration.sql
+--- a/backend/prisma/migrations/20261026120000_laundry_assistant_logs/migration.sql	1970-01-01 05:30:00
++++ b/backend/prisma/migrations/20261026120000_laundry_assistant_logs/migration.sql	2026-10-26 11:27:45
+@@ -0,0 +1,28 @@
++-- Ask: what owners ask the assistant (routes/laundry-assistant.js) — the owner's
++-- words, the reply text and tool names, one row per relay call. Not the shop data
++-- the app sends along. LAUNDRY_ASSISTANT_LOG=0 stops writing.
++-- CreateTable
++CREATE TABLE "laundry_assistant_logs" (
++    "id" TEXT NOT NULL,
++    "laundry_user_id" TEXT NOT NULL,
++    "shop_id" TEXT NOT NULL DEFAULT '',
++    "kind" TEXT NOT NULL,
++    "question" TEXT,
++    "reply" TEXT,
++    "tools" TEXT,
++    "status" TEXT NOT NULL DEFAULT 'ok',
++    "language" TEXT,
++    "app_version" INTEGER,
++    "ms" INTEGER,
++    "prompt_tokens" INTEGER,
++    "reply_tokens" INTEGER,
++    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
++
++    CONSTRAINT "laundry_assistant_logs_pkey" PRIMARY KEY ("id")
++);
++
++-- CreateIndex
++CREATE INDEX "laundry_assistant_logs_laundry_user_id_created_at_idx" ON "laundry_assistant_logs"("laundry_user_id", "created_at" DESC);
++
++-- CreateIndex
++CREATE INDEX "laundry_assistant_logs_created_at_idx" ON "laundry_assistant_logs"("created_at" DESC);
+diff -ruN a/backend/prisma/schema.prisma b/backend/prisma/schema.prisma
+--- a/backend/prisma/schema.prisma	2026-10-26 11:26:48
++++ b/backend/prisma/schema.prisma	2026-10-26 11:27:57
+@@ -660,3 +660,29 @@
+   @@index([createdAt(sort: Desc)])
+   @@map("agent_calls")
+ }
++
++// ── Ask (routes/laundry-assistant.js, owner 2026-10-26) ──
++// One row per relay call, so we can see what owners ask: the owner's own words
++// (typed, a chip, or the voice transcript), the assistant's reply text and the
++// names of the tools it called. The shop data the app sends with each question
++// (customers, orders, rates) is NOT stored. LAUNDRY_ASSISTANT_LOG=0 turns it off.
++model LaundryAssistantLog {
++  id            String   @id @default(cuid())
++  laundryUserId String   @map("laundry_user_id")
++  shopId        String   @default("") @map("shop_id") // "" = the main shop
++  kind          String // question | tool_round | nudge | voice
++  question      String? // the owner's words (kind question / voice)
++  reply         String? // the assistant's text back (chat)
++  tools         String? // tool names called, comma-separated
++  status        String   @default("ok") // ok | failed
++  language      String? // voice: the language Sarvam heard
++  appVersion    Int?     @map("app_version")
++  ms            Int?
++  promptTokens  Int?     @map("prompt_tokens")
++  replyTokens   Int?     @map("reply_tokens")
++  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
++
++  @@index([laundryUserId, createdAt(sort: Desc)])
++  @@index([createdAt(sort: Desc)])
++  @@map("laundry_assistant_logs")
++}
+diff -ruN a/backend/routes/laundry-assistant.js b/backend/routes/laundry-assistant.js
+--- a/backend/routes/laundry-assistant.js	2026-10-26 11:26:49
++++ b/backend/routes/laundry-assistant.js	2026-10-26 11:28:19
+@@ -3,6 +3,8 @@
+ 
+ const { requireLaundryAuth } = require('../middleware/laundry-auth');
+ const logger = require('../config/logger');
++const prisma = require('../db');
++const shops = require('../services/laundry-shops');
+ 
+ // The Android app's assistant ("Ask"): the owner types or speaks — make an
+ // order, ask about sales, an order, a customer's khata, send a bill or a
+@@ -28,7 +30,13 @@
+ //   LAUNDRY_ASSISTANT_MODEL            default sarvam-105b-conversations
+ //   LAUNDRY_ASSISTANT_STT_MODEL        default saaras:v4
+ //   LAUNDRY_ASSISTANT_STT_MODE         default translit (Hindi comes back in English letters: "Ramesh ke teen shirt")
++//   LAUNDRY_ASSISTANT_LOG              0 = don't save; default on (owner, 2026-10-26)
+ //
++// What owners ask is saved in laundry_assistant_logs, one row per call: the owner's
++// words (the last user message, or the voice transcript), the reply text, the tool
++// names. Never the rest of the conversation (the shop data the app sends along).
++// Saving runs after the answer is sent and can never fail a request.
++//
+ // Older apps never call this; nothing else changes.
+ 
+ const router = express.Router();
+@@ -86,6 +94,38 @@
+   }
+ }
+ 
++const clip = (s, n) => (s == null ? null : String(s).slice(0, n));
++
++// Saves one row of what was asked (see the top). Fire-and-forget: never awaited by
++// the request, and a failure only logs a warning.
++function saveLog(req, row) {
++  if (process.env.LAUNDRY_ASSISTANT_LOG === '0') return;
++  const v = parseInt(req.get('x-laundry-app-version'), 10);
++  let shopId = '';
++  try { shopId = shops.fromApiId(req.get(shops.HEADER)) || ''; } catch { shopId = ''; }
++  prisma.laundryAssistantLog.create({
++    data: {
++      laundryUserId: req.laundryUserId,
++      shopId: String(shopId),
++      appVersion: Number.isFinite(v) ? v : null,
++      ...row,
++      question: clip(row.question, 4000),
++      reply: clip(row.reply, 4000),
++      tools: clip(row.tools, 500),
++      language: clip(row.language, 20),
++    },
++  }).catch((e) => logger.warn({ err: e && e.message }, 'laundry assistant: log save failed'));
++}
++
++// The owner's words in this call: the last message when it is theirs. The app's own
++// "[App] …" retry note and tool results are not the owner's words.
++function askedIn(messages) {
++  const last = messages[messages.length - 1];
++  if (!last || last.role !== 'user') return { kind: 'tool_round', question: null };
++  const text = String(last.content || '');
++  return text.startsWith('[App]') ? { kind: 'nudge', question: null } : { kind: 'question', question: text };
++}
++
+ function gate(req, res) {
+   if (!enabledFor(req.laundryAuth.user)) {
+     res.status(403).json({ success: false, code: 'ASSISTANT_OFF', message: 'The assistant is not on for this shop' });
+@@ -131,12 +171,23 @@
+       }),
+     }, 25000);
+     const choice = r.body && Array.isArray(r.body.choices) ? r.body.choices[0] : null;
++    const asked = askedIn(messages);
+     if (!r.ok || !choice || !choice.message) {
+       logger.warn({ userId, status: r.status, error: r.body && r.body.error }, 'laundry assistant: sarvam chat failed');
++      saveLog(req, { ...asked, status: 'failed', ms: Date.now() - started });
+       return res.status(502).json({ success: false, message: 'Assistant unavailable' });
+     }
+     logger.info({ userId, ms: Date.now() - started, usage: r.body.usage, finish: choice.finish_reason }, 'laundry assistant chat');
+     const m = choice.message;
++    const usage = r.body.usage || {};
++    saveLog(req, {
++      ...asked,
++      reply: m.content == null ? null : String(m.content),
++      tools: Array.isArray(m.tool_calls) ? m.tool_calls.map((t) => t && t.function && t.function.name).filter(Boolean).join(',') || null : null,
++      ms: Date.now() - started,
++      promptTokens: Number.isFinite(usage.prompt_tokens) ? usage.prompt_tokens : null,
++      replyTokens: Number.isFinite(usage.completion_tokens) ? usage.completion_tokens : null,
++    });
+     return res.json({
+       success: true,
+       message: { content: m.content == null ? null : String(m.content), tool_calls: Array.isArray(m.tool_calls) ? m.tool_calls : [] },
+@@ -173,6 +224,7 @@
+       return res.status(502).json({ success: false, message: 'Could not hear that' });
+     }
+     logger.info({ userId, ms: Date.now() - started, bytes: buf.length, language: r.body.language_code }, 'laundry assistant voice');
++    saveLog(req, { kind: 'voice', question: r.body.transcript, language: r.body.language_code || null, ms: Date.now() - started });
+     return res.json({ success: true, transcript: r.body.transcript, language: r.body.language_code || null });
+   } catch (e) {
+     if (e && e.name === 'AbortError') return res.status(504).json({ success: false, message: 'Assistant timed out' });
