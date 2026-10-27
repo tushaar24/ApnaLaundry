@@ -1,6 +1,6 @@
 {
   "_note": "Hand corrections that always win over the machine translation (translate.py applies them on every run). Mostly one-word buttons, where the translator can't tell a verb from a noun.",
-  "hi": { "Change": "बदलें" },
+  "hi": { "Change": "बदलें", "Charge by": "किस हिसाब से दाम" },
   "bn": { "Change": "বদলান" },
   "kn": { "Change": "ಬದಲಿಸಿ", "Delete": "ಅಳಿಸಿ", "Call": "ಕರೆ ಮಾಡಿ" },
   "ml": { "Change": "മാറ്റുക", "Delete": "ഡിലീറ്റ് ചെയ്യുക" },

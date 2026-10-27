@@ -53,6 +53,7 @@ import com.dailyworks.apnalaundry.analytics.Analytics
 import com.dailyworks.apnalaundry.core.I18n
 import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.domain.BillDetails
+import com.dailyworks.apnalaundry.domain.SeedData
 import com.dailyworks.apnalaundry.domain.BillDetails.withFields
 import com.dailyworks.apnalaundry.domain.BillReceipt
 import com.dailyworks.apnalaundry.ui.ShopViewModel
@@ -103,7 +104,8 @@ fun BillDesignScreen(shopVm: ShopViewModel, editing: Boolean, onBack: () -> Unit
     }
 
     // ── the three bills ──
-    val order = remember(state.services, shop.expressPct) { BillDetails.sampleOrder(state.services, shop.expressPct, 1001) }
+    // A shop with no services yet (services-from-scratch variant) still gets a filled sample bill.
+    val order = remember(state.services, shop.expressPct) { BillDetails.sampleOrder(state.services.ifEmpty { SeedData.services }, shop.expressPct, 1001) }
     val previewShop = shop.withFields(draft).copy(name = if (editing) BillDetails.cleanName(name).ifEmpty { shop.name } else shop.name)
     val receipts = remember(previewShop, order) {
         // The bill document stays English (it matches the bill's web page).

@@ -28,6 +28,10 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.Icon
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -159,13 +163,22 @@ fun ClothesEditor(
     modifier: Modifier = Modifier,
     /** Per-piece services: add a cloth + price right here (saved to the rate list). */
     onAddItem: ((Service, String, Int) -> Unit)? = null,
+    /** Services-from-scratch variant: a "+ Add service" tile after the services. */
+    onAddService: (() -> Unit)? = null,
+    /** Services-from-scratch variant: the add-cloth row starts folded as "+ Add cloth", with less text. */
+    simpleAdd: Boolean = false,
 ) {
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        // tiles (2 columns)
-        val rows = services.chunked(2)
+        // tiles (2 columns); null = the "+ Add service" tile
+        val slots: List<Service?> = if (onAddService != null) services + null else services
+        val rows = slots.chunked(2)
         rows.forEach { pair ->
             Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 pair.forEach { s ->
+                    if (s == null) {
+                        AddServiceTile(Modifier.weight(1f).fillMaxHeight(), onClick = onAddService!!)
+                        return@forEach
+                    }
                     val (n, kg, amt) = serviceStat(state, s)
                     val has = amt > 0
                     val sel = state.selected == s.id
@@ -200,7 +213,7 @@ fun ClothesEditor(
                         onInc = { state.bump(cur.id, item.name, 1) },
                     )
                 }
-                if (onAddItem != null) AddItemRow(cur) { name, price -> onAddItem(cur, name, price) }
+                if (onAddItem != null) AddItemRow(cur, simple = simpleAdd) { name, price -> onAddItem(cur, name, price) }
             }
         } else {
             val rate = cur.ratePerKg ?: 0
@@ -381,9 +394,23 @@ private fun trimK(v: Double): String = if (v % 1.0 == 0.0) v.toInt().toString() 
 
 /** "Add a cloth" under a per-piece service: name + price, saved to the rate list. */
 @Composable
-private fun AddItemRow(svc: Service, onAdd: (String, Int) -> Unit) {
+private fun AddItemRow(svc: Service, simple: Boolean = false, onAdd: (String, Int) -> Unit) {
     var name by remember(svc.id) { mutableStateOf("") }
     var price by remember(svc.id) { mutableStateOf("") }
+    // Simple mode: folded to one "+ Add cloth" line until tapped.
+    var open by remember(svc.id) { mutableStateOf(!simple) }
+    if (simple && !open) {
+        Row(
+            Modifier.fillMaxWidth().padding(top = 8.dp).height(52.dp).rounded(12.dp).background(Tokens.BlueLight)
+                .dashedBorder(Tokens.Blue, 1.5.dp, 12.dp).tap { open = true },
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
+        ) {
+            Icon(Icons.Filled.Add, null, tint = Tokens.Blue, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(tr("Add cloth"), style = fig(15, FontWeight.Bold, Tokens.Blue))
+        }
+        return
+    }
     val clean = name.trim().replace(Regex("\\s+"), " ")
     val existing = svc.items.firstOrNull { it.name.equals(clean, ignoreCase = true) }
     val priced = existing != null && (existing.price ?: 0) > 0
@@ -399,8 +426,13 @@ private fun AddItemRow(svc: Service, onAdd: (String, Int) -> Unit) {
             .border(1.5.dp, Tokens.BlueBorder, RoundedCornerShape(14.dp)).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(tr("Add a cloth to {service}", "service" to svc.name), style = fig(13, FontWeight.Bold, Tokens.BlueText))
-        FieldBox(name, { name = it.take(30) }, Modifier.fillMaxWidth(), placeholder = tr("Cloth name, e.g. Blazer"), height = 48.dp)
+        if (simple) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(tr("New cloth in {service}", "service" to svc.name), style = fig(13, FontWeight.Bold, Tokens.BlueText), modifier = Modifier.weight(1f))
+                Text(tr("Cancel"), style = fig(13, FontWeight.Bold, Tokens.Blue), modifier = Modifier.tap { open = false; name = ""; price = "" })
+            }
+        } else Text(tr("Add a cloth to {service}", "service" to svc.name), style = fig(13, FontWeight.Bold, Tokens.BlueText))
+        FieldBox(name, { name = it.take(30) }, Modifier.fillMaxWidth(), placeholder = if (simple) tr("Cloth name") else tr("Cloth name, e.g. Blazer"), height = 48.dp)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FieldBox(
                 if (priced) (existing!!.price ?: 0).toString() else price,
@@ -414,9 +446,26 @@ private fun AddItemRow(svc: Service, onAdd: (String, Int) -> Unit) {
                 contentAlignment = Alignment.Center,
             ) { Text(tr("Add"), style = fig(14, FontWeight.Bold, if (ok) Tokens.OnDark else Tokens.Muted)) }
         }
-        Text(
+        if (!simple || priced) Text(
             if (priced) tr("Already in your services list — Add puts 1 in this order.") else tr("Saved to your services list and added to this order."),
             style = fig(12, color = Tokens.BlueText),
         )
+    }
+}
+
+/** The last tile in the grid (services-from-scratch variant): another kind of work. */
+@Composable
+private fun AddServiceTile(modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Column(
+        modifier.heightIn(min = 64.dp).rounded(14.dp).background(Tokens.BlueLight)
+            .dashedBorder(Tokens.Blue, 1.5.dp, 14.dp).tap(onClick = onClick).padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Add, null, tint = Tokens.Blue, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(4.dp))
+            Text(tr("Add service"), style = fig(15, FontWeight.Bold, Tokens.Blue), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Text(tr("Dry clean, press…"), style = fig(12, FontWeight.SemiBold, Tokens.BlueText), maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }

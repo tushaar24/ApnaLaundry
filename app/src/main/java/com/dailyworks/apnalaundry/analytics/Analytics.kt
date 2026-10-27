@@ -91,12 +91,26 @@ object Analytics {
         updateProfile(mapOf("Customer_Flow" to flow))
     }
 
+    // The services-setup test (2026-10-28): "samples" | "scratch" from GET /experiments,
+    // saved on the profile as Services_Setup (the server saves it too) and stamped on
+    // every event as services_setup. null = not in the test.
+    @Volatile private var servicesSetup: String? = null
+    @Volatile private var servicesSetupSaved: String? = null
+
+    fun setServicesSetup(v: String?) {
+        servicesSetup = v
+        if (v == null || v == servicesSetupSaved) return
+        servicesSetupSaved = v
+        updateProfile(mapOf("Services_Setup" to v))
+    }
+
     private fun track(name: String, props: Map<String, Any?> = emptyMap()) {
         if (!enabled) return
         val clean = HashMap<String, Any>()
         for ((k, v) in props) if (v != null) clean[k] = v
         paywallVariant?.let { clean["paywall_variant"] = it }
         customerFlow?.let { clean["customer_flow"] = it }
+        servicesSetup?.let { clean["services_setup"] = it }
         // Stamped last so no event prop can override them.
         clean["platform"] = "android"
         clean["source"] = "android"

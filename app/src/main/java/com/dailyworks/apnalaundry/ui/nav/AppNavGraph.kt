@@ -161,6 +161,18 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
 
         composable(Routes.HOME) { HomeScreen(shopVm, navigator) }
 
+        // Services-from-scratch variant: the first service, added from New order's empty state.
+        composable(
+            Routes.ADD_SERVICE,
+            arguments = listOf(navArgument("from") { type = NavType.StringType; defaultValue = "new_order" }),
+        ) {
+            com.dailyworks.apnalaundry.ui.screens.rates.AddServiceSimplePage(
+                existing = shopState.services,
+                onAdd = { shopVm.upsertService(it); Analytics.serviceAdded(it.mode.name); navigator.back() },
+                onBack = { navigator.back() },
+            )
+        }
+
         composable(
             Routes.CUSTOMERS,
             arguments = listOf(navArgument("filter") { type = NavType.StringType; defaultValue = "all" }),

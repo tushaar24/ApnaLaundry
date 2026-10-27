@@ -20,6 +20,8 @@ object Routes {
     const val BILL_DESIGN = "bill-design"
     const val ADD_SHOP = "add-shop/{from}"
     const val ASSISTANT = "assistant?from={from}"
+    /** The simple "Add new service" form (services-from-scratch variant), opened from New order. */
+    const val ADD_SERVICE = "add-service?from={from}"
 }
 
 /** Thin typed wrapper over the NavController used by every screen. */
@@ -41,6 +43,7 @@ class AppNavigator(val nav: NavHostController) {
     fun openCombinedBill(custId: String) = push("combined-bill/$custId")
     /** "Ask" — the assistant (only when the server has it on for this shop). */
     fun openAssistant(from: String = "home") = push("assistant?from=$from")
+    fun openAddService(from: String) = push("add-service?from=$from")
 
     /**
      * Opens a screen — once. A double tap on a slow phone (or a tap on the

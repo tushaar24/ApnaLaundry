@@ -155,6 +155,32 @@ funnel or raw export splits by it. Main funnel: `New Order Started` →
 `order_address_form` (v2's address sheet tip); its `order_route` and
 `order_customer_form` cards word themselves for the variant.
 
+### Services setup — A/B (Android 1.0.17, 2026-10-28)
+
+How a brand-new shop gets its services. Assigned by the backend
+(`GET /api/laundry/experiments` → `servicesSetup`, see
+`docs/deploy/2026-10-28-services-setup-ab.md`) to accounts whose first login
+is on Android 1.0.17+ after `LAUNDRY_SERVICES_SETUP_START`, 50/50. Everyone
+else (older accounts, older apps, the website) keeps the sample list.
+
+| `services_setup` | What the owner sees |
+| --- | --- |
+| `samples` | Setup step 2 is the seeded sample list with sample prices (as before) |
+| `scratch` | Setup is name → bill (no services step); the sample services are removed; New order's Clothes section shows "No services yet · Add service", then a "+ Add service" tile and a folded "+ Add cloth" row; the simple "Add new service" form (name, per piece / per kg, clothes + prices); the last service can be deleted; **no guide** |
+| *(absent)* | not in the test: the sample list |
+
+Why: in the 28 Oct readout, owners who changed anything on the sample list in
+setup made a first order at 61% against 36% for owners who tapped Next
+untouched, in every build and variant (memory: setup-services-touch).
+
+Profile property **`Services_Setup`** (server + app) and event property
+**`services_setup`** on **every** Android event of a test account. Compare the
+groups on `Onboarding Step Viewed` (scratch has no `services` step) →
+`Setup Completed {services_count}` (0 for scratch) → `New Order Started` →
+`Service Added {mode}` (scratch: the first service, from New order) →
+`Order Saved` → `Checkout Succeeded`. `Service Deleted` does not fire for the
+quiet removal of the samples. The scratch group fires no `Tour *` events.
+
 ### Guide & support (Android)
 
 The guide walks a new shop through its first order end to end: New order →

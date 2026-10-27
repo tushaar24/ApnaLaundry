@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.outlined.LocalLaundryService
 import androidx.compose.material.icons.Icons
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.FocusRequester
@@ -125,6 +126,7 @@ fun NewOrderScreen(
 ) {
     val state by shopVm.state.collectAsStateWithLifecycle()
     val services = state.services
+    val scratch by shopVm.servicesScratch.collectAsStateWithLifecycle()
     val clothes = rememberClothesState(services)
     val editingOrder = editId?.let { Selectors.order(state, it) }
 
@@ -542,6 +544,11 @@ fun NewOrderScreen(
 
             // ---- clothes ----
             Column(Modifier.tourTarget(targets, tourScroll, TOUR_CLOTHES), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (services.isEmpty()) {
+                    // Services-from-scratch variant: a new shop has no services until it adds one here.
+                    SectionLabel(tr("Clothes"))
+                    NoServicesYet { navigator.openAddService("new_order") }
+                } else {
                 Row(Modifier.fillMaxWidth().padding(end = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     SectionLabel(tr("Clothes"))
                     Row(
@@ -552,7 +559,10 @@ fun NewOrderScreen(
                         Text(tr("Edit services"), style = fig(13, FontWeight.Bold, Tokens.Blue))
                     }
                 }
-                ClothesEditor(services, clothes, editablePrice = true, onAddItem = { svc, name, price ->
+                ClothesEditor(services, clothes, editablePrice = true,
+                    onAddService = if (scratch) ({ navigator.openAddService("new_order") }) else null,
+                    simpleAdd = scratch,
+                    onAddItem = { svc, name, price ->
                     // Save to the rate list (or price an item it didn't offer), then put 1 in this order.
                     val has = svc.items.any { it.name == name }
                     val items = if (has) svc.items.map { if (it.name == name && (it.price ?: 0) <= 0) it.copy(price = price) else it }
@@ -561,6 +571,7 @@ fun NewOrderScreen(
                     clothes.bump(svc.id, name, 1)
                     shopVm.showInfo(tr("{item} · {amount} added to {service}", "item" to name, "amount" to "₹$price", "service" to svc.name))
                 })
+                }
                 if (showQuickBox) {
                     AppCard {
                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -755,6 +766,25 @@ fun NewOrderScreen(
         BackHandler { editingRates = false }
         Box(Modifier.fillMaxSize().background(Tokens.Bg).tap { /* keep taps off the form below */ }) {
             RatesEditor(shopVm, setupHeader = null, onDone = { editingRates = false }, onBack = { editingRates = false })
+        }
+    }
+}
+
+/** No services on the shop yet: add the first one (its clothes and prices) from here. */
+@Composable
+private fun NoServicesYet(onAdd: () -> Unit) {
+    AppCard {
+        Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(Modifier.size(52.dp).rounded(16.dp).background(Tokens.BlueLight), contentAlignment = Alignment.Center) {
+                Icon(Icons.Outlined.LocalLaundryService, null, tint = Tokens.Blue, modifier = Modifier.size(28.dp))
+            }
+            Text(tr("No services yet"), style = fig(17, FontWeight.Bold))
+            Text(
+                tr("Add your first service with its clothes and prices. It will show here for every order."),
+                style = fig(14, color = Tokens.Muted), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+            Spacer(Modifier.height(4.dp))
+            PrimaryButton(tr("Add service"), height = 52.dp, onClick = onAdd)
         }
     }
 }

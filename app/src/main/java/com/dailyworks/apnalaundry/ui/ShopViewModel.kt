@@ -74,7 +74,11 @@ class ShopViewModel(
     // ---- the guide (ui/tour): new order → ready → delivered + money → khata → earnings ----
 
     /** A/B (server-assigned, 50/50): this shop gets the guide at all. Unknown = no. */
-    val guideOn: StateFlow<Boolean> = prefs.guideVariant.map { it == ExperimentsRepository.GUIDE }
+    /** A/B (2026-10-28): this shop is in the services-from-scratch group (no services step, no samples, no guide). */
+    val servicesScratch: StateFlow<Boolean> = prefs.servicesSetup.map { it == ExperimentsRepository.SERVICES_SCRATCH }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    // The scratch group never gets the guide (owner, 2026-10-28) — neither the auto-start nor the Settings replay.
+    val guideOn: StateFlow<Boolean> = combine(prefs.guideVariant, prefs.servicesSetup) { g, s -> s != ExperimentsRepository.SERVICES_SCRATCH && g == ExperimentsRepository.GUIDE }
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     /** A/B (server-assigned, new accounts on 1.0.15+): how New order adds the first customer. */
@@ -335,9 +339,10 @@ class ShopViewModel(
     fun sendBill(id: Int) = launchCmd { repo.sendBill(id) }
     fun receivePayment(custId: String, amount: Int, method: PayMethod) = launchCmd { repo.receivePayment(custId, amount, method) }
     fun addOldBaaki(custId: String, amount: Int) = launchCmd { repo.addOldBaaki(custId, amount) }
-    fun deleteService(id: String) = launchCmd { repo.deleteService(id) }
+    fun deleteService(id: String) = launchCmd { repo.deleteService(id, allowEmpty = servicesScratch.value) }
 
     fun upsertService(service: Service) = viewModelScope.launch { invalidateUndo(); repo.upsertService(service); sync.requestSync() }
+    fun removeSampleServices() = viewModelScope.launch { repo.removeSampleServices(); sync.requestSync() }
     fun updateShop(name: String, expressPct: Int) =
         viewModelScope.launch { invalidateUndo(); repo.updateShop(name, expressPct); sync.requestSync() }
 

@@ -84,9 +84,18 @@ fun OnboardingFlow(shopVm: ShopViewModel, onFinished: () -> Unit) {
     val vmLoaded by shopVm.loaded.collectAsStateWithLifecycle()
     // Read from the DB, not the VM's not-yet-loaded initial state.
     var step by remember { mutableStateOf<String?>(null) }
+    // A/B (2026-10-28), the services-from-scratch group: name -> bill, no services
+    // step; the shop's sample services go (their prices were never the owner's) and
+    // the first service is added from New order. The group was fetched at login
+    // (AuthRepository), so it is known by the time the name step is done.
+    val scratch by shopVm.servicesScratch.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) {
         val saved = repo.onboardingStep()
-        step = if (saved == "" || saved == "done" || saved == "intro") "name" else saved
+        step = when {
+            saved == "" || saved == "done" || saved == "intro" -> "name"
+            saved == "services" && shopVm.servicesScratch.value -> "bill"
+            else -> saved
+        }
     }
     var finished by remember { mutableStateOf(false) }
     // One event per step shown, so the funnel shows where new shops drop off.
@@ -122,7 +131,7 @@ fun OnboardingFlow(shopVm: ShopViewModel, onFinished: () -> Unit) {
                 initial = state.shop.name.takeUnless { SeedData.isDefaultShopName(it) } ?: "",
                 onNext = { name ->
                     shopVm.updateShopDetails(name = BillDetails.cleanName(name))
-                    goTo("services")
+                    if (scratch) { shopVm.removeSampleServices(); goTo("bill") } else goTo("services")
                 },
             )
         }
@@ -136,8 +145,9 @@ fun OnboardingFlow(shopVm: ShopViewModel, onFinished: () -> Unit) {
             )
         }
         else -> {
-            BackHandler { goTo("services") }
-            BillDesignScreen(shopVm, editing = false, onBack = { goTo("services") }, onDone = ::finish)
+            val prev = if (scratch) "name" else "services"
+            BackHandler { goTo(prev) }
+            BillDesignScreen(shopVm, editing = false, onBack = { goTo(prev) }, onDone = ::finish)
         }
     }
 }

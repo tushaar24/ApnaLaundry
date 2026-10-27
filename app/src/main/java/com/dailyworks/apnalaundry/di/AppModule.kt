@@ -53,7 +53,7 @@ val appModule = module {
     single { AssistantApi(get(), get(), get()) }
     single { com.dailyworks.apnalaundry.data.AppConfigRepository(get(), get()) }
     factory { VoiceRecorder(androidContext()) }
-    single { AuthRepository(get(), get(), get(), get(), get(), get(), get()) }
+    single { AuthRepository(get(), get(), get(), get(), get(), get(), get(), get()) }
 
     viewModel { ShopViewModel(get(), get(), get(), get(), get(), get(), get()) }
     viewModel { AuthViewModel(get()) }

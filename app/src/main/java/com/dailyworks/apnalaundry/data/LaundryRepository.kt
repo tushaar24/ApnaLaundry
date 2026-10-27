@@ -629,10 +629,23 @@ class LaundryRepository(private val shops: ShopDirectory) {
     // ---------------- rate card ----------------
     suspend fun upsertService(service: Service) = serviceDao.upsert(service.toEntity())
 
-    suspend fun deleteService(id: String): CmdResult {
+    /**
+     * Services-from-scratch setup: drop the seeded sample services while their
+     * prices are still the samples (the owner never set them). Quiet: no
+     * "Service Deleted" events, so the A/B's edit counts stay the owner's own.
+     */
+    suspend fun removeSampleServices() {
+        val current = serviceDao.getAll().filter { !it.deleted }.map { it.toDomain() }
+        if (!SeedData.ratesUnchanged(current)) return
+        val sampleIds = SeedData.services.map { it.id }.toSet()
+        current.filter { it.id in sampleIds }.forEach { serviceDao.setDeleted(it.id, true, SyncClock.now()) }
+    }
+
+    /** [allowEmpty]: the services-from-scratch group may delete its last service (New order then offers to add one). */
+    suspend fun deleteService(id: String, allowEmpty: Boolean = false): CmdResult {
         val undo = snapshot()
         val services = serviceDao.getAll().filter { !it.deleted }
-        if (services.size <= 1) return CmdResult(tr("Keep at least one service"))
+        if (services.size <= 1 && !allowEmpty) return CmdResult(tr("Keep at least one service"))
         val sv = services.first { it.id == id }
         serviceDao.setDeleted(id, true, SyncClock.now())
         Analytics.serviceDeleted(id)

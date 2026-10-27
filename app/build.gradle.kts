@@ -18,8 +18,8 @@ android {
         applicationId = "com.dailyworks.apnalaundry"
         minSdk = 24
         targetSdk = 36
-        versionCode = 16
-        versionName = "1.0.16"
+        versionCode = 17
+        versionName = "1.0.17"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -32,6 +32,13 @@ android {
             // instead: "http://10.0.2.2:5001/api/laundry" (needs the debug-only
             // cleartext manifest).
             buildConfigField("String", "API_BASE_URL", "\"https://shwetamakeover.online/api/laundry\"")
+        }
+        // Side-by-side preview of one screen on the owner's phone (its own package, so the
+        // Play build stays): `./gradlew :app:installPreview`.
+        create("preview") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".preview"
+            matchingFallbacks += listOf("debug")
         }
         release {
             // R8 shrink + obfuscate; keep rules in proguard-rules.pro. Upload
@@ -128,6 +135,7 @@ dependencies {
     // Chucker: in-app HTTP inspector (notification) on debug builds; no-op in release.
     debugImplementation(libs.chucker)
     releaseImplementation(libs.chucker.no.op)
+    "previewImplementation"(libs.chucker.no.op)
 
     // UPI pay QR on bills (QR matrix only — drawn on our own canvas)
     implementation(libs.zxing.core)

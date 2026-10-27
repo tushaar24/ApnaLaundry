@@ -41,6 +41,7 @@ class AuthRepository(
     private val repo: LaundryRepository,
     private val shops: com.dailyworks.apnalaundry.data.shops.ShopDirectory,
     private val shopsRepo: com.dailyworks.apnalaundry.data.shops.ShopsRepository,
+    private val experiments: com.dailyworks.apnalaundry.data.experiments.ExperimentsRepository,
 ) {
     /** In-flight OTP; held by the ViewModel between the two steps. */
     sealed interface Challenge {
@@ -230,6 +231,9 @@ class AuthRepository(
         // A brand-new account may be in the hard-paywall test: PaywallGate waits
         // for the first billing check before showing setup (set before loggedIn flips).
         if (body.isNewUser) prefs.setPaywallCheckPending(true)
+        // Its A/B groups too (services setup decides what setup step 2 is), before the
+        // first setup screen draws. Bounded: offline, setup goes on with the defaults.
+        if (body.isNewUser) runCatching { kotlinx.coroutines.withTimeout(5_000) { experiments.refresh() } }
         prefs.setLoggedIn(true)
 
         // Initial sync: pull this account's data if it exists. Failures are

@@ -16,7 +16,7 @@ import kotlinx.serialization.Serializable
 
 /** The shop's A/B test groups, as GET /api/laundry/experiments returns them. */
 @Serializable
-data class ExperimentGroups(val guide: String? = null, val customerFlow: String? = null)
+data class ExperimentGroups(val guide: String? = null, val customerFlow: String? = null, val servicesSetup: String? = null)
 
 /**
  * A/B (2026-10-24, brand-new accounts on 1.0.15+): how a new shop's first
@@ -52,6 +52,11 @@ data class ExperimentsResponse(val success: Boolean = false, val experiments: Ex
  * Settings replay; [NO_GUIDE] = neither. Not fetched yet = no guide.
  *
  * customerFlow: a [CustomerFlow] key, or absent = not in that test (the old flow).
+ *
+ * servicesSetup (2026-10-28, brand-new accounts on 1.0.17+): [SERVICES_SAMPLES] =
+ * setup step 2 is the seeded sample list; [SERVICES_SCRATCH] = no services step and
+ * no sample services — New order offers "Add service" and the owner types every
+ * price. Absent = samples. The scratch group never gets the guide.
  */
 class ExperimentsRepository(
     private val client: HttpClient,
@@ -72,10 +77,16 @@ class ExperimentsRepository(
         val flow = CustomerFlow.of(groups.customerFlow).key
         prefs.setCustomerFlow(flow)
         Analytics.setCustomerFlow(flow)
+        val setup = groups.servicesSetup?.takeIf { it == SERVICES_SAMPLES || it == SERVICES_SCRATCH }
+        prefs.setServicesSetup(setup)
+        Analytics.setServicesSetup(setup)
     }
 
-    /** App start: stamp the saved customer-flow group on events before the fetch answers. */
-    suspend fun restore() = Analytics.setCustomerFlow(prefs.customerFlow.first())
+    /** App start: stamp the saved groups on events before the fetch answers. */
+    suspend fun restore() {
+        Analytics.setCustomerFlow(prefs.customerFlow.first())
+        Analytics.setServicesSetup(prefs.servicesSetup.first())
+    }
 
     private suspend fun fetch(): ExperimentsResponse {
         val token = tokens.validAccessToken() ?: throw NotLoggedInException()
@@ -91,5 +102,7 @@ class ExperimentsRepository(
     companion object {
         const val GUIDE = "guide"
         const val NO_GUIDE = "no_guide"
+        const val SERVICES_SAMPLES = "samples"
+        const val SERVICES_SCRATCH = "scratch"
     }
 }

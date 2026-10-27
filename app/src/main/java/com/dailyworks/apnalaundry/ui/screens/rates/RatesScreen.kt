@@ -119,6 +119,7 @@ fun RatesScreen(shopVm: ShopViewModel, from: String, onDone: () -> Unit, onBack:
 @Composable
 fun RatesEditor(shopVm: ShopViewModel, setupHeader: (@Composable () -> Unit)?, onDone: () -> Unit, onBack: () -> Unit) {
     val state by shopVm.state.collectAsStateWithLifecycle()
+    val scratch by shopVm.servicesScratch.collectAsStateWithLifecycle()
     var page by remember { mutableStateOf<RatePage>(RatePage.List) }
     when (val p = page) {
         is RatePage.List -> RateListPage(
@@ -132,14 +133,19 @@ fun RatesEditor(shopVm: ShopViewModel, setupHeader: (@Composable () -> Unit)?, o
             val svc = state.services.firstOrNull { it.id == p.serviceId }
             if (svc == null) { page = RatePage.List } else {
                 EditServicePage(
-                    original = svc, canDelete = state.services.size > 1,
+                    original = svc, canDelete = state.services.size > 1 || scratch,
                     onSave = { shopVm.upsertService(it); Analytics.serviceEdited(it.id); page = RatePage.List },
                     onDelete = { shopVm.deleteService(svc.id); page = RatePage.List },
                     onBack = { page = RatePage.List },
                 )
             }
         }
-        is RatePage.Add -> AddServicePage(
+        // Services-from-scratch variant: the simple form (name, per piece / per kg, clothes + prices) everywhere.
+        is RatePage.Add -> if (scratch) AddServiceSimplePage(
+            existing = state.services,
+            onAdd = { shopVm.upsertService(it); Analytics.serviceAdded(it.mode.name); page = RatePage.List },
+            onBack = { page = RatePage.List },
+        ) else AddServicePage(
             existing = state.services,
             onAdd = { shopVm.upsertService(it); Analytics.serviceAdded(it.mode.name); page = RatePage.List },
             onBack = { page = RatePage.List },
@@ -156,6 +162,7 @@ private fun RateListPage(
 ) {
     val setup = setupHeader != null
     val state by shopVm.state.collectAsStateWithLifecycle()
+    val scratch by shopVm.servicesScratch.collectAsStateWithLifecycle()
     val services = state.services
 
     fun commitAndDone() {
@@ -189,7 +196,7 @@ private fun RateListPage(
             AddServiceCard(onAdd)
 
             services.forEach { s ->
-                ServiceCard(s, canDelete = services.size > 1, onEdit = { onEdit(s.id) }, onDelete = { shopVm.deleteService(s.id) })
+                ServiceCard(s, canDelete = services.size > 1 || scratch, onEdit = { onEdit(s.id) }, onDelete = { shopVm.deleteService(s.id) })
             }
 
         }
@@ -281,6 +288,10 @@ private fun EditServicePage(
 ) {
     var draft by remember(original.id) { mutableStateOf(original) }
     BackHandler(onBack = onBack)
+    // Open on the name, keyboard up (owner, 2026-10-28).
+    val nameFocus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    LaunchedEffect(original.id) { nameFocus.requestFocus(); keyboard?.show() }
 
     Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars).imePadding()) {
         TopBar(tr("Edit service"), onBack = onBack)
@@ -291,7 +302,7 @@ private fun EditServicePage(
             Text(tr("Change only what you need. Everything else can stay as it is."), style = fig(15, color = Tokens.Muted))
 
             SectionCard(tr("Service name")) {
-                FieldBox(draft.name, { draft = draft.copy(name = it) }, height = 56.dp, borderColor = Tokens.FieldBorder, textStyle = fig(18, FontWeight.Bold))
+                FieldBox(draft.name, { draft = draft.copy(name = it) }, height = 56.dp, borderColor = Tokens.FieldBorder, textStyle = fig(18, FontWeight.Bold), fieldModifier = Modifier.focusRequester(nameFocus))
             }
 
             ChargeByCard(draft) { draft = it }

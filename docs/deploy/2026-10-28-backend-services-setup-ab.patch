@@ -1,0 +1,104 @@
+--- a/backend/routes/laundry-experiments.js
++++ b/backend/routes/laundry-experiments.js
+@@ -35,6 +35,19 @@
+ //   LAUNDRY_CUSTOMER_FLOW_SPLITS='[{"from":"<ISO time>","split":[10,45,45]}]'
+ // An account created at/after a `from` uses that split (the latest that applies);
+ // older accounts keep LAUNDRY_CUSTOMER_FLOW_SPLIT, so their variant never changes.
++//
++// servicesSetup (2026-10-28, Android 1.0.17): how a brand-new shop gets its
++// services.
++//   samples  setup step 2 is the seeded sample list with sample prices (as before)
++//   scratch  no services step and no sample services: New order shows "Add
++//            service" and the owner types every price; no guide for this group
++// Only accounts whose first login was on Android 1.0.17+ (signup_app_version),
++// created at/after LAUNDRY_SERVICES_SETUP_START (ISO time; unset = test off).
++// Everyone else gets no servicesSetup key (= samples, the old flow).
++// LAUNDRY_SERVICES_SETUP_SCRATCH_PCT (default 50) = share that gets scratch, on
++// a stable hash of the user id. LAUNDRY_SERVICES_SETUP_FORCE='{"<10-digit phone>":"scratch"}'
++// pins QA phones. Saved to CleverTap as Services_Setup (the app stamps it on
++// every event as services_setup).
+ 
+ const router = express.Router();
+ router.use(requireLaundryAuth);
+@@ -104,6 +117,41 @@
+   return CUSTOMER_FLOWS[CUSTOMER_FLOWS.length - 1];
+ }
+ 
++const SERVICES_SETUP_TEST = 'services_setup_v1';
++const SERVICES_SETUPS = ['samples', 'scratch'];
++const SERVICES_SETUP_MIN_APP = 17;
++
++function servicesSetupStart() {
++  const t = Date.parse(process.env.LAUNDRY_SERVICES_SETUP_START || '');
++  return Number.isFinite(t) ? t : null;
++}
++
++function servicesSetupScratchPct() {
++  const n = parseInt(process.env.LAUNDRY_SERVICES_SETUP_SCRATCH_PCT, 10);
++  return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 50;
++}
++
++function servicesSetupForce() {
++  try {
++    const f = JSON.parse(process.env.LAUNDRY_SERVICES_SETUP_FORCE || '{}');
++    return f && typeof f === 'object' ? f : {};
++  } catch {
++    return {};
++  }
++}
++
++// The account's servicesSetup group, or null = not in the test (the old flow).
++function servicesSetupFor(user) {
++  if (!user) return null;
++  const forced = servicesSetupForce()[String(user.phone || '').slice(-10)];
++  if (SERVICES_SETUPS.includes(forced)) return forced;
++  const start = servicesSetupStart();
++  if (start === null) return null;
++  if (user.signupPlatform !== 'android' || !(Number(user.signupAppVersion) >= SERVICES_SETUP_MIN_APP)) return null;
++  if (!(new Date(user.createdAt).getTime() >= start)) return null;
++  return bucket(SERVICES_SETUP_TEST, user.id) < servicesSetupScratchPct() ? 'scratch' : 'samples';
++}
++
+ function guidePct() {
+   const n = parseInt(process.env.LAUNDRY_GUIDE_PCT, 10);
+   return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 50;
+@@ -113,13 +161,16 @@
+ // re-send an unchanged one (resets on restart — then it's sent once again).
+ const saved = new Map();
+ const savedFlow = new Map();
++const savedSetup = new Map();
+ 
+ router.get('/', (req, res) => {
+   const userId = req.laundryUserId;
+   const user = req.laundryAuth.user;
++  const servicesSetup = servicesSetupFor(user);
+   // Paywall-test accounts (brand-new, first login on 1.0.12+) always get the guide;
+-  // everyone else keeps their 50/50 group.
+-  const guide = paywallTest.groupFor(user) || bucket(GUIDE_TEST, userId) < guidePct() ? 'guide' : 'no_guide';
++  // everyone else keeps their 50/50 group. The services-from-scratch group never does.
++  const guide = servicesSetup === 'scratch' ? 'no_guide'
++    : paywallTest.groupFor(user) || bucket(GUIDE_TEST, userId) < guidePct() ? 'guide' : 'no_guide';
+   if (saved.get(userId) !== guide) {
+     if (saved.size > 50000) saved.clear();
+     saved.set(userId, guide);
+@@ -135,9 +186,18 @@
+     savedFlow.set(userId, customerFlow);
+     clevertap.setProfile(userId, { Customer_Flow: customerFlow }).catch(() => {});
+   }
+-  // No key at all when not in the test: older apps and older accounts see the same response as before.
+-  res.json({ success: true, experiments: customerFlow ? { guide, customerFlow } : { guide } });
++  if (servicesSetup && savedSetup.get(userId) !== servicesSetup) {
++    if (savedSetup.size > 50000) savedSetup.clear();
++    savedSetup.set(userId, servicesSetup);
++    clevertap.setProfile(userId, { Services_Setup: servicesSetup }).catch(() => {});
++  }
++  // No key at all when not in a test: older apps and older accounts see the same response as before.
++  const experiments = { guide };
++  if (customerFlow) experiments.customerFlow = customerFlow;
++  if (servicesSetup) experiments.servicesSetup = servicesSetup;
++  res.json({ success: true, experiments });
+ });
+ 
+ module.exports = router;
+ module.exports.customerFlowFor = customerFlowFor;
++module.exports.servicesSetupFor = servicesSetupFor;
