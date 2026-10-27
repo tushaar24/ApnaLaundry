@@ -1,0 +1,91 @@
+diff -ruN backend-orig/config/env.js backend-live/config/env.js
+--- backend-orig/config/env.js	2026-10-28 01:29:53
++++ backend-live/config/env.js	2026-10-28 01:30:26
+@@ -104,6 +104,9 @@
+   // auth on the device — the default, as before) | 'sms' (this backend's OTP
+   // provider, LAUNDRY_OTP_PROVIDER). Older apps always use Firebase.
+   laundryOtpAppMethod: process.env.LAUNDRY_OTP_APP_METHOD,
++  // Review numbers (comma-separated) whose account is deleted and recreated on
++  // every login, so the owner can replay the brand-new-shop journey. Empty = none.
++  laundryAlwaysNewPhones: process.env.LAUNDRY_ALWAYS_NEW_PHONES,
+ 
+   // MyLaundry WhatsApp Business (Cloud) API — its own Meta app/number, apart
+   // from the course site's WHATSAPP_*. Not REQUIRED: the webhook answers 403
+diff -ruN backend-orig/routes/laundry-auth.js backend-live/routes/laundry-auth.js
+--- backend-orig/routes/laundry-auth.js	2026-10-28 01:29:52
++++ backend-live/routes/laundry-auth.js	2026-10-28 01:30:26
+@@ -15,6 +15,7 @@
+ const freeOrders = require('../services/laundry-free-orders');
+ const paywallTest = require('../services/laundry-paywall-test');
+ const firebaseAuth = require('../services/laundry-firebase-auth');
++const userWipe = require('../services/laundry-user-wipe');
+ 
+ // OTP login for the ApnaLaundry app (challenge-based OTP ported from the
+ // HealthProduct identity service). Each user has ONE permanent API token —
+@@ -262,6 +263,14 @@
+   // Every query here is a DB round trip on the login critical path, so
+   // create/touch the user in one statement either way.
+   let user = await tx.laundryUser.findUnique({ where: { phone } });
++  // The owner's "always new" review numbers (LAUNDRY_ALWAYS_NEW_PHONES): the
++  // previous account and all its data go, and the login below creates a fresh
++  // one — new id, new token, isNewUser — so every login replays the first-time
++  // journey (setup, free orders, experiment buckets, paywall).
++  if (user && userWipe.isAlwaysNewPhone(phone)) {
++    await userWipe.wipeUserData(tx, user.id, { deleteUser: true });
++    user = null;
++  }
+   const isNewUser = !user;
+   user = isNewUser
+     ? await tx.laundryUser.create({
+diff -ruN backend-orig/services/laundry-user-wipe.js backend-live/services/laundry-user-wipe.js
+--- backend-orig/services/laundry-user-wipe.js	1970-01-01 05:30:00
++++ backend-live/services/laundry-user-wipe.js	2026-10-28 01:30:39
+@@ -0,0 +1,48 @@
++'use strict';
++
++// Wipes everything a laundry account holds on the server (shops, rates,
++// customers, orders, ledger, day closes, bill links, logos, subscriptions,
++// payments, sessions, support calls, assistant logs) — the account row itself
++// only when `deleteUser` is set. Used for the owner's test numbers:
++//  - "always new" review numbers (LAUNDRY_ALWAYS_NEW_PHONES) are deleted and
++//    recreated on every login, so each login replays the brand-new-shop journey
++//    (new user id → new experiment buckets, fresh free orders, no subscription).
++//  - one-off resets of a test account that should keep its id/token.
++// Runs inside the caller's transaction (tx) or on the shared prisma client.
++// Deletion order follows the foreign keys (no ON DELETE CASCADE on these).
++async function wipeUserData(db, userId, { deleteUser = false } = {}) {
++  const w = { where: { userId } };
++  const counts = {};
++  counts.payments = (await db.laundryPayment.deleteMany(w)).count;
++  counts.subscriptions = (await db.laundrySubscription.deleteMany(w)).count;
++  counts.billLinks = (await db.laundryBillLink.deleteMany(w)).count;
++  counts.orders = (await db.laundryOrder.deleteMany(w)).count;
++  counts.ledger = (await db.laundryLedgerEntry.deleteMany(w)).count;
++  counts.dayCloses = (await db.laundryDayClose.deleteMany(w)).count;
++  counts.customers = (await db.laundryCustomer.deleteMany(w)).count;
++  counts.services = (await db.laundryService.deleteMany(w)).count;
++  counts.shopLogos = (await db.laundryShopLogo.deleteMany(w)).count;
++  counts.shops = (await db.laundryShop.deleteMany(w)).count;
++  counts.supportCalls = (await db.laundrySupportCall.deleteMany(w)).count; // call tags cascade
++  counts.assistantLogs = (await db.laundryAssistantLog.deleteMany({ where: { laundryUserId: userId } })).count;
++  await db.laundryWhatsappMessage.updateMany({ where: { laundryUserId: userId }, data: { laundryUserId: null } });
++  counts.credentials = (await db.laundryCredential.deleteMany({ where: { session: { userId } } })).count;
++  counts.sessions = (await db.laundrySession.deleteMany(w)).count;
++  if (deleteUser) {
++    await db.laundryUser.delete({ where: { id: userId } });
++    counts.user = 1;
++  }
++  return counts;
++}
++
++// Review numbers that start over on every login (comma-separated 10-digit
++// phones in LAUNDRY_ALWAYS_NEW_PHONES; empty = none).
++function alwaysNewPhones() {
++  return String(process.env.LAUNDRY_ALWAYS_NEW_PHONES || '')
++    .split(',')
++    .map((s) => s.trim())
++    .filter(Boolean);
++}
++const isAlwaysNewPhone = (phone) => alwaysNewPhones().includes(String(phone));
++
++module.exports = { wipeUserData, isAlwaysNewPhone, alwaysNewPhones };
