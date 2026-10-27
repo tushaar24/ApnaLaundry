@@ -7,7 +7,9 @@ Owner ask: use review number **1000000000** to "always feel new in the journey",
 - **1000000000**: account `c0b120f5-…` and all its data deleted (1 shop, 5 services, 5 customers, 6 orders, 5 bill links, 1 subscription row). The next login creates it afresh.
 - **1000000001**: account kept (id `b99e0ec4-c293-42ac-95fd-affa4eccf68f`, same token), all data wiped (1 shop, 4 services, 2 subscription rows), then a DB-only `laundry_subscriptions` row added: plan annual, status active, notes `{"manual":true,"test":true}`, `current_end` **2027-10-27**. `/billing/status` verified: `hasActiveSubscription: true`, `paywallDue: false`. Logging in seeds a fresh shop and keeps data like any other account.
 
-## Backend change (staged — needs the owner to run the deploy)
+## Backend change — DEPLOYED 28 Oct 01:42 IST
+
+Owner approved the deploy via /permissions; the script below ran from the job. Server-local commit `c30701f`, backup `~/backend-filebak/20261027-201216-always-new/`. Verified right after: two review-OTP logins as 1000000000 returned two different user ids, both `isNewUser: true`, and one account row remains.
 
 `2026-10-28-backend-always-new-phones.patch` against the live server tree (`~/shweta-makeup-monorepo/backend`, dry run passed):
 
@@ -27,6 +29,6 @@ Rollback: copy the backed-up `routes/laundry-auth.js`, `config/env.js`, `.env` b
 
 ## Using the numbers
 
-- 1000000000 (OTP 100000): **log out in the app before logging in again** — logout wipes the phone's local data; the server then hands back a brand-new account (new experiment buckets, free orders, paywall group as for a real new sign-up). Every login = day-0 journey. Don't keep anything on it. Until the deploy runs, only the one-off wipe above applies (the account persists again after the next login).
+- 1000000000 (OTP 100000): **log out in the app before logging in again** — logout wipes the phone's local data; the server then hands back a brand-new account (new experiment buckets, free orders, paywall group as for a real new sign-up). Every login = day-0 journey. Don't keep anything on it.
 - 1000000001 (OTP 100001): data persists; yearly plan active to 27 Oct 2027. To reset it again, run the wipe with `deleteUser: false` and re-add the subscription row (see the patch's service).
 - Both numbers are already excluded from the dashboards (`10000000xx`).
