@@ -86,8 +86,16 @@ async function campaignData(q, offer) {
   const sendErrors = {};
   rows.filter((r) => !r.accepted).forEach((r) => { const k = (r.sendError || '(none)').slice(0, 90); sendErrors[k] = (sendErrors[k] || 0) + 1; });
   const messagedUsers = new Set(sends.map((s) => s.user_id));
+  const firstSend = sends.length ? sends[0].sent_at : new Date();
+  const inbound = await q(
+    `select m.phone, m.type, m.body, coalesce(m.wa_timestamp, m.created_at) as at, s.user_id, s.tier, s.sent_at, s.name as greeting
+       from laundry_whatsapp_messages m join laundry_offer_sends s on s.phone = m.phone
+      where m.direction = 'inbound' and coalesce(m.wa_timestamp, m.created_at) >= $1 order by 4 desc limit 300`, [firstSend]);
+  const replies = inbound.map((r) => ({ phone: r.phone, userId: r.user_id, tier: Number(r.tier), name: r.greeting, at: r.at, type: r.type, body: (r.body || '').replace(/\s+/g, ' ').trim(),
+    auto: looksAutomatic(r.body, new Date(r.at) - new Date(r.sent_at)) }));
   return {
-    offer, generated_at: new Date().toISOString(), config: cfg,
+    offer, generated_at: new Date().toISOString(), config: cfg, replies,
+    reply_summary: { total: replies.length, owners: new Set(replies.map((r) => r.phone)).size, likely_human: replies.filter((r) => !r.auto).length },
     first_send: sends.length ? sends[0].sent_at : null, last_send: sends.length ? sends[sends.length - 1].sent_at : null,
     total: agg(rows), by_tier: Object.fromEntries(Object.entries(byTier).map(([t, g]) => [t, agg(g)])),
     by_hour: byHour, wa_errors: waErrors, send_errors: sendErrors,
@@ -128,12 +136,21 @@ async function shopsData(q, offer, listUsers) {
 async function shopData(q, offer, id, userDetail) {
   const cfg = offerConfig(offer);
   const detail = await userDetail(q, id);
+  const inbound = await q(`select m.type, m.body, coalesce(m.wa_timestamp, m.created_at) as at from laundry_whatsapp_messages m join laundry_offer_sends s on s.phone = m.phone where s.user_id = $1 and m.direction = 'inbound' and coalesce(m.wa_timestamp, m.created_at) >= s.sent_at order by 3`, [id]);
   const sends = await q(`select s.*, m.status as wa_status, m.error_code, m.error_title, m.wa_timestamp, m.created_at as wa_created
          from laundry_offer_sends s left join laundry_whatsapp_messages m on m.wa_message_id = s.wa_message_id where s.user_id = $1 order by s.sent_at`, [id]);
   const views = await q('select kind, at from laundry_offer_events where offer = $1 and user_id = $2 order by at', [offer, id]);
   const subs = await q('select id, status, paid_count, amount, created_at, updated_at, razorpay_subscription_id from laundry_subscriptions where plan_id = $1 and user_id = $2 order by created_at', [cfg.planId, id]);
   if (!detail) return null;
-  return { offer, config: cfg, detail, sends, views, offerSubs: subs };
+  return { offer, config: cfg, detail, sends, views, offerSubs: subs, inbound };
+}
+
+// A WhatsApp Business greeting / away message: boilerplate text arriving right after our message.
+const AUTO_RE = /thank(s| you) for (contacting|reaching|your message|messaging|connecting|visit)|welcome to|we.?re (unavailable|not available|done for the day|closed)|not available right now|will (respond|reply|get back)|reply with|option number|our timings|working hours|abhi hum available nahi|aapka message mil gaya|swagat|स्वागत|आपका संदेश|धन्यवाद/i;
+function looksAutomatic(body, msSinceSend) {
+  const b = String(body || '');
+  if (AUTO_RE.test(b)) return true;
+  return msSinceSend >= 0 && msSinceSend < 3 * 60e3 && b.length > 40; // long text within 3 minutes of delivery = a bot
 }
 
 // ───────── rendering ─────────
@@ -210,6 +227,9 @@ ${nav(d.offer, 'live from the database · refreshes every minute · ' + ist(d.ge
 <h2>Owners who reached checkout</h2><div class="tw"><table><thead><tr><th>Phone</th><th>Shop</th><th class=n>Tier</th><th>Opened Plans</th><th>Checkout</th><th>Paid</th></tr></thead><tbody>${conv}</tbody></table></div>
 <h2>Why messages did not arrive</h2><div class="tw"><table><thead><tr><th>Meta code</th><th>Meaning</th><th class=n>Owners</th></tr></thead><tbody>${waErr}</tbody></table></div>
 <div class="tw" style="margin-top:10px"><table><thead><tr><th>Refused at send time</th><th class=n>Owners</th></tr></thead><tbody>${sendErr}</tbody></table></div>
+<h2>Replies on WhatsApp <small>${num(d.reply_summary.total)} messages from ${num(d.reply_summary.owners)} owners · ${num(d.reply_summary.likely_human)} look like a person</small></h2>
+<div class="tw"><table><thead><tr><th>When</th><th>Phone</th><th>Shop</th><th class=n>Tier</th><th>Kind</th><th>Message</th></tr></thead><tbody>${d.replies.map((r) => `<tr><td>${ist(r.at)}</td><td>${r.userId ? `<a href="/campaigns/shop/${esc(r.userId)}?offer=${esc(d.offer)}" target="_blank" rel="noopener">${esc(r.phone)}</a>` : esc(r.phone)}</td><td>${esc(r.name)}</td><td class=n>${r.tier}</td><td>${r.auto ? '<span class="pill">auto-reply</span>' : '<span class="pill good">person</span>'}</td><td class=wrap style="min-width:320px">${r.type === 'text' ? esc(r.body.slice(0, 240)) : '<i>' + esc(r.type) + '</i> ' + esc(r.body.slice(0, 120))}</td></tr>`).join('') || '<tr><td colspan=6 class="muted">No replies yet</td></tr>'}</tbody></table></div>
+<div class="note">Replies land on the My Laundry App number (+91 98867 88977), which nobody answers from the app. "auto-reply" = a WhatsApp Business greeting or away message from the shop's own account; "person" = anything else. Messages are shown newest first, up to 300.</div>
 <h2>Sends by hour</h2><div class="tw"><table><thead><tr><th>Hour</th><th class=n>Accepted</th></tr></thead><tbody>${hours}</tbody></table></div>
 <h2>₹${num(d.config.price)} plan on Razorpay, everyone</h2>
 <div class="note">${num(os.rows)} subscriptions created on the offer plan, ${num(os.paid)} paid; by status: ${esc(Object.entries(os.by_status).map(([k, v]) => `${k} ${v}`).join(', ') || 'none')}. ${num(os.not_messaged)} of them are owners who were not messaged.</div>
@@ -322,6 +342,7 @@ function shopPage(d) {
     if (s.status === 'active' || Number(s.paid_count || 0) > 0) trail.push([s.updated_at, `<b>Paid ₹${num(d.config.price)}</b>`]);
     else if (s.status !== 'created') trail.push([s.updated_at, `Checkout ended: ${esc(s.status)}`]);
   }
+  for (const m of d.inbound) trail.push([m.at, `Replied on WhatsApp${looksAutomatic(m.body, 1) ? ' <span class="pill">auto-reply</span>' : ' <span class="pill good">person</span>'}: ${m.type === 'text' ? esc((m.body || '').replace(/\s+/g, ' ').slice(0, 300)) : '<i>' + esc(m.type) + '</i>'}`]);
   trail.sort((a, b) => new Date(a[0]) - new Date(b[0]));
   const tl = trail.map(([t, what]) => `<li><time>${ist(t)}</time><span>${what}</span></li>`).join('') || '<li><span class="muted">No campaign events for this shop</span></li>';
   const subs = d.detail.subscriptions.map((s) => `<tr><td>${esc(s.plan)}</td><td>${esc(s.status)} <small>${esc(STAGES[s.stage] || '')}</small></td><td class=n>${inr(s.amount)}</td><td class=n>${s.paid_count || 0}</td><td>${istD(s.created_at)}</td><td>${istD(s.accessUntil)}</td><td class=wrap>${s.payments.map((p) => `${esc(p.status)} ${inr(p.amount)} ${esc(p.method || '')} ${p.error_description ? '<small>' + esc(p.error_description) + '</small>' : ''}`).join('<br>') || '<span class="muted">no payment attempts</span>'}</td></tr>`).join('') || '<tr><td colspan=7 class="muted">Never opened a checkout</td></tr>';
