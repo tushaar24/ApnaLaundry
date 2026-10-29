@@ -32,13 +32,14 @@ function offerConfig(name) {
 
 // ───────── data ─────────
 
-async function sendRows(q, offer, cfg) {
+async function sendRows(q, offer, cfg, template) {
   const sends = await q(
-    `select s.phone, s.user_id, s.tier, s.name, s.batch, s.wa_message_id, s.status as send_status, s.error, s.sent_at,
+    `select s.phone, s.user_id, s.tier, s.name, s.batch, s.wa_message_id, s.status as send_status, s.error, s.sent_at, s.template,
             m.status as wa_status, m.error_code, m.error_title, m.wa_timestamp
        from laundry_offer_sends s
        left join laundry_whatsapp_messages m on m.wa_message_id = s.wa_message_id
-      order by s.sent_at`);
+      where ($1 = '' or s.template = $1)
+      order by s.sent_at`, [template || '']);
   const userIds = [...new Set(sends.map((s) => s.user_id).filter(Boolean))];
   const views = userIds.length ? await q(
     `select e.user_id, min(e.at) as first_at, max(e.at) as last_at, count(*)::int as n
@@ -58,7 +59,7 @@ async function sendRows(q, offer, cfg) {
     const ss = S.get(s.user_id) || [];
     const wa = s.wa_status || (s.wa_message_id ? 'sent' : null);
     return {
-      phone: s.phone, userId: s.user_id, name: s.name, tier: Number(s.tier), batch: s.batch, sentAt: s.sent_at,
+      phone: s.phone, userId: s.user_id, name: s.name, tier: Number(s.tier), batch: s.batch, template: s.template, sentAt: s.sent_at,
       accepted: Boolean(s.wa_message_id), retry: s.send_status === 'retry', sendError: s.error,
       wa, waAt: s.wa_timestamp, waErrorCode: s.error_code, waError: s.error_code ? `${s.error_code} ${META_ERRORS[s.error_code] || s.error_title || ''}`.trim() : null,
       waLabel: s.retry ? 'waiting for daily limit' : !s.wa_message_id ? 'refused' : wa === 'failed' ? 'not delivered' : wa === 'sent' ? 'sent, not delivered yet' : wa,
@@ -69,9 +70,10 @@ async function sendRows(q, offer, cfg) {
   return { sends, rows, subs, paidRow };
 }
 
-async function campaignData(q, offer) {
+async function campaignData(q, offer, template) {
   const cfg = offerConfig(offer);
-  const { sends, rows, subs, paidRow } = await sendRows(q, offer, cfg);
+  const { sends, rows, subs, paidRow } = await sendRows(q, offer, cfg, template);
+  const templates = (await q('select template, count(*)::int as n from laundry_offer_sends group by template order by min(sent_at)')).map((t) => ({ name: t.template, n: t.n }));
   const agg = (g) => ({
     n: g.length, accepted: g.filter((r) => r.accepted).length, retry: g.filter((r) => r.retry).length, refused: g.filter((r) => !r.accepted && !r.retry).length,
     delivered: g.filter((r) => ['delivered', 'read'].includes(r.wa)).length, read: g.filter((r) => r.wa === 'read').length, pending: g.filter((r) => r.wa === 'sent').length,
@@ -94,7 +96,7 @@ async function campaignData(q, offer) {
   const replies = inbound.map((r) => ({ phone: r.phone, userId: r.user_id, tier: Number(r.tier), name: r.greeting, at: r.at, type: r.type, body: (r.body || '').replace(/\s+/g, ' ').trim(),
     auto: looksAutomatic(r.body, new Date(r.at) - new Date(r.sent_at)) }));
   return {
-    offer, generated_at: new Date().toISOString(), config: cfg, replies,
+    offer, template: template || '', templates, generated_at: new Date().toISOString(), config: cfg, replies,
     reply_summary: { total: replies.length, owners: new Set(replies.map((r) => r.phone)).size, likely_human: replies.filter((r) => !r.auto).length },
     first_send: sends.length ? sends[0].sent_at : null, last_send: sends.length ? sends[sends.length - 1].sent_at : null,
     total: agg(rows), by_tier: Object.fromEntries(Object.entries(byTier).map(([t, g]) => [t, agg(g)])),
@@ -109,9 +111,9 @@ async function campaignData(q, offer) {
 }
 
 // Every messaged shop with the Owners page's columns attached.
-async function shopsData(q, offer, listUsers) {
+async function shopsData(q, offer, listUsers, template) {
   const cfg = offerConfig(offer);
-  const { rows } = await sendRows(q, offer, cfg);
+  const { rows } = await sendRows(q, offer, cfg, template);
   const owners = await listUsers(q);
   const O = new Map(owners.map((o) => [o.id, o]));
   const byPhone = new Map(owners.map((o) => [String(o.phone || '').slice(-10), o]));
@@ -182,7 +184,7 @@ tbody tr.row{cursor:pointer}tbody tr.row:hover td{background:var(--soft)}
 .tl{list-style:none;padding:0;margin:0}.tl li{display:grid;grid-template-columns:130px 1fr;gap:10px;padding:5px 0;border-bottom:1px solid var(--line);font-size:13.5px}.tl li:last-child{border-bottom:none}.tl time{color:var(--muted);font-variant-numeric:tabular-nums}
 `;
 const head = (title, extra = '') => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">${extra}<title>${esc(title)}</title><style>${CSS}</style></head><body>`;
-const nav = (offer, here) => `<header><h1>🪔 ${esc(offer)}</h1><span class="meta">${here}</span><a href="/campaigns?offer=${esc(offer)}" style="margin-left:auto">Summary</a><a href="/campaigns/shops?offer=${esc(offer)}">Shops messaged</a><a href="/" class="sub">Owners</a><a href="/calls" class="sub">Calls</a><a href="/logout" class="sub">Sign out</a></header>`;
+const nav = (offer, here, d) => `<header><h1>🪔 ${esc(offer)}</h1><span class="meta">${here}</span>${d && d.templates && d.templates.length > 1 ? `<span class="meta">template: ${d.templates.map((t) => `<a href="?offer=${esc(offer)}&template=${esc(t.name)}" ${d.template === t.name ? 'style="text-decoration:underline"' : ''}>${esc(t.name)}</a> (${t.n})`).join(' · ')} · <a href="?offer=${esc(offer)}&template=" ${!d.template ? 'style="text-decoration:underline"' : ''}>all</a></span>` : ''}<a href="/campaigns?offer=${esc(offer)}" style="margin-left:auto">Summary</a><a href="/campaigns/shops?offer=${esc(offer)}">Shops messaged</a><a href="/" class="sub">Owners</a><a href="/calls" class="sub">Calls</a><a href="/logout" class="sub">Sign out</a></header>`;
 
 function summaryPage(d) {
   const T = d.total;
@@ -210,7 +212,7 @@ function summaryPage(d) {
   const os = d.offer_subscriptions;
   const notMsg = os.list.filter((s) => s.tier == null).map((s) => `<tr><td>${link(s)}</td><td>${esc(s.shop)}</td><td>${esc(s.status)}</td><td>${s.paid ? '<b>paid</b>' : ''}</td><td>${ist(s.at)}</td></tr>`).join('');
   return `${head('Campaign · ' + d.offer, '<meta http-equiv="refresh" content="60">')}
-${nav(d.offer, 'live from the database · refreshes every minute · ' + ist(d.generated_at) + ' IST')}
+${nav(d.offer, 'live from the database · refreshes every minute · ' + ist(d.generated_at) + ' IST', d)}
 <div class="meta">WhatsApp template diwali_999_yearly from +91 98867 88977 · first send ${ist(d.first_send)} · last send ${ist(d.last_send)} · offer: yearly ₹${num(d.config.price)} on ${esc(d.config.planId)} until ${d.config.until ? ist(d.config.until) : '–'} IST · shown to: ${d.config.audience === 'messaged' ? 'messaged owners only' : 'every shop without a plan'}</div>
 <div class="tiles">
 <div class="tile"><div class="v">${num(T.n)}</div><div class="l">owners in the send list so far</div></div>
@@ -269,6 +271,7 @@ const COLS=[
  ['owner','Owner / shop',(r)=>esc(r.owner||'—')+'<div class="muted">'+esc(r.shopName||'no shop set up')+'</div>'],
  ['tier','Tier',(r)=>r.tier+' <small>'+esc(TIERS[r.tier]||'')+'</small>'],
  ['batch','Batch',(r)=>esc(r.batch)],
+ ['template','Template',(r)=>esc(r.template||'')],
  ['sentAt','Sent',(r)=>ist(r.sentAt)],
  ['waLabel','WhatsApp',(r)=>waPill(r)],
  ['waAt','Status at',(r)=>ist(r.waAt)],
@@ -333,7 +336,7 @@ function shopPage(d) {
   const u = d.detail.user, shop = d.detail.shop || {};
   const trail = [];
   for (const s of d.sends) {
-    trail.push([s.sent_at, s.wa_message_id ? `Message sent (${esc(s.batch)}, tier ${s.tier}, greeting "${esc(s.name)}")` : s.status === 'retry' ? 'Send attempted, rejected by the daily limit, queued for retry' : `Send refused: ${esc(s.error || '')}`]);
+    trail.push([s.sent_at, s.wa_message_id ? `Message sent: ${esc(s.template || '')} (${esc(s.batch)}, tier ${s.tier}, greeting "${esc(s.name)}")` : s.status === 'retry' ? 'Send attempted, rejected by the daily limit, queued for retry' : `Send refused: ${esc(s.error || '')}`]);
     if (s.wa_status && s.wa_status !== 'sent') trail.push([s.wa_timestamp || s.wa_created, s.wa_status === 'failed' ? `Not delivered: ${esc(s.error_code)} ${esc(META_ERRORS[s.error_code] || s.error_title || '')}` : `WhatsApp: ${esc(s.wa_status)}`]);
   }
   for (const v of d.views) trail.push([v.at, 'Opened the app / Plans: the ₹' + num(d.config.price) + ' price was loaded']);
@@ -369,11 +372,12 @@ ${nav(d.offer, 'one shop · ' + ist(new Date()) + ' IST')}
 module.exports = function mount(app, readOnly, deps = {}) {
   const { listUsers, userDetail } = deps;
   const offerOf = (req) => String(req.query.offer || req.params.offer || 'diwali999').replace(/[^a-z0-9_-]/gi, '').slice(0, 40) || 'diwali999';
+  const templateOf = (req) => (req.query.template === undefined ? 'diwali_999_yearly' : String(req.query.template).replace(/[^a-z0-9_-]/gi, '').slice(0, 60));
   app.get('/campaigns', async (req, res, next) => {
-    try { res.type('html').send(summaryPage(await readOnly((q) => campaignData(q, offerOf(req))))); } catch (e) { next(e); }
+    try { res.type('html').send(summaryPage(await readOnly((q) => campaignData(q, offerOf(req), templateOf(req))))); } catch (e) { next(e); }
   });
   app.get('/campaigns/shops', async (req, res, next) => {
-    try { res.type('html').send(shopsPage(await readOnly((q) => shopsData(q, offerOf(req), listUsers)))); } catch (e) { next(e); }
+    try { res.type('html').send(shopsPage(await readOnly((q) => shopsData(q, offerOf(req), listUsers, templateOf(req))))); } catch (e) { next(e); }
   });
   app.get('/campaigns/shop/:id', async (req, res, next) => {
     try {
@@ -383,10 +387,10 @@ module.exports = function mount(app, readOnly, deps = {}) {
     } catch (e) { next(e); }
   });
   app.get('/api/campaigns/:offer', async (req, res, next) => {
-    try { res.json(await readOnly((q) => campaignData(q, offerOf(req)))); } catch (e) { next(e); }
+    try { res.json(await readOnly((q) => campaignData(q, offerOf(req), templateOf(req)))); } catch (e) { next(e); }
   });
   app.get('/api/campaigns/:offer/shops', async (req, res, next) => {
-    try { res.json(await readOnly((q) => shopsData(q, offerOf(req), listUsers))); } catch (e) { next(e); }
+    try { res.json(await readOnly((q) => shopsData(q, offerOf(req), listUsers, templateOf(req)))); } catch (e) { next(e); }
   });
 };
 module.exports.campaignData = campaignData;

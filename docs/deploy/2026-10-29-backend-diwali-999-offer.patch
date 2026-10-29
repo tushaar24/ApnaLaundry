@@ -45,7 +45,7 @@
      const offered = pt && (pt.drawn || !pt.config || pt.plans.includes(plan)) ? paywallTest.planFor(pt, plan) : null;
 --- /dev/null
 +++ b/backend/services/laundry-paywall-offer.js
-@@ -0,0 +1,93 @@
+@@ -0,0 +1,98 @@
 +// A time-boxed price offer for everyone WITHOUT an active plan (first used for the
 +// Diwali ₹999/year WhatsApp push, 2026-10-29). While it runs, /billing/status shows
 +// its plans and prices and /billing/subscribe charges them — on every client,
@@ -90,14 +90,18 @@
 +
 +// audience "messaged": the user ids whose WhatsApp send Meta accepted (laundry_offer_sends),
 +// refreshed from the DB at most once a minute. Owners outside it keep the normal paywall.
++// Rows with template 'manual_allow' are owners the owner added by hand: they get the offer
++// whatever their sign-up date (the audience Set carries them in `.forced`).
 +let audienceSet = new Set(), audienceAt = 0;
 +async function audience(prisma) {
 +  const o = current();
 +  if (!o || o.audience !== 'messaged') return null;
 +  if (Date.now() - audienceAt > 60_000) {
 +    try {
-+      const rows = await prisma.$queryRawUnsafe('select user_id from laundry_offer_sends where wa_message_id is not null and user_id is not null');
-+      audienceSet = new Set(rows.map((r) => r.user_id)); audienceAt = Date.now();
++      const rows = await prisma.$queryRawUnsafe('select user_id, template from laundry_offer_sends where wa_message_id is not null and user_id is not null');
++      const set = new Set(rows.map((r) => r.user_id));
++      set.forced = new Set(rows.filter((r) => r.template === 'manual_allow').map((r) => r.user_id));
++      audienceSet = set; audienceAt = Date.now();
 +    } catch { /* keep the last set */ }
 +  }
 +  return audienceSet;
@@ -115,7 +119,8 @@
 +  if (sub && ['active', 'authenticated'].includes(sub.status)) return pt;
 +  // Existing owners only: an account created at/after the offer started keeps the
 +  // normal paywall (and its A/B group), unless the offer says newAccounts: true.
-+  if (!o.newAccounts && user && user.createdAt && new Date(user.createdAt).getTime() >= o.from) return pt;
++  const forced = Boolean(messaged && messaged.forced && user && messaged.forced.has(user.id));
++  if (!forced && !o.newAccounts && user && user.createdAt && new Date(user.createdAt).getTime() >= o.from) return pt;
 +  const base = pt || {
 +    group: null, gateGroup: null, config: false, drawn: false, gate: 'first_order',
 +    plans: ['annual', 'monthly'], defaultPlan: 'annual', trial: false, trialDays: TRIAL_DAYS,
