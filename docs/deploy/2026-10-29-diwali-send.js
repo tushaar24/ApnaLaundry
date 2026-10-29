@@ -18,7 +18,7 @@ const rows = fs.readFileSync(process.env.LIST, "utf8").trim().split("\n").slice(
 }).filter(Boolean);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 (async () => {
-  const done = new Set((await p.$queryRawUnsafe("select phone from laundry_offer_sends where wa_message_id is not null")).map((r) => r.phone));
+  const done = new Set((await p.$queryRawUnsafe("select phone from laundry_offer_sends where wa_message_id is not null and template = $1", TEMPLATE)).map((r) => r.phone));
   const todo = rows.filter((r) => !done.has(r.phone)).slice(0, LIMIT);
   console.log(`list ${rows.length}, already sent ${rows.length - rows.filter((r) => !done.has(r.phone)).length}, sending now ${todo.length}${DRY ? " (DRY RUN)" : ""}`);
   let ok = 0, failed = 0, stopped = null; const sentNow = [];
@@ -32,18 +32,18 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const wamid = res.ok && j.messages && j.messages[0] && j.messages[0].id;
     const err = res.ok ? null : `${j.error && j.error.code}: ${(j.error && (j.error.error_data && j.error.error_data.details || j.error.message)) || res.status}`;
     await p.$executeRawUnsafe(
-      "insert into laundry_offer_sends (phone, user_id, tier, name, batch, wa_message_id, status, error, sent_at) values ($1,$2,$3,$4,$5,$6,$7,$8,now()) on conflict (phone) do update set user_id=excluded.user_id, tier=excluded.tier, name=excluded.name, batch=excluded.batch, wa_message_id=excluded.wa_message_id, status=excluded.status, error=excluded.error, sent_at=now()",
-      r.phone, user ? user.id : null, r.tier, r.name, BATCH, wamid || null, wamid ? "sent" : "failed", err);
+      "insert into laundry_offer_sends (phone, user_id, tier, name, batch, wa_message_id, status, error, sent_at, template) values ($1,$2,$3,$4,$5,$6,$7,$8,now(),$9) on conflict (phone, template) do update set user_id=excluded.user_id, tier=excluded.tier, name=excluded.name, batch=excluded.batch, wa_message_id=excluded.wa_message_id, status=excluded.status, error=excluded.error, sent_at=now()",
+      r.phone, user ? user.id : null, r.tier, r.name, BATCH, wamid || null, wamid ? "sent" : "failed", err, TEMPLATE);
     if (wamid) {
       ok++; sentNow.push({ userId: user ? user.id : null, tier: r.tier, ts: Math.floor(Date.now() / 1000) });
-      await p.laundryWhatsappMessage.create({ data: { waMessageId: wamid, phoneNumberId: PHONE_ID, laundryUserId: user ? user.id : null, waId: "91" + r.phone, phone: r.phone, direction: "outbound", type: "template", body: TEMPLATE, status: "sent", waTimestamp: new Date(), raw: { campaign: BATCH, name: r.name } } }).catch(() => {});
+      await p.laundryWhatsappMessage.create({ data: { waMessageId: wamid, phoneNumberId: PHONE_ID, laundryUserId: user ? user.id : null, waId: "91" + r.phone, phone: r.phone, direction: "outbound", type: "template", body: TEMPLATE, status: "sent", waTimestamp: new Date(), raw: { campaign: BATCH, template: TEMPLATE, name: r.name } } }).catch(() => {});
     } else {
       failed++;
       const code = j.error && j.error.code;
       if ([130429, 131056, 80007, 131048].includes(code)) { stopped = err; break; }
     }
     if ((ok + failed) % 50 === 0) console.log(`… ${ok} sent, ${failed} failed`);
-    await sleep(120);
+    await sleep(500);
   }
   console.log(`done: ${ok} sent, ${failed} failed${stopped ? " — STOPPED: " + stopped + " (rerun later; already-sent phones are skipped)" : ""}`);
   await p.$disconnect();
@@ -52,7 +52,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     // One "Diwali Offer Sent" event per owner messaged in THIS run (never re-sent), then the profile stamp for everyone.
     const ct = { acct: process.env.LAUNDRY_CLEVERTAP_ACCOUNT_ID, pass: process.env.LAUNDRY_CLEVERTAP_PASSCODE, region: process.env.LAUNDRY_CLEVERTAP_REGION };
     const ctUrl = (!ct.region || ct.region === "global") ? "https://api.clevertap.com/1/upload" : `https://${ct.region}.api.clevertap.com/1/upload`;
-    const evs = sentNow.filter((x) => x.userId).map((x) => ({ type: "event", identity: x.userId, evtName: "Diwali Offer Sent", ts: x.ts, evtData: { offer: "diwali999", tier: x.tier, batch: BATCH, wa_status: "sent", platform: "backend" } }));
+    const evs = sentNow.filter((x) => x.userId).map((x) => ({ type: "event", identity: x.userId, evtName: "Diwali Offer Sent", ts: x.ts, evtData: { offer: "diwali999", template: TEMPLATE, tier: x.tier, batch: BATCH, wa_status: "sent", platform: "backend" } }));
     for (let i = 0; i < evs.length; i += 500) {
       const res = await fetch(ctUrl, { method: "POST", headers: { "X-CleverTap-Account-Id": ct.acct, "X-CleverTap-Passcode": ct.pass, "Content-Type": "application/json" }, body: JSON.stringify({ d: evs.slice(i, i + 500) }) }).catch(() => null);
       if (!res || !res.ok) console.log("clevertap event upload failed for batch", i / 500);

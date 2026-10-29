@@ -34,8 +34,12 @@ async function plansSeen() {
 }
 
 (async () => {
-  const rows = await p.$queryRawUnsafe(`select s.phone, s.user_id, s.tier, s.batch, s.status, s.wa_message_id, s.sent_at, m.status as wa
+  const all = await p.$queryRawUnsafe(`select s.phone, s.user_id, s.tier, s.batch, s.status, s.wa_message_id, s.sent_at, s.template, m.status as wa
     from laundry_offer_sends s left join laundry_whatsapp_messages m on m.wa_message_id = s.wa_message_id order by s.sent_at`);
+  // one row per owner: the latest send; plus every template that reached them
+  const latest = new Map(), tpl = new Map();
+  for (const r of all) { latest.set(r.phone, r); if (r.wa_message_id) tpl.set(r.phone, [...(tpl.get(r.phone) || []), r.template]); }
+  const rows = [...latest.values()];
   const ids = rows.map((r) => r.user_id).filter(Boolean);
   const viewed = new Set((await p.$queryRawUnsafe(`select distinct e.user_id from laundry_offer_events e join laundry_offer_sends s on s.user_id = e.user_id where e.offer = $1 and e.at >= s.sent_at`, OFFER)).map((r) => r.user_id));
   const idSet = new Set(ids);
@@ -51,7 +55,7 @@ async function plansSeen() {
       : msg !== "sent" ? msg : wa === "failed" ? "undelivered" : wa; // read | delivered | sent
     stages[stage] = (stages[stage] || 0) + 1;
     const ts = Math.floor(new Date(r.sent_at).getTime() / 1000);
-    recs.push({ type: "profile", identity: r.user_id, profileData: { Diwali_999_Msg: msg, Diwali_999_WA: wa, Diwali_999_Stage: stage, Diwali_999_Tier: Number(r.tier), Diwali_999_Batch: r.batch, Diwali_999_Sent_At: "$D_" + ts } });
+    recs.push({ type: "profile", identity: r.user_id, profileData: { Diwali_999_Msg: msg, Diwali_999_WA: wa, Diwali_999_Stage: stage, Diwali_999_Tier: Number(r.tier), Diwali_999_Batch: r.batch, Diwali_999_Sent_At: "$D_" + ts, Diwali_999_Templates: (tpl.get(r.phone) || []).join(","), Diwali_999_Msgs: (tpl.get(r.phone) || []).length } });
     if (sendEvents && r.wa_message_id) recs.push({ type: "event", identity: r.user_id, evtName: "Diwali Offer Sent", ts, evtData: { offer: OFFER, tier: Number(r.tier), batch: r.batch, wa_status: wa, platform: "backend" } });
   }
   let ok = 0, bad = 0;
