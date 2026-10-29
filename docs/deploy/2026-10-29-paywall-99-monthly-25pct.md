@@ -10,3 +10,7 @@ Owner ask: 25% of NEW users see ₹99 monthly; the other 75% keep today's ₹499
 - Change the share: run the script again with `PCT=…` (adds another dated split). Stop: add a split with `first_order_monthly_499: 100`.
 
 Script: `docs/deploy/2026-10-29-paywall-99-monthly-25pct-deploy.sh` (`DRY_RUN=1` first).
+
+## 11:39 IST — third arm: ₹199
+
+Owner: 25% ₹99, 25% ₹199, 50% ₹499. Added `first_order_monthly_199` (same pop-up flow, monthly only, ₹199, the existing `plan_TnWwZMQsOCML47`) and a new dated split `{"from":"2026-10-29T06:09:49Z","split":{"first_order_monthly_499":50,"first_order_monthly_199":25,"first_order_monthly_99":25}}`. Accounts from 03:10–11:39 IST keep the earlier 75/25 split. Verified in the container: 4,000 synthetic new accounts → 1,996 / 996 / 1,008; each arm resolves to its price and plan; earlier accounts unchanged. Backend + laundry-dash recreated; backup `~/backend-filebak/20261029-060949-paywall-199/`.
