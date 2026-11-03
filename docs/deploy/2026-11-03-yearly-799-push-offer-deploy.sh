@@ -27,7 +27,7 @@ const auth = "Basic " + Buffer.from(process.env.LAUNDRY_RAZORPAY_KEY_ID + ":" + 
 KEY=$(grep -o "^LAUNDRY_OFFER_WEBHOOK_KEY=.*" .env | cut -d= -f2- || true)
 [ -n "$KEY" ] || KEY=$(openssl rand -hex 24)
 FROM=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-OFFER=$(PLAN_ID="$PLAN_ID" GRANT_HOURS="$GRANT_HOURS" UNTIL="$UNTIL" FROM="$FROM" python3 -c 'import json,os;e=os.environ;print(json.dumps({"name":"yearly799","audience":"tagged","tags":["push:yearly799"],"grantHours":int(e["GRANT_HOURS"]),"newAccounts":True,"from":e["FROM"],"until":e["UNTIL"],"plans":["annual","monthly"],"default":"annual","prices":{"annual":799},"planIds":{"annual":e["PLAN_ID"]}},separators=(",",":")))')
+OFFER=$(PLAN_ID="$PLAN_ID" GRANT_HOURS="$GRANT_HOURS" UNTIL="$UNTIL" FROM="$FROM" python3 -c 'import json,os;e=os.environ;print(json.dumps({"name":"yearly799","audience":"tagged","tags":["push:yearly799"],"grantHours":int(e["GRANT_HOURS"]),"variants":["first_order_monthly_99"],"newAccounts":True,"from":e["FROM"],"until":e["UNTIL"],"plans":["annual","monthly"],"default":"annual","prices":{"annual":799},"planIds":{"annual":e["PLAN_ID"]}},separators=(",",":")))')
 echo "plan: $PLAN_ID | offer: $OFFER"
 if [ "$DRY_RUN" = 1 ]; then echo "DRY RUN — nothing changed"; exit 0; fi
 B=~/backend-filebak/$(date -u +%Y%m%d-%H%M%S)-yearly799; mkdir -p "$B"; cp .env "$B/.env"; cp services/laundry-paywall-offer.js app.js "$B/"
@@ -45,7 +45,7 @@ docker compose -f docker-compose.prod.yml up -d --build backend 2>&1 | tail -1
 sleep 12; docker ps --format '{{.Names}} {{.Status}}' | grep backend-1
 echo "--- webhook: bad key → 401, then grant the test phone:"
 curl -s -o /dev/null -w "bad key -> HTTP %{http_code}\n" -X POST https://shwetamakeover.online/api/laundry/offers/grant -H "Content-Type: application/json" -d '{"phone":"'"$TEST_PHONE"'","offer":"yearly799"}'
-curl -s -X POST "https://shwetamakeover.online/api/laundry/offers/grant?offer=yearly799&key=$KEY" -H "Content-Type: application/json" -d '{"targetId":0,"profiles":[{"identity":"not-a-user","phone":"+91'"$TEST_PHONE"'","profileData":{}}]}'; echo
+echo "(grant calls from this server are refused by the IP allow-list; CleverTap is the only caller)"
 echo "--- what Plans will show:"
 docker exec -e TEST_PHONE="$TEST_PHONE" "$C" node -e '
 const prisma = require("/app/db"); const t = require("/app/services/laundry-paywall-test"), o = require("/app/services/laundry-paywall-offer");
@@ -57,7 +57,7 @@ const prisma = require("/app/db"); const t = require("/app/services/laundry-payw
     const pt = o.apply(t.offer(u, Number(u.signupAppVersion) || 17), sub, Number(u.signupAppVersion) || 17, 5, u, aud);
     console.log(label.padEnd(34), "→", pt && pt.offer ? `OFFER ${pt.offer}: plans ${pt.plans} annual ₹${pt.prices.annual/100} monthly ₹${pt.prices.monthly/100} default ${pt.defaultPlan}` : `normal (${pt ? pt.group + " monthly ₹" + pt.prices.monthly/100 : "none"})`);
   };
-  await show("granted test phone", { phone: { endsWith: process.env.TEST_PHONE } });
+  await show("granted test phone (not ₹99 arm → normal)", { phone: { endsWith: process.env.TEST_PHONE } });
   const since = new Date("2026-11-01T16:30:20Z");
   await show("un-granted new ₹99 account", { signupPlatform: "android", createdAt: { gt: since }, NOT: { phone: { endsWith: process.env.TEST_PHONE } } });
   await show("Diwali allow-listed (paid)", { phone: { endsWith: "7602017890" } });
