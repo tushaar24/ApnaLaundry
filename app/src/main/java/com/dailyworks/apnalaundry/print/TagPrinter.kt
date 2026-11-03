@@ -97,9 +97,18 @@ object TagPrinter {
             withContext(Dispatchers.Main) { onProgress(0) }
             images.forEachIndexed { i, bmp ->
                 ensureActive()
-                val bytes = EscPos.raster(bmp)
+                // One complete image band (64 rows ≈ 3 KB on 58 mm paper) per write, then a pause sized to
+                // the printer's speed (~16 KB/s). A bill is several times a tag: written in one go it overflows
+                // a cheap printer's buffer; paused mid-band the printer drops the image and prints text garbage.
+                val bands = EscPos.rasterBands(bmp, band = 64)
+                val total = bands.sumOf { it.size }
+                android.util.Log.i("TagPrinter", "$what ${i + 1}/${images.size}: ${bmp.width}x${bmp.height} px, $total bytes in ${bands.size} bands, to $name")
                 try {
-                    out.write(bytes); out.flush()
+                    for (b in bands) {
+                        ensureActive()
+                        out.write(b); out.flush()
+                        delay(b.size / 16L)
+                    }
                 } catch (e: IOException) {
                     throw PrintError(
                         "write",
@@ -107,8 +116,7 @@ object TagPrinter {
                         else tr("Printing stopped. Check the printer is on and has paper, then try again."),
                     )
                 }
-                // Cheap printers drop data sent faster than they print (~16 KB a second).
-                delay(bytes.size / 16L)
+                delay(150) // let the page finish before the next image / the feed
                 withContext(Dispatchers.Main) { onProgress(i + 1) }
             }
             out.write(EscPos.feed(4)); out.flush()

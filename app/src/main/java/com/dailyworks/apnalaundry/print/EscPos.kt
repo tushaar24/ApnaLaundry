@@ -17,14 +17,27 @@ object EscPos {
      * one tall image. Dark pixels print; the rest stays paper.
      */
     fun raster(bmp: Bitmap, band: Int = 128): ByteArray {
+        val out = ByteArrayOutputStream()
+        rasterBands(bmp, band).forEach { out.write(it) }
+        return out.toByteArray()
+    }
+
+    /**
+     * The same image as one byte array per band — each a complete GS v 0 command.
+     * A band must reach the printer in one go: pausing inside it makes cheap
+     * printers abandon the image and print the remaining bytes as text (seen on
+     * the owner's printer, 2026-11-03). Pauses go between bands.
+     */
+    fun rasterBands(bmp: Bitmap, band: Int = 128): List<ByteArray> {
         val w = bmp.width
         val h = bmp.height
         val rowBytes = (w + 7) / 8
-        val out = ByteArrayOutputStream(h * rowBytes + (h / band + 1) * 8)
         val px = IntArray(w)
+        val bands = ArrayList<ByteArray>(h / band + 1)
         var top = 0
         while (top < h) {
             val rows = minOf(band, h - top)
+            val out = ByteArrayOutputStream(rows * rowBytes + 8)
             out.write(byteArrayOf(0x1D, 0x76, 0x30, 0x00, rowBytes.toByte(), (rowBytes shr 8).toByte(), rows.toByte(), (rows shr 8).toByte()))
             for (y in top until top + rows) {
                 bmp.getPixels(px, 0, w, 0, y, w, 1)
@@ -37,9 +50,10 @@ object EscPos {
                     out.write(bits)
                 }
             }
+            bands.add(out.toByteArray())
             top += rows
         }
-        return out.toByteArray()
+        return bands
     }
 
     /** A little under mid-grey counts as black: anti-aliased text edges print solid. */
