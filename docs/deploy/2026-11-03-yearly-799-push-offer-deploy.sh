@@ -45,7 +45,7 @@ docker compose -f docker-compose.prod.yml up -d --build backend 2>&1 | tail -1
 sleep 12; docker ps --format '{{.Names}} {{.Status}}' | grep backend-1
 echo "--- webhook: bad key → 401, then grant the test phone:"
 curl -s -o /dev/null -w "bad key -> HTTP %{http_code}\n" -X POST https://shwetamakeover.online/api/laundry/offers/grant -H "Content-Type: application/json" -d '{"phone":"'"$TEST_PHONE"'","offer":"yearly799"}'
-curl -s -X POST https://shwetamakeover.online/api/laundry/offers/grant -H "Content-Type: application/json" -H "X-Laundry-Offer-Key: $KEY" -d '{"phone":"'"$TEST_PHONE"'","offer":"yearly799"}'; echo
+curl -s -X POST "https://shwetamakeover.online/api/laundry/offers/grant?offer=yearly799&key=$KEY" -H "Content-Type: application/json" -d '{"targetId":0,"profiles":[{"identity":"not-a-user","phone":"+91'"$TEST_PHONE"'","profileData":{}}]}'; echo
 echo "--- what Plans will show:"
 docker exec -e TEST_PHONE="$TEST_PHONE" "$C" node -e '
 const prisma = require("/app/db"); const t = require("/app/services/laundry-paywall-test"), o = require("/app/services/laundry-paywall-offer");
@@ -65,6 +65,6 @@ const prisma = require("/app/db"); const t = require("/app/services/laundry-payw
   await prisma.$disconnect(); })();'
 docker compose -f docker-compose.prod.yml up -d --force-recreate --no-deps laundry-dash 2>&1 | tail -1
 echo "backup: $B"
-echo "WEBHOOK URL: https://shwetamakeover.online/api/laundry/offers/grant"
+echo "WEBHOOK URL: https://shwetamakeover.online/api/laundry/offers/grant?offer=yearly799&key=$KEY"
 echo "WEBHOOK KEY: $KEY"
 REMOTE
