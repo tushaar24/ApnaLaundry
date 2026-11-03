@@ -443,6 +443,13 @@ object Analytics {
     fun tagsPrintFailed(orderId: Int, reason: String, from: String) =
         track("Tags Print Failed", mapOf("order_id" to orderId, "reason" to reason, "from" to from))
 
+    /** The customer's bill printed on the Bluetooth printer (1.0.18). [paper] = "58mm" | "80mm"; [from] as for tags. */
+    fun billPrinted(orderId: Int, paper: String, from: String) =
+        track("Bill Printed", mapOf("order_id" to orderId, "paper" to paper, "from" to from))
+
+    fun billPrintFailed(orderId: Int, reason: String, from: String) =
+        track("Bill Print Failed", mapOf("order_id" to orderId, "reason" to reason, "from" to from))
+
     fun combinedBillSent(customerId: String, orders: Int, total: Int, toPay: Int) =
         track("Combined Bill Sent", mapOf("customer_id" to customerId, "orders" to orders, "total" to total, "to_pay" to toPay, "channel" to "whatsapp"))
 

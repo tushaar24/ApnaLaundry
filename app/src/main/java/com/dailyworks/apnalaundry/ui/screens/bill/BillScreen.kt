@@ -162,12 +162,17 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
                     )
                 }
 
-                // tags for the clothes, on the Bluetooth printer
-                if (o.lines.isNotEmpty() && o.status != OrderStatus.CANCELLED) {
+                // the bill and the clothes' tags, on the Bluetooth printer
+                if (o.lines.isNotEmpty()) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(tr("Tags"), style = fig(13, FontWeight.Bold, Tokens.Muted))
-                        OutlineButton(tr("Print tags"), Modifier.fillMaxWidth(), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) {
-                            active = ActiveSheet.PrintTags(o.id, "bill")
+                        Text(tr("Print"), style = fig(13, FontWeight.Bold, Tokens.Muted))
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlineButton(tr("Print bill"), Modifier.weight(1f), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) {
+                                active = ActiveSheet.PrintBill(o.id, "bill")
+                            }
+                            if (o.status != OrderStatus.CANCELLED) OutlineButton(tr("Print tags"), Modifier.weight(1f), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) {
+                                active = ActiveSheet.PrintTags(o.id, "bill")
+                            }
                         }
                     }
                 }

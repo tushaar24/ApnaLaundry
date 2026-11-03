@@ -35,6 +35,8 @@ sealed interface ActiveSheet {
     data class BillView(val orderId: Int) : ActiveSheet
     /** [from] = "bill" | "order_detail" | "menu" (analytics). */
     data class PrintTags(val orderId: Int, val from: String) : ActiveSheet
+    /** The customer's bill on the Bluetooth printer (1.0.18); [from] as for tags. */
+    data class PrintBill(val orderId: Int, val from: String) : ActiveSheet
     data class Share(val text: String) : ActiveSheet
     /** Multi-shop: switch shop / add a shop. */
     data class Shops(val from: String) : ActiveSheet
@@ -70,6 +72,7 @@ fun SheetHost(
         is ActiveSheet.AddOld -> AddOldBaakiSheet(state, active.custId, vm, onDismiss)
         is ActiveSheet.BillView -> BillViewSheet(state, active.orderId, vm, onDismiss)
         is ActiveSheet.PrintTags -> PrintTagsSheet(state, active.orderId, active.from, vm, onDismiss)
+        is ActiveSheet.PrintBill -> PrintTagsSheet(state, active.orderId, active.from, vm, onDismiss, bill = true)
         is ActiveSheet.Share -> ShareSummarySheet(active.text, vm, onDismiss)
         is ActiveSheet.Shops -> com.dailyworks.apnalaundry.ui.screens.shops.ShopsSheet(vm, navigator, active.from, onDismiss)
     }

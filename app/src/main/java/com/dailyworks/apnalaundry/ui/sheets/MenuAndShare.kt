@@ -75,6 +75,8 @@ fun OrderMenuSheet(
             // Tags once the clothes are counted (a cancelled order has nothing to tag).
             if (o.lines.isNotEmpty() && o.status != OrderStatus.CANCELLED)
                 MenuRow(Icons.Outlined.Print, tr("Print tags")) { onOpen(ActiveSheet.PrintTags(o.id, "menu")) }
+            if (o.lines.isNotEmpty())
+                MenuRow(Icons.Outlined.Print, tr("Print bill")) { onOpen(ActiveSheet.PrintBill(o.id, "menu")) }
             MenuRow(Icons.Outlined.Edit, tr("Edit order / bill")) { onDismiss(); navigator.openNewOrder(editId = o.id, from = "home") }
             // Any state to any state — forward, backward, delivered included.
             MenuRow(Icons.Outlined.SwapVert, tr("Change status")) { onOpen(ActiveSheet.ChangeStatus(o.id)) }

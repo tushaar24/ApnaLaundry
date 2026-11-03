@@ -25,6 +25,7 @@ import kotlin.math.ceil
  *     11 Oct 2026 · Due 15 Oct
  *     [ DC ] [EXPRESS]
  *     T-Shirt (Kids)
+ *     Dry Cleaning          (the service in words; the order's one tag lists each service × count)
  *     2/5
  *     - - - - - - - -   (tear here)
  *
@@ -112,6 +113,10 @@ object TagRender {
         val item = paint(30 * s, MEDIUM)
         if (item.measureText(t.item) > inner) item.textSize = 24 * s
         line(t.item, item)
+        // The service in words — the code box above is too terse once an order mixes services.
+        val svc = paint(24 * s, MEDIUM)
+        t.services.take(4).forEach { line(it, svc) }
+        if (t.services.size > 4) line("+${t.services.size - 4} more", svc)
         line(t.note.replace(Regex("\\s+"), " ").let { if (it.isEmpty()) "" else "Note: $it" }, paint(22 * s, MEDIUM))
         line(t.count, paint(52 * s, BOLD))
 

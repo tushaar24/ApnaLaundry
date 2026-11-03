@@ -46,9 +46,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.dailyworks.apnalaundry.analytics.Analytics
+import com.dailyworks.apnalaundry.core.I18n
 import com.dailyworks.apnalaundry.core.tr
+import com.dailyworks.apnalaundry.domain.BillReceipt
 import com.dailyworks.apnalaundry.domain.LaundryState
 import com.dailyworks.apnalaundry.domain.LaundryTags
+import com.dailyworks.apnalaundry.print.ReceiptRender
 import com.dailyworks.apnalaundry.print.TagPrefs
 import com.dailyworks.apnalaundry.print.TagPrinter
 import com.dailyworks.apnalaundry.print.TagRender
@@ -69,9 +72,11 @@ import kotlinx.coroutines.launch
  * Bluetooth thermal printer. First sorts out whatever is missing — Bluetooth
  * allowed, Bluetooth on, a paired printer — then shows the tag and prints the
  * lot with a running count. [from] = "bill" | "order_detail" | "menu".
+ * [bill] = print the customer's bill (print/ReceiptRender) instead of tags —
+ * the same printer set-up, one page, no "how many" choice (1.0.18).
  */
 @Composable
-fun PrintTagsSheet(state: LaundryState, orderId: Int, from: String, vm: ShopViewModel, onDismiss: () -> Unit) {
+fun PrintTagsSheet(state: LaundryState, orderId: Int, from: String, vm: ShopViewModel, onDismiss: () -> Unit, bill: Boolean = false) {
     val o = Selectors.order(state, orderId) ?: return onDismiss()
     val c = Selectors.customer(state, o.custId)
     val context = LocalContext.current
@@ -100,7 +105,10 @@ fun PrintTagsSheet(state: LaundryState, orderId: Int, from: String, vm: ShopView
         if (perPiece) LaundryTags.perPiece(state.shop, o, c) else listOf(LaundryTags.forOrder(state.shop, o, c))
     }
     val dots = if (wide) TagRender.WIDE else TagRender.NARROW
-    val preview = remember(tags, dots) { tags.firstOrNull()?.let { TagRender.render(it, dots).asImageBitmap() } }
+    // The bill is English whatever the app's language, like the WhatsApp bill image.
+    val receipt = remember(state.shop, o, c, bill) { if (bill) I18n.english { BillReceipt.of(state, o) } else null }
+    val images = remember(tags, receipt, dots) { if (receipt != null) listOf(ReceiptRender.render(receipt, dots)) else tags.map { TagRender.render(it, dots) } }
+    val preview = remember(images) { images.firstOrNull()?.asImageBitmap() }
 
     var printing by remember { mutableStateOf(false) }
     var sent by remember { mutableStateOf<Int?>(null) } // null = still connecting
@@ -115,22 +123,27 @@ fun PrintTagsSheet(state: LaundryState, orderId: Int, from: String, vm: ShopView
         // used to cancel the job and leave half the tags unprinted, silently.
         vm.viewModelScope.launch {
             try {
-                TagPrinter.print(context, p.address, p.name, tags, dots) { sent = it }
-                Analytics.tagsPrinted(o.id, tags.size, if (perPiece) "piece" else "order", if (wide) "80mm" else "58mm", from)
-                vm.showInfo(if (tags.size == 1) tr("1 tag printed") else tr("{n} tags printed", "n" to tags.size))
+                TagPrinter.printBitmaps(context, p.address, p.name, images, what = if (bill) "bill" else "tag") { sent = it }
+                if (bill) {
+                    Analytics.billPrinted(o.id, if (wide) "80mm" else "58mm", from)
+                    vm.showInfo(tr("Bill printed"))
+                } else {
+                    Analytics.tagsPrinted(o.id, tags.size, if (perPiece) "piece" else "order", if (wide) "80mm" else "58mm", from)
+                    vm.showInfo(if (tags.size == 1) tr("1 tag printed") else tr("{n} tags printed", "n" to tags.size))
+                }
                 if (open.get()) onDismiss()
             } catch (e: TagPrinter.PrintError) {
                 error = e.message
-                Analytics.tagsPrintFailed(o.id, e.reason, from)
-                // The sheet is gone: say it here, or the owner never learns the tags didn't print.
-                if (!open.get()) vm.showInfo(tr("Tags not printed · {reason}", "reason" to e.message))
+                if (bill) Analytics.billPrintFailed(o.id, e.reason, from) else Analytics.tagsPrintFailed(o.id, e.reason, from)
+                // The sheet is gone: say it here, or the owner never learns it didn't print.
+                if (!open.get()) vm.showInfo(if (bill) tr("Bill not printed · {reason}", "reason" to e.message) else tr("Tags not printed · {reason}", "reason" to e.message))
             } finally {
                 printing = false
             }
         }
     }
 
-    AppBottomSheet(title = tr("Print tags"), subtitle = "${c.name} · #${o.no()}", onDismiss = onDismiss) {
+    AppBottomSheet(title = if (bill) tr("Print bill") else tr("Print tags"), subtitle = "${c.name} · #${o.no()}", onDismiss = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             when {
                 !hasBluetooth -> Notice(tr("This phone has no Bluetooth, so it can't reach a printer."))
@@ -185,18 +198,24 @@ fun PrintTagsSheet(state: LaundryState, orderId: Int, from: String, vm: ShopView
                         )
                     }
 
-                    // How many
-                    Text(tr("How many tags?"), style = fig(15, FontWeight.Bold))
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        PillChip(tr("One for each cloth · {n}", "n" to pieces), perPiece) { if (!printing) { perPiece = true; saved.perPiece = true } }
-                        PillChip(tr("One for the order"), !perPiece) { if (!printing) { perPiece = false; saved.perPiece = false } }
+                    // How many (tags only — a bill is one page)
+                    if (!bill) {
+                        Text(tr("How many tags?"), style = fig(15, FontWeight.Bold))
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            PillChip(tr("One for each cloth · {n}", "n" to pieces), perPiece) { if (!printing) { perPiece = true; saved.perPiece = true } }
+                            PillChip(tr("One for the order"), !perPiece) { if (!printing) { perPiece = false; saved.perPiece = false } }
+                        }
                     }
 
                     // What it looks like
                     preview?.let { img ->
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text(
-                                if (tags.size > 1) tr("Tag 1 of {n} looks like this", "n" to tags.size) else tr("Your tag looks like this"),
+                                when {
+                                    bill -> tr("Your bill looks like this")
+                                    tags.size > 1 -> tr("Tag 1 of {n} looks like this", "n" to tags.size)
+                                    else -> tr("Your tag looks like this")
+                                },
                                 style = fig(13, FontWeight.SemiBold, Tokens.Muted),
                             )
                             Box(
@@ -204,7 +223,7 @@ fun PrintTagsSheet(state: LaundryState, orderId: Int, from: String, vm: ShopView
                                     .border(1.dp, Tokens.CardBorder, RoundedCornerShape(12.dp)).padding(vertical = 12.dp),
                                 contentAlignment = Alignment.Center,
                             ) {
-                                Image(img, contentDescription = tr("Tag for order #{no}", "no" to o.no()), modifier = Modifier.size(width = 220.dp, height = (220f * img.height / img.width).dp), contentScale = ContentScale.Fit)
+                                Image(img, contentDescription = if (bill) tr("Bill for order #{no}", "no" to o.no()) else tr("Tag for order #{no}", "no" to o.no()), modifier = Modifier.size(width = 220.dp, height = (220f * img.height / img.width).dp), contentScale = ContentScale.Fit)
                             }
                         }
                     }
@@ -216,18 +235,20 @@ fun PrintTagsSheet(state: LaundryState, orderId: Int, from: String, vm: ShopView
                         )
                     }
 
-                    val n = tags.size
+                    val n = images.size
                     PrimaryButton(
                         when {
                             printing && sent == null -> tr("Connecting to printer…")
+                            bill && printing -> tr("Printing bill…")
                             printing -> tr("Printing {i} of {n}…", "i" to minOf((sent ?: 0) + 1, n), "n" to n)
                             error != null -> tr("Try again")
+                            bill -> tr("Print bill")
                             n == 1 -> tr("Print 1 tag")
                             else -> tr("Print {n} tags", "n" to n)
                         },
                         enabled = !printing && n > 0, height = 56.dp,
                     ) { print() }
-                    Text(
+                    if (!bill) Text(
                         tr("Tear or cut along the dashed line between tags."),
                         style = fig(13, color = Tokens.Muted), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
                     )

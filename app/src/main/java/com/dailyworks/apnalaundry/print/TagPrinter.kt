@@ -22,7 +22,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
 /**
- * Laundry tags on a Bluetooth thermal printer — the 58 / 80 mm kind shops use
+ * Laundry tags (and the customer's bill, print/ReceiptRender) on a Bluetooth thermal printer — the 58 / 80 mm kind shops use
  * for receipts — over classic Bluetooth serial (SPP) with ESC/POS raster
  * images. The printer is paired once in the phone's Bluetooth settings; the
  * app only lists paired devices and never scans, so it needs no location.
@@ -68,9 +68,18 @@ object TagPrinter {
      * Prints [tags], [dots] wide, on the printer at [address]. [onProgress]
      * gets 0 once connected, then the count of tags sent. Throws [PrintError].
      */
-    @SuppressLint("MissingPermission")
     suspend fun print(
         context: Context, address: String, name: String, tags: List<LaundryTag>, dots: Int,
+        onProgress: (Int) -> Unit,
+    ) = printBitmaps(context, address, name, tags.map { TagRender.render(it, dots) }, what = "tag", onProgress = onProgress)
+
+    /**
+     * Prints [images] (tags, or a bill) in order. [what] = "tag" | "bill" for the
+     * stop message. [onProgress] gets 0 once connected, then the count sent.
+     */
+    @SuppressLint("MissingPermission")
+    suspend fun printBitmaps(
+        context: Context, address: String, name: String, images: List<android.graphics.Bitmap>, what: String = "tag",
         onProgress: (Int) -> Unit,
     ) = withContext(Dispatchers.IO) {
         val bt = adapter(context) ?: throw PrintError("no_bluetooth", tr("This phone has no Bluetooth."))
@@ -86,13 +95,17 @@ object TagPrinter {
             val out = socket.outputStream
             out.write(EscPos.INIT)
             withContext(Dispatchers.Main) { onProgress(0) }
-            tags.forEachIndexed { i, t ->
+            images.forEachIndexed { i, bmp ->
                 ensureActive()
-                val bytes = EscPos.raster(TagRender.render(t, dots))
+                val bytes = EscPos.raster(bmp)
                 try {
                     out.write(bytes); out.flush()
                 } catch (e: IOException) {
-                    throw PrintError("write", tr("Printing stopped at tag {i} of {n}. Check the printer is on and has paper, then try again.", "i" to i + 1, "n" to tags.size))
+                    throw PrintError(
+                        "write",
+                        if (what == "tag" && images.size > 1) tr("Printing stopped at tag {i} of {n}. Check the printer is on and has paper, then try again.", "i" to i + 1, "n" to images.size)
+                        else tr("Printing stopped. Check the printer is on and has paper, then try again."),
+                    )
                 }
                 // Cheap printers drop data sent faster than they print (~16 KB a second).
                 delay(bytes.size / 16L)

@@ -17,6 +17,13 @@ data class LaundryTag(
     val count: String,    // "3/12" on a cloth's tag, "12 pcs" on the order's one tag; "" = none
     val express: Boolean,
     val note: String,     // the order's note; "" = none
+    /**
+     * The service in words, under the cloth — "Dry Cleaning" on a cloth's tag;
+     * on the order's one tag every service with its count: "Dry Cleaning × 3",
+     * "Wash & Iron × 2". The [code] box alone ("DC+WI") was not enough once an
+     * order had several items (owner, 2026-11-03).
+     */
+    val services: List<String> = emptyList(),
 )
 
 object LaundryTags {
@@ -46,17 +53,22 @@ object LaundryTags {
     /** One tag per cloth, numbered "1/12" … "12/12". */
     fun perPiece(shop: Shop, o: Order, c: Customer): List<LaundryTag> {
         val all = pieces(o)
-        return all.mapIndexed { i, p -> tag(shop, o, c, code(p.service), p.item, "${i + 1}/${all.size}") }
+        return all.mapIndexed { i, p -> tag(shop, o, c, code(p.service), p.item, "${i + 1}/${all.size}", listOfNotNull(p.service.trim().ifBlank { null })) }
     }
 
     /** One tag for the whole order (for its bag): every service's code, and how many clothes. */
     fun forOrder(shop: Shop, o: Order, c: Customer): LaundryTag {
         val clothes = pieces(o).count { it.cloth }
         val codes = o.lines.filter { !it.isQuick }.map { code(it.serviceName) }.filter { it.isNotEmpty() }.distinct()
+        // Each service once, with how many clothes it has in this order.
+        val perService = linkedMapOf<String, Int>()
+        for (p in pieces(o)) { val k = p.service.trim(); if (k.isNotEmpty()) perService[k] = (perService[k] ?: 0) + (if (p.cloth) 1 else 0) }
+        val services = perService.map { (name, n) -> if (n > 0) "$name × $n" else name }
         return tag(
             shop, o, c, codes.joinToString("+"),
             if (clothes > 0) "$clothes ${if (clothes == 1) "cloth" else "clothes"}" else "Clothes",
             if (clothes > 0) "$clothes pcs" else "",
+            services,
         )
     }
 
@@ -73,9 +85,9 @@ object LaundryTags {
         }
     }
 
-    private fun tag(shop: Shop, o: Order, c: Customer, code: String, item: String, count: String) = LaundryTag(
+    private fun tag(shop: Shop, o: Order, c: Customer, code: String, item: String, count: String, services: List<String>) = LaundryTag(
         shop = shop.name.trim(), customer = c.name.trim(), orderNo = o.no(), date = o.pickupDate, due = o.deliveryDate,
-        code = code, item = item, count = count, express = o.express, note = o.note.trim(),
+        code = code, item = item, count = count, express = o.express, note = o.note.trim(), services = services,
     )
 
     private fun trimKg(kg: Double): String = if (kg % 1.0 == 0.0) kg.toInt().toString() else kg.toString()

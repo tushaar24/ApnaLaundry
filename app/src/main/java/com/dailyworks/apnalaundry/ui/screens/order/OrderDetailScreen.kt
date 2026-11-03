@@ -199,9 +199,12 @@ fun OrderDetailScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: I
                         OutlineButton(tr("View bill"), Modifier.weight(1f).fillMaxHeight(), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { active = ActiveSheet.BillView(o.id) }
                         OutlineButton(tr("Download"), Modifier.weight(1f).fillMaxHeight(), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { Analytics.billDownloaded(o.id, "order_detail"); scope.launch { shareBillPdf(context, state, o) } }
                     }
-                    // Tags for the clothes, on the Bluetooth printer.
-                    if (!cancelled) {
-                        OutlineButton(tr("Print tags"), Modifier.fillMaxWidth(), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) {
+                    // The bill and the clothes' tags, on the Bluetooth printer.
+                    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlineButton(tr("Print bill"), Modifier.weight(1f).fillMaxHeight(), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) {
+                            active = ActiveSheet.PrintBill(o.id, "order_detail")
+                        }
+                        if (!cancelled) OutlineButton(tr("Print tags"), Modifier.weight(1f).fillMaxHeight(), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) {
                             active = ActiveSheet.PrintTags(o.id, "order_detail")
                         }
                     }
