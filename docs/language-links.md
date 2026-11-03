@@ -58,3 +58,29 @@ A link can open the Android app in one language, for ads, WhatsApp or SMS in tha
   - `/open/ta/new-order` → `new-order?lang=ta`;
   - `/open/new-order?lang=kn` and `/pay/<code>?lang=hi` work;
   - `/open` and `/open/customers` are unchanged.
+
+## Every screen (app 1.0.18, 3 Nov 2026)
+
+`mylaundry://<screen>[/<id>][?…]` and `https://mylaundry.work/open/<screen>[/<id>][?…]` (a language may precede the screen: `/open/hi/<screen>`):
+
+| Link | Opens |
+|---|---|
+| `home` (alias `orders`) | Orders |
+| `new-order[?cust=<customer id>]` | New order, for that customer |
+| `customers[?filter=…]` (alias `khata`) | Customers tab, on that filter |
+| `customer/<id>` | one customer's khata |
+| `combined-bill/<id>` | that customer's combined bill |
+| `order/<no>` | one order (the app's order number, e.g. 1012) |
+| `bill/<no>` | that order's bill |
+| `earnings[?period=today\|week\|month\|all]` | Earnings on that period |
+| `subscription[?plan=annual\|monthly]` (alias `plans`) | Plans, that plan pre-selected if offered |
+| `rates` (alias `services`) | Services & prices |
+| `add-service` | Add a service |
+| `settings` (alias `shop`) | Settings |
+| `bill-design` (alias `bill-setup`) | Bill design |
+| `bill-details` (alias `bill-fields`) | Bill design with the details form open |
+| `add-shop` | Add a shop |
+| `assistant` (alias `ask`) | Ask (Home where it is off) |
+| `demo` (alias `demo-video`, `video`) | Home with the demo video playing |
+
+Apps before 1.0.18 open Home for the screens they don't know. `/pay/<code>` still opens Plans. Each tap fires `Deep Link Opened {screen}` ("order/1012" for id screens). Code: `push/DeepLinks.kt`, `ui/nav/AppNavGraph.kt`, `web/src/core/openApp.ts`.

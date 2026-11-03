@@ -1,6 +1,7 @@
 package com.dailyworks.apnalaundry.ui.sheets
 
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.viewModelScope
 import android.Manifest
 import android.bluetooth.BluetoothAdapter
@@ -108,6 +109,17 @@ fun PrintTagsSheet(state: LaundryState, orderId: Int, from: String, vm: ShopView
     // The bill is English whatever the app's language, like the WhatsApp bill image.
     val receipt = remember(state.shop, o, c, bill) { if (bill) I18n.english { BillReceipt.of(state, o) } else null }
     val images = remember(tags, receipt, dots) { if (receipt != null) listOf(ReceiptRender.render(receipt, dots)) else tags.map { TagRender.render(it, dots) } }
+    // Debug builds: every design at both paper widths as PNGs in filesDir/print-debug (adb run-as … pulls them), so the
+    // printed layout can be checked on a laptop without a printer.
+    if (com.dailyworks.apnalaundry.BuildConfig.DEBUG && receipt != null) LaunchedEffect(receipt) {
+        runCatching {
+            val dir = java.io.File(context.filesDir, "print-debug").apply { mkdirs() }
+            for (t in listOf("classic", "bold", "receipt", "invoice")) for (w in listOf(TagRender.NARROW, TagRender.WIDE)) {
+                java.io.FileOutputStream(java.io.File(dir, "bill-$t-$w.png")).use { ReceiptRender.render(receipt.copy(template = t), w).compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            }
+            tags.firstOrNull()?.let { tg -> java.io.FileOutputStream(java.io.File(dir, "tag-${dots}.png")).use { TagRender.render(tg, dots).compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) } }
+        }
+    }
     val preview = remember(images) { images.firstOrNull()?.asImageBitmap() }
 
     var printing by remember { mutableStateOf(false) }

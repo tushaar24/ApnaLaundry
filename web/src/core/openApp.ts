@@ -17,19 +17,31 @@
  * from the container logs.
  */
 
-export const SCREENS = ["new-order", "home", "customers", "earnings", "subscription"];
+export const SCREENS = [
+  "new-order", "home", "customers", "earnings", "subscription", "assistant",
+  // app 1.0.18: every screen; <id> screens take a second path segment (older apps open Home for these)
+  "customer", "combined-bill", "order", "bill", "rates", "services", "add-service", "settings", "bill-design", "bill-details", "add-shop", "demo",
+];
+/** Screens that take an id: /open/order/1012 → mylaundry://order/1012. */
+export const WITH_ID = ["customer", "combined-bill", "order", "bill"];
+/** Query keys passed through to the app (?plan=annual on subscription, ?filter= on customers, ?cust= on new-order). */
+export const QUERY_KEYS = ["plan", "filter", "cust", "period"];
 /** The app's languages (core/I18n.kt AppLanguage). */
 export const LANGS = ["en", "hi", "mr", "gu", "bn", "ta", "te", "kn", "ml", "pa", "or"];
 const PACKAGE = "com.dailyworks.apnalaundry";
 const PLAY_URL = `https://play.google.com/store/apps/details?id=${PACKAGE}`;
 
-export function openAppResponse(userAgent: string, screen: string, via: string, code = "", lang = ""): Response {
-  const target = SCREENS.includes(screen) ? screen : "home";
+export function openAppResponse(userAgent: string, screen: string, via: string, code = "", lang = "", id = "", query: Record<string, string> = {}): Response {
+  const base = SCREENS.includes(screen) ? screen : "home";
+  const safeId = WITH_ID.includes(base) && /^[a-z0-9_-]{1,64}$/i.test(id) ? id : "";
+  const qs = Object.entries(query).filter(([k, v]) => QUERY_KEYS.includes(k) && /^[a-z0-9_-]{1,64}$/i.test(v)).map(([k, v]) => `${k}=${v}`);
+  const target = (safeId ? `${base}/${safeId}` : base);
   const language = LANGS.includes(lang) ? lang : "";
   const android = /android/i.test(userAgent);
   console.log(JSON.stringify({ evt: "open_link", via, target, lang: language, code: code.slice(0, 64), android, at: new Date().toISOString() }));
   const playUrl = language ? `${PLAY_URL}&referrer=${encodeURIComponent(`lang=${language}`)}` : PLAY_URL;
-  const intentUrl = `intent://${target}${language ? `?lang=${language}` : ""}#Intent;scheme=mylaundry;package=${PACKAGE};S.browser_fallback_url=${encodeURIComponent(playUrl)};end`;
+  const q = [...qs, ...(language ? [`lang=${language}`] : [])];
+  const intentUrl = `intent://${target}${q.length ? `?${q.join("&")}` : ""}#Intent;scheme=mylaundry;package=${PACKAGE};S.browser_fallback_url=${encodeURIComponent(playUrl)};end`;
 
   const body = android
     ? `<h1>Opening MyLaundry…</h1>

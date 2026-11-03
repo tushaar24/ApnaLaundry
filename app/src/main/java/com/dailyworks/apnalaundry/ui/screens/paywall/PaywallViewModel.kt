@@ -150,6 +150,9 @@ class PaywallViewModel(
 
     /** Pre-selects the server's default plan (its config) until the owner taps one. */
     private fun withServerDefault(s: PaywallUiState): PaywallUiState {
+        // A deep link's ?plan= (mylaundry://subscription?plan=annual) picks that plan when it is offered.
+        val wanted = com.dailyworks.apnalaundry.push.DeepLinks.takePlanHint()?.toPaywallPlan()
+        if (wanted != null && wanted in s.offeredPlans) return s.copy(plan = wanted, planPicked = true)
         val default = s.config?.defaultPlan?.toPaywallPlan() ?: return s
         return if (s.planPicked || default !in s.offeredPlans) s else s.copy(plan = default)
     }

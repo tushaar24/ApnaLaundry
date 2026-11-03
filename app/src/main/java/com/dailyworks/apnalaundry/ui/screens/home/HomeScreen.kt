@@ -117,7 +117,8 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
     val waPrompt by shopVm.waPrompt.collectAsStateWithLifecycle()
     val demoUrl by koinInject<com.dailyworks.apnalaundry.data.AppConfigRepository>().demoVideoUrl
         .collectAsStateWithLifecycle(initialValue = com.dailyworks.apnalaundry.data.AppConfigRepository.DEFAULT_DEMO_VIDEO)
-    var demoOpen by remember { mutableStateOf(false) }
+    // A mylaundry://demo link opens the video straight away.
+    var demoOpen by remember { mutableStateOf(com.dailyworks.apnalaundry.push.DeepLinks.takeHint("demo") != null).also { if (it.value) Analytics.demoVideoOpened("push") } }
     val targets = rememberSpotlightTargets()
     val context = LocalContext.current
 

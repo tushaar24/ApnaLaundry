@@ -95,7 +95,8 @@ fun BillDesignScreen(shopVm: ShopViewModel, editing: Boolean, onBack: () -> Unit
 
     var name by remember { mutableStateOf(shop.name) }
     var draft by remember { mutableStateOf(BillDetails.fieldsOf(shop)) }
-    var sheet by remember { mutableStateOf(false) }
+    // A mylaundry://bill-details link opens the details form at once.
+    var sheet by remember { mutableStateOf(com.dailyworks.apnalaundry.push.DeepLinks.takeHint("bill_details") != null) }
     var tested by remember { mutableStateOf(false) }
 
     fun change(f: BillDetails.Fields) {

@@ -74,13 +74,24 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
     val link by DeepLinks.pending.collectAsStateWithLifecycle()
     LaunchedEffect(link, li, sd) {
         if (link == null || !li || !sd) return@LaunchedEffect
-        val screen = DeepLinks.consume() ?: return@LaunchedEffect
-        Analytics.deepLinkOpened(screen)
-        when (screen) {
-            "new-order" -> navigator.openNewOrder(from = "push")
-            "customers" -> navigator.openCustomers()
-            "earnings" -> navigator.openEarnings()
-            "subscription" -> navigator.openSubscription()
+        val t = DeepLinks.consume() ?: return@LaunchedEffect
+        Analytics.deepLinkOpened(t.label)
+        when (t.screen) {
+            "new-order" -> navigator.openNewOrder(custId = t.params["cust"], from = "push")
+            "customers" -> navigator.openCustomers(t.params["filter"] ?: "all")
+            "customer" -> navigator.openCustomer(t.id, "push")
+            "combined-bill" -> navigator.openCombinedBill(t.id)
+            "order" -> t.id.toIntOrNull()?.let { navigator.openOrder(it, "push") } ?: navigator.openHome()
+            "bill" -> t.id.toIntOrNull()?.let { navigator.openBill(it, "push") } ?: navigator.openHome()
+            "earnings" -> { DeepLinks.setHint("earnings_period", t.params["period"]?.takeIf { it in setOf("today", "week", "month", "all") }); navigator.openEarnings() }
+            "demo" -> { DeepLinks.setHint("demo", "1"); navigator.openHome() }
+            "bill-details" -> { DeepLinks.setHint("bill_details", "1"); navigator.openBillDesign() }
+            "subscription" -> { DeepLinks.setPlanHint(t.params["plan"]); navigator.openSubscription() }
+            "rates" -> navigator.openRates("push")
+            "add-service" -> navigator.openAddService("push")
+            "settings" -> navigator.openSettings()
+            "bill-design" -> navigator.openBillDesign()
+            "add-shop" -> navigator.openAddShop("push")
             "assistant" -> if (prefs.assistantOn.first()) navigator.openAssistant("push") else navigator.openHome()
             else -> navigator.openHome()
         }

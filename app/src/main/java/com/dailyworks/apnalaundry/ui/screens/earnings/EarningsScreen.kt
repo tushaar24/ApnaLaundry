@@ -109,7 +109,8 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
     }
     val multi = views.size > 1
     val hidden by shopVm.hideAmounts.collectAsStateWithLifecycle()
-    var period by remember { mutableStateOf("today") }
+    // A mylaundry://earnings?period=week link opens on that period.
+    var period by remember { mutableStateOf(com.dailyworks.apnalaundry.push.DeepLinks.takeHint("earnings_period") ?: "today") }
     var payFilter by remember { mutableStateOf("all") }
     var showAllOrders by remember { mutableStateOf(false) }
     // Custom range: last 7 days until the owner picks their own.
