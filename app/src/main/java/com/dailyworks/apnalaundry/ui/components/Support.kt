@@ -7,8 +7,8 @@ import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.ui.screens.bill.openWhatsApp
 
 /** MyLaundry support: shop owners call or WhatsApp this number for help. */
-const val SUPPORT_PHONE = "7676363793"
-const val SUPPORT_PHONE_SHOWN = "+91 76763 63793"
+const val SUPPORT_PHONE = "9886788977"
+const val SUPPORT_PHONE_SHOWN = "+91 98867 88977"
 
 /** Opens the dialer with the support number typed in. */
 fun callSupport(context: Context) {
