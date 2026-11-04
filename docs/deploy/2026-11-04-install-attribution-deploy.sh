@@ -9,6 +9,12 @@
 # services/laundry-install-attribution.js, scripts/laundry-attribution-redecrypt.js (re-decrypt rows saved
 # before the key was set: `docker exec shweta-makeup-monorepo-backend-1 node scripts/laundry-attribution-redecrypt.js --apply`).
 # Web: src/core/openApp.ts, src/app/open/[[...screen]]/route.ts.
+# Env on the server (backend/.env): LAUNDRY_META_MARKETING_TOKEN = ads_read user token under the MyLaundry
+# Meta app (set 4 Nov, expires 2026-12-28 — renew in Graph API Explorer / Business settings); the courses
+# dashboard's META_MARKETING_TOKEN expired on 2 Oct 2026 and is only the fallback. LAUNDRY_META_INSTALL_REFERRER_KEY
+# still to be set (Meta app dashboard → Settings → Basic → Android); then run the redecrypt script above.
+# DEPLOYED 4 Nov 2026 ~12:24 UTC (migration + backend; `up -d --build backend` had to be re-run by hand once
+# more to recreate the container) and web ~12:22 UTC; token + env.js/service update ~12:29 UTC.
 #   DRY_RUN=1 bash docs/deploy/2026-11-04-install-attribution-deploy.sh   # copy nothing, show what would run
 #   bash docs/deploy/2026-11-04-install-attribution-deploy.sh
 set -euo pipefail
