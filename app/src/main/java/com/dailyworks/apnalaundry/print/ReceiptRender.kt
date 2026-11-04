@@ -142,18 +142,18 @@ object ReceiptRender {
                 val namePaint = paint(30f, strong = true, white = true)
                 val detPaint = paint(18f, white = true)
                 val nameLines = StaticLayout.Builder.obtain(name, 0, name.length, namePaint, inner.toInt()).setIncludePad(false).build()
-                var h = 14 * s + nameLines.height + 4 * s
-                details.forEach { h += lh(detPaint) + 2 * s }
+                var h = 14 * s + nameLines.height + 5 * s
+                details.forEach { d -> h += StaticLayout.Builder.obtain(d, 0, d.length, detPaint, inner.toInt()).setIncludePad(false).build().height + 2 * s }
                 h += 12 * s
                 val top = band(h)
                 y = top + 14 * s
-                wrapped(name, namePaint, gapAfter = 4 * s)
-                details.forEach { text(it, detPaint, left, Paint.Align.LEFT) }
-                y = top + h + 10 * s
+                wrapped(name, namePaint, gapAfter = 5 * s)
+                details.forEach { wrapped(it, detPaint, gapAfter = 2 * s) }
+                y = top + h + 12 * s
             } else {
-                wrapped(name, paint(if (receipt) 28f else 32f, strong = true), gapAfter = 4 * s, align = Layout.Alignment.ALIGN_CENTER)
-                details.forEach { centred(it, paint(19f)) }
-                rule()
+                wrapped(name, paint(if (receipt) 27f else 32f, strong = true), gapAfter = 5 * s, align = Layout.Alignment.ALIGN_CENTER)
+                details.forEach { wrapped(it, paint(19f), gapAfter = 2 * s, align = Layout.Alignment.ALIGN_CENTER) }
+                rule(gap = 8 * s)
             }
         }
 
@@ -164,8 +164,8 @@ object ReceiptRender {
 
         fun payStatus() {
             if (r.payStatus.isBlank()) return
-            y += 6 * s
-            centred(r.payStatus, paint(23f, strong = true), 4 * s)
+            y += 8 * s
+            centred(r.payStatus, paint(23f, strong = true), 6 * s)
         }
 
         fun gstNote() { if (r.gstNote.isNotBlank()) wrapped(r.gstNote, paint(18f)) }
@@ -184,9 +184,9 @@ object ReceiptRender {
         fun termsAndThanks() {
             if (r.terms.isNotEmpty()) {
                 rule(dashed = true)
-                r.terms.forEach { wrapped("• $it", paint(17f), gapAfter = 2 * s) }
+                r.terms.forEach { wrapped("• $it", paint(17f), gapAfter = 4 * s) }
             }
-            y += 8 * s
+            y += 10 * s
             centred("Thank you!", paint(23f, medium = true), 3 * s)
             centred("MyLaundry app", paint(17f), 0f)
         }
@@ -197,10 +197,10 @@ object ReceiptRender {
             shopBlock()
             taxInvoice()
             // bill no. + date, customer
-            row(r.billNo, r.date, paint(23f, strong = true), paint(21f))
-            if (r.customerName.isNotBlank()) text(r.customerName.trim(), paint(23f, medium = !receipt), left, Paint.Align.LEFT, gapAfter = 1 * s)
+            row(r.billNo, r.date, paint(23f, strong = true), paint(21f), gapAfter = 6 * s)
+            if (r.customerName.isNotBlank()) wrapped(r.customerName.trim(), paint(23f, medium = !receipt), gapAfter = 2 * s)
             if (r.customerPhone.isNotBlank()) text(r.customerPhone, paint(19f), left, Paint.Align.LEFT)
-            rule()
+            rule(gap = 8 * s)
 
             // items, numbered; Bold has column headings
             val numW = 26 * s
@@ -213,24 +213,24 @@ object ReceiptRender {
                 y += lh(hp) + 2 * s
                 rule(gap = 3 * s)
             }
-            val ip = paint(23f, strong = !receipt && bold, medium = !receipt && !bold)
-            val np = paint(21f)
+            val ip = paint(if (receipt) 21f else 23f, strong = !receipt && bold, medium = !receipt && !bold)
+            val np = paint(if (receipt) 19f else 21f)
             val sp = paint(18f)
             r.lines.forEachIndexed { n, l ->
                 val amtW = ip.measureText(l.amount)
-                val itemW = right - itemX - amtW - 8 * s
+                val itemW = right - itemX - amtW - 10 * s
                 c?.drawText("${n + 1}.", left, y - np.ascent(), np)
                 c?.drawText(l.amount, right - amtW, y - ip.ascent(), ip)
-                wrapped(l.item, ip, maxW = itemW, x = itemX, gapAfter = 1 * s)
+                wrapped(l.item, ip, maxW = itemW, x = itemX, gapAfter = 2 * s)
                 val sub = listOf(l.rate, l.sub).filter { it.isNotBlank() }.joinToString(" · ")
-                if (sub.isNotBlank()) wrapped(sub, sp, maxW = right - itemX, x = itemX, gapAfter = 4 * s) else y += 3 * s
+                if (sub.isNotBlank()) wrapped(sub, sp, maxW = right - itemX, x = itemX, gapAfter = 7 * s) else y += 6 * s
             }
-            rule()
+            rule(gap = 7 * s)
 
             // totals
             val tl = paint(21f); val tv = paint(21f, medium = true)
-            row("Subtotal", r.subtotal, tl, tv)
-            r.extras.forEach { row(it.label, it.value, tl, tv) }
+            row("Subtotal", r.subtotal, tl, tv, gapAfter = 5 * s)
+            r.extras.forEach { row(it.label, it.value, tl, tv, gapAfter = 5 * s) }
             y += 4 * s
             if (bold) {
                 val lp = paint(24f, strong = true, white = true); val vp = paint(30f, strong = true, white = true)
@@ -271,38 +271,34 @@ object ReceiptRender {
                 var vp = dv
                 var size = 20f
                 while (vp.measureText(value) > room && size > 13f) { size -= 1f; vp = paint(size, strong = true) }
-                row(label, ell(value, vp, room), dl, vp)
+                row(label, ell(value, vp, room), dl, vp, gapAfter = 5 * s)
             }
-            rule(dashed = false)
+            rule(gap = 7 * s, dashed = false)
 
-            // Item · Qty · Rate · Total
-            val qtyX = left + 0.58f * inner
-            val rateR = left + 0.80f * inner
+            // Item · Qty · Rate · Total — on thermal paper the item and its total share a line and
+            // "qty × rate" sits under the item (four columns collide on 58 mm).
             val hp = paint(19f, strong = true)
             c?.drawText("Item", left, y - hp.ascent(), hp)
-            c?.drawText("Qty", qtyX - hp.measureText("Qty") / 2, y - hp.ascent(), hp)
-            c?.drawText("Rate", rateR - hp.measureText("Rate"), y - hp.ascent(), hp)
+            c?.drawText("Qty × Rate", left + 0.48f * inner, y - hp.ascent(), hp)
             c?.drawText("Total", right - hp.measureText("Total"), y - hp.ascent(), hp)
-            y += lh(hp) + 2 * s
+            y += lh(hp) + 3 * s
             rule(gap = 3 * s, heavy = true, dashed = false)
-            val ip = paint(21f); val sp = paint(17f)
-            val itemW = qtyX - left - 20 * s
+            val ip = paint(22f); val sp = paint(18f)
             r.lines.forEachIndexed { i, l ->
-                if (i > 0) rule(gap = 3 * s, dashed = true)
-                val rowTop = y
-                c?.drawText(l.qty, qtyX - ip.measureText(l.qty) / 2, rowTop - ip.ascent(), ip)
-                c?.drawText(l.unit, rateR - ip.measureText(l.unit), rowTop - ip.ascent(), ip)
+                if (i > 0) rule(gap = 4 * s, dashed = true)
                 val tot = l.totalExact.ifEmpty { l.amount }
-                c?.drawText(tot, right - ip.measureText(tot), rowTop - ip.ascent(), ip)
-                wrapped(l.name.ifEmpty { l.item }, ip, maxW = itemW, gapAfter = 1 * s)
-                if (l.sub.isNotBlank()) wrapped(l.sub, sp, maxW = itemW, gapAfter = 2 * s)
-                y += 2 * s
+                val totW = ip.measureText(tot)
+                c?.drawText(tot, right - totW, y - ip.ascent(), ip)
+                wrapped(l.name.ifEmpty { l.item }, ip, maxW = inner - totW - 10 * s, gapAfter = 2 * s)
+                val qtyRate = listOf(l.qty, l.unit).filter { it.isNotBlank() }.joinToString(" × ")
+                val under = listOf(qtyRate, l.sub).filter { it.isNotBlank() }.joinToString(" · ")
+                if (under.isNotBlank()) wrapped(under, sp, gapAfter = 3 * s)
             }
             rule(dashed = false)
             val tl = paint(20f); val tv = paint(20f, strong = true)
-            row("Subtotal", r.subtotalExact.ifEmpty { r.subtotal }, tl, tv)
-            r.extras.forEach { row(it.label, it.exact, tl, tv) }
-            rule(gap = 4 * s, dashed = false)
+            row("Subtotal", r.subtotalExact.ifEmpty { r.subtotal }, tl, tv, gapAfter = 5 * s)
+            r.extras.forEach { row(it.label, it.exact, tl, tv, gapAfter = 5 * s) }
+            rule(gap = 5 * s, dashed = false)
             row("Total", r.totalExact.ifEmpty { r.total }, paint(26f, strong = true), paint(28f, strong = true), gapAfter = 4 * s)
             gstNote()
             payStatus()
