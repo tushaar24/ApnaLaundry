@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
-import QRCode from "qrcode";
 import { openSubscriptionCheckout, type SubscribeResult } from "@/data/billing";
 import { PrimaryButton } from "@/ui/basics";
 
@@ -33,7 +32,7 @@ export function AutopayPage({ id }: { id: string }) {
   const [plan, setPlan] = useState<string>("monthly");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string>("");
-  const [qr, setQr] = useState<{ src: string; url: string } | null>(null);
+  const [payUrl, setPayUrl] = useState<string>("");
   const polling = useRef<number | null>(null);
 
   const load = useCallback(async (): Promise<Info | null> => {
@@ -50,8 +49,8 @@ export function AutopayPage({ id }: { id: string }) {
     load().then((info) => {
       if (!info) return;
       setPlan(info.plans.some((p) => p.plan === info.defaultPlan) ? info.defaultPlan : info.plans[0]?.plan ?? "monthly");
-      // A checkout the owner already started (same plan) keeps its QR.
-      if (info.subscription?.status === "created" && info.subscription.shortUrl) showQr(info.subscription.shortUrl);
+      // A checkout the owner already started keeps its hosted payment page (QR on a laptop).
+      if (info.subscription?.status === "created" && info.subscription.shortUrl) setPayUrl(info.subscription.shortUrl);
     });
     // Back does nothing: the page re-enters itself so the browser never leaves it mid-mandate.
     const trap = () => { try { window.history.pushState(null, "", window.location.href); } catch { /* ignore */ } };
@@ -67,10 +66,6 @@ export function AutopayPage({ id }: { id: string }) {
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [busy]);
-
-  async function showQr(url: string) {
-    try { setQr({ src: await QRCode.toDataURL(url, { margin: 1, width: 260 }), url }); } catch { setQr(null); }
-  }
 
   function pollUntilActive() {
     if (polling.current) window.clearInterval(polling.current);
@@ -93,11 +88,23 @@ export function AutopayPage({ id }: { id: string }) {
       if (r.status === 409 || body.code === "ALREADY_SUBSCRIBED") { await load(); setBusy(false); return; }
       if (!r.ok || !body.success || !body.subscriptionId || !body.keyId) throw new Error(body.message || "Could not start AutoPay. Try again.");
       const result: SubscribeResult = { subscriptionId: body.subscriptionId, keyId: body.keyId, shortUrl: body.shortUrl ?? null, plan: body.plan || plan, amount: body.amount || 0, trialAmount: body.trialAmount || 0 };
-      if (result.shortUrl) showQr(result.shortUrl);
+      if (result.shortUrl) setPayUrl(result.shortUrl);
       await openSubscriptionCheckout(result, {
         name: view.info.shopName,
+        // Razorpay's own UPI AutoPay QR (the mandate itself, not a link) shown first, then UPI apps / UPI id,
+        // then card and net banking. Razorpay hides any flow it can't offer on this device or plan.
+        config: {
+          display: {
+            blocks: {
+              upi: { name: "UPI AutoPay — scan QR or choose your app", instruments: [{ method: "upi", flows: ["qr", "intent", "collect"] }] },
+              other: { name: "Card / Net banking", instruments: [{ method: "card" }, { method: "netbanking" }] },
+            },
+            sequence: ["block.upi", "block.other"],
+            preferences: { show_default_blocks: true },
+          },
+        },
         onSuccess: () => { setNote("Approved. Confirming with the bank…"); pollUntilActive(); },
-        onDismiss: () => { setBusy(false); setNote("Checkout closed. Nothing was charged — tap the button to try again, or scan the QR below."); },
+        onDismiss: () => { setBusy(false); setNote("Checkout closed. Nothing was charged — tap the button to try again."); },
         onError: (m) => { setNote(m); },
       });
     } catch (e) {
@@ -164,15 +171,13 @@ export function AutopayPage({ id }: { id: string }) {
               {note && <p style={{ margin: "10px 0 0", color: "#8a3a06", fontWeight: 600 }}>{note}</p>}
             </div>
 
-            {qr && (
-              <div style={{ ...card, textAlign: "center" }}>
-                <div style={{ fontWeight: 700 }}>Or scan with any UPI app</div>
-                <p style={{ ...muted, margin: "4px 0 10px" }}>Open Google Pay / PhonePe / Paytm → Scan → point at this code.</p>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={qr.src} alt="Scan to set up AutoPay" width={260} height={260} style={{ display: "inline-block", borderRadius: 8 }} />
-                <div style={{ marginTop: 8 }}><a href={qr.url} target="_blank" rel="noopener noreferrer" style={{ color: "#1d4ed8", fontSize: 14 }}>Open the payment page instead</a></div>
-              </div>
-            )}
+            <div style={card}>
+              <div style={{ fontWeight: 700 }}>Want to scan a QR?</div>
+              <p style={{ ...muted, margin: "4px 0 0" }}>
+                Tap <b>Set up AutoPay</b> and choose <b>Scan QR</b> under UPI — Razorpay shows the AutoPay QR there, and any UPI app that supports AutoPay can scan it.
+                {payUrl ? <> On a laptop, <a href={payUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#1d4ed8" }}>open the payment page</a> and the QR is on screen.</> : null}
+              </p>
+            </div>
           </>
         )}
 

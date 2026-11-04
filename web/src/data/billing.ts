@@ -139,6 +139,8 @@ export interface CheckoutCallbacks {
   onSuccess: () => void;
   onDismiss: () => void;
   onError?: (message: string) => void;
+  /** Razorpay Checkout display config (which methods / flows to show first), e.g. UPI with the QR flow. */
+  config?: Record<string, unknown>;
 }
 
 /**
@@ -161,6 +163,7 @@ export async function openSubscriptionCheckout(result: SubscribeResult, cb: Chec
     theme: { color: "#1d4ed8" },
     handler: () => cb.onSuccess(),
     modal: { ondismiss: () => cb.onDismiss() },
+    ...(cb.config ? { config: cb.config } : {}),
   });
   rzp.on("payment.failed", (resp: unknown) => {
     const err = (resp as { error?: { description?: string } })?.error;
