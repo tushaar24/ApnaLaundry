@@ -46,7 +46,7 @@ export function BillDesignScreen({
   const [draft, setDraft] = useState<BillDetails>(() => ({
     billPhone: shop.billPhone || loginPhone,
     address: shop.address, gstin: shop.gstin, email: shop.email, upiId: shop.upiId, logoId: shop.logoId,
-    terms: shop.terms, termsCustom: shop.termsCustom, billTemplate: shop.billTemplate,
+    terms: shop.terms, termsCustom: shop.termsCustom, billTemplate: shop.billTemplate, custAddressOnBill: shop.custAddressOnBill,
   }));
   const [sheet, setSheet] = useState(false);
   const [tested, setTested] = useState(false);

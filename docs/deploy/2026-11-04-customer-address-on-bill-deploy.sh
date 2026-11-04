@@ -13,7 +13,7 @@ HERE=$(cd "$(dirname "$0")/../.." && pwd)
 STAMP=$(date -u +%Y%m%d-%H%M%S)
 MIG=20261104120000_laundry_shop_cust_address_on_bill
 B="$HERE/courses/backend"
-WEB_FILES=(src/domain/models.ts src/domain/billDetails.ts src/domain/billReceipt.ts src/data/rows.ts src/data/store.ts src/ui/billRender.ts src/ui/onboarding/billFields.tsx)
+WEB_FILES=(src/ui/onboarding/billDesign.tsx src/domain/models.ts src/domain/billDetails.ts src/domain/billReceipt.ts src/data/rows.ts src/data/store.ts src/ui/billRender.ts src/ui/onboarding/billFields.tsx)
 if [ "${DRY_RUN:-0}" = "1" ]; then
   echo "would copy backend: prisma/schema.prisma prisma/migrations/$MIG services/laundry-shop-details.js services/laundry-bill-links.js"
   echo "would run: migrate deploy, up -d --build backend, then web files ${WEB_FILES[*]} + up -d --build laundry"
