@@ -162,6 +162,9 @@ fun NewOrderScreen(
     var showQuickBox by remember { mutableStateOf(false) }
     var active by remember { mutableStateOf<ActiveSheet?>(null) }
     var editingRates by remember { mutableStateOf(false) } // rate list opened over this form
+    // Add service page drawn over this form (1.0.17 pushed it as a route, which disposed New order:
+    // the customer and clothes typed so far were lost).
+    var addingService by remember { mutableStateOf(false) }
     var loaded by remember { mutableStateOf(false) }
     // For "New Order Abandoned": how far the owner got before leaving without saving.
     var saved by remember { mutableStateOf(false) }
@@ -389,7 +392,7 @@ fun NewOrderScreen(
             Analytics.firstOrderHelpShown()
         } else navigator.back()
     }
-    BackHandler(enabled = firstOrder && !helpShown && active == null && !editingRates) { leave() }
+    BackHandler(enabled = firstOrder && !helpShown && active == null && !editingRates && !addingService) { leave() }
 
     Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.statusBars).imePadding()) {
         TopBar(
@@ -547,7 +550,7 @@ fun NewOrderScreen(
                 if (services.isEmpty()) {
                     // Services-from-scratch variant: a new shop has no services until it adds one here.
                     SectionLabel(tr("Clothes"))
-                    NoServicesYet { navigator.openAddService("new_order") }
+                    NoServicesYet { addingService = true }
                 } else {
                 Row(Modifier.fillMaxWidth().padding(end = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     SectionLabel(tr("Clothes"))
@@ -560,7 +563,7 @@ fun NewOrderScreen(
                     }
                 }
                 ClothesEditor(services, clothes, editablePrice = true,
-                    onAddService = if (scratch) ({ navigator.openAddService("new_order") }) else null,
+                    onAddService = if (scratch) ({ addingService = true }) else null,
                     simpleAdd = scratch,
                     onAddItem = { svc, name, price ->
                     // Save to the rate list (or price an item it didn't offer), then put 1 in this order.
@@ -716,7 +719,7 @@ fun NewOrderScreen(
         LaunchedEffect(tourStep) {
             if (tourStep < TOUR_SAVE) { kotlinx.coroutines.delay(120); tourScroll[tourStep].bringIntoView() }
         }
-        if (vmLoaded && active == null && !editingRates) {
+        if (vmLoaded && active == null && !editingRates && !addingService) {
             val step = when (tourStep) {
                 TOUR_CUSTOMER -> TourSteps.customer(hasCustomers = state.customers.isNotEmpty())
                 TOUR_ROUTE -> if (noAddress) TourSteps.routeAsksAddress else TourSteps.route
@@ -766,6 +769,17 @@ fun NewOrderScreen(
         BackHandler { editingRates = false }
         Box(Modifier.fillMaxSize().background(Tokens.Bg).tap { /* keep taps off the form below */ }) {
             RatesEditor(shopVm, setupHeader = null, onDone = { editingRates = false }, onBack = { editingRates = false })
+        }
+    }
+    if (addingService) {
+        // Same idea as the rate list: the page sits over the form (its own BackHandler closes it),
+        // so the customer and clothes already picked are still there when it closes.
+        Box(Modifier.fillMaxSize().background(Tokens.Bg).tap { /* keep taps off the form below */ }) {
+            com.dailyworks.apnalaundry.ui.screens.rates.AddServiceSimplePage(
+                existing = services,
+                onAdd = { shopVm.upsertService(it); Analytics.serviceAdded(it.mode.name); addingService = false },
+                onBack = { addingService = false },
+            )
         }
     }
 }
