@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { LANGS, openAppResponse } from "@/core/openApp";
+import { AD_KEYS, LANGS, openAppResponse } from "@/core/openApp";
 
 /**
  * https links into the Android app: /open/<screen> opens mylaundry://<screen>.
@@ -25,5 +25,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ scre
   const lang = pathLang || (req.nextUrl.searchParams.get("lang") ?? "").toLowerCase();
   const query: Record<string, string> = {};
   for (const k of ["plan", "filter", "cust", "period"]) { const v = req.nextUrl.searchParams.get(k); if (v) query[k] = v.toLowerCase(); }
-  return openAppResponse(req.headers.get("user-agent") ?? "", parts[0] ?? "", "open", "", lang, parts[1] ?? "", query);
+  // Meta ad links: ?ad_id={{ad.id}}&ad_name={{ad.name}}… → the Play Store referrer (see core/openApp.ts).
+  const ad: Record<string, string> = {};
+  for (const k of AD_KEYS) { const v = req.nextUrl.searchParams.get(k); if (v) ad[k] = v.trim(); }
+  return openAppResponse(req.headers.get("user-agent") ?? "", parts[0] ?? "", "open", "", lang, parts[1] ?? "", query, ad);
 }

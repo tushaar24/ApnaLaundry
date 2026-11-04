@@ -104,6 +104,9 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
     // A/B groups (the guide, the first-customer flow): fetched at app start / right after login, while setup runs.
     val experiments: ExperimentsRepository = koinInject()
     LaunchedEffect(li) { if (li) { experiments.restore(); experiments.refresh() } }
+    // Which ad the install came from (Play's install referrer): sent to the server once per account.
+    val installAttribution: com.dailyworks.apnalaundry.data.attribution.InstallAttributionRepository = koinInject()
+    LaunchedEffect(li) { if (li) installAttribution.reportIfNeeded() }
     // The assistant ("Ask" on Home): on only where the server says so (an older server: off).
     val assistantApi: com.dailyworks.apnalaundry.data.assistant.AssistantApi = koinInject()
     LaunchedEffect(li) { if (li) assistantApi.refreshEnabled() }

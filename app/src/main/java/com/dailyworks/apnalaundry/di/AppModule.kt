@@ -50,6 +50,7 @@ val appModule = module {
     single { FirebasePhoneAuth() }
     single { TourVoice(androidContext(), get()) }
     single { ExperimentsRepository(get(), get(), get()) }
+    single { com.dailyworks.apnalaundry.data.attribution.InstallAttributionRepository(androidContext(), get(), get(), get()) }
     single { AssistantApi(get(), get(), get()) }
     single { com.dailyworks.apnalaundry.data.AppConfigRepository(get(), get()) }
     factory { VoiceRecorder(androidContext()) }
