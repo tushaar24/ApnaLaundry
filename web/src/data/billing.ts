@@ -132,6 +132,32 @@ function loadCheckout(): Promise<void> {
   return checkoutLoading;
 }
 
+/** A one-time Razorpay Order (the standalone pay page): Checkout takes the order id; its handler returns the proof. */
+export interface OrderCheckout { orderId: string; keyId: string; amount: number; description: string; name?: string; contact?: string }
+export interface OrderProof { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }
+
+export async function openOrderCheckout(o: OrderCheckout, cb: { onPaid: (proof: OrderProof) => void; onDismiss: () => void; onError?: (message: string) => void }): Promise<void> {
+  await loadCheckout();
+  const RazorpayCtor = (window as unknown as { Razorpay: new (opts: Record<string, unknown>) => { open: () => void; on: (e: string, h: (r: unknown) => void) => void } }).Razorpay;
+  const rzp = new RazorpayCtor({
+    key: o.keyId,
+    order_id: o.orderId,
+    amount: o.amount,
+    currency: "INR",
+    name: "MyLaundry",
+    description: o.description,
+    prefill: { name: o.name, contact: o.contact },
+    theme: { color: "#1d4ed8" },
+    handler: (resp: unknown) => cb.onPaid(resp as OrderProof),
+    modal: { ondismiss: () => cb.onDismiss() },
+  });
+  rzp.on("payment.failed", (resp: unknown) => {
+    const err = (resp as { error?: { description?: string } })?.error;
+    if (cb.onError) cb.onError(err?.description || "Payment failed — please try again");
+  });
+  rzp.open();
+}
+
 export interface CheckoutCallbacks {
   name?: string;
   email?: string;

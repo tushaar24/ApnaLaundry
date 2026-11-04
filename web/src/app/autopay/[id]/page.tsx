@@ -9,7 +9,7 @@ import { AutopayPage } from "@/ui/autopayPage";
  */
 
 export const metadata: Metadata = {
-  title: "Set up AutoPay · MyLaundry",
+  title: "Yearly plan · MyLaundry",
   robots: { index: false, follow: false },
 };
 
