@@ -336,7 +336,7 @@ class ShopViewModel(
     fun deleteOrder(id: Int) = launchCmd { repo.deleteOrder(id) }
     fun reschedule(id: Int, kind: String, date: String, time24: String, notify: Boolean) =
         launchCmd { repo.reschedule(id, kind, date, time24, notify) }
-    fun sendBill(id: Int) = launchCmd { repo.sendBill(id) }
+    fun sendBill(id: Int, mode: String = "image") = launchCmd { repo.sendBill(id, mode) }
     fun receivePayment(custId: String, amount: Int, method: PayMethod) = launchCmd { repo.receivePayment(custId, amount, method) }
     fun addOldBaaki(custId: String, amount: Int) = launchCmd { repo.addOldBaaki(custId, amount) }
     fun deleteService(id: String) = launchCmd { repo.deleteService(id, allowEmpty = servicesScratch.value) }

@@ -557,12 +557,12 @@ class LaundryRepository(private val shops: ShopDirectory) {
         return CmdResult(msg, undo)
     }
 
-    suspend fun sendBill(orderId: Int): CmdResult {
+    suspend fun sendBill(orderId: Int, mode: String = "image"): CmdResult {
         val st = current()
         val o = st.orders.first { it.id == orderId }
         val nm = firstName(st.customers.first { it.id == o.custId }.name)
         putOrder(o.copy(billSent = true).toEntity())
-        Analytics.billSent(orderId)
+        Analytics.billSent(orderId, mode)
         val no = current().orders.firstOrNull { it.id == orderId }?.no() ?: orderId
         return CmdResult(tr("Opening WhatsApp · bill #{no} to {name}", "no" to no, "name" to nm))
     }

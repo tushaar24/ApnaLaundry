@@ -12,6 +12,7 @@ import com.dailyworks.apnalaundry.core.I18n
 import com.dailyworks.apnalaundry.core.Money
 import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.data.LogoStore
+import com.dailyworks.apnalaundry.data.PhoneContacts
 import com.dailyworks.apnalaundry.domain.BillReceipt
 import com.dailyworks.apnalaundry.domain.CombinedBill
 import com.dailyworks.apnalaundry.domain.CombinedReceipt
@@ -28,9 +29,19 @@ import org.koin.core.context.GlobalContext
  * ui/billActions.ts + ui/billPdf.ts). Both hand over the bill as a PDF in the
  * shop's chosen design ([BillRender], vector text) — no storage permission.
  *  - WhatsApp: ACTION_SEND straight into WhatsApp (or WhatsApp Business) with
- *    the customer's chat preselected via the "jid" extra and the PDF attached.
+ *    the customer's chat preselected via the "jid" extra and the bill picture
+ *    attached — WhatsApp honours that only for numbers it knows (saved
+ *    contacts / earlier chats; an unknown number lands on its "Send to"
+ *    picker, which can't even show an unsaved number). So (owner, 4 Nov 2026)
+ *    the number is looked up in the phone's contacts first: saved → picture;
+ *    not saved → a wa.me chat link with the message + bill page link, which
+ *    opens any number's chat. Without the Contacts permission the picture
+ *    route is used as before.
  *  - Download: the system share sheet with the PDF (save to Files, or send).
  */
+
+/** How a bill left for WhatsApp (analytics `mode`). */
+enum class BillSendMode(val key: String) { IMAGE("image"), TEXT("text") }
 
 /** Public bill pages: mylaundry.work/b/<token>. */
 const val BILL_PAGE_URL = "https://mylaundry.work/b/"
@@ -204,15 +215,78 @@ private fun sharePdf(context: Context, uri: Uri, title: String) {
 private fun phoneDigits(state: LaundryState, custId: String): String =
     Selectors.customer(state, custId).phone.filter { it.isDigit() }.takeLast(10)
 
+/** The WhatsApp app bills go to: the remembered choice, else the only one installed, else null (system decides). */
+private fun whatsAppPackage(context: Context): String? {
+    val installed = WHATSAPP_PACKAGES.filter { context.packageManager.getLaunchIntentForPackage(it) != null }
+    val saved = context.getSharedPreferences("bill_share", Context.MODE_PRIVATE).getString("whatsapp_pkg", null)
+    return saved?.takeIf { it in installed } ?: installed.singleOrNull()
+}
+
 /**
- * Sends the bill to the customer on WhatsApp — their chat opens directly with
- * the bill picture and the message ([link] = the bill page, for the PDF).
- * Caller marks it sent.
+ * Opens the customer's chat with [text] typed in (wa.me click-to-chat), which
+ * works for any number, saved or not. The owner taps send in WhatsApp.
  */
-suspend fun sendBillOnWhatsApp(context: Context, state: LaundryState, o: Order, link: String?) {
+private fun openChatWithText(context: Context, phoneDigits: String, text: String) {
+    val url = if (phoneDigits.length == 10) "https://wa.me/91$phoneDigits?text=${Uri.encode(text)}" else "https://wa.me/?text=${Uri.encode(text)}"
+    val pkg = whatsAppPackage(context)
+    if (pkg != null) {
+        try {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).setPackage(pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            return
+        } catch (e: ActivityNotFoundException) { /* fall through to whatever handles wa.me */ }
+    }
+    openWhatsApp(context, url)
+}
+
+/**
+ * The bill as text for a customer whose number isn't saved: the usual message
+ * with the bill page link; offline (no link) the bill's lines themselves, so
+ * the customer still gets the amounts.
+ */
+private fun billText(state: LaundryState, o: Order, link: String?): String {
+    if (link != null) return billCaption(state, o, link)
+    val r = I18n.english { BillReceipt.of(state, o) }
+    val c = Selectors.customer(state, o.custId)
+    return buildString {
+        appendLine(tr("Hi {name}, here is your bill for order #{no} from *{shop}* — Total *{amount}*.",
+            "name" to Selectors.firstName(c.name), "no" to o.no(), "shop" to state.shop.name, "amount" to Money.rupees(LaundryMath.amtOf(o))))
+        appendLine()
+        appendLine("${r.billNo} · ${r.date}")
+        r.lines.forEach { appendLine("${it.item}  ${it.amount}") }
+        r.extras.forEach { appendLine("${it.label}  ${it.value}") }
+        appendLine("*Total ${r.total}*")
+        if (r.payStatus.isNotBlank()) appendLine(r.payStatus)
+        appendLine()
+        append(tr("Thank you!"))
+    }
+}
+
+/** Picture when WhatsApp will open the chat for it (saved contact), else text. */
+private suspend fun modeFor(context: Context, phoneDigits: String, contactsAllowed: Boolean): BillSendMode = when {
+    phoneDigits.length != 10 -> BillSendMode.IMAGE // no usable number: the picture + WhatsApp's picker, as always
+    !contactsAllowed -> BillSendMode.IMAGE // can't look it up: the old behaviour
+    PhoneContacts.isSaved(context, phoneDigits) -> BillSendMode.IMAGE
+    else -> BillSendMode.TEXT
+}
+
+/**
+ * Sends the bill to the customer on WhatsApp — their chat opens directly: with
+ * the bill picture + message when their number is saved in the phone's contacts
+ * ([contactsAllowed] = READ_CONTACTS granted), else with the message + bill page
+ * link typed in ([link]; offline, the bill as text). Returns how it went, for
+ * analytics. Caller marks it sent.
+ */
+suspend fun sendBillOnWhatsApp(context: Context, state: LaundryState, o: Order, link: String?, contactsAllowed: Boolean = false): BillSendMode {
+    val digits = phoneDigits(state, o.custId)
+    val mode = modeFor(context, digits, contactsAllowed)
+    if (mode == BillSendMode.TEXT) {
+        openChatWithText(context, digits, billText(state, o, link))
+        return mode
+    }
     // Drawing + saving the picture takes a moment on a cheap phone: off the main thread.
     val uri = withContext(Dispatchers.Default) { billPngUri(context, state, o) }
-    sendImageOnWhatsApp(context, uri, phoneDigits(state, o.custId), billCaption(state, o, link), tr("Send bill #{no}", "no" to o.no()))
+    sendImageOnWhatsApp(context, uri, digits, billCaption(state, o, link), tr("Send bill #{no}", "no" to o.no()))
+    return mode
 }
 
 /** Renders the bill to a PDF and opens the share sheet (save or send). */
@@ -225,9 +299,23 @@ suspend fun shareBillPdf(context: Context, state: LaundryState, o: Order) {
  * Sends a combined bill (many orders, one picture + message) to the customer on WhatsApp.
  * A document only — nothing is written to the khata.
  */
-suspend fun sendCombinedBillOnWhatsApp(context: Context, state: LaundryState, custId: String, r: CombinedReceipt) {
+suspend fun sendCombinedBillOnWhatsApp(context: Context, state: LaundryState, custId: String, r: CombinedReceipt, contactsAllowed: Boolean = false): BillSendMode {
+    val digits = phoneDigits(state, custId)
+    val mode = modeFor(context, digits, contactsAllowed)
+    if (mode == BillSendMode.TEXT) {
+        // No picture: the message plus one line per order (the combined bill has no web page).
+        val text = buildString {
+            appendLine(combinedBillCaption(state.shop.name, r))
+            appendLine()
+            r.rows.forEach { appendLine("• ${it.title} — ${it.amount}" + if (it.tag.label.isNotBlank()) " · ${it.tag.label}" else "") }
+            append("*${r.totalLabel}: ${r.total}*")
+        }
+        openChatWithText(context, digits, text)
+        return mode
+    }
     val uri = withContext(Dispatchers.Default) { combinedBillPngUri(context, r) }
-    sendImageOnWhatsApp(context, uri, phoneDigits(state, custId), combinedBillCaption(state.shop.name, r), tr("Send combined bill"))
+    sendImageOnWhatsApp(context, uri, digits, combinedBillCaption(state.shop.name, r), tr("Send combined bill"))
+    return mode
 }
 
 /** The combined bill as a PDF in the share sheet (save or send). */

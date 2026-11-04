@@ -146,6 +146,7 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
                     // The bill link can take a few seconds on a slow network: say so, and
                     // ignore more taps meanwhile (each would send it again).
                     var sending by remember { mutableStateOf(false) }
+                    val contactsAllowed = rememberContactsAllowed()
                     PrimaryButton(
                         when { sending -> tr("Opening WhatsApp…"); o.billSent -> tr("Send again"); else -> tr("Send on WhatsApp") },
                         Modifier.bringIntoViewRequester(sendInView).spotlightTarget(targets, "send"), enabled = !sending, height = 56.dp,
@@ -153,7 +154,10 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
                         if (tourOn) { sentInTour = true; shopVm.setTour(TourStage.STATUS) }
                         sending = true
                         scope.launch {
-                            try { sendBillOnWhatsApp(context, state, o, shopVm.billUrl(o.id)); shopVm.sendBill(o.id) } finally { sending = false }
+                            try {
+                                val mode = sendBillOnWhatsApp(context, state, o, shopVm.billUrl(o.id), contactsAllowed())
+                                shopVm.sendBill(o.id, mode.key)
+                            } finally { sending = false }
                         }
                     }
                     Text(

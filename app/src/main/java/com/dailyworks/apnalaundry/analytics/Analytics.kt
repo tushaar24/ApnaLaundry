@@ -423,8 +423,9 @@ object Analytics {
     fun reminderSent(customerId: String, amount: Int) =
         track("Reminder Sent", mapOf("customer_id" to customerId, "amount" to amount))
 
-    fun billSent(orderId: Int) =
-        track("Bill Sent", mapOf("order_id" to orderId, "channel" to "whatsapp"))
+    /** [mode]: image (picture + caption into the chat) | text (wa.me message + bill link: number not saved). */
+    fun billSent(orderId: Int, mode: String = "image") =
+        track("Bill Sent", mapOf("order_id" to orderId, "channel" to "whatsapp", "mode" to mode))
 
     fun billViewed(orderId: Int) = track("Bill Viewed", mapOf("order_id" to orderId))
 
@@ -450,8 +451,8 @@ object Analytics {
     fun billPrintFailed(orderId: Int, reason: String, from: String) =
         track("Bill Print Failed", mapOf("order_id" to orderId, "reason" to reason, "from" to from))
 
-    fun combinedBillSent(customerId: String, orders: Int, total: Int, toPay: Int) =
-        track("Combined Bill Sent", mapOf("customer_id" to customerId, "orders" to orders, "total" to total, "to_pay" to toPay, "channel" to "whatsapp"))
+    fun combinedBillSent(customerId: String, orders: Int, total: Int, toPay: Int, mode: String = "image") =
+        track("Combined Bill Sent", mapOf("customer_id" to customerId, "orders" to orders, "total" to total, "to_pay" to toPay, "channel" to "whatsapp", "mode" to mode))
 
     fun summaryShared(period: String) = track("Summary Shared", mapOf("period" to period))
 

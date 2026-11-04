@@ -94,14 +94,14 @@ Custom property keys are `snake_case`. `Charged` uses CleverTap's reserved
 | ----- | ---------- | ---------- |
 | `Customer Added` | `source` (`order`\|`list`), `with_old_baaki` | new customer saved |
 | `Reminder Sent` | `customer_id`, `amount` | WhatsApp baaki reminder |
-| `Bill Sent` | `order_id`, `channel` (`whatsapp`) | send bill |
+| `Bill Sent` | `order_id`, `channel` (`whatsapp`), `mode` (`image` = picture into the chat \| `text` = wa.me message + bill link, the number isn't a saved contact; 1.0.18+) | send bill |
 | `Bill Viewed` | `order_id` | customer-facing bill preview opened |
 | `Bill Downloaded` | `order_id`, `from` (`bill`\|`order_detail`) | bill PDF opened in the share sheet (Android) |
 | `Tags Printed` | `order_id`, `tags`, `mode` (`piece`\|`order`), `paper` (`58mm`\|`80mm`), `from` (`bill`\|`order_detail`\|`menu`) | laundry tags printed on a Bluetooth printer (Android) |
 | `Tags Print Failed` | `order_id`, `reason` (`connect`\|`write`\|`bluetooth_off`\|`permission`\|`no_bluetooth`), `from` | tag printing failed (Android) |
 | `Bill Printed` | `order_id`, `paper` (`58mm`\|`80mm`), `from` (`bill`\|`order_detail`\|`menu`) | the customer's bill printed on the Bluetooth printer (Android 1.0.18, print/ReceiptRender) |
 | `Bill Print Failed` | `order_id`, `reason` (as Tags Print Failed), `from` | bill printing failed (Android 1.0.18) |
-| `Combined Bill Sent` | `customer_id`, `orders`, `total`, `to_pay`, `channel` (`whatsapp`) | many orders of one customer sent as one bill |
+| `Combined Bill Sent` | `customer_id`, `orders`, `total`, `to_pay`, `channel` (`whatsapp`), `mode` (`image`\|`text`, 1.0.18+) | many orders of one customer sent as one bill |
 | `Summary Shared` | `period` | earnings day/week/month summary shared |
 | `Rates Opened` | `from` (`home`\|`settings`) | rate card opened |
 | `Service Added` | `mode` (`PIECE`\|`WEIGHT`) | new service saved |
