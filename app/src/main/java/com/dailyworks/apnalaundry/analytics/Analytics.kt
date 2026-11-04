@@ -104,6 +104,29 @@ object Analytics {
         updateProfile(mapOf("Services_Setup" to v))
     }
 
+    // The send-bill contacts ask (2026-11-04): "ask" | "no_ask" from GET /experiments,
+    // saved on the profile as Bill_Contacts_Ask (the server saves it too) and stamped on
+    // every event as bill_contacts_ask. null = never got it (doesn't ask).
+    @Volatile private var billContactsAsk: String? = null
+    @Volatile private var billContactsAskSaved: String? = null
+
+    fun setBillContactsAsk(v: String?) {
+        billContactsAsk = v
+        if (v == null || v == billContactsAskSaved) return
+        billContactsAskSaved = v
+        updateProfile(mapOf("Bill_Contacts_Ask" to v))
+    }
+
+    // Whether this phone lets the app read contacts, on the profile as Contacts_Permission
+    // (granted | not_granted): checked at every app start and after each answer.
+    @Volatile private var contactsPermissionSaved: Boolean? = null
+
+    fun setContactsPermission(granted: Boolean) {
+        if (granted == contactsPermissionSaved) return
+        contactsPermissionSaved = granted
+        updateProfile(mapOf("Contacts_Permission" to if (granted) "granted" else "not_granted"))
+    }
+
     private fun track(name: String, props: Map<String, Any?> = emptyMap()) {
         if (!enabled) return
         val clean = HashMap<String, Any>()
@@ -111,6 +134,7 @@ object Analytics {
         paywallVariant?.let { clean["paywall_variant"] = it }
         customerFlow?.let { clean["customer_flow"] = it }
         servicesSetup?.let { clean["services_setup"] = it }
+        billContactsAsk?.let { clean["bill_contacts_ask"] = it }
         // Stamped last so no event prop can override them.
         clean["platform"] = "android"
         clean["source"] = "android"
@@ -156,6 +180,9 @@ object Analytics {
         paywallVariantSaved = null
         customerFlow = null
         customerFlowSaved = null
+        billContactsAsk = null
+        billContactsAskSaved = null
+        contactsPermissionSaved = null
     }
 
     // ---- onboarding (after the paywall: intro -> name -> services -> bill) ----
@@ -251,9 +278,24 @@ object Analytics {
     fun customerContactsTapped(permission: String) =
         track("Customer Contacts Tapped", mapOf("permission" to permission))
 
-    /** The contacts permission dialog answered (no = Android's own picker opens). */
-    fun contactsPermissionAnswered(granted: Boolean) =
-        track("Contacts Permission Answered", mapOf("granted" to granted))
+    /**
+     * The system Contacts permission dialog requested. [from] = customer_sheet ("Choose
+     * from contacts") | bill_send (the first WhatsApp bill send, 1.0.18); [screen] = where:
+     * order | list (customer sheet), bill | order_detail | combined_bill | assistant (bill send).
+     */
+    fun contactsPermissionAsked(from: String, screen: String) =
+        track("Contacts Permission Asked", mapOf("from" to from, "screen" to screen))
+
+    /**
+     * The contacts permission dialog answered. [from] / [screen] as [contactsPermissionAsked];
+     * [ms] = from the request to the answer (a few ms = Android said no by itself, the dialog
+     * never showed). Customer sheet: no = Android's own picker opens. Bill send: the bill goes
+     * either way (yes = picture or text by saved contact, no = picture as before).
+     */
+    fun contactsPermissionAnswered(granted: Boolean, from: String, screen: String, ms: Long) {
+        setContactsPermission(granted)
+        track("Contacts Permission Answered", mapOf("granted" to granted, "from" to from, "screen" to screen, "ms" to ms))
+    }
 
     /**
      * A contact tapped. [source] = in_app (our list) | system (Android's picker);
@@ -423,9 +465,12 @@ object Analytics {
     fun reminderSent(customerId: String, amount: Int) =
         track("Reminder Sent", mapOf("customer_id" to customerId, "amount" to amount))
 
-    /** [mode]: image (picture + caption into the chat) | text (wa.me message + bill link: number not saved). */
-    fun billSent(orderId: Int, mode: String = "image") =
-        track("Bill Sent", mapOf("order_id" to orderId, "channel" to "whatsapp", "mode" to mode))
+    /**
+     * [mode]: image (picture + caption into the chat) | text (wa.me message + bill link: number not saved).
+     * [contacts] (1.0.18): the Contacts permission at this send, a [ContactsCheck] key.
+     */
+    fun billSent(orderId: Int, mode: String = "image", contacts: String? = null) =
+        track("Bill Sent", mapOf("order_id" to orderId, "channel" to "whatsapp", "mode" to mode, "contacts" to contacts))
 
     fun billViewed(orderId: Int) = track("Bill Viewed", mapOf("order_id" to orderId))
 
@@ -451,8 +496,8 @@ object Analytics {
     fun billPrintFailed(orderId: Int, reason: String, from: String) =
         track("Bill Print Failed", mapOf("order_id" to orderId, "reason" to reason, "from" to from))
 
-    fun combinedBillSent(customerId: String, orders: Int, total: Int, toPay: Int, mode: String = "image") =
-        track("Combined Bill Sent", mapOf("customer_id" to customerId, "orders" to orders, "total" to total, "to_pay" to toPay, "channel" to "whatsapp", "mode" to mode))
+    fun combinedBillSent(customerId: String, orders: Int, total: Int, toPay: Int, mode: String = "image", contacts: String? = null) =
+        track("Combined Bill Sent", mapOf("customer_id" to customerId, "orders" to orders, "total" to total, "to_pay" to toPay, "channel" to "whatsapp", "mode" to mode, "contacts" to contacts))
 
     fun summaryShared(period: String) = track("Summary Shared", mapOf("period" to period))
 

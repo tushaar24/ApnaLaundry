@@ -1,0 +1,95 @@
+--- a/backend/routes/laundry-experiments.js	2026-11-04 19:34:59
++++ b/backend/routes/laundry-experiments.js	2026-11-04 19:35:17
+@@ -8,7 +8,7 @@
+ 
+ // A/B tests the app asks the server about, so a split can change without an
+ // app release:
+-//   GET /api/laundry/experiments -> { success, experiments: { guide: 'guide' | 'no_guide', customerFlow? } }
++//   GET /api/laundry/experiments -> { success, experiments: { guide: 'guide' | 'no_guide', customerFlow?, servicesSetup?, billContactsAsk } }
+ //
+ // guide (2026-10-13, Android 1.0.10): the step-by-step guide with voice for a
+ // new shop (first order -> ready -> delivered + money -> khata -> earnings).
+@@ -48,6 +48,20 @@
+ // a stable hash of the user id. LAUNDRY_SERVICES_SETUP_FORCE='{"<10-digit phone>":"scratch"}'
+ // pins QA phones. Saved to CleverTap as Services_Setup (the app stamps it on
+ // every event as services_setup).
++//
++// billContactsAsk (2026-11-04, Android 1.0.18): whether the app asks for the
++// phone's Contacts permission the first time a bill is sent on WhatsApp (to
++// send a picture to saved numbers and a wa.me text + bill link to unsaved ones).
++//   ask     asked once at the first send (a "no" is never asked again)
++//   no_ask  never asked there; the bill goes as before (a permission already
++//           given in "Choose from contacts" is still used)
++// Every account gets a group; older apps ignore the key, and an app that never
++// got it doesn't ask. LAUNDRY_BILL_CONTACTS_ASK_PCT (default 50) = share that
++// gets "ask", on a stable hash of the user id: 0 = off for everyone, 100 = on
++// for everyone; raising it only moves no_ask shops into ask. Takes effect at the
++// shop's next app start. LAUNDRY_BILL_CONTACTS_ASK_FORCE='{"<10-digit phone>":"ask"}'
++// pins QA phones. Saved to CleverTap as Bill_Contacts_Ask (the app stamps it on
++// every event as bill_contacts_ask).
+ 
+ const router = express.Router();
+ router.use(requireLaundryAuth);
+@@ -152,6 +166,31 @@
+   return bucket(SERVICES_SETUP_TEST, user.id) < servicesSetupScratchPct() ? 'scratch' : 'samples';
+ }
+ 
++const BILL_CONTACTS_ASK_TEST = 'bill_contacts_ask_v1';
++const BILL_CONTACTS_ASKS = ['ask', 'no_ask'];
++
++function billContactsAskPct() {
++  const n = parseInt(process.env.LAUNDRY_BILL_CONTACTS_ASK_PCT, 10);
++  return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 50;
++}
++
++function billContactsAskForce() {
++  try {
++    const f = JSON.parse(process.env.LAUNDRY_BILL_CONTACTS_ASK_FORCE || '{}');
++    return f && typeof f === 'object' ? f : {};
++  } catch {
++    return {};
++  }
++}
++
++// The account's billContactsAsk group: 'ask' | 'no_ask'.
++function billContactsAskFor(user) {
++  if (!user) return 'no_ask';
++  const forced = billContactsAskForce()[String(user.phone || '').slice(-10)];
++  if (BILL_CONTACTS_ASKS.includes(forced)) return forced;
++  return bucket(BILL_CONTACTS_ASK_TEST, user.id) < billContactsAskPct() ? 'ask' : 'no_ask';
++}
++
+ function guidePct() {
+   const n = parseInt(process.env.LAUNDRY_GUIDE_PCT, 10);
+   return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 50;
+@@ -162,6 +201,7 @@
+ const saved = new Map();
+ const savedFlow = new Map();
+ const savedSetup = new Map();
++const savedAsk = new Map();
+ 
+ router.get('/', (req, res) => {
+   const userId = req.laundryUserId;
+@@ -191,13 +231,22 @@
+     savedSetup.set(userId, servicesSetup);
+     clevertap.setProfile(userId, { Services_Setup: servicesSetup }).catch(() => {});
+   }
++  const billContactsAsk = billContactsAskFor(user);
++  if (savedAsk.get(userId) !== billContactsAsk) {
++    if (savedAsk.size > 50000) savedAsk.clear();
++    savedAsk.set(userId, billContactsAsk);
++    clevertap.setProfile(userId, { Bill_Contacts_Ask: billContactsAsk }).catch(() => {});
++  }
+   // No key at all when not in a test: older apps and older accounts see the same response as before.
++  // (billContactsAsk is for everyone; apps before 1.0.18 ignore it.)
+   const experiments = { guide };
+   if (customerFlow) experiments.customerFlow = customerFlow;
+   if (servicesSetup) experiments.servicesSetup = servicesSetup;
++  experiments.billContactsAsk = billContactsAsk;
+   res.json({ success: true, experiments });
+ });
+ 
+ module.exports = router;
+ module.exports.customerFlowFor = customerFlowFor;
+ module.exports.servicesSetupFor = servicesSetupFor;
++module.exports.billContactsAskFor = billContactsAskFor;

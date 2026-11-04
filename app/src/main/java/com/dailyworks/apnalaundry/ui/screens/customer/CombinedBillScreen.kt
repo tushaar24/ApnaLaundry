@@ -73,7 +73,7 @@ import com.dailyworks.apnalaundry.ui.components.showDatePicker
 import com.dailyworks.apnalaundry.ui.components.tap
 import com.dailyworks.apnalaundry.ui.nav.AppNavigator
 import com.dailyworks.apnalaundry.ui.screens.bill.rememberCombinedBillImage
-import com.dailyworks.apnalaundry.ui.screens.bill.rememberContactsAllowed
+import com.dailyworks.apnalaundry.ui.screens.bill.rememberContactsCheck
 import com.dailyworks.apnalaundry.ui.screens.bill.sendCombinedBillOnWhatsApp
 import com.dailyworks.apnalaundry.ui.screens.bill.shareCombinedBillPdf
 import com.dailyworks.apnalaundry.ui.sheets.Toggle
@@ -228,13 +228,16 @@ fun CombinedBillScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: S
                     contentAlignment = Alignment.Center,
                 ) { Icon(Icons.Outlined.Download, tr("Download"), tint = Tokens.Ink, modifier = Modifier.size(24.dp)) }
                 var sending by remember { mutableStateOf(false) }
-                val contactsAllowed = rememberContactsAllowed()
+                val contactsCheck = rememberContactsCheck("combined_bill")
                 PrimaryButton(if (sending) tr("Opening WhatsApp…") else tr("Send on WhatsApp"), Modifier.weight(1f), enabled = !sending, height = 56.dp) {
                     sending = true
                     scope.launch {
                         // Sent before leaving: leaving first would cancel it.
-                        val mode = try { sendCombinedBillOnWhatsApp(context, state, custId, receipt, contactsAllowed()) } finally { sending = false }
-                        Analytics.combinedBillSent(custId, receipt.orders, receipt.totalAmount, receipt.dueAmount, mode.key)
+                        val (contacts, mode) = try {
+                            val c = contactsCheck()
+                            c to sendCombinedBillOnWhatsApp(context, state, custId, receipt, c.allowed)
+                        } finally { sending = false }
+                        Analytics.combinedBillSent(custId, receipt.orders, receipt.totalAmount, receipt.dueAmount, mode.key, contacts.key)
                         val n = receipt.orders
                         shopVm.showInfo(
                             if (receipt.fullyPaid) {

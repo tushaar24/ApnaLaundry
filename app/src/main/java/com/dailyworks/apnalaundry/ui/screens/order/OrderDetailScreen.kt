@@ -34,7 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import com.dailyworks.apnalaundry.ui.screens.bill.rememberContactsAllowed
+import com.dailyworks.apnalaundry.ui.screens.bill.rememberContactsCheck
 import com.dailyworks.apnalaundry.ui.screens.bill.sendBillOnWhatsApp
 import com.dailyworks.apnalaundry.ui.screens.bill.shareBillPdf
 import androidx.compose.ui.text.font.FontWeight
@@ -73,11 +73,12 @@ fun OrderDetailScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: I
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     // The bill page link for the WhatsApp message — fetched ahead, so Send is instant.
     LaunchedEffect(orderId) { shopVm.billUrl(orderId) }
-    val contactsAllowed = rememberContactsAllowed()
+    val contactsCheck = rememberContactsCheck("order_detail")
     val sendOnWhatsApp: (com.dailyworks.apnalaundry.domain.Order) -> Unit = { ord ->
         scope.launch {
-            val mode = sendBillOnWhatsApp(context, state, ord, shopVm.billUrl(ord.id), contactsAllowed())
-            shopVm.sendBill(ord.id, mode.key)
+            val contacts = contactsCheck()
+            val mode = sendBillOnWhatsApp(context, state, ord, shopVm.billUrl(ord.id), contacts.allowed)
+            shopVm.sendBill(ord.id, mode.key, contacts.key)
         }
     }
     val o = Selectors.order(state, orderId) ?: return

@@ -104,6 +104,14 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
     // A/B groups (the guide, the first-customer flow): fetched at app start / right after login, while setup runs.
     val experiments: ExperimentsRepository = koinInject()
     LaunchedEffect(li) { if (li) { experiments.restore(); experiments.refresh() } }
+    // Whether this phone lets the app read contacts, on the CleverTap profile (Contacts_Permission).
+    val appContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    LaunchedEffect(li) {
+        if (li) Analytics.setContactsPermission(
+            androidx.core.content.ContextCompat.checkSelfPermission(appContext, android.Manifest.permission.READ_CONTACTS) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED,
+        )
+    }
     // Which ad the install came from (Play's install referrer): sent to the server once per account.
     val installAttribution: com.dailyworks.apnalaundry.data.attribution.InstallAttributionRepository = koinInject()
     LaunchedEffect(li) { if (li) installAttribution.reportIfNeeded() }

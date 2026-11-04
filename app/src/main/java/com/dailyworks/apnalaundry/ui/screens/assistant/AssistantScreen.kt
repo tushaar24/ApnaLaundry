@@ -87,7 +87,7 @@ import com.dailyworks.apnalaundry.ui.components.rounded
 import com.dailyworks.apnalaundry.ui.components.tap
 import com.dailyworks.apnalaundry.ui.nav.AppNavigator
 import com.dailyworks.apnalaundry.ui.screens.bill.openWhatsApp
-import com.dailyworks.apnalaundry.ui.screens.bill.rememberContactsAllowed
+import com.dailyworks.apnalaundry.ui.screens.bill.rememberContactsCheck
 import com.dailyworks.apnalaundry.ui.screens.bill.sendBillOnWhatsApp
 import com.dailyworks.apnalaundry.ui.screens.bill.sendReminderOnWhatsApp
 import com.dailyworks.apnalaundry.ui.theme.Tokens
@@ -475,7 +475,7 @@ private fun SendBillButtons(
     if (key in used || o.billSent) DoneText(tr("Bill sent to {name} ✓", "name" to Selectors.firstName(Selectors.customer(state, o.custId).name)))
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlineButton(tr("Open bill"), Modifier.weight(1f), height = 48.dp) { navigator.openBill(o.id, "assistant") }
-        val contactsAllowed = rememberContactsAllowed()
+        val contactsCheck = rememberContactsCheck("assistant")
         WaButton(if (sending) tr("Opening…") else tr("Send bill on WhatsApp"), Modifier.weight(1.6f)) {
             if (sending) return@WaButton
             sending = true
@@ -483,8 +483,9 @@ private fun SendBillButtons(
                 try {
                     val st = shopVm.state.value
                     val now = Selectors.order(st, orderId) ?: return@launch
-                    val mode = sendBillOnWhatsApp(context, st, now, shopVm.billUrl(orderId), contactsAllowed())
-                    shopVm.sendBill(orderId, mode.key)
+                    val contacts = contactsCheck()
+                    val mode = sendBillOnWhatsApp(context, st, now, shopVm.billUrl(orderId), contacts.allowed)
+                    shopVm.sendBill(orderId, mode.key, contacts.key)
                     vm.used(key, "send_bill", "Sent bill #${now.no()} to ${Selectors.customer(st, now.custId).name} on WhatsApp")
                 } finally { sending = false }
             }

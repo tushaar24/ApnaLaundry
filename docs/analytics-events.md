@@ -94,14 +94,14 @@ Custom property keys are `snake_case`. `Charged` uses CleverTap's reserved
 | ----- | ---------- | ---------- |
 | `Customer Added` | `source` (`order`\|`list`), `with_old_baaki` | new customer saved |
 | `Reminder Sent` | `customer_id`, `amount` | WhatsApp baaki reminder |
-| `Bill Sent` | `order_id`, `channel` (`whatsapp`), `mode` (`image` = picture into the chat \| `text` = wa.me message + bill link, the number isn't a saved contact; 1.0.18+) | send bill |
+| `Bill Sent` | `order_id`, `channel` (`whatsapp`), `mode` (`image` = picture into the chat \| `text` = wa.me message + bill link, the number isn't a saved contact; 1.0.18+), `contacts` (1.0.18+: `granted` \| `granted_now` \| `denied_now` \| `denied` \| `off` — see "Send-bill contacts ask") | send bill |
 | `Bill Viewed` | `order_id` | customer-facing bill preview opened |
 | `Bill Downloaded` | `order_id`, `from` (`bill`\|`order_detail`) | bill PDF opened in the share sheet (Android) |
 | `Tags Printed` | `order_id`, `tags`, `mode` (`piece`\|`order`), `paper` (`58mm`\|`80mm`), `from` (`bill`\|`order_detail`\|`menu`) | laundry tags printed on a Bluetooth printer (Android) |
 | `Tags Print Failed` | `order_id`, `reason` (`connect`\|`write`\|`bluetooth_off`\|`permission`\|`no_bluetooth`), `from` | tag printing failed (Android) |
 | `Bill Printed` | `order_id`, `paper` (`58mm`\|`80mm`), `from` (`bill`\|`order_detail`\|`menu`) | the customer's bill printed on the Bluetooth printer (Android 1.0.18, print/ReceiptRender) |
 | `Bill Print Failed` | `order_id`, `reason` (as Tags Print Failed), `from` | bill printing failed (Android 1.0.18) |
-| `Combined Bill Sent` | `customer_id`, `orders`, `total`, `to_pay`, `channel` (`whatsapp`), `mode` (`image`\|`text`, 1.0.18+) | many orders of one customer sent as one bill |
+| `Combined Bill Sent` | `customer_id`, `orders`, `total`, `to_pay`, `channel` (`whatsapp`), `mode` (`image`\|`text`, 1.0.18+), `contacts` (as `Bill Sent`, 1.0.18+) | many orders of one customer sent as one bill |
 | `Summary Shared` | `period` | earnings day/week/month summary shared |
 | `Rates Opened` | `from` (`home`\|`settings`) | rate card opened |
 | `Service Added` | `mode` (`PIECE`\|`WEIGHT`) | new service saved |
@@ -139,7 +139,8 @@ funnel or raw export splits by it. Main funnel: `New Order Started` →
 | `Customer Sheet Field Focused` | `field`, `ctx`, `seconds_since_open` | a field tapped into, typed in or not (once per field per sheet; 1.0.16) — "tapped Name but never typed" = keyboard trouble |
 | `Customer Phone Trimmed` | `digits`, `lead` (`91`\|`0`\|`other`) | more than 10 digits typed/pasted in Phone (it keeps the first 10 — "+91 98…" saves wrong) |
 | `Customer Contacts Tapped` | `permission` (`granted`\|`asking`) | "Choose from contacts" |
-| `Contacts Permission Answered` | `granted` | the contacts permission dialog answered (no → Android's own picker) |
+| `Contacts Permission Asked` | `from` (`customer_sheet`\|`bill_send`), `screen` (`order`\|`list` for the customer sheet; `bill`\|`order_detail`\|`combined_bill`\|`assistant` for a bill send) — 1.0.18+ | the system contacts permission dialog requested |
+| `Contacts Permission Answered` | `granted`; 1.0.18+: `from`, `screen` (as Asked), `ms` (request → answer; a few ms = Android refused by itself, no dialog shown) | the contacts permission dialog answered (customer sheet: no → Android's own picker; bill send: the bill goes either way) |
 | `Customer Contact Picked` | `source` (`in_app`\|`system`), `ok` (had a 10-digit mobile), `already_saved` | a contact tapped |
 | `Customer Contacts Closed` | `source`, `contacts` (listed, in_app), `searched` | the contact list left without picking |
 | `Customer Duplicate Shown` | `ctx` | "Already saved as …" (the number is a customer already) |
@@ -182,6 +183,46 @@ groups on `Onboarding Step Viewed` (scratch has no `services` step) →
 `Service Added {mode}` (scratch: the first service, from New order) →
 `Order Saved` → `Checkout Succeeded`. `Service Deleted` does not fire for the
 quiet removal of the samples. The scratch group fires no `Tour *` events.
+
+### Send-bill contacts ask — server switch (Android 1.0.18, 2026-11-04)
+
+Whether the first WhatsApp bill send asks for the Contacts permission (to send
+the picture to saved numbers and a wa.me text + bill link to unsaved ones).
+Every account gets a group from `GET /api/laundry/experiments` →
+`billContactsAsk`; `LAUNDRY_BILL_CONTACTS_ASK_PCT` on the backend is the share
+that gets `ask` (0 = off for everyone, 100 = on for everyone), on a stable hash
+of the user id. See `docs/deploy/2026-11-04-bill-contacts-ask.md`.
+
+| `bill_contacts_ask` | What the owner sees |
+| --- | --- |
+| `ask` | The first bill send on the phone shows Android's Contacts dialog; a "no" is never asked again there |
+| `no_ask` | Never asked at a bill send; bills go as a picture, as in 1.0.17 |
+| *(absent)* | An app that never got the group (or older than 1.0.18): no ask |
+
+A permission already given ("Choose from contacts") is used in both groups.
+
+Profile properties **`Bill_Contacts_Ask`** (server + app) and
+**`Contacts_Permission`** (`granted` \| `not_granted`, app: every app start and
+after each answer); event property **`bill_contacts_ask`** on **every**
+Android 1.0.18+ event. `contacts` on `Bill Sent` / `Combined Bill Sent`:
+
+| `contacts` | Meaning | Lookup used |
+| --- | --- | --- |
+| `granted` | already allowed (earlier send, or "Choose from contacts") | yes |
+| `granted_now` | asked at this send: yes | yes |
+| `denied_now` | asked at this send: no | no — picture |
+| `denied` | asked at an earlier send on this phone, not allowed: not asked again | no — picture |
+| `off` | the switch says don't ask (`no_ask` / not fetched) and not allowed | no — picture |
+
+How to read it (`ask` vs `no_ask`, same sign-up window, 1.0.18 events only):
+the ask itself → `Contacts Permission Asked {from: bill_send}` →
+`Contacts Permission Answered {from: bill_send, granted, ms}` → `Bill Sent
+{contacts: granted_now|denied_now}` (the bill still goes after the dialog).
+Harm checks per group: `Bill Sent` per shop-day, shops that send a 2nd bill,
+`New Order Started` → `Order Saved` after the first send, next-day return,
+`Tour *` drop at the bill step for new shops, `Checkout Succeeded`. Delivery
+side: `Bill Sent {mode}` — `text` = an unsaved number that would have landed on
+WhatsApp's picker as a picture.
 
 ### Guide & support (Android)
 

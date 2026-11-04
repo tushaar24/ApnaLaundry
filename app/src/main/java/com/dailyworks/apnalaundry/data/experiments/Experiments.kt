@@ -16,7 +16,12 @@ import kotlinx.serialization.Serializable
 
 /** The shop's A/B test groups, as GET /api/laundry/experiments returns them. */
 @Serializable
-data class ExperimentGroups(val guide: String? = null, val customerFlow: String? = null, val servicesSetup: String? = null)
+data class ExperimentGroups(
+    val guide: String? = null,
+    val customerFlow: String? = null,
+    val servicesSetup: String? = null,
+    val billContactsAsk: String? = null,
+)
 
 /**
  * A/B (2026-10-24, brand-new accounts on 1.0.15+): how a new shop's first
@@ -57,6 +62,12 @@ data class ExperimentsResponse(val success: Boolean = false, val experiments: Ex
  * setup step 2 is the seeded sample list; [SERVICES_SCRATCH] = no services step and
  * no sample services — New order offers "Add service" and the owner types every
  * price. Absent = samples. The scratch group never gets the guide.
+ *
+ * billContactsAsk (2026-11-04, every account; a server switch, not a new-shop test):
+ * [CONTACTS_ASK] = the first WhatsApp bill send asks for the Contacts permission
+ * (ui/screens/bill/ContactsGate); [CONTACTS_NO_ASK] = it never does. Absent (an
+ * older server, never fetched) = no ask. Read at each send, so a change on the
+ * server applies from the shop's next app start.
  */
 class ExperimentsRepository(
     private val client: HttpClient,
@@ -80,12 +91,16 @@ class ExperimentsRepository(
         val setup = groups.servicesSetup?.takeIf { it == SERVICES_SAMPLES || it == SERVICES_SCRATCH }
         prefs.setServicesSetup(setup)
         Analytics.setServicesSetup(setup)
+        val ask = groups.billContactsAsk?.takeIf { it == CONTACTS_ASK || it == CONTACTS_NO_ASK }
+        prefs.setBillContactsAsk(ask)
+        Analytics.setBillContactsAsk(ask)
     }
 
     /** App start: stamp the saved groups on events before the fetch answers. */
     suspend fun restore() {
         Analytics.setCustomerFlow(prefs.customerFlow.first())
         Analytics.setServicesSetup(prefs.servicesSetup.first())
+        Analytics.setBillContactsAsk(prefs.billContactsAsk.first())
     }
 
     private suspend fun fetch(): ExperimentsResponse {
@@ -104,5 +119,7 @@ class ExperimentsRepository(
         const val NO_GUIDE = "no_guide"
         const val SERVICES_SAMPLES = "samples"
         const val SERVICES_SCRATCH = "scratch"
+        const val CONTACTS_ASK = "ask"
+        const val CONTACTS_NO_ASK = "no_ask"
     }
 }

@@ -165,8 +165,9 @@ fun CustomerFormSheet(state: LaundryState, form: ActiveSheet.CustomerForm, vm: S
             c?.let(::fill) ?: run { step("contact_no_mobile"); vm.showInfo(tr("That contact has no 10-digit mobile number")) }
         }
     }
+    val contactsAskedAt = remember { LongArray(1) }
     val askContacts = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        Analytics.contactsPermissionAnswered(granted)
+        Analytics.contactsPermissionAnswered(granted, "customer_sheet", form.ctx, android.os.SystemClock.elapsedRealtime() - contactsAskedAt[0])
         if (granted) picking = true else systemPicker.launch(null)
     }
     fun chooseFromContacts() {
@@ -174,7 +175,11 @@ fun CustomerFormSheet(state: LaundryState, form: ActiveSheet.CustomerForm, vm: S
         step("contacts")
         val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
         Analytics.customerContactsTapped(if (granted) "granted" else "asking")
-        if (granted) picking = true else askContacts.launch(Manifest.permission.READ_CONTACTS)
+        if (granted) picking = true else {
+            contactsAskedAt[0] = android.os.SystemClock.elapsedRealtime()
+            Analytics.contactsPermissionAsked("customer_sheet", form.ctx)
+            askContacts.launch(Manifest.permission.READ_CONTACTS)
+        }
     }
     if (picking) {
         ContactPickerSheet(
