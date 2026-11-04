@@ -18,8 +18,7 @@ ssh -o BatchMode=yes courses-aws 'cd ~/shweta-makeup-monorepo && docker compose 
 # verify with the owner's test phone: data endpoint via the site proxy, and the page
 ssh -o BatchMode=yes courses-aws "TEST_PHONE='${TEST_PHONE:-7676363793}' bash -s" <<'REMOTE'
 set -e
-UID_=$(docker exec shweta-makeup-monorepo-backend-1 node -e 'const p=require("/app/db");p.laundryUser.findFirst({where:{phone:{endsWith:process.env.TP}},orderBy:{createdAt:"asc"}}).then(u=>{console.log(u?u.id:"");return p.$disconnect()})' 2>/dev/null | tail -1)
-[ -n "$UID_" ] || UID_=$(docker exec -e TP="$TEST_PHONE" shweta-makeup-monorepo-backend-1 node -e 'const p=require("/app/db");p.laundryUser.findFirst({where:{phone:{endsWith:process.env.TP}},orderBy:{createdAt:"asc"}}).then(u=>{console.log(u?u.id:"");return p.$disconnect()})' | tail -1)
+UID_=$(docker exec -e TP="$TEST_PHONE" shweta-makeup-monorepo-backend-1 node -e 'const p=require("/app/db");p.laundryUser.findFirst({where:{phone:{endsWith:process.env.TP}},orderBy:{createdAt:"asc"}}).then(u=>{console.log(u?u.id:"");return p.$disconnect()})' | tail -1)
 echo "test user: $UID_"
 curl -s "https://mylaundry.work/api/laundry/public/autopay/$UID_" | cut -c1-320; echo
 curl -s -o /dev/null -w "page HTTP %{http_code}\n" "https://mylaundry.work/autopay/$UID_"
