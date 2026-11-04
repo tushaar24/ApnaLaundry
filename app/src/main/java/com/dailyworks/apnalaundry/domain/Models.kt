@@ -133,6 +133,8 @@ data class Shop(
     val terms: List<String> = emptyList(), // preset ids
     val termsCustom: String = "",
     val billTemplate: String = BillDetails.CLASSIC,
+    /** Print the customer's saved address under their name on bills (1.0.18; nothing when they have none). */
+    val custAddressOnBill: Boolean = false,
     /** "" = a shop from before onboarding was tracked; else intro|name|services|bill|done. */
     val onboardingStep: String = "",
     /** The id the next new order gets. */

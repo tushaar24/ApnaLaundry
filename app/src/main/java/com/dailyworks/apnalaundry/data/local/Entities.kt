@@ -40,6 +40,8 @@ data class ShopEntity(
     @ColumnInfo(defaultValue = "0") val gstOn: Boolean = false,
     @ColumnInfo(defaultValue = "18") val gstPct: Double = 18.0,
     @ColumnInfo(defaultValue = "excl") val gstMode: String = "excl",
+    // Customer's address printed on bills (v10).
+    @ColumnInfo(defaultValue = "0") val custAddressOnBill: Boolean = false,
 )
 
 @Entity(tableName = "services")

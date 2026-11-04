@@ -58,6 +58,7 @@ export interface ShopDto {
   terms?: string[]; termsCustom?: string; billTemplate?: string; onboardingStep?: string;
   // Last-used GST setting — absent from servers before the GST release.
   gstOn?: boolean; gstPct?: number; gstMode?: string;
+  custAddressOnBill?: boolean; // absent from servers before app 1.0.18 (2026-11-04)
 }
 export interface ServiceDto {
   id: string; name: string; mode: string; ratePerKg: number | null;
@@ -108,12 +109,12 @@ export function shopToDto(r: ShopRow): ShopDto {
   const {
     name, phone, expressPct, nextOrder, nextCust, updatedAt,
     billPhone, address, gstin, email, upiId, logoId, terms, termsCustom, billTemplate, onboardingStep,
-    gstOn, gstPct, gstMode,
+    gstOn, gstPct, gstMode, custAddressOnBill,
   } = r;
   return {
     name, phone, expressPct, nextOrder, nextCust, updatedAt,
     billPhone, address, gstin, email, upiId, logoId, terms, termsCustom, billTemplate, onboardingStep,
-    gstOn, gstPct, gstMode,
+    gstOn, gstPct, gstMode, custAddressOnBill,
   };
 }
 export function shopFromDto(d: ShopDto): ShopRow {

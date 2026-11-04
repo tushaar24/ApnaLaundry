@@ -273,9 +273,10 @@ object BillRender {
         }
 
         /** 3. Customer name + phone, then a rule. */
-        fun customerBlock(name: String, phone: String) {
+        fun customerBlock(name: String, phone: String, address: String = "") {
             if (name.isNotEmpty()) lines(name, 15f, 700, false, right - left, left, Paint.Align.LEFT, INK, 22f)
             if (phone.isNotEmpty()) lines(phone, 13f, 400, false, right - left, left, Paint.Align.LEFT, MUTED, 17f)
+            if (address.isNotEmpty()) lines(address, 13f, 400, false, right - left, left, Paint.Align.LEFT, MUTED, 17f)
             cy += 12
             rule(cy)
         }
@@ -382,7 +383,7 @@ object BillRender {
             font(13f, 400); text(r.date, right, cy, Paint.Align.RIGHT, MUTED)
 
             // 3. customer
-            customerBlock(r.customerName, r.customerPhone)
+            customerBlock(r.customerName, r.customerPhone, r.customerAddress)
 
             // 4. items — each numbered (serial no.) in a narrow left column
             val snW = 28f
@@ -477,6 +478,12 @@ object BillRender {
                 while (p.measureText(value) > room && size > 9f) { size -= 0.5f; font(size, 700) } // a long name shrinks, never overlaps
                 text(value, right, cy, Paint.Align.RIGHT)
             }
+            if (r.customerAddress.isNotEmpty()) {
+                // The address is long: its label on one line, the value wrapped under it.
+                cy += 23
+                font(14.5f, 400); text("Address", left, cy, Paint.Align.LEFT)
+                lines(r.customerAddress, 14.5f, 700, false, right - left, left, Paint.Align.LEFT, INK, 21f)
+            }
             cy += 15
             rule(cy, width = 1.2f, color = INK)
 
@@ -568,7 +575,7 @@ object BillRender {
             // 3. bill to
             cy += 8
             lines(if (receipt) "BILL TO" else "Bill to", 11f, 700, false, right - left, left, Paint.Align.LEFT, MUTED, 16f)
-            customerBlock(r.customerName, r.customerPhone)
+            customerBlock(r.customerName, r.customerPhone, r.customerAddress)
 
             // 4. one row per order
             val amtW = 90f

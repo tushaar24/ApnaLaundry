@@ -183,6 +183,7 @@ object CombinedBill {
             period = period,
             customerName = c.name,
             customerPhone = if (phone.isNotEmpty()) "+91 ${Selectors.fmtPhone(phone)}" else "",
+            customerAddress = BillReceipt.customerAddress(shop, c.address),
             rows = rows,
             orders = picked.size,
             totalLabel = "Total of ${Selectors.countNoun(picked.size, "order")}",
@@ -216,6 +217,7 @@ data class CombinedReceipt(
     val period: String, // "September 2026" / "19 Sep – 25 Sep 2026" / ""
     val customerName: String,
     val customerPhone: String,
+    val customerAddress: String = "", // only when the shop prints it and the customer has one
     val rows: List<Row>, // oldest pickup first
     val orders: Int,
     val totalLabel: String, // "Total of 3 orders"

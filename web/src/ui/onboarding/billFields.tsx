@@ -9,8 +9,8 @@ import {
 import { uploadLogo } from "@/data/logoUpload";
 import * as Repo from "@/data/repository";
 import { AppSheet } from "../sheet";
-import { cls, FieldBox, OutlineButton, PrimaryButton } from "../basics";
-import { IcBadge, IcCall, IcCamera, IcCheck, IcChevronRight, IcImage, IcList, IcMail, IcPin, IcQr } from "../icons";
+import { cls, FieldBox, OutlineButton, PrimaryButton, Toggle } from "../basics";
+import { IcBadge, IcCall, IcCamera, IcCheck, IcChevronRight, IcHome, IcImage, IcList, IcMail, IcPin, IcQr } from "../icons";
 import { logoUrl } from "@/domain/billDetails";
 
 /**
@@ -21,7 +21,7 @@ import { logoUrl } from "@/domain/billDetails";
  * behind the sheet updates live.
  */
 
-type FieldKey = "upi" | "logo" | "address" | "terms" | "gstin" | "phone" | "email";
+type FieldKey = "upi" | "logo" | "address" | "terms" | "gstin" | "phone" | "email" | "custAddress";
 
 export function FieldsSheet({
   details, onChange, onClose,
@@ -42,7 +42,8 @@ export function FieldsSheet({
   if (editing === "email") return <EmailEditor value={details.email} onSave={(v) => { onChange({ email: v }); back(); }} onBack={back} />;
 
   const terms = termLines(details).length;
-  const rows: { key: FieldKey; icon: ReactNode; title: string; empty: string; set: string }[] = [
+  // toggle: a switch on the row instead of an editor
+  const rows: { key: FieldKey; icon: ReactNode; title: string; empty: string; set: string; toggle?: boolean }[] = [
     { key: "upi", icon: <IcQr size={22} />, title: "UPI QR on bill", empty: "Customers scan and pay you. Money goes to your bank.", set: isUpiValid(details.upiId) ? `UPI · ${details.upiId}` : "" },
     { key: "logo", icon: <IcImage size={22} />, title: "Shop logo", empty: "Your logo at the top of every bill", set: details.logoId ? "Logo added" : "" },
     { key: "address", icon: <IcPin size={22} />, title: "Shop address", empty: "Helps new customers find your shop", set: details.address },
@@ -50,7 +51,10 @@ export function FieldsSheet({
     { key: "gstin", icon: <IcBadge size={22} />, title: "GSTIN", empty: "Only for GST-registered shops", set: isGstinValid(details.gstin) ? details.gstin : "" },
     { key: "phone", icon: <IcCall size={22} />, title: "Phone number", empty: "Customers call or WhatsApp you on this", set: isPhoneValid(details.billPhone) ? fmtBillPhone(details.billPhone) : "" },
     { key: "email", icon: <IcMail size={22} />, title: "Email address", empty: "For customers who prefer to write to you", set: isEmailValid(details.email) ? details.email : "" },
+    // The customer's own saved address (from their details) under their name — nothing when they have none.
+    { key: "custAddress", icon: <IcHome size={22} />, title: "Customer address", empty: "Prints the customer's saved address under their name", set: details.custAddressOnBill ? "On · only when the customer has an address saved" : "", toggle: details.custAddressOnBill },
   ];
+  const toggleCustAddress = () => onChange({ custAddressOnBill: !details.custAddressOnBill });
 
   return (
     <AppSheet title="Add fields to your bill" subtitle="All optional. Your bill already works without these." onDismiss={onClose}>
@@ -59,7 +63,7 @@ export function FieldsSheet({
           <button
             key={r.key}
             type="button"
-            onClick={() => setEditing(r.key)}
+            onClick={() => (r.toggle !== undefined ? toggleCustAddress() : setEditing(r.key))}
             className="flex min-h-[64px] w-full items-center gap-3 px-4 py-3 text-left hover:bg-black/[0.02]"
           >
             <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-bluelight text-blue">{r.icon}</span>
@@ -67,10 +71,14 @@ export function FieldsSheet({
               <span className="text-[15px] font-bold">{r.title}</span>
               <span className={cls("truncate text-[13px]", r.set ? "font-semibold text-greentext" : "text-muted")}>{r.set || r.empty}</span>
             </span>
-            <span className="flex shrink-0 items-center gap-0.5 text-[14px] font-bold text-blue">
-              {r.set ? "Change" : "Add"}
-              <IcChevronRight size={16} />
-            </span>
+            {r.toggle !== undefined ? (
+              <span onClick={(e) => e.stopPropagation()}><Toggle on={r.toggle} onToggle={toggleCustAddress} /></span>
+            ) : (
+              <span className="flex shrink-0 items-center gap-0.5 text-[14px] font-bold text-blue">
+                {r.set ? "Change" : "Add"}
+                <IcChevronRight size={16} />
+              </span>
+            )}
           </button>
         ))}
       </div>

@@ -244,6 +244,13 @@ function layout(ctx: CanvasRenderingContext2D, r: BillReceipt, draw: boolean, mi
       while (ctx.measureText(value).width > room && size > 9) { size -= 0.5; font(size, 700, BODY); } // a long name shrinks, never overlaps
       text(value, right, p.y, "right");
     }
+    if (r.customer.address) {
+      // The address is long: its label on one line, the value wrapped under it.
+      p.y += 23;
+      font(14.5, 400, BODY);
+      text("Address", left, p.y, "left");
+      lines(r.customer.address, 14.5, 700, BODY, right - left, left, "left", C.ink, 21);
+    }
     p.y += 15;
     rule({ width: 1.2, color: C.ink });
 
@@ -357,6 +364,7 @@ function layout(ctx: CanvasRenderingContext2D, r: BillReceipt, draw: boolean, mi
   // 3. customer
   if (r.customer.name) lines(r.customer.name, 15, 700, BODY, right - left, left, "left", C.ink, 22);
   if (r.customer.phone) lines(r.customer.phone, 13, 400, BODY, right - left, left, "left", C.muted, 17);
+  if (r.customer.address) lines(r.customer.address, 13, 400, BODY, right - left, left, "left", C.muted, 17);
   p.y += 12;
   rule();
 

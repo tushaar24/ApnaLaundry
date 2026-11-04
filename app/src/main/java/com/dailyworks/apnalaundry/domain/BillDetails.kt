@@ -46,17 +46,23 @@ object BillDetails {
         val terms: List<String> = emptyList(),
         val termsCustom: String = "",
         val billTemplate: String = CLASSIC,
+        /** Customer's saved address under their name (only when they have one). */
+        val custAddressOnBill: Boolean = false,
     )
 
     fun fieldsOf(s: Shop, loginPhone: String = s.phone) = Fields(
         billPhone = s.billPhone.ifBlank { loginPhone }, address = s.address, gstin = s.gstin, email = s.email,
         upiId = s.upiId, logoId = s.logoId, terms = s.terms, termsCustom = s.termsCustom, billTemplate = s.billTemplate,
+        custAddressOnBill = s.custAddressOnBill,
     )
 
     fun Shop.withFields(f: Fields) = copy(
         billPhone = f.billPhone, address = f.address, gstin = f.gstin, email = f.email, upiId = f.upiId, logoId = f.logoId,
-        terms = f.terms, termsCustom = f.termsCustom, billTemplate = f.billTemplate,
+        terms = f.terms, termsCustom = f.termsCustom, billTemplate = f.billTemplate, custAddressOnBill = f.custAddressOnBill,
     )
+
+    /** What the onboarding preview prints as the sample customer's address when [Fields.custAddressOnBill] is on. */
+    const val SAMPLE_CUSTOMER_ADDRESS = "Flat 12, Green Park Apartments, Sector 4"
 
     fun templateOrDefault(t: String) = if (TEMPLATES.any { it.first == t }) t else CLASSIC
     fun stepOrBlank(s: String) = if (s in STEPS) s else ""
@@ -127,6 +133,7 @@ object BillDetails {
         if (isGstinValid(f.gstin)) n++
         if (isEmailValid(f.email)) n++
         if (f.billPhone.isNotEmpty() && f.billPhone != loginPhone) n++
+        if (f.custAddressOnBill) n++
         return n
     }
 

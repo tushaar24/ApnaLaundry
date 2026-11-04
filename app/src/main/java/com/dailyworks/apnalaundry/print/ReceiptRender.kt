@@ -200,6 +200,7 @@ object ReceiptRender {
             row(r.billNo, r.date, paint(23f, strong = true), paint(21f), gapAfter = 6 * s)
             if (r.customerName.isNotBlank()) wrapped(r.customerName.trim(), paint(23f, medium = !receipt), gapAfter = 2 * s)
             if (r.customerPhone.isNotBlank()) text(r.customerPhone, paint(19f), left, Paint.Align.LEFT)
+            if (r.customerAddress.isNotBlank()) wrapped(r.customerAddress, paint(19f), gapAfter = 2 * s)
             rule(gap = 8 * s)
 
             // items, numbered; Bold has column headings
@@ -272,6 +273,10 @@ object ReceiptRender {
                 var size = 20f
                 while (vp.measureText(value) > room && size > 13f) { size -= 1f; vp = paint(size, strong = true) }
                 row(label, ell(value, vp, room), dl, vp, gapAfter = 5 * s)
+            }
+            if (r.customerAddress.isNotBlank()) {
+                text("Address", dl, left, Paint.Align.LEFT, gapAfter = 3 * s)
+                wrapped(r.customerAddress, dv, gapAfter = 5 * s)
             }
             rule(gap = 7 * s, dashed = false)
 

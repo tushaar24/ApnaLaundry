@@ -23,6 +23,7 @@ data class BillReceipt(
     val date: String, // "Fri, 9 Oct"
     val customerName: String,
     val customerPhone: String,
+    val customerAddress: String = "", // only when the shop prints it and the customer has one
     val readyBy: String, // "Ready by Sat, 10 Oct · 6 PM" / "Delivered …" / ""
     val lines: List<Line>,
     val subtotal: String,
@@ -57,12 +58,17 @@ data class BillReceipt(
         /** A real order's bill. */
         fun of(state: LaundryState, o: Order): BillReceipt {
             val c = Selectors.customer(state, o.custId)
-            return build(state.shop, c.name, c.phone, o, sample = false, expressPct = null, template = null)
+            return build(state.shop, c.name, c.phone, o, sample = false, expressPct = null, template = null, custAddress = c.address)
         }
 
         /** The onboarding preview: a sample order built from the owner's rates. */
         fun sample(shop: Shop, order: Order, template: String): BillReceipt =
-            build(shop, "Sample customer", "", order, sample = true, expressPct = shop.expressPct, template = template)
+            build(shop, "Sample customer", "", order, sample = true, expressPct = shop.expressPct, template = template,
+                custAddress = BillDetails.SAMPLE_CUSTOMER_ADDRESS)
+
+        /** The address line under the customer: their saved address, only when the shop prints it. */
+        fun customerAddress(shop: Shop, address: String): String =
+            if (shop.custAddressOnBill) address.replace(Regex("\\s+"), " ").trim() else ""
 
         /** The price per item printed under it: "₹20 each", "₹60/kg"; "" for a lump (not itemised) bill. */
         fun rate(l: OrderLine): String = when {
@@ -103,7 +109,7 @@ data class BillReceipt(
 
         private fun build(
             shop: Shop, custName: String, custPhone: String, o: Order,
-            sample: Boolean, expressPct: Int?, template: String?,
+            sample: Boolean, expressPct: Int?, template: String?, custAddress: String = "",
         ): BillReceipt {
             val gst = LaundryMath.gstOf(o)
             val total = gst.total
@@ -136,6 +142,7 @@ data class BillReceipt(
                 date = AppDate.plain(o.createdOn),
                 customerName = custName,
                 customerPhone = if (phone.isNotEmpty()) "+91 ${Selectors.fmtPhone(phone)}" else "",
+                customerAddress = customerAddress(shop, custAddress),
                 readyBy = readyBy(o),
                 lines = o.lines.map(::line),
                 subtotal = Money.rupees(LaundryMath.clothesOf(o)),

@@ -4,7 +4,7 @@ import { clothesOf, gstOf } from "@/domain/laundryMath";
 import { gstBillNote, gstDefaults, halfRate, roundOffValue } from "@/domain/gst";
 import type { BillDetails, BillTemplate, LaundryState, Order, OrderLine, Service, Shop } from "@/domain/models";
 import {
-  billDetailsFrom, fmtBillPhone, isEmailValid, isGstinValid, isUpiValid, sampleOrder, termLines, upiPayload,
+  billDetailsFrom, fmtBillPhone, isEmailValid, isGstinValid, isUpiValid, SAMPLE_CUSTOMER_ADDRESS, sampleOrder, termLines, upiPayload,
 } from "@/domain/billDetails";
 import * as Sel from "@/domain/selectors";
 
@@ -53,7 +53,7 @@ export interface BillReceipt {
   taxInvoice: boolean; // "TAX INVOICE" over the bill number: GST on the order + a valid GSTIN
   billNo: string; // "Bill #1001"
   date: string; // "Fri, 9 Oct"
-  customer: { name: string; phone: string };
+  customer: { name: string; phone: string; address?: string }; // address only when the shop prints it and the customer has one
   readyBy: string; // "Ready by Sat, 10 Oct · 6 PM" / "Delivered Sat, 10 Oct" / ""
   lines: ReceiptLine[];
   subtotal: string;
@@ -85,7 +85,7 @@ export type BillShop = { name: string; phone: string } & Partial<BillDetails>;
 /** Everything needed to print one bill (the public /b/<token> page's payload). */
 export interface BillData {
   shop: BillShop;
-  customer: { name: string; phone: string };
+  customer: { name: string; phone: string; address?: string };
   order: BillOrder;
 }
 
@@ -167,7 +167,7 @@ export function billReceipt(state: LaundryState, o: Order, opts: ReceiptOptions 
 /** The onboarding preview: a sample order built from the owner's rates. */
 export function sampleReceipt(shop: Shop, order: Order, template: BillTemplate): BillReceipt {
   return receiptFrom(
-    { shop, customer: { name: "Sample customer", phone: "" }, order },
+    { shop, customer: { name: "Sample customer", phone: "", address: SAMPLE_CUSTOMER_ADDRESS }, order },
     { expressPct: shop.expressPct, sample: true, template },
   );
 }
@@ -206,7 +206,11 @@ export function receiptFrom({ shop, customer: c, order: o }: BillData, opts: Rec
     taxInvoice: gst.on && gstin !== "",
     billNo: `Bill #${Sel.orderNo(o)}`,
     date: AppDate.plain(o.createdOn),
-    customer: { name: c.name, phone: phone ? `+91 ${Sel.fmtPhone(phone)}` : "" },
+    customer: {
+      name: c.name,
+      phone: phone ? `+91 ${Sel.fmtPhone(phone)}` : "",
+      address: d.custAddressOnBill ? (c.address ?? "").replace(/\s+/g, " ").trim() : "",
+    },
     readyBy: readyByOf(o),
     lines: o.lines.map(line),
     subtotal: rupees(clothesOf(o)),

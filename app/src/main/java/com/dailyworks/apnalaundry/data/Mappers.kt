@@ -63,4 +63,5 @@ fun ShopEntity.toDomain() = Shop(
     terms = decodeTerms(termsJson), termsCustom = termsCustom, billTemplate = billTemplate, onboardingStep = onboardingStep,
     nextOrder = nextOrder,
     gstOn = gstOn, gstPct = gstPct, gstMode = Gst.modeOrDefault(gstMode),
+    custAddressOnBill = custAddressOnBill,
 )

@@ -27,9 +27,12 @@ export const ONBOARDING_STEPS: OnboardingStep[] = ["intro", "name", "services", 
 export function emptyBillDetails(billPhone = ""): BillDetails {
   return {
     billPhone, address: "", gstin: "", email: "", upiId: "", logoId: "",
-    terms: [], termsCustom: "", billTemplate: "classic",
+    terms: [], termsCustom: "", billTemplate: "classic", custAddressOnBill: false,
   };
 }
+
+/** What the onboarding preview prints as the sample customer's address when `custAddressOnBill` is on. */
+export const SAMPLE_CUSTOMER_ADDRESS = "Flat 12, Green Park Apartments, Sector 4";
 
 /** Accepts anything from the wire (older servers send none of these). */
 export function billDetailsFrom(d: Partial<Record<keyof BillDetails, unknown>>, fallbackPhone = ""): BillDetails {
@@ -45,6 +48,7 @@ export function billDetailsFrom(d: Partial<Record<keyof BillDetails, unknown>>, 
     terms: Array.isArray(d.terms) ? d.terms.filter((t): t is string => typeof t === "string") : [],
     termsCustom: str(d.termsCustom),
     billTemplate: BILL_TEMPLATES.some((t) => t.id === tpl) ? (tpl as BillTemplate) : "classic",
+    custAddressOnBill: d.custAddressOnBill === true,
   };
 }
 

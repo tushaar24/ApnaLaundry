@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Badge
 import androidx.compose.material.icons.outlined.Call
 import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.Place
@@ -34,6 +35,8 @@ import androidx.compose.material.icons.outlined.QrCode2
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -77,7 +80,7 @@ import java.io.File
  * to the list (several fields in one go); Done on the list closes the sheet.
  * Every change goes straight to [onChange], so the bill behind updates live.
  */
-private enum class FieldKey { Upi, Logo, Address, Terms, Gstin, Phone, Email }
+private enum class FieldKey { Upi, Logo, Address, Terms, Gstin, Phone, Email, CustAddress }
 
 @Composable
 fun FieldsSheet(shopVm: ShopViewModel, details: BillDetails.Fields, onChange: (BillDetails.Fields) -> Unit, onClose: () -> Unit) {
@@ -91,11 +94,12 @@ fun FieldsSheet(shopVm: ShopViewModel, details: BillDetails.Fields, onChange: (B
         FieldKey.Gstin -> return GstinEditor(details.gstin, onSave = { onChange(details.copy(gstin = it)); back() }, onBack = back)
         FieldKey.Phone -> return PhoneEditor(details.billPhone, onSave = { onChange(details.copy(billPhone = it)); back() }, onBack = back)
         FieldKey.Email -> return EmailEditor(details.email, onSave = { onChange(details.copy(email = it)); back() }, onBack = back)
-        null -> Unit
+        FieldKey.CustAddress, null -> Unit // a switch on the row, no editor
     }
 
     val terms = BillDetails.termLines(details.terms, details.termsCustom).size
-    data class Row4(val key: FieldKey, val icon: ImageVector, val title: String, val empty: String, val set: String)
+    // toggle: a switch on the row instead of an editor (null = opens an editor)
+    data class Row4(val key: FieldKey, val icon: ImageVector, val title: String, val empty: String, val set: String, val toggle: Boolean? = null)
     val rows = listOf(
         Row4(FieldKey.Upi, Icons.Outlined.QrCode2, tr("UPI QR on bill"), tr("Customers scan and pay you. Money goes to your bank."),
             if (BillDetails.isUpiValid(details.upiId)) tr("UPI · {id}", "id" to details.upiId) else ""),
@@ -112,7 +116,11 @@ fun FieldsSheet(shopVm: ShopViewModel, details: BillDetails.Fields, onChange: (B
             if (BillDetails.isPhoneValid(details.billPhone)) BillDetails.fmtBillPhone(details.billPhone) else ""),
         Row4(FieldKey.Email, Icons.Outlined.Email, tr("Email address"), tr("For customers who prefer to write to you"),
             if (BillDetails.isEmailValid(details.email)) details.email else ""),
+        // The customer's own saved address (from their details) under their name — nothing when they have none.
+        Row4(FieldKey.CustAddress, Icons.Outlined.Home, tr("Customer address"), tr("Prints the customer's saved address under their name"),
+            if (details.custAddressOnBill) tr("On · only when the customer has an address saved") else "", toggle = details.custAddressOnBill),
     )
+    val toggleCustAddress = { on: Boolean -> onChange(details.copy(custAddressOnBill = on)) }
 
     AppBottomSheet(title = tr("Add fields to your bill"), subtitle = tr("All optional. Your bill already works without these."), onDismiss = onClose) {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -120,7 +128,9 @@ fun FieldsSheet(shopVm: ShopViewModel, details: BillDetails.Fields, onChange: (B
                 rows.forEachIndexed { i, r ->
                     if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Divider))
                     Row(
-                        Modifier.fillMaxWidth().heightIn(min = 64.dp).tap { editing = r.key }.padding(horizontal = 16.dp, vertical = 12.dp),
+                        Modifier.fillMaxWidth().heightIn(min = 64.dp)
+                            .tap { if (r.toggle != null) toggleCustAddress(!r.toggle) else editing = r.key }
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         Box(Modifier.size(40.dp).rounded(12.dp).background(Tokens.BlueLight), contentAlignment = Alignment.Center) {
@@ -134,8 +144,15 @@ fun FieldsSheet(shopVm: ShopViewModel, details: BillDetails.Fields, onChange: (B
                                 maxLines = 2, overflow = TextOverflow.Ellipsis,
                             )
                         }
-                        if (r.set.isEmpty()) Text(tr("Add"), style = fig(14, FontWeight.Bold, Tokens.Blue))
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Tokens.Blue, modifier = Modifier.size(18.dp))
+                        if (r.toggle != null) {
+                            Switch(
+                                checked = r.toggle, onCheckedChange = { toggleCustAddress(it) },
+                                colors = SwitchDefaults.colors(checkedTrackColor = Tokens.Blue, checkedThumbColor = androidx.compose.ui.graphics.Color.White),
+                            )
+                        } else {
+                            if (r.set.isEmpty()) Text(tr("Add"), style = fig(14, FontWeight.Bold, Tokens.Blue))
+                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Tokens.Blue, modifier = Modifier.size(18.dp))
+                        }
                     }
                 }
             }

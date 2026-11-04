@@ -665,7 +665,7 @@ class LaundryRepository(private val shops: ShopDirectory) {
             if (details != null) n = n.copy(
                 billPhone = details.billPhone, address = details.address, gstin = details.gstin, email = details.email,
                 upiId = details.upiId, logoId = details.logoId, termsJson = encodeTerms(details.terms),
-                termsCustom = details.termsCustom, billTemplate = details.billTemplate,
+                termsCustom = details.termsCustom, billTemplate = details.billTemplate, custAddressOnBill = details.custAddressOnBill,
             )
             n
         } ?: return

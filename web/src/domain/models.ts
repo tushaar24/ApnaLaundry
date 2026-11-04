@@ -121,6 +121,7 @@ export interface BillDetails {
   terms: string[]; // preset ids, see domain/billDetails TERM_PRESETS
   termsCustom: string;
   billTemplate: BillTemplate;
+  custAddressOnBill: boolean; // print the customer's saved address under their name (nothing when they have none)
 }
 
 export interface Shop extends BillDetails {
