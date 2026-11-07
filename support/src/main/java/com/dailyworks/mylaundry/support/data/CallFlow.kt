@@ -6,7 +6,12 @@ import android.net.Uri
 import java.time.Instant
 
 /**
- * One support call, end to end:
+ * A call through MyLaundry ([bridge]) needs none of the steps below: the server has
+ * Vobiz ring the agent's phone, then the owner's, and records + transcribes the call
+ * itself. The dialer flow stays for phones without the agent's number set, and as the
+ * fallback while calling through MyLaundry isn't set up on the server.
+ *
+ * One support call through the phone's dialer, end to end:
  *  1. [start]    — log it on the server (agent + time) and remember it locally
  *  2. dial       — [dialIntent] hands off to the phone's dialer, which records it
  *  3. [finalize] — once the phone is idle again: real talk time from the call
@@ -20,6 +25,13 @@ class CallFlow(
     private val monitor: CallMonitor,
     private val finder: RecordingFinder,
 ) {
+    /** Places a call through MyLaundry; throws [ApiException] (status 503 = not set up on the server). */
+    suspend fun bridge(userId: String): CallDto {
+        val s = prefs.current()
+        if (s.agentName.isBlank()) throw ApiException("Set your name in Settings first")
+        return api.bridgeCall(userId, s.agentName, s.agentPhone)
+    }
+
     suspend fun start(userId: String, phone: String, label: String): PendingCall {
         val agent = prefs.current().agentName.ifBlank { throw ApiException("Set your name in Settings first") }
         val now = System.currentTimeMillis()

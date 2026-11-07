@@ -127,6 +127,19 @@ class SupportApi(private val baseUrl: String = BuildConfig.API_BASE_URL) {
             }
         }.call
 
+    /** A call through MyLaundry: the server rings [agentPhone], then the shop owner. */
+    suspend fun bridgeCall(userId: String, agentName: String, agentPhone: String): CallDto =
+        call<CallEnvelope> {
+            client.post(url("/calls/bridge")) {
+                contentType(ContentType.Application.Json)
+                setBody(buildJsonObject {
+                    put("userId", JsonPrimitive(userId))
+                    put("agentName", JsonPrimitive(agentName))
+                    put("agentPhone", JsonPrimitive(agentPhone))
+                })
+            }
+        }.call
+
     /** PATCH only the fields given (null = leave unchanged). */
     suspend fun updateCall(
         id: String,

@@ -91,7 +91,9 @@ private fun SupportRoot(graph: Graph) {
     val a = agent
     when {
         a == null -> Loading(Modifier.background(Tokens.Bg))
-        a.agentName.isBlank() -> Box(Modifier.fillMaxSize().background(Tokens.Bg).statusBarsPadding()) {
+        // The phone number came with calls through MyLaundry (7 Nov 2026): agents set up
+        // before that see the setup once more to add it.
+        a.agentName.isBlank() || a.agentPhone.length != 10 -> Box(Modifier.fillMaxSize().background(Tokens.Bg).statusBarsPadding()) {
             SettingsScreen(graph, isSetup = true, onDone = {})
         }
         else -> MainNav(graph)
@@ -110,6 +112,7 @@ private fun MainNav(graph: Graph) {
     // ── placing a call (shared by the list and the detail screen) ──
     var waitingForPermission by remember { mutableStateOf<OwnerSummary?>(null) }
 
+    // Through the phone's dialer: the app finds and uploads the dialer's recording.
     fun place(owner: OwnerSummary) {
         scope.launch {
             try {
@@ -133,12 +136,32 @@ private fun MainNav(graph: Graph) {
         else if (!granted) scope.launch { snackbar.showSnackbar("Allow phone calls to call from the app") }
     }
 
-    val onCall: (OwnerSummary) -> Unit = { owner ->
+    fun placeWithDialer(owner: OwnerSummary) {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
             place(owner)
         } else {
             waitingForPermission = owner
             callPermission.launch(Manifest.permission.CALL_PHONE)
+        }
+    }
+
+    // Through MyLaundry: the server rings this phone, then the owner, and records +
+    // transcribes the call. Only while that isn't set up on the server (503) does the
+    // dialer take over.
+    var placing by remember { mutableStateOf(false) }
+    val onCall: (OwnerSummary) -> Unit = onCall@{ owner ->
+        if (placing) return@onCall
+        placing = true
+        scope.launch {
+            try {
+                val call = graph.calls.bridge(owner.id)
+                nav.navigate("call/${call.id}") { launchSingleTop = true }
+            } catch (e: ApiException) {
+                if (e.status == 503) placeWithDialer(owner)
+                else snackbar.showSnackbar(e.message ?: "Couldn't place the call")
+            } finally {
+                placing = false
+            }
         }
     }
 

@@ -91,6 +91,22 @@ data class RecordingDto(
     val mime: String? = null,
     val bytes: Int? = null,
     val uploadedAt: String? = null,
+    /** A call through MyLaundry: the server is fetching its recording. */
+    val processing: Boolean = false,
+)
+
+/** Progress of a call through MyLaundry (Vobiz). */
+@Serializable
+data class LiveDto(
+    val status: String? = null, // agent_ringing | owner_ringing | connected | ended | agent_missed
+    val hangupCause: String? = null,
+)
+
+@Serializable
+data class TranscriptDto(
+    val status: String, // pending | processing | done | failed | skipped
+    val text: String? = null,
+    val language: String? = null,
 )
 
 @Serializable
@@ -108,7 +124,16 @@ data class CallDto(
     val recording: RecordingDto = RecordingDto(),
     val shopName: String? = null,
     val ownerName: String? = null,
-)
+    /** "vobiz" = placed through MyLaundry (recorded + transcribed by the server); null = the phone's dialer. */
+    val via: String? = null,
+    val live: LiveDto? = null,
+    val transcript: TranscriptDto? = null,
+) {
+    val throughMyLaundry get() = via == "vobiz"
+
+    /** A call through MyLaundry that hasn't finished yet. */
+    val isLive get() = throughMyLaundry && live?.status !in setOf("ended", "agent_missed")
+}
 
 @Serializable
 data class ShopDetail(

@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
@@ -43,6 +44,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -88,6 +90,9 @@ fun SettingsScreen(graph: Graph, isSetup: Boolean, onDone: () -> Unit) {
     val settings by graph.prefs.settings.collectAsStateWithLifecycle(Settings())
     var name by remember { mutableStateOf("") }
     LaunchedEffect(settings.agentName) { if (name.isBlank()) name = settings.agentName }
+    var phone by remember { mutableStateOf("") }
+    LaunchedEffect(settings.agentPhone) { if (phone.isBlank()) phone = settings.agentPhone }
+    val phoneOk = phone.length == 10
 
     // Re-check permissions whenever we come back from the system dialog / settings.
     var permTick by remember { mutableIntStateOf(0) }
@@ -113,8 +118,8 @@ fun SettingsScreen(graph: Graph, isSetup: Boolean, onDone: () -> Unit) {
             Text("Three quick steps so your calls are logged and recorded.", style = fig(15, color = Tokens.Muted))
         }
 
-        SectionCard("1 · Your name") {
-            Text("Shown on every call you make.", style = fig(14, color = Tokens.Muted))
+        SectionCard("1 · Your name and phone") {
+            Text("Your name is shown on every call you make.", style = fig(14, color = Tokens.Muted))
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it.take(60) },
@@ -125,9 +130,31 @@ fun SettingsScreen(graph: Graph, isSetup: Boolean, onDone: () -> Unit) {
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = Tokens.CardBorder, focusedBorderColor = Tokens.Blue),
             )
-            if (!isSetup && name.trim() != settings.agentName && name.isNotBlank()) {
-                OutlinedButton(onClick = { scope.launch { graph.prefs.setAgentName(name) } }, shape = RoundedCornerShape(12.dp)) {
-                    Text("Save name", style = fig(14, FontWeight.Bold, Tokens.Blue))
+            Text(
+                "Your mobile number: when you tap Call, MyLaundry rings this phone first. Pick up and " +
+                    "it connects you to the shop owner. The call is recorded and written down for you.",
+                style = fig(14, color = Tokens.Muted),
+            )
+            OutlinedTextField(
+                value = phone,
+                onValueChange = { v -> phone = v.filter(Char::isDigit).takeLast(10) },
+                placeholder = { Text("10-digit mobile number", style = fig(16, color = Tokens.Faint)) },
+                prefix = { Text("+91 ", style = fig(16, color = Tokens.Muted)) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                isError = phone.isNotEmpty() && !phoneOk,
+                modifier = Modifier.fillMaxWidth(),
+                textStyle = fig(16),
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = Tokens.CardBorder, focusedBorderColor = Tokens.Blue),
+            )
+            val changed = name.trim() != settings.agentName || phone != settings.agentPhone
+            if (!isSetup && changed && name.isNotBlank() && phoneOk) {
+                OutlinedButton(
+                    onClick = { scope.launch { graph.prefs.setAgentName(name); graph.prefs.setAgentPhone(phone) } },
+                    shape = RoundedCornerShape(12.dp),
+                ) {
+                    Text("Save", style = fig(14, FontWeight.Bold, Tokens.Blue))
                 }
             }
         }
@@ -150,7 +177,12 @@ fun SettingsScreen(graph: Graph, isSetup: Boolean, onDone: () -> Unit) {
             }
         }
 
-        SectionCard("3 · Call recordings") {
+        SectionCard("3 · Recordings of other calls") {
+            Text(
+                "Calls you place from this app are recorded by MyLaundry — nothing to set up. This step is only " +
+                    "for calls from your phone's own dialer (\"Log a call made outside the app\").",
+                style = fig(14, FontWeight.SemiBold, Tokens.InkSecondary),
+            )
             Text(
                 "Turn on automatic call recording in your phone's dialer (Phone app › Settings › Call recording › " +
                     "Record all calls). Then pick the folder it saves recordings in, so each call's recording is " +
@@ -187,8 +219,8 @@ fun SettingsScreen(graph: Graph, isSetup: Boolean, onDone: () -> Unit) {
         if (isSetup) {
             Spacer(Modifier.height(4.dp))
             Button(
-                onClick = { scope.launch { graph.prefs.setAgentName(name); onDone() } },
-                enabled = name.isNotBlank(),
+                onClick = { scope.launch { graph.prefs.setAgentName(name); graph.prefs.setAgentPhone(phone); onDone() } },
+                enabled = name.isNotBlank() && phoneOk,
                 modifier = Modifier.fillMaxWidth().height(54.dp),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Tokens.Blue),

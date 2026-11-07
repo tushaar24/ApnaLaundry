@@ -48,7 +48,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -60,6 +63,7 @@ import com.dailyworks.mylaundry.support.data.Outcome
 import com.dailyworks.mylaundry.support.data.PendingCall
 import com.dailyworks.mylaundry.support.data.RecordingUploads
 import com.dailyworks.mylaundry.support.data.TagDto
+import com.dailyworks.mylaundry.support.data.TranscriptDto
 import com.dailyworks.mylaundry.support.ui.components.ErrorState
 import com.dailyworks.mylaundry.support.ui.components.Loading
 import com.dailyworks.mylaundry.support.ui.components.RecordingLine
@@ -103,6 +107,16 @@ class CallNotesViewModel(private val graph: Graph, private val callId: String) :
 
     init {
         load()
+        // A call through MyLaundry: follow it until its recording and transcript are in.
+        viewModelScope.launch {
+            while (true) {
+                val c = _ui.value.call
+                delay(if (c == null || c.isLive) 2_000 else 5_000)
+                val now = _ui.value.call ?: continue
+                if (!now.throughMyLaundry || !stillComing(now)) break
+                refreshCall()
+            }
+        }
         viewModelScope.launch {
             val pending = graph.prefs.pendingCall.first()?.takeIf { it.callId == callId } ?: return@launch
             _ui.update { it.copy(pending = pending) }
@@ -148,6 +162,29 @@ class CallNotesViewModel(private val graph: Graph, private val callId: String) :
                 _ui.update { it.copy(loading = false, error = e.message) }
             }
         }
+    }
+
+    /** Re-reads the call (progress, outcome, recording, transcript) without a spinner. */
+    private suspend fun refreshCall() {
+        try {
+            val call = graph.api.getCall(callId)
+            _ui.update { s ->
+                // The server may have filled in the outcome; keep the agent's own pick.
+                if (s.dirty) s.copy(call = call) else s.copy(call = call, outcome = call.outcome)
+            }
+        } catch (_: ApiException) {
+            // Next round.
+        }
+    }
+
+    /** Something about this call through MyLaundry is still on its way from the server. */
+    private fun stillComing(c: CallDto): Boolean {
+        if (c.isLive || c.recording.processing) return true
+        if (c.live?.status == "agent_missed") return false
+        if (c.transcript?.status in setOf("pending", "processing")) return true
+        // Just ended: the recording webhook comes a little after the hang-up.
+        val ended = parseInstant(c.endedAt)?.toEpochMilli() ?: return false
+        return !c.recording.uploaded && System.currentTimeMillis() - ended < 3 * 60_000
     }
 
     /** Also the manual "Call ended" button when phone state can't be read. */
@@ -308,9 +345,11 @@ fun CallNotesScreen(vm: CallNotesViewModel, onBack: () -> Unit) {
                         }
                     }
 
+                    call.transcript?.let { TranscriptCard(it) }
+
                     SectionCard("Recording") {
                         RecordingLine(call)
-                        if (!call.recording.uploaded) {
+                        if (!call.recording.uploaded && !call.throughMyLaundry) {
                             OutlinedButton(onClick = { pickFile.launch(arrayOf("audio/*")) }, shape = RoundedCornerShape(12.dp)) {
                                 Icon(Icons.Filled.AttachFile, null, Modifier.size(18.dp))
                                 Spacer(Modifier.size(6.dp))
@@ -349,9 +388,16 @@ fun CallNotesScreen(vm: CallNotesViewModel, onBack: () -> Unit) {
 private fun StatusCard(ui: CallNotesUi, call: CallDto, onEnded: () -> Unit) {
     SectionCard {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Icon(Icons.Filled.Call, null, tint = if (ui.pending != null) Tokens.Green else Tokens.Muted)
+            Icon(Icons.Filled.Call, null, tint = if (ui.pending != null || call.isLive) Tokens.Green else Tokens.Muted)
             Column(Modifier.weight(1f)) {
                 val title = when {
+                    call.throughMyLaundry -> when (call.live?.status) {
+                        "agent_ringing" -> "Your phone is ringing — pick up"
+                        "owner_ringing" -> "Ringing the shop owner…"
+                        "connected" -> "On the call — you can write notes now"
+                        "agent_missed" -> "You didn't pick up, so the shop owner wasn't called"
+                        else -> if (call.endedAt == null) "Call in progress…" else "Call ended · ${duration(call.durationSec)}"
+                    }
                     ui.finalizing -> "Finishing the call…"
                     ui.pending != null && ui.inCall == true -> "On the call — you can write notes now"
                     ui.pending != null -> "Waiting for the call to end…"
@@ -360,13 +406,57 @@ private fun StatusCard(ui: CallNotesUi, call: CallDto, onEnded: () -> Unit) {
                 Text(title, style = fig(15, FontWeight.Bold))
                 Text("${dayTime(call.startedAt)} · ${call.agentName}", style = fig(13, color = Tokens.Muted))
             }
-            if (ui.finalizing) CircularProgressIndicator(Modifier.size(20.dp), color = Tokens.Blue, strokeWidth = 2.dp)
+            if (ui.finalizing || (call.isLive && call.live?.status != "connected")) {
+                CircularProgressIndicator(Modifier.size(20.dp), color = Tokens.Blue, strokeWidth = 2.dp)
+            }
         }
         // Without phone-state permission we can't see the hang-up: let the agent say so.
         if (ui.pending != null && ui.inCall == null && !ui.finalizing) {
             OutlinedButton(onClick = onEnded, shape = RoundedCornerShape(12.dp)) {
                 Text("Call has ended", style = fig(14, FontWeight.Bold, Tokens.Blue))
             }
+        }
+    }
+}
+
+/** What was said on a call through MyLaundry (Sarvam's transcript, made by the server). */
+@Composable
+private fun TranscriptCard(t: TranscriptDto) {
+    SectionCard("What was said") {
+        when (t.status) {
+            "done" -> {
+                val lines = t.text.orEmpty().lines().filter { it.isNotBlank() }
+                if (lines.isEmpty()) Text("Nobody spoke on this call.", style = fig(14, color = Tokens.Muted))
+                lines.forEach { line ->
+                    // "Speaker 1: …" — the label bold, the words plain.
+                    val who = line.substringBefore(": ", "")
+                    Text(
+                        buildAnnotatedString {
+                            if (who.isNotEmpty()) {
+                                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(who) }
+                                append(": ")
+                                append(line.substringAfter(": "))
+                            } else {
+                                append(line)
+                            }
+                        },
+                        style = fig(14),
+                    )
+                }
+                Text(
+                    "Written by a computer, so it may have mistakes. Speaker 1 is whoever spoke first.",
+                    style = fig(12, color = Tokens.Faint),
+                )
+            }
+            "pending", "processing" -> Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                CircularProgressIndicator(Modifier.size(16.dp), color = Tokens.Blue, strokeWidth = 2.dp)
+                Text("Writing down the call… takes a minute or two", style = fig(14, color = Tokens.Muted))
+            }
+            "skipped" -> Text("Nothing to write down — the shop owner didn't pick up.", style = fig(14, color = Tokens.Muted))
+            else -> Text("Couldn't write down this call.", style = fig(14, FontWeight.SemiBold, Tokens.OrangeText))
         }
     }
 }

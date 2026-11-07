@@ -13,13 +13,20 @@ backend repo (`routes/laundry-support.js`).
   and a **Call** button.
 - **Calls** — every call by the team (or just mine), newest first.
 - **Tags** — create / rename / recolour / delete call tags.
-- After each call the notes screen opens: outcome, notes, tags. The call's real
-  talk time comes from the call log, and the dialer's recording is found and
-  uploaded to Supabase Storage in the background. Unanswered calls are marked
-  "No answer" automatically.
+- **Call** goes through MyLaundry (Vobiz, since 1.1): the server rings the
+  agent's phone, then the shop owner's, from the MyLaundry number. The server
+  records the call, saves it to Supabase Storage and has Sarvam write it down;
+  the notes screen follows the call live and shows the recording and "What was
+  said" when they're ready. Talk time and No answer / Busy come from Vobiz.
+  The agent's number must be in the backend's `LAUNDRY_VOBIZ_AGENT_PHONES`.
+- While calling through MyLaundry isn't set up on the server, Call falls back to
+  the phone's dialer: the call's real talk time comes from the call log, and the
+  dialer's recording is found and uploaded in the background. Unanswered calls
+  are marked "No answer" automatically.
 
-No login and no API key (owner decision): each agent types their name once
-(shown on their calls).
+No login and no API key (owner decision): each agent types their name and
+mobile number once (name shown on their calls; the number is the phone that
+rings when they tap Call).
 
 ## Build
 

@@ -24,6 +24,8 @@ data class PendingCall(
 /** Local, per-phone settings: who the agent is and where the dialer saves recordings. */
 data class Settings(
     val agentName: String = "",
+    /** The agent's 10-digit mobile: calls through MyLaundry ring it first. */
+    val agentPhone: String = "",
     /** SAF tree the agent picked (the dialer's call-recordings folder), or null. */
     val recordingsTree: String? = null,
 )
@@ -31,6 +33,7 @@ data class Settings(
 class Prefs(private val context: Context) {
     private object K {
         val agent = stringPreferencesKey("agent_name")
+        val phone = stringPreferencesKey("agent_phone")
         val tree = stringPreferencesKey("recordings_tree")
         val pCall = stringPreferencesKey("pending_call_id")
         val pUser = stringPreferencesKey("pending_user_id")
@@ -40,7 +43,7 @@ class Prefs(private val context: Context) {
     }
 
     val settings: Flow<Settings> = context.store.data.map { p ->
-        Settings(agentName = p[K.agent].orEmpty(), recordingsTree = p[K.tree])
+        Settings(agentName = p[K.agent].orEmpty(), agentPhone = p[K.phone].orEmpty(), recordingsTree = p[K.tree])
     }
 
     val pendingCall: Flow<PendingCall?> = context.store.data.map(::pending)
@@ -60,6 +63,8 @@ class Prefs(private val context: Context) {
     suspend fun currentPending(): PendingCall? = pendingCall.first()
 
     suspend fun setAgentName(name: String) = context.store.edit { it[K.agent] = name.trim() }
+
+    suspend fun setAgentPhone(phone: String) = context.store.edit { it[K.phone] = phone.filter(Char::isDigit).takeLast(10) }
 
     suspend fun setRecordingsTree(uri: String?) = context.store.edit {
         if (uri == null) it.remove(K.tree) else it[K.tree] = uri

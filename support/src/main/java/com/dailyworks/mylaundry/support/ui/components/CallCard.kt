@@ -81,6 +81,9 @@ fun CallCard(call: CallDto, showShop: Boolean, onClick: () -> Unit) {
             )
         }
         if (call.note.isNotBlank()) Text(call.note, style = fig(14, color = Tokens.Ink), maxLines = 6)
+        if (call.transcript?.status == "done") {
+            Text("What was said — open the call to read it", style = fig(12, FontWeight.SemiBold, Tokens.BlueText))
+        }
         if (call.tags.isNotEmpty()) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 call.tags.forEach { TagChip(it.name, it.color) }
@@ -95,6 +98,21 @@ fun CallCard(call: CallDto, showShop: Boolean, onClick: () -> Unit) {
 fun RecordingLine(call: CallDto) {
     if (call.recording.uploaded) {
         RecordingPlayer(call.id)
+        return
+    }
+    // A call through MyLaundry: the server fetches the recording itself after the call.
+    if (call.throughMyLaundry) {
+        val text = when {
+            call.live?.status == "agent_missed" -> return
+            call.isLive -> "Recording — it appears here after the call"
+            call.recording.processing || call.endedAt == null -> "Saving the recording…"
+            (call.durationSec ?: 0) == 0 -> return
+            else -> "Recording not ready yet — pull to refresh"
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Icon(Icons.Filled.CloudUpload, null, tint = Tokens.BlueText, modifier = Modifier.size(16.dp))
+            Text(text, style = fig(12, FontWeight.SemiBold, Tokens.BlueText))
+        }
         return
     }
     val context = LocalContext.current
