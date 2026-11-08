@@ -230,12 +230,34 @@ class Prefs(private val context: Context) {
         return context.dataStore.data.first()[DEVICE_ID] ?: id
     }
 
+    /**
+     * Another account on this phone (a dead session, then a different number): every per-shop sync
+     * position, reserved number block and flag belongs to the old one — kept, the new account's
+     * pull would start from the wrong place (sync v2 afterSeq) and skip its rows.
+     */
+    suspend fun resetSyncState() {
+        context.dataStore.edit {
+            it[SYNC_CHECKPOINT] = 0L
+            it.asMap().keys.filter { k -> k.name.startsWith(SHOP_CHECKPOINT_PREFIX) }.forEach { k -> it.remove(k) }
+            removeSyncState(it)
+        }
+    }
+
+    /** sync_seq_*, id_block_*, shop_has_staff_*, expenses_pulled_* (all per shop). */
+    private fun removeSyncState(p: androidx.datastore.preferences.core.MutablePreferences) {
+        p.asMap().keys.filter { k ->
+            k.name.startsWith("sync_seq_") || k.name.startsWith("id_block_") || k.name.startsWith("shop_has_staff_") || k.name.startsWith("expenses_pulled_")
+        }.forEach { k -> p.remove(k) }
+    }
+
     suspend fun logoutAndReset() {
         context.dataStore.edit {
             it[LOGGED_IN] = false; it[SETUP_DONE] = false; it[HIDE_AMOUNTS] = false
             it[SYNC_CHECKPOINT] = 0L
             it.remove(SHOPS); it.remove(ACTIVE_SHOP)
             it.asMap().keys.filter { k -> k.name.startsWith(SHOP_CHECKPOINT_PREFIX) }.forEach { k -> it.remove(k) }
+            removeSyncState(it)
+            it.remove(STAFF_WELCOME); it.remove(STAFF_ENABLED)
             it.remove(GUIDE_STAGE); it.remove(GUIDE_ORDER); it.remove(GUIDE_VARIANT); it.remove(GUIDE_NEW_SHOP)
             it.remove(CUSTOMER_FLOW); it.remove(SERVICES_SETUP); it.remove(ASSISTANT_ON)
             it.remove(ACCESS_TOKEN); it.remove(ACCESS_EXPIRES_AT); it.remove(REFRESH_TOKEN)

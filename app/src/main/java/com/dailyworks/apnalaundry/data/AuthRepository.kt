@@ -211,7 +211,7 @@ class AuthRepository(
         if (prevPhone != null && prevPhone != user.phone) {
             shops.forgetExtraShops() // back on the main shop, extra shops' data gone
             repo.clearAll()
-            prefs.setLastSyncCheckpoint(0)
+            prefs.resetSyncState() // checkpoints, sync v2 positions, number blocks: the old account's
             prefs.setSetupDone(false)
         }
 
@@ -291,7 +291,7 @@ class AuthRepository(
         if (prevPhone != null && prevPhone != phone) {
             shops.forgetExtraShops()
             repo.clearAll()
-            prefs.setLastSyncCheckpoint(0)
+            prefs.resetSyncState()
             prefs.setSetupDone(false)
         }
         // Back on this phone: keep the shop the main database already holds first; another shop
@@ -302,8 +302,7 @@ class AuthRepository(
         if (held != first.staffId) {
             shops.forgetExtraShops()
             repo.clearAll()
-            prefs.setSyncCheckpoint(MAIN_SHOP, 0L)
-            prefs.setSyncSeq(MAIN_SHOP, 0L)
+            prefs.resetSyncState() // the main database now holds another shop: start its sync afresh
         }
         prefs.setCredentials(
             access = first.token!!, accessExpiresAt = parseIsoMs("2099-12-31T00:00:00.000Z"),
