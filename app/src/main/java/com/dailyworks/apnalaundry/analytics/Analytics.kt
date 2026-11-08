@@ -563,6 +563,29 @@ object Analytics {
     fun expenseCategoryAdded(mode: String, name: String, from: String) =
         track("Expense Category Added", mapOf("mode" to mode, "name" to name, "from" to from))
 
+    /** The edit button on one of the shop's own categories tapped; [expenses] = how many use it. */
+    fun expenseCategoryEditTapped(mode: String, category: String, expenses: Int) =
+        track("Expense Category Edit Tapped", mapOf("mode" to mode, "category" to category, "expenses" to expenses))
+
+    /** Cancel on the edit-category box (back to the list). */
+    fun expenseCategoryEditCancelled(mode: String, category: String) =
+        track("Expense Category Edit Cancelled", mapOf("mode" to mode, "category" to category))
+
+    /** Renamed: [expenses] moved to the new name; [merged] = it named a category that already existed. */
+    fun expenseCategoryRenamed(mode: String, from: String, to: String, expenses: Int, merged: Boolean) =
+        track("Expense Category Renamed", mapOf("mode" to mode, "from" to from, "to" to to, "expenses" to expenses, "merged" to merged))
+
+    /** "Delete category" tapped (the confirm opens). */
+    fun expenseCategoryDeleteTapped(mode: String, category: String, expenses: Int) =
+        track("Expense Category Delete Tapped", mapOf("mode" to mode, "category" to category, "expenses" to expenses))
+
+    fun expenseCategoryDeleteCancelled(mode: String, category: String) =
+        track("Expense Category Delete Cancelled", mapOf("mode" to mode, "category" to category))
+
+    /** Deleted: its [expenses] moved to Other. */
+    fun expenseCategoryDeleted(mode: String, category: String, expenses: Int) =
+        track("Expense Category Deleted", mapOf("mode" to mode, "category" to category, "expenses" to expenses))
+
     /** The category list closed. [how]: picked | added | dismissed; [query] = what was in the search box ("" = nothing). */
     fun expenseCategorySheetClosed(mode: String, how: String, query: String) =
         track("Expense Category Sheet Closed", mapOf("mode" to mode, "how" to how, "query" to query))

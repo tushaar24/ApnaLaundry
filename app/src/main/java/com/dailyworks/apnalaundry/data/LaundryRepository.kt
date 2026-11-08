@@ -172,6 +172,19 @@ class LaundryRepository(private val shops: ShopDirectory) {
         expenseDao.upsert(e.copy(deleted = true, dirty = true, updatedAt = SyncClock.now()))
     }
 
+    /**
+     * Moves every expense of the shop's own category [from] to [to] — a rename (or a merge into a
+     * category that already exists), or "other" when the category is deleted. Each moved row is
+     * re-stamped so it syncs. Returns how many moved.
+     */
+    suspend fun moveExpenseCategory(from: String, to: String): Int {
+        val rows = expenseDao.getAll().filter { !it.deleted && it.category.equals(from, ignoreCase = true) && it.category != to }
+        if (rows.isEmpty()) return 0
+        val now = SyncClock.now()
+        expenseDao.upsertAll(rows.map { it.copy(category = to, dirty = true, updatedAt = now) })
+        return rows.size
+    }
+
     /** A new expense id, unique across devices. */
     fun newExpenseId(): String = "x" + System.currentTimeMillis().toString(36) + (1000..9999).random().toString(36)
 

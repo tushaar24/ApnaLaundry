@@ -351,6 +351,20 @@ class ShopViewModel(
         CmdResult(if (isNew) tr("Expense added") else tr("Expense updated"))
     }
 
+    /** Renames one of the shop's own expense categories on all its expenses; [merged] = [to] already existed. */
+    fun renameExpenseCategory(from: String, to: String, merged: Boolean, mode: String) = launchCmd {
+        val moved = repo.moveExpenseCategory(from, to)
+        Analytics.expenseCategoryRenamed(mode, from, to, moved, merged)
+        CmdResult(tr("Category renamed"))
+    }
+
+    /** Deletes one of the shop's own expense categories: its expenses move to Other. */
+    fun deleteExpenseCategory(name: String, mode: String) = launchCmd {
+        val moved = repo.moveExpenseCategory(name, ExpenseCategory.OTHER.key)
+        Analytics.expenseCategoryDeleted(mode, name, moved)
+        CmdResult(tr("Category deleted"))
+    }
+
     fun deleteExpense(e: Expense) = launchCmd {
         repo.deleteExpense(e.id)
         Analytics.expenseDeleted(e.category, e.amt)

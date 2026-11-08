@@ -122,6 +122,12 @@ Custom property keys are `snake_case`. `Charged` uses CleverTap's reserved
 | `Expense New Category Tapped` | `mode`, `from` (`button` = "+ New" beside the search — opens the name box \| `search_row` = "Add … as a new category" — adds at once), `typed` (bool — the search had text) | a new category asked for in the list (Android 1.0.19) |
 | `Expense New Category Cancelled` | `mode`, `typed` (bool — a name was in the box) | Cancel on the new-category name box — back to the list (Android 1.0.19) |
 | `Expense Category Added` | `mode`, `name`, `from` (as New Category Tapped) | a new category added — the name the owner typed (Android 1.0.19) |
+| `Expense Category Edit Tapped` | `mode`, `category`, `expenses` (how many use it) | the edit button on one of the shop's own categories tapped — the common ones have none (Android 1.0.19) |
+| `Expense Category Edit Cancelled` | `mode`, `category` | Cancel on the edit-category box (Android 1.0.19) |
+| `Expense Category Renamed` | `mode`, `from`, `to`, `expenses` (moved), `merged` (bool — the new name was an existing category) | a category renamed; all its expenses carry the new name (Android 1.0.19) |
+| `Expense Category Delete Tapped` | `mode`, `category`, `expenses` | "Delete category" tapped — the confirm opens (Android 1.0.19) |
+| `Expense Category Delete Cancelled` | `mode`, `category` | the delete confirm's Cancel / a tap outside (Android 1.0.19) |
+| `Expense Category Deleted` | `mode`, `category`, `expenses` (moved to Other) | a category deleted; its expenses move to Other (Android 1.0.19) |
 | `Expense Category Sheet Closed` | `mode`, `how` (`picked`\|`added`\|`dismissed`), `query` (what was in the search box, "" = nothing) | the category list closed (Android 1.0.19) |
 | `Expense Save Blocked` | `mode`, `missing` (`amount`\|`category`\|`amount_category`) | the greyed Save tapped (Android 1.0.19) |
 | `Expense Added` | `category` (`rent`\|`salary`\|`electricity`\|`supplies`\|`fuel`\|`water`\|`packing`\|`transport`\|`repairs`\|`other`, or the name of a category the owner added), `custom` (bool), `amount`, `has_note` (bool), `days_ago` | a new expense saved (Android 1.0.19) |

@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -109,6 +110,8 @@ fun ExpenseFormScreen(shopVm: ShopViewModel, navigator: AppNavigator, id: String
             .groupingBy { it }.eachCount().entries.sortedByDescending { it.value }.map { it.key })
             .distinctBy { it.lowercase() }
     }
+    // How many of this shop's expenses use each category (lowercase name).
+    val counts = remember(state.expenses) { state.expenses.groupingBy { it.category.lowercase() }.eachCount() }
     val amountFocus = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
@@ -185,11 +188,22 @@ fun ExpenseFormScreen(shopVm: ShopViewModel, navigator: AppNavigator, id: String
 
     if (choosing) {
         CategorySheet(
-            selected = category, custom = custom, mode = mode,
+            selected = category, custom = custom, counts = counts, mode = mode,
             onPick = { c ->
                 if (ExpenseCategory.known(c) == null && custom.none { it.equals(c, ignoreCase = true) }) added = added + c
                 category = c
                 choosing = false
+            },
+            onRename = { old, new, merged ->
+                shopVm.renameExpenseCategory(old, new, merged, mode)
+                added = added.map { if (it.equals(old, ignoreCase = true)) new else it }
+                    .filter { ExpenseCategory.known(it) == null }.distinctBy { it.lowercase() }
+                if (category.equals(old, ignoreCase = true)) category = new
+            },
+            onDelete = { name ->
+                shopVm.deleteExpenseCategory(name, mode)
+                added = added.filterNot { it.equals(name, ignoreCase = true) }
+                if (category.equals(name, ignoreCase = true)) category = ""
             },
             onBack = { choosing = false },
         )
@@ -241,14 +255,23 @@ private fun CategoryBox(category: String, modifier: Modifier, onClick: () -> Uni
  * ([custom]), then the common ones — with a search box. "+ New" beside it switches the sheet to
  * a name box (whatever was searched filled in) with Cancel / Add; the "Add … as a new category"
  * row, shown when the search matches none exactly, adds the search at once. [onPick] gets the
- * stored category (a common key or the name).
+ * stored category (a common key or the name). The shop's own categories have an edit button:
+ * rename ([onRename] old, new, merged into one that exists) or delete ([onDelete]; its expenses
+ * move to Other). The common ones can't be changed. [counts]: expenses per lowercase category.
  */
 @Composable
-private fun CategorySheet(selected: String, custom: List<String>, mode: String, onPick: (String) -> Unit, onBack: () -> Unit) {
+private fun CategorySheet(
+    selected: String, custom: List<String>, counts: Map<String, Int>, mode: String,
+    onPick: (String) -> Unit, onRename: (old: String, new: String, merged: Boolean) -> Unit, onDelete: (String) -> Unit,
+    onBack: () -> Unit,
+) {
     var query by remember { mutableStateOf("") }
     var creating by remember { mutableStateOf(false) } // "+ New": naming a category
     var newName by remember { mutableStateOf("") }
     val nameFocus = remember { FocusRequester() }
+    var editing by remember { mutableStateOf<String?>(null) } // one of the shop's own, being renamed / deleted
+    var editName by remember { mutableStateOf("") }
+    var confirmDelete by remember { mutableStateOf(false) }
     val q = query.trim().replace(Regex("\\s+"), " ")
     val own = custom.map { Triple(it, ExpenseCategory.emoji(it), it) }
     val common = ExpenseCategory.entries.map { Triple(it.key, it.emoji, tr(it.label)) }
@@ -280,10 +303,88 @@ private fun CategorySheet(selected: String, custom: List<String>, mode: String, 
         }
     }
 
+    /** The edited category's new name: a rename, a merge into one that exists, or nothing to do. */
+    fun rename(old: String) {
+        val clean = editName.trim().replace(Regex("\\s+"), " ").take(30)
+        if (clean.isEmpty()) return
+        val key = ExpenseCategory.keyFor(clean)
+        val existing = custom.firstOrNull { it.equals(key, ignoreCase = true) && !it.equals(old, ignoreCase = true) }
+        val to = existing ?: key
+        if (to != old) onRename(old, to, existing != null || ExpenseCategory.known(key) != null)
+        editing = null
+    }
+
     AppBottomSheet(
-        title = if (creating) tr("Add category") else tr("Choose category"),
+        title = when {
+            editing != null -> tr("Edit category")
+            creating -> tr("Add category")
+            else -> tr("Choose category")
+        },
         onDismiss = { Analytics.expenseCategorySheetClosed(mode, "dismissed", q.take(30)); onBack() },
     ) {
+        editing?.let { old ->
+            val n = counts[old.lowercase()] ?: 0
+            LaunchedEffect(old) { runCatching { nameFocus.requestFocus() } }
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                FieldBox(
+                    editName, { editName = it.take(30) }, Modifier.fillMaxWidth(),
+                    placeholder = tr("Category name"), height = 56.dp, textStyle = fig(17, FontWeight.SemiBold),
+                    capitalization = KeyboardCapitalization.Words,
+                    imeAction = ImeAction.Done, onImeAction = { rename(old) },
+                    fieldModifier = Modifier.focusRequester(nameFocus),
+                )
+                Text(
+                    when (n) {
+                        0 -> tr("No expenses use this category yet.")
+                        1 -> tr("1 expense uses this category. Renaming changes it there too.")
+                        else -> tr("{n} expenses use this category. Renaming changes it on all of them.", "n" to n)
+                    },
+                    style = fig(13, color = Tokens.Muted),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlineButton(tr("Cancel"), Modifier.weight(1f), height = 52.dp) {
+                        Analytics.expenseCategoryEditCancelled(mode, old)
+                        editing = null
+                    }
+                    PrimaryButton(tr("Save"), Modifier.weight(1f), enabled = editName.isNotBlank() && editName.trim() != old, height = 52.dp) { rename(old) }
+                }
+                Text(
+                    tr("Delete category"), style = fig(15, FontWeight.Bold, Tokens.DeleteRed), textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().tap {
+                        Analytics.expenseCategoryDeleteTapped(mode, old, n)
+                        confirmDelete = true
+                    }.padding(vertical = 12.dp),
+                )
+            }
+            if (confirmDelete) {
+                AlertDialog(
+                    onDismissRequest = { confirmDelete = false; Analytics.expenseCategoryDeleteCancelled(mode, old) },
+                    title = { Text(tr("Delete \u201c{name}\u201d?", "name" to old), style = fig(18, FontWeight.Bold)) },
+                    text = {
+                        Text(
+                            when (n) {
+                                0 -> tr("It will be removed from your categories.")
+                                1 -> tr("Its 1 expense will move to Other.")
+                                else -> tr("Its {n} expenses will move to Other.", "n" to n)
+                            },
+                            style = fig(15),
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { confirmDelete = false; editing = null; onDelete(old) }) {
+                            Text(tr("Delete"), style = fig(15, FontWeight.Bold, Tokens.DeleteRed))
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { confirmDelete = false; Analytics.expenseCategoryDeleteCancelled(mode, old) }) {
+                            Text(tr("Cancel"), style = fig(15, FontWeight.Bold))
+                        }
+                    },
+                    containerColor = Tokens.Card,
+                )
+            }
+            return@AppBottomSheet
+        }
         if (creating) {
             LaunchedEffect(Unit) { runCatching { nameFocus.requestFocus() } }
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -337,7 +438,16 @@ private fun CategorySheet(selected: String, custom: List<String>, mode: String, 
                 }
                 if (ownShown.isNotEmpty()) {
                     if (q.isEmpty()) item(key = "own") { SectionLabel(tr("Your categories")) }
-                    items(ownShown, key = { "o:" + it.first }) { (key, emoji, label) -> CategoryRow(emoji, label, key == selected) { pick(key, "picked") } }
+                    items(ownShown, key = { "o:" + it.first }) { (key, emoji, label) ->
+                        CategoryRow(
+                            emoji, label, key == selected,
+                            onEdit = {
+                                Analytics.expenseCategoryEditTapped(mode, key, counts[key.lowercase()] ?: 0)
+                                editName = key
+                                editing = key
+                            },
+                        ) { pick(key, "picked") }
+                    }
                 }
                 if (commonShown.isNotEmpty()) {
                     if (q.isEmpty() && ownShown.isNotEmpty()) item(key = "common") { SectionLabel(tr("Common categories")) }
@@ -354,7 +464,7 @@ private fun SectionLabel(text: String) {
 }
 
 @Composable
-private fun CategoryRow(emoji: String, label: String, selected: Boolean, onClick: () -> Unit) {
+private fun CategoryRow(emoji: String, label: String, selected: Boolean, onEdit: (() -> Unit)? = null, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().heightIn(min = 52.dp).tap(onClick = onClick).padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -364,5 +474,11 @@ private fun CategoryRow(emoji: String, label: String, selected: Boolean, onClick
         }
         Text(label, style = fig(15, if (selected) FontWeight.Bold else FontWeight.SemiBold), modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
         if (selected) Icon(Icons.Filled.Check, null, tint = Tokens.Blue, modifier = Modifier.size(22.dp))
+        // Only the shop's own categories: the common ones can't be renamed or deleted.
+        onEdit?.let {
+            Box(Modifier.size(40.dp).rounded(999.dp).tap(onClick = it), contentAlignment = Alignment.Center) {
+                Icon(Icons.Outlined.Edit, tr("Edit category"), tint = Tokens.Muted, modifier = Modifier.size(20.dp))
+            }
+        }
     }
 }

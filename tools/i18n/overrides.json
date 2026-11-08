@@ -1,13 +1,13 @@
 {
   "_note": "Hand corrections that always win over the machine translation (translate.py applies them on every run). Mostly one-word buttons, where the translator can't tell a verb from a noun.",
-  "hi": { "Change": "बदलें", "Charge by": "किस हिसाब से दाम", "Spent · {period}": "खर्च · {period}" },
-  "bn": { "Change": "বদলান", "Spent · {period}": "খরচ · {period}" },
+  "hi": { "Change": "बदलें", "Charge by": "किस हिसाब से दाम", "Spent · {period}": "खर्च · {period}", "Its {n} expenses will move to Other.": "इसके {n} खर्च ‘अन्य’ कैटेगरी में चले जाएंगे।", "Its 1 expense will move to Other.": "इसका 1 खर्च ‘अन्य’ कैटेगरी में चला जाएगा।" },
+  "bn": { "Change": "বদলান", "Spent · {period}": "খরচ · {period}", "Its {n} expenses will move to Other.": "এর {n}টি খরচ ‘অন্য কিছু’ ক্যাটাগরিতে চলে যাবে।", "Its 1 expense will move to Other.": "এর ১টি খরচ ‘অন্য কিছু’ ক্যাটাগরিতে চলে যাবে।" },
   "kn": { "Change": "ಬದಲಿಸಿ", "Delete": "ಅಳಿಸಿ", "Call": "ಕರೆ ಮಾಡಿ", "Open": "ತೆರೆಯಿರಿ" },
-  "ml": { "Change": "മാറ്റുക", "Delete": "ഡിലീറ്റ് ചെയ്യുക", "Spent · {period}": "ചെലവ് · {period}" },
-  "or": { "Change": "ବଦଳାନ୍ତୁ", "Spent · {period}": "ଖର୍ଚ୍ଚ · {period}", "Open": "ଖୋଲନ୍ତୁ" },
-  "te": { "Done": "అయింది", "Later": "తర్వాత", "Spent · {period}": "ఖర్చు · {period}", "Open": "తెరవండి" },
-  "mr": { "Spent · {period}": "खर्च · {period}" },
-  "gu": { "Spent · {period}": "ખર્ચ · {period}" },
-  "ta": { "Spent · {period}": "செலவு · {period}", "Open": "திற" },
-  "pa": { "Spent · {period}": "ਖਰਚ · {period}" }
+  "ml": { "Change": "മാറ്റുക", "Delete": "ഡിലീറ്റ് ചെയ്യുക", "Spent · {period}": "ചെലവ് · {period}", "Its {n} expenses will move to Other.": "ഇതിലെ {n} ചെലവുകൾ ‘മറ്റുള്ളവ’ കാറ്റഗറിയിലേക്ക് മാറും.", "Its 1 expense will move to Other.": "ഇതിലെ 1 ചെലവ് ‘മറ്റുള്ളവ’ കാറ്റഗറിയിലേക്ക് മാറും." },
+  "or": { "Change": "ବଦଳାନ୍ତୁ", "Spent · {period}": "ଖର୍ଚ୍ଚ · {period}", "Open": "ଖୋଲନ୍ତୁ", "Its {n} expenses will move to Other.": "ଏହାର {n} ଟି ଖର୍ଚ୍ଚ ‘ଅନ୍ୟାନ୍ୟ’ କାଟେଗୋରୀକୁ ଚାଲିଯିବ।", "Its 1 expense will move to Other.": "ଏହାର 1 ଟି ଖର୍ଚ୍ଚ ‘ଅନ୍ୟାନ୍ୟ’ କାଟେଗୋରୀକୁ ଚାଲିଯିବ।" },
+  "te": { "Done": "అయింది", "Later": "తర్వాత", "Spent · {period}": "ఖర్చు · {period}", "Open": "తెరవండి", "Its {n} expenses will move to Other.": "దీనిలోని {n} ఖర్చులు ‘ఇతర’ కేటగిరీకి మారుతాయి.", "Its 1 expense will move to Other.": "దీనిలోని 1 ఖర్చు ‘ఇతర’ కేటగిరీకి మారుతుంది." },
+  "mr": { "Spent · {period}": "खर्च · {period}", "Its {n} expenses will move to Other.": "त्यातील {n} खर्च ‘इतर’ कॅटेगरीत जातील.", "Its 1 expense will move to Other.": "त्यातील १ खर्च ‘इतर’ कॅटेगरीत जाईल." },
+  "gu": { "Spent · {period}": "ખર્ચ · {period}", "Its {n} expenses will move to Other.": "તેના {n} ખર્ચ ‘અન્ય’ કેટેગરીમાં જતા રહેશે.", "Its 1 expense will move to Other.": "તેનો 1 ખર્ચ ‘અન્ય’ કેટેગરીમાં જતો રહેશે." },
+  "ta": { "Spent · {period}": "செலவு · {period}", "Open": "திற", "Its {n} expenses will move to Other.": "இதிலுள்ள {n} செலவுகள் ‘மற்றவை’ கேட்டகரிக்கு மாற்றப்படும்.", "Its 1 expense will move to Other.": "இதிலுள்ள 1 செலவு ‘மற்றவை’ கேட்டகரிக்கு மாற்றப்படும்." },
+  "pa": { "Spent · {period}": "ਖਰਚ · {period}", "Its {n} expenses will move to Other.": "ਇਸਦੇ {n} ਖਰਚੇ ‘ਹੋਰ’ ਕੈਟੇਗਰੀ ਵਿੱਚ ਚਲੇ ਜਾਣਗੇ।", "Its 1 expense will move to Other.": "ਇਸਦਾ 1 ਖਰਚਾ ‘ਹੋਰ’ ਕੈਟੇਗਰੀ ਵਿੱਚ ਚਲਾ ਜਾਵੇਗਾ।" }
 }
