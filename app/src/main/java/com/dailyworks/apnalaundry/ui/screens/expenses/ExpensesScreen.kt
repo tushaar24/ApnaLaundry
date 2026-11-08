@@ -1,6 +1,7 @@
 package com.dailyworks.apnalaundry.ui.screens.expenses
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,15 +12,20 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -274,7 +280,8 @@ private fun ExpenseRow(x: Expense, onClick: () -> Unit) {
 
 /**
  * Add or change an expense: the amount, the day and an optional note, then what it was for —
- * a common category, one the shop added before ([custom]), or a new one named right here.
+ * "+ Add category" opens [CategorySheet] (the common categories, the shop's own [custom] ones,
+ * and a new one named there).
  */
 @Composable
 private fun ExpenseSheet(initial: Expense, custom: List<String>, onDismiss: () -> Unit, onSave: (Expense) -> Unit, onDelete: (() -> Unit)?) {
@@ -283,33 +290,27 @@ private fun ExpenseSheet(initial: Expense, custom: List<String>, onDismiss: () -
     var date by remember { mutableStateOf(initial.date) }
     var note by remember { mutableStateOf(initial.note) }
     var category by remember { mutableStateOf(initial.category) }
-    // Named in this sheet: kept as a chip until the sheet closes (it is saved with the expense).
+    // Named in the category list: shown there until this sheet closes (it is saved with the expense).
     var added by remember { mutableStateOf(listOf<String>()) }
-    var naming by remember { mutableStateOf(false) }
-    var newName by remember { mutableStateOf("") }
+    var choosing by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     val amt = amount.toIntOrNull() ?: 0
-    val mine = (custom + added).distinctBy { it.lowercase() }
+    val mine = (added + custom).distinctBy { it.lowercase() }
     val mode = if (initial.id.isEmpty()) "new" else "edit"
     LaunchedEffect(Unit) { Analytics.expenseSheetShown(mode) }
 
-    fun pick(c: String) {
-        category = c
-        Analytics.expenseCategoryPicked(mode, c, ExpenseCategory.known(c) == null)
-    }
-
-    fun addCategory() {
-        val name = newName.trim().replace(Regex("\\s+"), " ")
-        if (name.isEmpty()) return
-        val key = ExpenseCategory.keyFor(name)
-        val existing = mine.firstOrNull { it.equals(key, ignoreCase = true) }
-        if (existing == null && ExpenseCategory.known(key) == null) {
-            added = added + key
-            Analytics.expenseCategoryAdded(mode, key)
-        }
-        pick(existing ?: key)
-        naming = false
-        newName = ""
+    // The list takes the sheet's place; everything typed above stays.
+    if (choosing) {
+        CategorySheet(
+            selected = category, custom = mine, mode = mode,
+            onPick = { c ->
+                if (ExpenseCategory.known(c) == null && mine.none { it.equals(c, ignoreCase = true) }) added = added + c
+                category = c
+                choosing = false
+            },
+            onBack = { choosing = false },
+        )
+        return
     }
 
     AppBottomSheet(
@@ -328,27 +329,15 @@ private fun ExpenseSheet(initial: Expense, custom: List<String>, onDismiss: () -
                 }
             }
             FieldBox(note, { note = it.take(200) }, Modifier.fillMaxWidth(), placeholder = tr("Note (optional)"))
-
-            Text(tr("Category"), style = fig(13, FontWeight.Bold, Tokens.Muted), modifier = Modifier.padding(top = 4.dp))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                ExpenseCategory.entries.forEach { c ->
-                    PillChip("${c.emoji} ${tr(c.label)}", category == c.key) { pick(c.key) }
+            if (category.isBlank()) {
+                OutlineButton("+ " + tr("Add category"), Modifier.fillMaxWidth(), height = 52.dp) {
+                    Analytics.expenseCategoryTapped(mode, "add")
+                    choosing = true
                 }
-                mine.forEach { n -> PillChip("🏷️ $n", category == n) { pick(n) } }
-                if (!naming) PillChip("+ " + tr("New category"), false) { naming = true; Analytics.expenseNewCategoryTapped(mode) }
-            }
-            if (naming) {
-                val focus = remember { FocusRequester() }
-                LaunchedEffect(Unit) { focus.requestFocus() }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FieldBox(
-                        newName, { newName = it.take(30) }, Modifier.weight(1f),
-                        placeholder = tr("New category name"),
-                        capitalization = KeyboardCapitalization.Words,
-                        imeAction = ImeAction.Done, onImeAction = { addCategory() },
-                        fieldModifier = Modifier.focusRequester(focus),
-                    )
-                    PrimaryButton(tr("Add"), Modifier.width(84.dp), enabled = newName.isNotBlank(), height = 52.dp) { addCategory() }
+            } else {
+                CategoryBox(category, Modifier.fillMaxWidth()) {
+                    Analytics.expenseCategoryTapped(mode, "change")
+                    choosing = true
                 }
             }
 
@@ -361,12 +350,14 @@ private fun ExpenseSheet(initial: Expense, custom: List<String>, onDismiss: () -
                 onSave(initial.copy(amt = amt, category = category, date = date, note = note.trim()))
             }
             if (amt > 0 && category.isBlank()) {
-                Text(tr("Pick a category to save."), style = fig(13, color = Tokens.Muted), modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+                Text(tr("Add a category to save."), style = fig(13, color = Tokens.Muted), modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
             }
-            onDelete?.let { OutlineButton(tr("Delete expense"), Modifier.fillMaxWidth(), border = Tokens.DeleteRed, fg = Tokens.DeleteRed) {
+            onDelete?.let {
+                OutlineButton(tr("Delete expense"), Modifier.fillMaxWidth(), border = Tokens.DeleteRed, fg = Tokens.DeleteRed) {
                     Analytics.expenseDeleteTapped(initial.category, initial.amt)
                     confirmDelete = true
-                } }
+                }
+            }
         }
     }
     if (confirmDelete) {
@@ -378,5 +369,116 @@ private fun ExpenseSheet(initial: Expense, custom: List<String>, onDismiss: () -
             dismissButton = { TextButton(onClick = { confirmDelete = false; Analytics.expenseDeleteCancelled(initial.category, initial.amt) }) { Text(tr("Cancel"), style = fig(15, FontWeight.Bold)) } },
             containerColor = Tokens.Card,
         )
+    }
+}
+
+/** The chosen category in the expense form, like the date box above it; a tap changes it. */
+@Composable
+private fun CategoryBox(category: String, modifier: Modifier, onClick: () -> Unit) {
+    Row(
+        modifier.heightIn(min = 52.dp).rounded(12.dp).background(Tokens.Card)
+            .border(1.5.dp, Tokens.FieldBorder, RoundedCornerShape(12.dp)).tap(onClick = onClick).padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(ExpenseCategory.emoji(category), style = fig(18))
+        Column(Modifier.weight(1f)) {
+            Text(tr("Category"), style = fig(11, FontWeight.SemiBold, Tokens.Muted))
+            Text(ExpenseCategory.label(category), style = fig(14, FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Text(tr("Change"), style = fig(14, FontWeight.Bold, Tokens.Blue))
+    }
+}
+
+/**
+ * Every category in one list — the shop's own first ([custom]), then the common ones — with a
+ * search box. "+ New" beside it, or the "Add … as a new category" row when the search matches
+ * none exactly, adds what was typed. [onPick] gets the stored category (a common key or the name).
+ */
+@Composable
+private fun CategorySheet(selected: String, custom: List<String>, mode: String, onPick: (String) -> Unit, onBack: () -> Unit) {
+    var query by remember { mutableStateOf("") }
+    var naming by remember { mutableStateOf(false) } // "+ New" tapped with nothing typed yet
+    val focus = remember { FocusRequester() }
+    val q = query.trim().replace(Regex("\\s+"), " ")
+    val own = custom.map { Triple(it, ExpenseCategory.emoji(it), it) }
+    val common = ExpenseCategory.entries.map { Triple(it.key, it.emoji, tr(it.label)) }
+    fun matches(key: String, label: String) = q.isEmpty() || label.contains(q, ignoreCase = true) ||
+        ExpenseCategory.known(key)?.label?.contains(q, ignoreCase = true) == true
+    val ownShown = own.filter { matches(it.first, it.third) }
+    val commonShown = common.filter { matches(it.first, it.third) }
+    val exact = q.isNotEmpty() && (own + common).any { it.third.equals(q, ignoreCase = true) || it.first == ExpenseCategory.keyFor(q) }
+
+    fun pick(key: String, how: String) {
+        Analytics.expenseCategoryPicked(mode, key, ExpenseCategory.known(key) == null, q.isNotEmpty())
+        Analytics.expenseCategorySheetClosed(mode, how, q.take(30))
+        onPick(key)
+    }
+
+    fun addNew(from: String) {
+        Analytics.expenseNewCategoryTapped(mode, from, q.isNotEmpty())
+        if (q.isEmpty()) { naming = true; focus.requestFocus(); return }
+        val key = ExpenseCategory.keyFor(q.take(30))
+        val existing = custom.firstOrNull { it.equals(key, ignoreCase = true) }
+        if (existing == null && ExpenseCategory.known(key) == null) {
+            Analytics.expenseCategoryAdded(mode, key, from)
+            pick(key, "added")
+        } else {
+            pick(existing ?: key, "picked")
+        }
+    }
+
+    AppBottomSheet(
+        title = tr("Choose category"),
+        onDismiss = { Analytics.expenseCategorySheetClosed(mode, "dismissed", q.take(30)); onBack() },
+    ) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FieldBox(
+                    query, { query = it.take(30) }, Modifier.weight(1f),
+                    placeholder = if (naming) tr("Type the new category name") else tr("Search category"),
+                    height = 48.dp,
+                    capitalization = KeyboardCapitalization.Words,
+                    imeAction = ImeAction.Done, onImeAction = { if (q.isNotEmpty()) addNew("keyboard") },
+                    fieldModifier = Modifier.focusRequester(focus),
+                    leading = { Icon(Icons.Outlined.Search, null, tint = Tokens.Muted, modifier = Modifier.size(20.dp)) },
+                )
+                OutlineButton("+ " + tr("New"), Modifier.width(92.dp), height = 48.dp) { addNew("button") }
+            }
+            if (q.isNotEmpty() && !exact) {
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 52.dp).rounded(12.dp).background(Tokens.BlueLight)
+                        .tap { addNew("search_row") }.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text("+", style = fig(20, FontWeight.Bold, Tokens.Blue))
+                    Text(
+                        tr("Add \u201c{name}\u201d as a new category", "name" to q.take(30)),
+                        style = fig(15, FontWeight.Bold, Tokens.Blue), modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+            if (ownShown.isNotEmpty()) {
+                if (q.isEmpty()) Text(tr("Your categories"), style = fig(13, FontWeight.Bold, Tokens.Muted), modifier = Modifier.padding(top = 4.dp))
+                ownShown.forEach { (key, emoji, label) -> CategoryRow(emoji, label, key == selected) { pick(key, "picked") } }
+            }
+            if (commonShown.isNotEmpty()) {
+                if (q.isEmpty() && ownShown.isNotEmpty()) Text(tr("Common categories"), style = fig(13, FontWeight.Bold, Tokens.Muted), modifier = Modifier.padding(top = 4.dp))
+                commonShown.forEach { (key, emoji, label) -> CategoryRow(emoji, label, key == selected) { pick(key, "picked") } }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategoryRow(emoji: String, label: String, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 52.dp).tap(onClick = onClick).padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(Modifier.size(40.dp).rounded(999.dp).background(Tokens.OrangeLight), contentAlignment = Alignment.Center) {
+            Text(emoji, style = fig(18))
+        }
+        Text(label, style = fig(15, if (selected) FontWeight.Bold else FontWeight.SemiBold), modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+        if (selected) Icon(Icons.Filled.Check, null, tint = Tokens.Blue, modifier = Modifier.size(22.dp))
     }
 }

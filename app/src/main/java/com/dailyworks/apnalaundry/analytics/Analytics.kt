@@ -540,14 +540,27 @@ object Analytics {
     /** The sheet's date changed: [daysAgo] = how many days before today. */
     fun expenseDateChanged(mode: String, daysAgo: Int) = track("Expense Date Changed", mapOf("mode" to mode, "days_ago" to daysAgo))
 
-    fun expenseCategoryPicked(mode: String, category: String, custom: Boolean) =
-        track("Expense Category Picked", mapOf("mode" to mode, "category" to category, "custom" to custom))
+    /** "+ Add category" ([action] add) or the chosen category's box ([action] change) tapped in the form — opens the category list. */
+    fun expenseCategoryTapped(mode: String, action: String) = track("Expense Category Tapped", mapOf("mode" to mode, "action" to action))
 
-    /** "+ New category" chip tapped (the name box opens). */
-    fun expenseNewCategoryTapped(mode: String) = track("Expense New Category Tapped", mapOf("mode" to mode))
+    /** A category tapped in the list; [searched] = something was typed in the search. */
+    fun expenseCategoryPicked(mode: String, category: String, custom: Boolean, searched: Boolean) =
+        track("Expense Category Picked", mapOf("mode" to mode, "category" to category, "custom" to custom, "searched" to searched))
 
-    /** A new category named and added: the name the owner typed. */
-    fun expenseCategoryAdded(mode: String, name: String) = track("Expense Category Added", mapOf("mode" to mode, "name" to name))
+    /**
+     * "+ New" beside the search ([from] button), the "Add … as a new category" row (search_row) or
+     * the keyboard's Done (keyboard); [typed] = a name was in the box (else the box waits for one).
+     */
+    fun expenseNewCategoryTapped(mode: String, from: String, typed: Boolean) =
+        track("Expense New Category Tapped", mapOf("mode" to mode, "from" to from, "typed" to typed))
+
+    /** A new category added: the name the owner typed; [from] as New Category Tapped. */
+    fun expenseCategoryAdded(mode: String, name: String, from: String) =
+        track("Expense Category Added", mapOf("mode" to mode, "name" to name, "from" to from))
+
+    /** The category list closed. [how]: picked | added | dismissed; [query] = what was in the search box ("" = nothing). */
+    fun expenseCategorySheetClosed(mode: String, how: String, query: String) =
+        track("Expense Category Sheet Closed", mapOf("mode" to mode, "how" to how, "query" to query))
 
     /** The greyed Save tapped. [missing]: amount | category | amount_category. */
     fun expenseSaveBlocked(mode: String, missing: String) = track("Expense Save Blocked", mapOf("mode" to mode, "missing" to missing))

@@ -117,9 +117,11 @@ Custom property keys are `snake_case`. `Charged` uses CleverTap's reserved
 | `Expense Row Tapped` | `category` (`rent`\|`salary`\|`electricity`\|`supplies`\|`fuel`\|`water`\|`packing`\|`transport`\|`repairs`\|`other`, or the name of a category the owner added), `custom` (bool), `amount` | an expense in the list tapped to change or delete it (Android 1.0.19) |
 | `Expense Sheet Shown` | `mode` (`new`\|`edit`) | the add / change expense sheet shown (Android 1.0.19) |
 | `Expense Date Changed` | `mode`, `days_ago` | the sheet's date changed (Android 1.0.19) |
-| `Expense Category Picked` | `mode`, `category` (`rent`\|`salary`\|`electricity`\|`supplies`\|`fuel`\|`water`\|`packing`\|`transport`\|`repairs`\|`other`, or the name of a category the owner added), `custom` (bool) | a category chip tapped in the sheet (Android 1.0.19) |
-| `Expense New Category Tapped` | `mode` | "+ New category" tapped — the name box opens (Android 1.0.19) |
-| `Expense Category Added` | `mode`, `name` | a new category named and added — the name the owner typed (Android 1.0.19) |
+| `Expense Category Tapped` | `mode`, `action` (`add` = "+ Add category" \| `change` = the chosen category's box) | the form's category button tapped — opens the category list (Android 1.0.19) |
+| `Expense Category Picked` | `mode`, `category` (`rent`\|`salary`\|`electricity`\|`supplies`\|`fuel`\|`water`\|`packing`\|`transport`\|`repairs`\|`other`, or the name of a category the owner added), `custom` (bool), `searched` (bool) | a category tapped in the list (Android 1.0.19) |
+| `Expense New Category Tapped` | `mode`, `from` (`button` = "+ New" beside the search \| `search_row` = "Add … as a new category" \| `keyboard` = Done), `typed` (bool — false: the box waits for a name) | a new category asked for in the list (Android 1.0.19) |
+| `Expense Category Added` | `mode`, `name`, `from` (as New Category Tapped) | a new category added — the name the owner typed (Android 1.0.19) |
+| `Expense Category Sheet Closed` | `mode`, `how` (`picked`\|`added`\|`dismissed`), `query` (what was in the search box, "" = nothing) | the category list closed (Android 1.0.19) |
 | `Expense Save Blocked` | `mode`, `missing` (`amount`\|`category`\|`amount_category`) | the greyed Save tapped (Android 1.0.19) |
 | `Expense Added` | `category` (`rent`\|`salary`\|`electricity`\|`supplies`\|`fuel`\|`water`\|`packing`\|`transport`\|`repairs`\|`other`, or the name of a category the owner added), `custom` (bool), `amount`, `has_note` (bool), `days_ago` | a new expense saved (Android 1.0.19) |
 | `Expense Edited` | as `Expense Added` | an expense changed and saved (Android 1.0.19) |
