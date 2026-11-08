@@ -150,6 +150,8 @@ data class SyncChanges(
     val shopName: String = "",
     val ownerName: String = "",
     val ownerPlanActive: Boolean = true,
+    /** When the owner's plan runs out (a cancelled plan's paid period); null = renews by itself. */
+    val ownerPlanUntil: Long? = null,
 )
 @Serializable data class ContextsResponse(val success: Boolean = false, val contexts: List<StaffContextWire> = emptyList(), val hasOwnShop: Boolean = true)
 @Serializable data class ReserveRequest(val kind: String, val count: Int, val floor: Int)

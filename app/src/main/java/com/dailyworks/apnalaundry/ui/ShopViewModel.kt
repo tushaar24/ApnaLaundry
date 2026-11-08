@@ -86,14 +86,25 @@ class ShopViewModel(
      * Staff (1.0.20): what the person may do on the shop on screen — [StaffAccess.OWNER] on their
      * own shop. Every event says role = staff while it's a staff shop (Analytics.setStaffMode).
      */
-    val access: StateFlow<com.dailyworks.apnalaundry.domain.StaffAccess> = shopDir.activeRef.map { ref ->
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val access: StateFlow<com.dailyworks.apnalaundry.domain.StaffAccess> = shopDir.activeRef.flatMapLatest { ref ->
         val st = ref.staff
-        if (st == null) com.dailyworks.apnalaundry.domain.StaffAccess.OWNER
+        fun build(now: Long) = if (st == null) com.dailyworks.apnalaundry.domain.StaffAccess.OWNER
         else com.dailyworks.apnalaundry.domain.StaffAccess(
             isStaff = true,
             permissions = st.permissions.filterValues { it }.keys.mapNotNull { com.dailyworks.apnalaundry.domain.StaffPermission.of(it) }.toSet(),
-            staffId = st.staffId, staffName = st.name, ownerName = st.ownerName, shopName = ref.name, ownerPlanActive = st.ownerPlanActive,
+            staffId = st.staffId, staffName = st.name, ownerName = st.ownerName, shopName = ref.name, ownerPlanActive = st.planOn(now),
         )
+        kotlinx.coroutines.flow.flow {
+            val now = System.currentTimeMillis()
+            emit(build(now))
+            // The owner's plan has a known end: lock this shop at that very moment (even offline).
+            val until = st?.ownerPlanUntil
+            if (st != null && st.ownerPlanActive && until != null && until > now) {
+                kotlinx.coroutines.delay(until - now)
+                emit(build(until))
+            }
+        }
     }.onEach { a -> Analytics.setStaffMode(a.staffId.takeIf { a.isStaff }, a.shopName) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, com.dailyworks.apnalaundry.domain.StaffAccess.OWNER)
 

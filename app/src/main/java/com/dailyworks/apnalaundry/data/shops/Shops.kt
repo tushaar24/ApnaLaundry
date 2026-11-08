@@ -40,8 +40,13 @@ data class StaffCtx(
     val ownerName: String = "",
     val permissions: Map<String, Boolean> = emptyMap(),
     val ownerPlanActive: Boolean = true,
+    /** The owner's plan ends at this time (epoch ms): the shop locks then, even offline. null = renews by itself. */
+    val ownerPlanUntil: Long? = null,
 ) {
     fun can(p: com.dailyworks.apnalaundry.domain.StaffPermission) = permissions[p.key] == true
+
+    /** Whether staff may work now: the server hasn't said the plan ended, and its known end hasn't passed. */
+    fun planOn(now: Long = System.currentTimeMillis()) = ownerPlanActive && (ownerPlanUntil == null || now < ownerPlanUntil)
 }
 
 /**

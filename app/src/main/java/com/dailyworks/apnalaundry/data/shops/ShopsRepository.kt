@@ -49,7 +49,7 @@ class ShopsRepository(
         var entries = contexts.filter { !it.token.isNullOrBlank() }.map { c ->
             ShopRef(
                 id = staffShopId(c.staffId), name = c.shopName,
-                staff = StaffCtx(c.staffId, c.token!!, c.name, c.ownerName, c.permissions, c.ownerPlanActive),
+                staff = StaffCtx(c.staffId, c.token!!, c.name, c.ownerName, c.permissions, c.ownerPlanActive, c.ownerPlanUntil),
             )
         }
         // Only staff: the main slot keeps the shop it already holds (its data is in the main database).

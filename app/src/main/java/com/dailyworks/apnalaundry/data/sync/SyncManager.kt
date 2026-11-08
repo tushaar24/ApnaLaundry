@@ -118,7 +118,11 @@ class SyncManager(
         if (!res.success) throw IllegalStateException(res.message ?: "Pull failed")
         applyPull(shops.db(shop), res.changes, onScreen = shop == shops.activeId.value)
         // A staff login: the owner's current switches (and the plan is on, or the pull would be 402).
-        res.staff?.let { st -> shops.updateStaff(shop) { it.copy(permissions = st.permissions, ownerPlanActive = true, name = st.name.ifBlank { it.name }) } }
+        res.staff?.let { st ->
+            shops.updateStaff(shop) {
+                it.copy(permissions = st.permissions, ownerPlanActive = st.ownerPlanActive, ownerPlanUntil = st.ownerPlanUntil, name = st.name.ifBlank { it.name })
+            }
+        }
         prefs.setSyncCheckpoint(shop, res.checkpoint)
         if (res.seq > 0) prefs.setSyncSeq(shop, res.seq)
         prefs.setExpensesPulled(shop)
