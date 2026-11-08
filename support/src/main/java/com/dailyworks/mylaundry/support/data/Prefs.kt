@@ -28,12 +28,15 @@ data class Settings(
     val agentPhone: String = "",
     /** SAF tree the agent picked (the dialer's call-recordings folder), or null. */
     val recordingsTree: String? = null,
+    /** The admin.mylaundry.work session ("al_dash=…") the WhatsApp tab uses; null = signed out. */
+    val waCookie: String? = null,
 )
 
 class Prefs(private val context: Context) {
     private object K {
         val agent = stringPreferencesKey("agent_name")
         val phone = stringPreferencesKey("agent_phone")
+        val wa = stringPreferencesKey("wa_cookie")
         val tree = stringPreferencesKey("recordings_tree")
         val pCall = stringPreferencesKey("pending_call_id")
         val pUser = stringPreferencesKey("pending_user_id")
@@ -43,7 +46,7 @@ class Prefs(private val context: Context) {
     }
 
     val settings: Flow<Settings> = context.store.data.map { p ->
-        Settings(agentName = p[K.agent].orEmpty(), agentPhone = p[K.phone].orEmpty(), recordingsTree = p[K.tree])
+        Settings(agentName = p[K.agent].orEmpty(), agentPhone = p[K.phone].orEmpty(), recordingsTree = p[K.tree], waCookie = p[K.wa])
     }
 
     val pendingCall: Flow<PendingCall?> = context.store.data.map(::pending)
@@ -65,6 +68,10 @@ class Prefs(private val context: Context) {
     suspend fun setAgentName(name: String) = context.store.edit { it[K.agent] = name.trim() }
 
     suspend fun setAgentPhone(phone: String) = context.store.edit { it[K.phone] = phone.filter(Char::isDigit).takeLast(10) }
+
+    suspend fun setWaCookie(cookie: String?) = context.store.edit {
+        if (cookie == null) it.remove(K.wa) else it[K.wa] = cookie
+    }
 
     suspend fun setRecordingsTree(uri: String?) = context.store.edit {
         if (uri == null) it.remove(K.tree) else it[K.tree] = uri

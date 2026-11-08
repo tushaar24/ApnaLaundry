@@ -26,6 +26,13 @@ backend repo (`routes/laundry-support.js`).
   on picking up, Vobiz also says the shop's name. The call is logged under the
   shop as Incoming (or Missed call / left a message), recorded and transcribed;
   calls from numbers that aren't a shop show as "new number" in Calls.
+- **WhatsApp** (1.3): the MyLaundry number's chats, from admin.mylaundry.work
+  (sign in once with the admin site's login): read, reply with text / photo /
+  file / template (templates only after the 24-hour window), WhatsApp button on
+  each shop. Each new message shows as a notification (Firebase push from the
+  server) — needs `support/google-services.json` (Firebase project
+  shweta-makeover, app `com.dailyworks.mylaundry.support`) at build time and the
+  backend's `LAUNDRY_FCM_SERVICE_ACCOUNT_B64`; without them everything else works.
 - While calling through MyLaundry isn't set up on the server, Call falls back to
   the phone's dialer: the call's real talk time comes from the call log, and the
   dialer's recording is found and uploaded in the background. Unanswered calls

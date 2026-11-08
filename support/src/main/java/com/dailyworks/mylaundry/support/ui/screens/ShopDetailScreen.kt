@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -120,6 +121,7 @@ fun ShopDetailScreen(
     onBack: () -> Unit,
     onCall: (OwnerSummary) -> Unit,
     onOpenCall: (String) -> Unit,
+    onWhatsApp: (waId: String) -> Unit = {},
 ) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -182,6 +184,7 @@ fun ShopDetailScreen(
                             adding = ui.adding,
                             message = ui.message,
                             onCall = { onCall(d.owner) },
+                            onWhatsApp = { onWhatsApp("91${d.owner.phone}") },
                             onLogOutsideCall = { askOutsideCall = true },
                         )
                     }
@@ -208,6 +211,7 @@ private fun Header(
     adding: Boolean,
     message: String?,
     onCall: () -> Unit,
+    onWhatsApp: () -> Unit,
     onLogOutsideCall: () -> Unit,
 ) {
     val o = d.owner
@@ -229,6 +233,16 @@ private fun Header(
             Icon(Icons.Filled.Call, null)
             Spacer(Modifier.size(8.dp))
             Text("Call +91 ${o.phone.take(5)} ${o.phone.drop(5)}", style = fig(16, FontWeight.Bold, Tokens.OnDark))
+        }
+        // Their chat on the MyLaundry WhatsApp number (the WhatsApp tab).
+        OutlinedButton(
+            onClick = onWhatsApp,
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            shape = RoundedCornerShape(14.dp),
+        ) {
+            Icon(Icons.Filled.Forum, null, Modifier.size(18.dp), tint = Tokens.GreenText)
+            Spacer(Modifier.size(8.dp))
+            Text("WhatsApp", style = fig(15, FontWeight.Bold, Tokens.GreenText))
         }
         // Calls made outside the app (normal dialer, another phone): same after-call notes.
         OutlinedButton(

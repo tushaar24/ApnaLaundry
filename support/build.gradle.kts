@@ -5,6 +5,10 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+// WhatsApp pushes (Firebase Cloud Messaging, project shweta-makeover): on once
+// support/google-services.json is in place; without it the app builds and runs, with no pushes.
+if (file("google-services.json").exists()) apply(plugin = "com.google.gms.google-services")
+
 // Internal customer-service app (agents calling MyLaundry shop owners).
 // Installed as an APK on team phones, not shipped on Play. No login and no
 // API key (owner decision).
@@ -17,8 +21,8 @@ android {
         applicationId = "com.dailyworks.mylaundry.support"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.2"
+        versionCode = 4
+        versionName = "1.3"
         vectorDrawables { useSupportLibrary = true }
         buildConfigField("String", "API_BASE_URL", "\"https://shwetamakeover.online/api/laundry/support\"")    }
 
@@ -72,6 +76,10 @@ dependencies {
     implementation(libs.ktor.client.okhttp)
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
+
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
+    implementation(libs.kotlinx.coroutines.play.services)
 
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)

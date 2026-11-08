@@ -51,6 +51,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dailyworks.mylaundry.support.Graph
 import com.dailyworks.mylaundry.support.data.Settings
+import com.dailyworks.mylaundry.support.data.WaPush
 import com.dailyworks.mylaundry.support.ui.components.SectionCard
 import com.dailyworks.mylaundry.support.ui.theme.Tokens
 import com.dailyworks.mylaundry.support.ui.theme.bric
@@ -215,6 +216,24 @@ fun SettingsScreen(graph: Graph, isSetup: Boolean, onDone: () -> Unit) {
             }
             OutlinedButton(onClick = { pickFolder.launch(null) }, shape = RoundedCornerShape(12.dp)) {
                 Text(if (settings.recordingsTree == null) "Pick recordings folder" else "Change folder", style = fig(14, FontWeight.Bold, Tokens.Blue))
+            }
+        }
+
+        if (!isSetup) {
+            SectionCard("WhatsApp") {
+                if (settings.waCookie != null) {
+                    Text(
+                        if (WaPush.available(context)) "Signed in. New WhatsApp messages show as notifications on this phone."
+                        else "Signed in. Message notifications aren't switched on in this version of the app yet.",
+                        style = fig(14, color = Tokens.InkSecondary),
+                    )
+                    OutlinedButton(
+                        onClick = { scope.launch { WaPush.unregister(context); graph.wa.signOut() } },
+                        shape = RoundedCornerShape(12.dp),
+                    ) { Text("Sign out of WhatsApp", style = fig(14, FontWeight.Bold, Tokens.Red)) }
+                } else {
+                    Text("Not signed in. Open the WhatsApp tab to sign in.", style = fig(14, color = Tokens.Muted))
+                }
             }
         }
 

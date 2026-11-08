@@ -6,6 +6,7 @@ import com.dailyworks.mylaundry.support.data.CallMonitor
 import com.dailyworks.mylaundry.support.data.Prefs
 import com.dailyworks.mylaundry.support.data.RecordingFinder
 import com.dailyworks.mylaundry.support.data.SupportApi
+import com.dailyworks.mylaundry.support.data.WhatsAppApi
 
 /** The app's few singletons (small enough not to need a DI framework). */
 class Graph(app: Application) {
@@ -14,6 +15,7 @@ class Graph(app: Application) {
     val monitor = CallMonitor(app)
     val finder = RecordingFinder(app)
     val calls = CallFlow(app, api, prefs, monitor, finder)
+    val wa = WhatsAppApi(prefs)
 }
 
 class SupportApp : Application() {

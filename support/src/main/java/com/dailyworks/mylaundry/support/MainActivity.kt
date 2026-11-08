@@ -19,8 +19,11 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.outlined.Call
+import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Storefront
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -32,6 +35,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -51,6 +55,12 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.dailyworks.mylaundry.support.data.ApiException
 import com.dailyworks.mylaundry.support.data.IncomingNotifier
+import com.dailyworks.mylaundry.support.data.WaNotifier
+import com.dailyworks.mylaundry.support.data.WaPush
+import com.dailyworks.mylaundry.support.ui.screens.ChatScreen
+import com.dailyworks.mylaundry.support.ui.screens.ChatViewModel
+import com.dailyworks.mylaundry.support.ui.screens.ChatsViewModel
+import com.dailyworks.mylaundry.support.ui.screens.WhatsAppTab
 import com.dailyworks.mylaundry.support.data.OwnerSummary
 import com.dailyworks.mylaundry.support.ui.components.Loading
 import com.dailyworks.mylaundry.support.ui.screens.CallNotesScreen
@@ -67,24 +77,38 @@ import com.dailyworks.mylaundry.support.ui.screens.TagsViewModel
 import com.dailyworks.mylaundry.support.ui.theme.SupportTheme
 import com.dailyworks.mylaundry.support.ui.theme.Tokens
 import com.dailyworks.mylaundry.support.ui.theme.fig
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
-    // A "… is calling" notification was tapped: open that call's notes.
-    private val openCall = MutableStateFlow<String?>(null)
+    // A notification was tapped: "… is calling" opens that call's notes, a WhatsApp
+    // message opens its chat.
+    private val opens = Opens()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        openCall.value = intent?.getStringExtra(IncomingNotifier.EXTRA_CALL_ID)
+        opens.take(intent)
         val graph = (application as SupportApp).graph
-        setContent { SupportTheme { SupportRoot(graph, openCall) } }
+        setContent { SupportTheme { SupportRoot(graph, opens) } }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        intent.getStringExtra(IncomingNotifier.EXTRA_CALL_ID)?.let { openCall.value = it }
+        opens.take(intent)
+    }
+}
+
+/** What a tapped notification asks to open. */
+class Opens {
+    val call = MutableStateFlow<String?>(null)
+    val chat = MutableStateFlow<String?>(null)
+
+    fun take(intent: Intent?) {
+        intent?.getStringExtra(IncomingNotifier.EXTRA_CALL_ID)?.let { call.value = it }
+        intent?.getStringExtra(WaNotifier.EXTRA_WA_ID)?.let { chat.value = it }
     }
 }
 
@@ -93,12 +117,13 @@ private data class Tab(val route: String, val label: String, val icon: ImageVect
 private val TABS = listOf(
     Tab("shops", "Shops", Icons.Outlined.Storefront),
     Tab("calls", "Calls", Icons.Outlined.Call),
+    Tab("wa", "WhatsApp", Icons.Outlined.Forum),
     Tab("tags", "Tags", Icons.AutoMirrored.Outlined.Label),
     Tab("settings", "Settings", Icons.Outlined.Settings),
 )
 
 @Composable
-private fun SupportRoot(graph: Graph, openCall: MutableStateFlow<String?>) {
+private fun SupportRoot(graph: Graph, opens: Opens) {
     // null until DataStore answers, so setup doesn't flash for a configured agent.
     val agent by remember { graph.prefs.settings }.collectAsStateWithLifecycle<com.dailyworks.mylaundry.support.data.Settings?>(null)
     val a = agent
@@ -109,12 +134,12 @@ private fun SupportRoot(graph: Graph, openCall: MutableStateFlow<String?>) {
         a.agentName.isBlank() || a.agentPhone.length != 10 -> Box(Modifier.fillMaxSize().background(Tokens.Bg).statusBarsPadding()) {
             SettingsScreen(graph, isSetup = true, onDone = {})
         }
-        else -> MainNav(graph, openCall)
+        else -> MainNav(graph, opens)
     }
 }
 
 @Composable
-private fun MainNav(graph: Graph, openCall: MutableStateFlow<String?>) {
+private fun MainNav(graph: Graph, opens: Opens) {
     val nav = rememberNavController()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -178,11 +203,31 @@ private fun MainNav(graph: Graph, openCall: MutableStateFlow<String?>) {
         }
     }
 
-    val callToOpen by openCall.collectAsStateWithLifecycle()
+    val callToOpen by opens.call.collectAsStateWithLifecycle()
     LaunchedEffect(callToOpen) {
         val id = callToOpen ?: return@LaunchedEffect
-        openCall.value = null
+        opens.call.value = null
         nav.navigate("call/$id") { launchSingleTop = true }
+    }
+    val chatToOpen by opens.chat.collectAsStateWithLifecycle()
+    LaunchedEffect(chatToOpen) {
+        val id = chatToOpen ?: return@LaunchedEffect
+        opens.chat.value = null
+        nav.navigate("wa/$id") { launchSingleTop = true }
+    }
+
+    // WhatsApp: the notification channel (also used by pushes Android shows itself), this
+    // phone registered for pushes, and the unread-chats badge on the tab.
+    val waCookie by remember { graph.prefs.settings.map { it.waCookie } }.collectAsStateWithLifecycle(null)
+    var waUnread by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) { WaNotifier.ensureChannel(context) }
+    LaunchedEffect(waCookie) {
+        if (waCookie == null) { waUnread = 0; return@LaunchedEffect }
+        WaPush.register(context)
+        while (true) {
+            runCatching { graph.wa.unread() }.onSuccess { waUnread = it }
+            delay(30_000)
+        }
     }
 
     // A call still pending when the app comes back (even after process death):
@@ -209,7 +254,13 @@ private fun MainNav(graph: Graph, openCall: MutableStateFlow<String?>) {
                         NavigationBarItem(
                             selected = route == t.route,
                             onClick = { nav.switchTab(t.route) },
-                            icon = { Icon(t.icon, null) },
+                            icon = {
+                                if (t.route == "wa" && waUnread > 0) {
+                                    BadgedBox(badge = { Badge { Text("$waUnread") } }) { Icon(t.icon, null) }
+                                } else {
+                                    Icon(t.icon, null)
+                                }
+                            },
                             label = { Text(t.label, style = fig(12, FontWeight.SemiBold)) },
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = Tokens.Blue, selectedTextColor = Tokens.Blue,
@@ -236,6 +287,17 @@ private fun MainNav(graph: Graph, openCall: MutableStateFlow<String?>) {
                     CallsScreen(viewModel { CallsViewModel(graph) }, onOpenCall = { nav.navigate("call/$it") })
                 }
             }
+            composable("wa") {
+                WhatsAppTab(graph, viewModel { ChatsViewModel(graph) }, onOpen = { nav.navigate("wa/$it") })
+            }
+            composable("wa/{waId}") { entry ->
+                val waId = entry.arguments?.getString("waId").orEmpty()
+                ChatScreen(
+                    vm = viewModel(key = "chat-$waId") { ChatViewModel(graph, waId) },
+                    onBack = { if (!nav.popBackStack()) nav.navigate("wa") },
+                    onOpenShop = { nav.navigate("shop/$it") },
+                )
+            }
             composable("tags") {
                 Box(Modifier.statusBarsPadding()) { TagsScreen(viewModel { TagsViewModel(graph) }) }
             }
@@ -249,6 +311,7 @@ private fun MainNav(graph: Graph, openCall: MutableStateFlow<String?>) {
                     onBack = { nav.popBackStack() },
                     onCall = onCall,
                     onOpenCall = { nav.navigate("call/$it") },
+                    onWhatsApp = { nav.navigate("wa/$it") },
                 )
             }
             composable("call/{id}") { entry ->
