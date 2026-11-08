@@ -144,6 +144,8 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
     // The owner's shops (multi-shop): a shop added on another phone shows up here.
     LaunchedEffect(li) { if (li && !staffOnly) shopVm.refreshShops() }
 
+    // Staff (1.0.20): a removed staff-only phone — its shop's data goes the moment the login ends.
+    LaunchedEffect(li) { if (!li) authRepo.dropStaffShopIfLoggedOut() }
     LaunchedEffect(li) {
         if (!li && navController.currentDestination?.route?.let { it != Routes.LOGIN } == true) {
             navController.navigate(Routes.LOGIN) { popUpTo(0) { inclusive = true } }

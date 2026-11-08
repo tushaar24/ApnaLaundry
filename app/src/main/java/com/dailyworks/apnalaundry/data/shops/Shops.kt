@@ -141,7 +141,7 @@ class ShopDirectory(private val context: Context, private val prefs: Prefs) {
         }
         val gone = current.filter { it.staff != null && it.id != MAIN_SHOP && all.none { a -> a.id == it.id } }.map { it.id }
         write(all)
-        gone.forEach { id -> dbs.remove(id)?.close(); context.deleteDatabase(fileOf(id)); prefs.setSyncCheckpoint(id, 0L); prefs.setSyncSeq(id, 0L) }
+        gone.forEach { id -> dbs.remove(id)?.close(); context.deleteDatabase(fileOf(id)); prefs.clearShopState(id) }
         return gone
     }
 
@@ -173,8 +173,7 @@ class ShopDirectory(private val context: Context, private val prefs: Prefs) {
         write(list().filter { it.id != id }) // not save(): that keeps staff entries, and this may be one
         dbs.remove(id)?.close()
         context.deleteDatabase(fileOf(id))
-        prefs.setSyncCheckpoint(id, 0L)
-        prefs.setSyncSeq(id, 0L)
+        prefs.clearShopState(id) // its sync positions, number blocks and flags too: nothing of it is left
     }
 
     /**

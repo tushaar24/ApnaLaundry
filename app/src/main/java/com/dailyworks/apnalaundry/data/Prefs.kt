@@ -243,6 +243,17 @@ class Prefs(private val context: Context) {
         }
     }
 
+    /** One shop leaves this phone (deleted, or a removed staff shop): everything saved for it goes. */
+    suspend fun clearShopState(shop: String) {
+        context.dataStore.edit { p ->
+            if (shop == MAIN_SHOP) p[SYNC_CHECKPOINT] = 0L
+            p.asMap().keys.filter { k ->
+                k.name == SHOP_CHECKPOINT_PREFIX + shop || k.name == "sync_seq_$shop" || k.name == "shop_has_staff_$shop" ||
+                    k.name == "expenses_pulled_$shop" || k.name.startsWith("id_block_${shop}_")
+            }.forEach { k -> p.remove(k) }
+        }
+    }
+
     /** sync_seq_*, id_block_*, shop_has_staff_*, expenses_pulled_* (all per shop). */
     private fun removeSyncState(p: androidx.datastore.preferences.core.MutablePreferences) {
         p.asMap().keys.filter { k ->

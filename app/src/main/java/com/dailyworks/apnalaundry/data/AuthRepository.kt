@@ -337,6 +337,20 @@ class AuthRepository(
     }
 
     /**
+     * Staff (1.0.20): the login ended on a phone that was only someone's staff (the owner removed
+     * it, or deleted the shop) — that shop's data leaves the phone at once, whatever call noticed.
+     */
+    suspend fun dropStaffShopIfLoggedOut() {
+        if (prefs.loggedIn.first()) return
+        val main = shops.list().firstOrNull() ?: return
+        if (main.staff == null) return
+        shops.forgetExtraShops()
+        repo.clearAll()
+        prefs.resetSyncState()
+        prefs.setSetupDone(false)
+    }
+
+    /**
      * Push-then-logout. Fails (session kept) if unsynced work can't be pushed
      * for a transient reason — but a dead session can never sync again, so it
      * doesn't block logout.
