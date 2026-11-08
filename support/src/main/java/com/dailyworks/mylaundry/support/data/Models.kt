@@ -159,6 +159,43 @@ data class ShopDetail(
     val subscriptions: List<SubRow> = emptyList(),
     val payments: List<PaymentRow> = emptyList(),
     val calls: List<CallDto> = emptyList(),
+    /** Open reminders for this owner, soonest first. */
+    val reminders: List<ReminderDto> = emptyList(),
+)
+
+/** "Call / follow up with this owner at <time>" (shared by the team; the setter gets the alarm). */
+@Serializable
+data class ReminderDto(
+    val id: String,
+    val userId: String,
+    val agentName: String,
+    val dueAt: String,
+    val kind: String = "call", // call | follow_up
+    val note: String = "",
+    val doneAt: String? = null,
+    val callId: String? = null,
+    val phone: String? = null,
+    val ownerName: String? = null,
+    val shopName: String? = null,
+) {
+    val title get() = shopName ?: ownerName ?: "+91 ${phone.orEmpty()}"
+    val isCall get() = kind == "call"
+}
+
+@Serializable internal data class RemindersEnvelope(val reminders: List<ReminderDto> = emptyList())
+@Serializable internal data class ReminderEnvelope(val reminder: ReminderDto)
+
+/** One person in the agent's call queue (kept on this phone). */
+@Serializable
+data class QueueItem(
+    val userId: String,
+    val phone: String,
+    val label: String,
+    /** Came from a reminder: marked done when called. */
+    val reminderId: String? = null,
+    val note: String? = null,
+    val status: String = "pending", // pending | called | skipped
+    val callId: String? = null,
 )
 
 @Serializable

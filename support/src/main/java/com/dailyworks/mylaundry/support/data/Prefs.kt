@@ -9,6 +9,8 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 
 private val Context.store by preferencesDataStore("support_prefs")
 
@@ -32,11 +34,14 @@ data class Settings(
     val waCookie: String? = null,
 )
 
+private val queueJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+
 class Prefs(private val context: Context) {
     private object K {
         val agent = stringPreferencesKey("agent_name")
         val phone = stringPreferencesKey("agent_phone")
         val wa = stringPreferencesKey("wa_cookie")
+        val queue = stringPreferencesKey("call_queue")
         val tree = stringPreferencesKey("recordings_tree")
         val pCall = stringPreferencesKey("pending_call_id")
         val pUser = stringPreferencesKey("pending_user_id")
@@ -68,6 +73,21 @@ class Prefs(private val context: Context) {
     suspend fun setAgentName(name: String) = context.store.edit { it[K.agent] = name.trim() }
 
     suspend fun setAgentPhone(phone: String) = context.store.edit { it[K.phone] = phone.filter(Char::isDigit).takeLast(10) }
+
+    /** The agent's call queue (JSON list of [QueueItem]). */
+    val queue: Flow<List<QueueItem>> = context.store.data.map { p ->
+        p[K.queue]?.let { runCatching { queueJson.decodeFromString<List<QueueItem>>(it) }.getOrNull() }.orEmpty()
+    }
+
+    suspend fun setQueue(items: List<QueueItem>) = context.store.edit {
+        if (items.isEmpty()) it.remove(K.queue) else it[K.queue] = queueJson.encodeToString(items)
+    }
+
+    suspend fun updateQueue(change: (List<QueueItem>) -> List<QueueItem>) = context.store.edit {
+        val now = it[K.queue]?.let { j -> runCatching { queueJson.decodeFromString<List<QueueItem>>(j) }.getOrNull() }.orEmpty()
+        val next = change(now)
+        if (next.isEmpty()) it.remove(K.queue) else it[K.queue] = queueJson.encodeToString(next)
+    }
 
     suspend fun setWaCookie(cookie: String?) = context.store.edit {
         if (cookie == null) it.remove(K.wa) else it[K.wa] = cookie

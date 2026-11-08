@@ -33,6 +33,17 @@ backend repo (`routes/laundry-support.js`).
   server) — needs `support/google-services.json` (Firebase project
   shweta-makeover, app `com.dailyworks.mylaundry.support`) at build time and the
   backend's `LAUNDRY_FCM_SERVICE_ACCOUNT_B64`; without them everything else works.
+- **Reminders** (1.4): "Remind me" on a shop or after a call (Call / Follow up,
+  quick times or any date + time, note; picking "Call back later" offers it).
+  Shared by the team on the server; the setter's phone rings an alarm at the
+  time. Calls shows **Scheduled today** (overdue included) with Call / Done /
+  Reschedule / Delete, above the call log; calling from a reminder ticks it off.
+- **Call queue** (1.4): Shops › Select › tick owners › Call queue, or Calls ›
+  Call all on today's scheduled — then Call, Call, Call: the next one is ready
+  after each call's notes. Kept on the phone.
+- **Shop details** (1.4): with the admin login (WhatsApp tab), each shop page
+  shows what admin.mylaundry.work shows — total orders and sales, earnings,
+  customers + baaki, recent orders, services, CleverTap identity / ID / props.
 - While calling through MyLaundry isn't set up on the server, Call falls back to
   the phone's dialer: the call's real talk time comes from the call log, and the
   dialer's recording is found and uploaded in the background. Unanswered calls

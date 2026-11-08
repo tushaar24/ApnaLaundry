@@ -62,6 +62,9 @@ import com.dailyworks.mylaundry.support.data.ApiException
 import com.dailyworks.mylaundry.support.data.CallDto
 import com.dailyworks.mylaundry.support.data.Outcome
 import com.dailyworks.mylaundry.support.data.PendingCall
+import com.dailyworks.mylaundry.support.data.ReminderAlarms
+import com.dailyworks.mylaundry.support.ui.components.ReminderDialog
+import com.dailyworks.mylaundry.support.ui.components.reminderTime
 import com.dailyworks.mylaundry.support.data.RecordingUploads
 import com.dailyworks.mylaundry.support.data.TagDto
 import com.dailyworks.mylaundry.support.data.TranscriptDto
@@ -100,6 +103,12 @@ data class CallNotesUi(
     val dirty: Boolean = false,
     val error: String? = null,
     val message: String? = null,
+    /** The follow-up reminder dialog. */
+    val reminding: Boolean = false,
+    val savingReminder: Boolean = false,
+    val reminderError: String? = null,
+    /** "Reminder set for …" once saved. */
+    val reminderSet: String? = null,
 )
 
 class CallNotesViewModel(private val graph: Graph, private val callId: String) : ViewModel() {
@@ -209,7 +218,28 @@ class CallNotesViewModel(private val graph: Graph, private val callId: String) :
         }
     }
 
-    fun setOutcome(o: String?) = _ui.update { it.copy(outcome = o, dirty = true) }
+    // "Call back later" usually means: when? Offer the reminder right away.
+    fun setOutcome(o: String?) = _ui.update {
+        it.copy(outcome = o, dirty = true, reminding = it.reminding || (o == Outcome.CALL_BACK.name && it.reminderSet == null))
+    }
+
+    fun remind(open: Boolean) = _ui.update { it.copy(reminding = open, reminderError = null) }
+
+    fun saveReminder(context: android.content.Context, at: java.time.Instant, kind: String, note: String) {
+        val userId = _ui.value.call?.userId ?: return
+        _ui.update { it.copy(savingReminder = true, reminderError = null) }
+        viewModelScope.launch {
+            try {
+                graph.api.createReminder(userId, graph.prefs.current().agentName, at.toString(), kind, note)
+                _ui.update { it.copy(savingReminder = false, reminding = false, reminderSet = reminderTime(at)) }
+                ReminderAlarms.syncSoon(context.applicationContext)
+            } catch (e: ApiException) {
+                _ui.update { it.copy(savingReminder = false, reminderError = e.message) }
+            }
+        }
+    }
+
+
     fun setNote(n: String) = _ui.update { it.copy(note = n, dirty = true) }
     fun toggleTag(id: String) = _ui.update {
         it.copy(tagIds = if (id in it.tagIds) it.tagIds - id else it.tagIds + id, dirty = true)
@@ -346,6 +376,15 @@ fun CallNotesScreen(vm: CallNotesViewModel, onBack: () -> Unit, onOpenShop: (Str
                         }
                     }
 
+                    if (call.userId != null) {
+                        SectionCard("Follow-up") {
+                            ui.reminderSet?.let { Text("⏰ Reminder set for $it", style = fig(14, FontWeight.Bold, Tokens.GreenText)) }
+                            OutlinedButton(onClick = { vm.remind(true) }, shape = RoundedCornerShape(12.dp)) {
+                                Text(if (ui.reminderSet == null) "⏰ Remind me to call again" else "Add another reminder", style = fig(14, FontWeight.Bold, Tokens.Blue))
+                            }
+                        }
+                    }
+
                     call.transcript?.let { TranscriptCard(it, if (call.live?.status == "voicemail") "Their message" else "What was said") }
 
                     SectionCard("Recording") {
@@ -372,6 +411,17 @@ fun CallNotesScreen(vm: CallNotesViewModel, onBack: () -> Unit, onOpenShop: (Str
                 }
             }
         }
+    }
+
+    if (ui.reminding) {
+        ReminderDialog(
+            title = "Remind me · ${ui.call?.shopName ?: ui.call?.ownerName ?: "this shop"}",
+            saving = ui.savingReminder,
+            error = ui.reminderError,
+            initialNote = if (ui.outcome == Outcome.CALL_BACK.name) "Call back" else "",
+            onDismiss = { vm.remind(false) },
+            onSave = { at, kind, note -> vm.saveReminder(context, at, kind, note) },
+        )
     }
 
     if (newTagOpen) {

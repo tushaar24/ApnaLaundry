@@ -15,8 +15,14 @@
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
 
-    <!-- "Sharma Laundry is calling" while an incoming MyLaundry call rings. -->
+    <!-- "Sharma Laundry is calling" while an incoming MyLaundry call rings; reminders. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Reminders ring on time (exact alarms), and again after a restart. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <uses-feature
         android:name="android.hardware.telephony"
@@ -64,6 +70,18 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- Reminders: the alarm, and setting the alarms again after a restart. -->
+        <receiver
+            android:name=".data.ReminderReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".data.ReminderBootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
 
         <!-- The phone rings: is it an incoming MyLaundry call, and from which shop? -->
         <receiver

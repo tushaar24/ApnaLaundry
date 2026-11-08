@@ -140,6 +140,79 @@ data class WaTemplate(
 @Serializable internal data class WaUnread(val messages: Int = 0, val chats: Int = 0)
 @Serializable internal data class WaError(val error: String? = null)
 
+// ───────── an owner as admin.mylaundry.work's owner panel shows them (GET /api/users/:id) ─────────
+
+@Serializable
+data class AdminUser(
+    val id: String,
+    val phone: String? = null,
+    val name: String? = null,
+    @kotlinx.serialization.SerialName("created_at") val createdAt: String? = null,
+    @kotlinx.serialization.SerialName("last_login_at") val lastLoginAt: String? = null,
+)
+
+@Serializable
+data class AdminShop(
+    val name: String? = null,
+    val phone: String? = null,
+    @kotlinx.serialization.SerialName("close_time") val closeTime: String? = null,
+    @kotlinx.serialization.SerialName("express_pct") val expressPct: Double? = null,
+)
+
+/** Kept orders, their value (cancelled left out, ₹) and how many were delivered. */
+@Serializable
+data class AdminTotals(val orders: Int = 0, val sales: Double = 0.0, val delivered: Int = 0)
+
+@Serializable
+data class AdminEarnings(
+    val label: String? = null,
+    val received: Double = 0.0,
+    val cash: Double = 0.0,
+    val upi: Double = 0.0,
+    /** Value of the orders delivered in the period. */
+    val work: Double = 0.0,
+    val ordersDelivered: Int = 0,
+    val pieces: Double = 0.0,
+    val kg: Double = 0.0,
+)
+
+@Serializable
+data class AdminCustomer(
+    val name: String? = null,
+    val phone: String? = null,
+    val orders: Int = 0,
+    val billed: Double = 0.0,
+    val balance: Double = 0.0,
+)
+
+@Serializable
+data class AdminService(val name: String? = null, val mode: String? = null)
+
+@Serializable
+data class AdminOrder(
+    val customer: String? = null,
+    val status: String? = null,
+    val createdOn: String? = null,
+    val amount: Double = 0.0,
+    val paid: Double = 0.0,
+    val services: String? = null,
+)
+
+@Serializable
+data class AdminOwner(
+    val user: AdminUser,
+    val shop: AdminShop? = null,
+    val totals: AdminTotals? = null,
+    val statusCounts: Map<String, Int> = emptyMap(),
+    val earnings: Map<String, AdminEarnings> = emptyMap(),
+    val customers: List<AdminCustomer> = emptyList(),
+    val services: List<AdminService> = emptyList(),
+    val orders: List<AdminOrder> = emptyList(),
+    val baakiMarket: Double = 0.0,
+    val baakiCustomers: Int = 0,
+    val dayCloses: Int = 0,
+)
+
 class WhatsAppApi(private val prefs: Prefs, private val baseUrl: String = "https://admin.mylaundry.work") {
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
     private val client = HttpClient(OkHttp) {
@@ -270,6 +343,16 @@ class WhatsAppApi(private val prefs: Prefs, private val baseUrl: String = "https
         if (res.status.value == 410) throw ApiException("No longer available on WhatsApp")
         if (!res.status.isSuccess()) throw ApiException("Couldn't load it (${res.status.value})")
         return res.readRawBytes()
+    }
+
+    /** The owner as admin.mylaundry.work's owner panel shows them (same admin login). */
+    suspend fun owner(userId: String): AdminOwner = call { client.get("$baseUrl/api/users/$userId") }
+
+    /** Their CleverTap profile properties (incl. "clevertap_id"); null = no profile. */
+    suspend fun clevertap(userId: String): Map<String, String>? {
+        val j = call<kotlinx.serialization.json.JsonObject> { client.get("$baseUrl/api/clevertap") { parameter("ids", userId) } }
+        val p = (j["profiles"] as? kotlinx.serialization.json.JsonObject)?.get(userId) as? kotlinx.serialization.json.JsonObject ?: return null
+        return p.mapValues { (_, v) -> (v as? JsonPrimitive)?.content ?: v.toString() }
     }
 
     /** This phone's Firebase token, so the server pushes new WhatsApp messages here. */

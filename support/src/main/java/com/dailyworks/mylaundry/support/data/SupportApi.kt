@@ -128,6 +128,50 @@ class SupportApi(private val baseUrl: String = BuildConfig.API_BASE_URL) {
             }
         }.call
 
+    suspend fun reminders(fromIso: String?, toIso: String?, agent: String? = null, open: Boolean = true, userId: String? = null): List<ReminderDto> =
+        call<RemindersEnvelope> {
+            client.get(url("/reminders")) {
+                fromIso?.let { parameter("from", it) }
+                toIso?.let { parameter("to", it) }
+                agent?.let { parameter("agent", it) }
+                userId?.let { parameter("userId", it) }
+                if (open) parameter("open", 1)
+            }
+        }.reminders
+
+    suspend fun createReminder(userId: String, agentName: String, dueAtIso: String, kind: String, note: String): ReminderDto =
+        call<ReminderEnvelope> {
+            client.post(url("/reminders")) {
+                contentType(ContentType.Application.Json)
+                setBody(buildJsonObject {
+                    put("userId", JsonPrimitive(userId))
+                    put("agentName", JsonPrimitive(agentName))
+                    put("dueAt", JsonPrimitive(dueAtIso))
+                    put("kind", JsonPrimitive(kind))
+                    put("note", JsonPrimitive(note))
+                })
+            }
+        }.reminder
+
+    /** PATCH only the fields given. */
+    suspend fun updateReminder(id: String, dueAtIso: String? = null, note: String? = null, kind: String? = null, done: Boolean? = null, callId: String? = null): ReminderDto =
+        call<ReminderEnvelope> {
+            client.patch(url("/reminders/$id")) {
+                contentType(ContentType.Application.Json)
+                setBody(buildJsonObject {
+                    dueAtIso?.let { put("dueAt", JsonPrimitive(it)) }
+                    note?.let { put("note", JsonPrimitive(it)) }
+                    kind?.let { put("kind", JsonPrimitive(it)) }
+                    done?.let { put("done", JsonPrimitive(it)) }
+                    callId?.let { put("callId", JsonPrimitive(it)) }
+                })
+            }
+        }.reminder
+
+    suspend fun deleteReminder(id: String) {
+        call<OkBody> { client.delete(url("/reminders/$id")) }
+    }
+
     /** Asked while this phone rings: the incoming MyLaundry call ringing [agentPhone], if any. */
     suspend fun incoming(agentPhone: String, ringingNumber: String?): IncomingDto = call {
         client.get(url("/calls/incoming")) {

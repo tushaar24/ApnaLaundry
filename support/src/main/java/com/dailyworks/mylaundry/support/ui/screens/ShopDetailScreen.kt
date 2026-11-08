@@ -49,6 +49,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.dailyworks.mylaundry.support.Graph
 import com.dailyworks.mylaundry.support.data.ApiException
+import com.dailyworks.mylaundry.support.data.ReminderAlarms
+import com.dailyworks.mylaundry.support.data.ReminderDto
+import com.dailyworks.mylaundry.support.ui.components.ReminderDialog
+import com.dailyworks.mylaundry.support.ui.components.ReminderRow
+import com.dailyworks.mylaundry.support.ui.components.parseInstant
 import com.dailyworks.mylaundry.support.data.OwnerSummary
 import com.dailyworks.mylaundry.support.data.ShopDetail
 import com.dailyworks.mylaundry.support.ui.components.CallCard
@@ -79,6 +84,11 @@ data class ShopDetailUi(
     /** Logging a call from a picked recording file. */
     val adding: Boolean = false,
     val message: String? = null,
+    /** The Remind me dialog: open for a new reminder (editing = null) or to reschedule one. */
+    val reminding: Boolean = false,
+    val editing: ReminderDto? = null,
+    val savingReminder: Boolean = false,
+    val reminderError: String? = null,
 )
 
 class ShopDetailViewModel(private val graph: Graph, private val userId: String) : ViewModel() {
@@ -96,6 +106,36 @@ class ShopDetailViewModel(private val graph: Graph, private val userId: String) 
             }
         }
     }
+
+    fun remind(open: Boolean, editing: ReminderDto? = null) =
+        _ui.update { it.copy(reminding = open, editing = editing, reminderError = null) }
+
+    private fun reminderChange(context: android.content.Context, block: suspend () -> Unit) {
+        _ui.update { it.copy(savingReminder = true, reminderError = null) }
+        viewModelScope.launch {
+            try {
+                block()
+                _ui.update { it.copy(savingReminder = false, reminding = false, editing = null) }
+                ReminderAlarms.syncSoon(context.applicationContext)
+                load()
+            } catch (e: ApiException) {
+                _ui.update { it.copy(savingReminder = false, reminderError = e.message, message = e.message) }
+            }
+        }
+    }
+
+    fun saveReminder(context: android.content.Context, at: java.time.Instant, kind: String, note: String) {
+        val editing = _ui.value.editing
+        reminderChange(context) {
+            val agent = graph.prefs.current().agentName
+            if (editing == null) graph.api.createReminder(userId, agent, at.toString(), kind, note)
+            else graph.api.updateReminder(editing.id, dueAtIso = at.toString(), kind = kind, note = note)
+        }
+    }
+
+    fun reminderDone(context: android.content.Context, r: ReminderDto) = reminderChange(context) { graph.api.updateReminder(r.id, done = true) }
+
+    fun deleteReminder(context: android.content.Context, r: ReminderDto) = reminderChange(context) { graph.api.deleteReminder(r.id) }
 
     /** A call made outside this app (recording optional): log it, then open its after-call notes. */
     fun logOutsideCall(file: Uri?, onCreated: (callId: String) -> Unit) {
@@ -122,6 +162,7 @@ fun ShopDetailScreen(
     onCall: (OwnerSummary) -> Unit,
     onOpenCall: (String) -> Unit,
     onWhatsApp: (waId: String) -> Unit = {},
+    onCallReminder: (ReminderDto) -> Unit = {},
 ) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -131,6 +172,19 @@ fun ShopDetailScreen(
             runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
             vm.logOutsideCall(uri, onCreated = onOpenCall)
         }
+    }
+    if (ui.reminding) {
+        val editing = ui.editing
+        ReminderDialog(
+            title = if (editing == null) "Remind me" else "Reschedule",
+            saving = ui.savingReminder,
+            error = ui.reminderError,
+            initialKind = editing?.kind ?: "call",
+            initialNote = editing?.note.orEmpty(),
+            initialAt = editing?.let { parseInstant(it.dueAt) }?.takeIf { it.isAfter(java.time.Instant.now()) },
+            onDismiss = { vm.remind(false) },
+            onSave = { at, kind, note -> vm.saveReminder(context, at, kind, note) },
+        )
     }
     var askOutsideCall by remember { mutableStateOf(false) }
     if (askOutsideCall) {
@@ -186,6 +240,28 @@ fun ShopDetailScreen(
                             onCall = { onCall(d.owner) },
                             onWhatsApp = { onWhatsApp("91${d.owner.phone}") },
                             onLogOutsideCall = { askOutsideCall = true },
+                        )
+                    }
+                    // What admin.mylaundry.work shows for this owner (with the admin login).
+                    item(key = "admin") {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { ShopAdminDetails(d.owner.id) }
+                    }
+                    item {
+                        // Reminders: Remind me + this shop's open ones (anyone's).
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Reminders · ${d.reminders.size}", style = bric(20), modifier = Modifier.weight(1f))
+                            OutlinedButton(onClick = { vm.remind(true) }, shape = RoundedCornerShape(12.dp)) {
+                                Text("⏰ Remind me", style = fig(14, FontWeight.Bold, Tokens.Blue))
+                            }
+                        }
+                    }
+                    items(d.reminders, key = { "r-" + it.id }) { r ->
+                        ReminderRow(
+                            r, showShop = false, showAgent = true,
+                            onCall = { onCallReminder(r) },
+                            onDone = { vm.reminderDone(context, r) },
+                            onEdit = { vm.remind(true, r) },
+                            onDelete = { vm.deleteReminder(context, r) },
                         )
                     }
                     item { Billing(d) }

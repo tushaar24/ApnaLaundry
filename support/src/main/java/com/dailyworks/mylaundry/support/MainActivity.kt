@@ -55,6 +55,10 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.dailyworks.mylaundry.support.data.ApiException
 import com.dailyworks.mylaundry.support.data.IncomingNotifier
+import com.dailyworks.mylaundry.support.data.QueueItem
+import com.dailyworks.mylaundry.support.data.ReminderAlarms
+import com.dailyworks.mylaundry.support.data.ReminderDto
+import com.dailyworks.mylaundry.support.ui.screens.QueueScreen
 import com.dailyworks.mylaundry.support.data.WaNotifier
 import com.dailyworks.mylaundry.support.data.WaPush
 import com.dailyworks.mylaundry.support.ui.screens.ChatScreen
@@ -105,8 +109,10 @@ class MainActivity : ComponentActivity() {
 class Opens {
     val call = MutableStateFlow<String?>(null)
     val chat = MutableStateFlow<String?>(null)
+    val shop = MutableStateFlow<String?>(null)
 
     fun take(intent: Intent?) {
+        intent?.getStringExtra(ReminderAlarms.EXTRA_OPEN_SHOP)?.takeIf { it.isNotBlank() }?.let { shop.value = it }
         intent?.getStringExtra(IncomingNotifier.EXTRA_CALL_ID)?.let { call.value = it }
         intent?.getStringExtra(WaNotifier.EXTRA_WA_ID)?.let { chat.value = it }
     }
@@ -147,18 +153,20 @@ private fun MainNav(graph: Graph, opens: Opens) {
     val backStack by nav.currentBackStackEntryAsState()
     val route = backStack?.destination?.route
 
-    // ── placing a call (shared by the list and the detail screen) ──
-    var waitingForPermission by remember { mutableStateOf<OwnerSummary?>(null) }
+    // ── placing a call (shops, a shop, a reminder, the queue) ──
+    /** Who to call; [onPlaced] gets the new call's id (to tick off a reminder / queue item). */
+    class Dial(val userId: String, val phone: String, val label: String, val onPlaced: (String) -> Unit = {})
+    var waitingForPermission by remember { mutableStateOf<Dial?>(null) }
 
     // Through the phone's dialer: the app finds and uploads the dialer's recording.
-    fun place(owner: OwnerSummary) {
+    fun place(d: Dial) {
         scope.launch {
             try {
-                val label = owner.shopName ?: owner.name ?: "+91 ${owner.phone}"
-                val pending = graph.calls.start(owner.id, owner.phone, label)
+                val pending = graph.calls.start(d.userId, d.phone, d.label)
+                d.onPlaced(pending.callId)
                 // Open the notes screen first so returning from the dialer lands there.
                 nav.navigate("call/${pending.callId}") { launchSingleTop = true }
-                context.startActivity(graph.calls.dialIntent(owner.phone))
+                context.startActivity(graph.calls.dialIntent(d.phone))
             } catch (e: ApiException) {
                 snackbar.showSnackbar(e.message ?: "Couldn't start the call")
             } catch (e: ActivityNotFoundException) {
@@ -168,17 +176,17 @@ private fun MainNav(graph: Graph, opens: Opens) {
     }
 
     val callPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        val owner = waitingForPermission
+        val d = waitingForPermission
         waitingForPermission = null
-        if (granted && owner != null) place(owner)
+        if (granted && d != null) place(d)
         else if (!granted) scope.launch { snackbar.showSnackbar("Allow phone calls to call from the app") }
     }
 
-    fun placeWithDialer(owner: OwnerSummary) {
+    fun placeWithDialer(d: Dial) {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
-            place(owner)
+            place(d)
         } else {
-            waitingForPermission = owner
+            waitingForPermission = d
             callPermission.launch(Manifest.permission.CALL_PHONE)
         }
     }
@@ -187,20 +195,53 @@ private fun MainNav(graph: Graph, opens: Opens) {
     // transcribes the call. Only while that isn't set up on the server (503) does the
     // dialer take over.
     var placing by remember { mutableStateOf(false) }
-    val onCall: (OwnerSummary) -> Unit = onCall@{ owner ->
-        if (placing) return@onCall
+    fun startCall(d: Dial) {
+        if (placing) return
         placing = true
         scope.launch {
             try {
-                val call = graph.calls.bridge(owner.id)
+                val call = graph.calls.bridge(d.userId)
+                d.onPlaced(call.id)
                 nav.navigate("call/${call.id}") { launchSingleTop = true }
             } catch (e: ApiException) {
-                if (e.status == 503) placeWithDialer(owner)
+                if (e.status == 503) placeWithDialer(d)
                 else snackbar.showSnackbar(e.message ?: "Couldn't place the call")
             } finally {
                 placing = false
             }
         }
+    }
+    val onCall: (OwnerSummary) -> Unit = { o -> startCall(Dial(o.id, o.phone, o.shopName ?: o.name ?: "+91 ${o.phone}")) }
+
+    // A reminder's Call: the reminder is done once the call is placed.
+    fun reminderDone(reminderId: String, callId: String) = scope.launch {
+        runCatching { graph.api.updateReminder(reminderId, done = true, callId = callId) }
+        ReminderAlarms.syncSoon(context)
+    }
+    val onCallReminder: (ReminderDto) -> Unit = { r ->
+        startCall(Dial(r.userId, r.phone.orEmpty(), r.title) { callId -> reminderDone(r.id, callId) })
+    }
+
+    // The call queue (kept on this phone): start one, call its people one by one.
+    fun startQueue(items: List<QueueItem>) = scope.launch {
+        graph.prefs.setQueue(items)
+        nav.navigate("queue") { launchSingleTop = true }
+    }
+    val onCallQueued: (QueueItem) -> Unit = { item ->
+        startCall(Dial(item.userId, item.phone, item.label) { callId ->
+            scope.launch {
+                graph.prefs.updateQueue { q ->
+                    var ticked = false
+                    q.map {
+                        if (!ticked && it.status == "pending" && it.userId == item.userId && it.reminderId == item.reminderId) {
+                            ticked = true
+                            it.copy(status = "called", callId = callId)
+                        } else it
+                    }
+                }
+            }
+            item.reminderId?.let { reminderDone(it, callId) }
+        })
     }
 
     val callToOpen by opens.call.collectAsStateWithLifecycle()
@@ -208,6 +249,17 @@ private fun MainNav(graph: Graph, opens: Opens) {
         val id = callToOpen ?: return@LaunchedEffect
         opens.call.value = null
         nav.navigate("call/$id") { launchSingleTop = true }
+    }
+    val shopToOpen by opens.shop.collectAsStateWithLifecycle()
+    LaunchedEffect(shopToOpen) {
+        val id = shopToOpen ?: return@LaunchedEffect
+        opens.shop.value = null
+        nav.navigate("shop/$id") { launchSingleTop = true }
+    }
+    // Reminders: alarms for this agent's, kept in step with the server.
+    LaunchedEffect(Unit) {
+        ReminderAlarms.keepSynced(context)
+        ReminderAlarms.syncSoon(context)
     }
     val chatToOpen by opens.chat.collectAsStateWithLifecycle()
     LaunchedEffect(chatToOpen) {
@@ -279,12 +331,33 @@ private fun MainNav(graph: Graph, opens: Opens) {
                         vm = viewModel { ShopsViewModel(graph) },
                         onOpen = { id -> nav.navigate("shop/$id") },
                         onCall = onCall,
+                        onQueue = { owners -> startQueue(owners.map { o -> QueueItem(o.id, o.phone, o.shopName ?: o.name ?: "+91 ${o.phone}") }) },
                     )
                 }
             }
             composable("calls") {
                 Box(Modifier.statusBarsPadding()) {
-                    CallsScreen(viewModel { CallsViewModel(graph) }, onOpenCall = { nav.navigate("call/$it") })
+                    CallsScreen(
+                        viewModel { CallsViewModel(graph, context.applicationContext) },
+                        onOpenCall = { nav.navigate("call/$it") },
+                        onOpenShop = { nav.navigate("shop/$it") },
+                        onCallReminder = onCallReminder,
+                        onQueueReminders = { rs ->
+                            startQueue(rs.map { r -> QueueItem(r.userId, r.phone.orEmpty(), r.title, reminderId = r.id, note = r.note.ifBlank { null }) })
+                        },
+                        onOpenQueue = { nav.navigate("queue") { launchSingleTop = true } },
+                    )
+                }
+            }
+            composable("queue") {
+                Box(Modifier.statusBarsPadding()) {
+                    QueueScreen(
+                        graph,
+                        placing = placing,
+                        onBack = { if (!nav.popBackStack()) nav.navigate("calls") },
+                        onCall = onCallQueued,
+                        onOpenShop = { nav.navigate("shop/$it") },
+                    )
                 }
             }
             composable("wa") {
@@ -312,6 +385,7 @@ private fun MainNav(graph: Graph, opens: Opens) {
                     onCall = onCall,
                     onOpenCall = { nav.navigate("call/$it") },
                     onWhatsApp = { nav.navigate("wa/$it") },
+                    onCallReminder = onCallReminder,
                 )
             }
             composable("call/{id}") { entry ->

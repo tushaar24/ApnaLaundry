@@ -57,6 +57,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.material3.Checkbox
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -186,9 +187,13 @@ fun ShopsScreen(
     vm: ShopsViewModel,
     onOpen: (String) -> Unit,
     onCall: (OwnerSummary) -> Unit,
+    onQueue: (List<OwnerSummary>) -> Unit = {},
 ) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     var showFilters by remember { mutableStateOf(false) }
+    // Select mode: tick owners, then "Call queue" calls them one after another.
+    var selecting by remember { mutableStateOf(false) }
+    var selected by remember { mutableStateOf(setOf<String>()) }
     val f = ui.filters
 
     Column(Modifier.fillMaxSize()) {
@@ -239,7 +244,32 @@ fun ShopsScreen(
                 Text(if (f.sheetCount > 0) "Filters · ${f.sheetCount}" else "Filters", style = fig(14, FontWeight.Bold, Tokens.Blue))
             }
             Spacer(Modifier.weight(1f))
+            TextButton(onClick = { selecting = !selecting; selected = emptySet() }) {
+                Text(if (selecting) "Cancel" else "Select", style = fig(14, FontWeight.Bold, Tokens.Blue))
+            }
             SortMenu(f.sort) { vm.setFilters(f.copy(sort = it)) }
+        }
+        if (selecting) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)
+                    .background(Tokens.Ink, RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("${selected.size} selected", style = fig(14, FontWeight.Bold, Tokens.OnDark), modifier = Modifier.weight(1f))
+                TextButton(onClick = { selected = if (selected.size == ui.items.size) emptySet() else ui.items.map { it.id }.toSet() }) {
+                    Text(if (selected.size == ui.items.size && ui.items.isNotEmpty()) "None" else "All ${ui.items.size}", style = fig(14, FontWeight.Bold, Tokens.OnDark))
+                }
+                Button(
+                    onClick = {
+                        onQueue(ui.items.filter { it.id in selected })
+                        selecting = false
+                        selected = emptySet()
+                    },
+                    enabled = selected.isNotEmpty(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Tokens.Green),
+                ) { Text("Call queue", style = fig(14, FontWeight.Bold, Tokens.OnDark)) }
+            }
         }
         Text(
             "${ui.total} shop owner${if (ui.total == 1) "" else "s"}",
@@ -268,7 +298,12 @@ fun ShopsScreen(
                     ) {
                         if (ui.items.isEmpty()) item { EmptyState("No shop owners match these filters.") }
                         items(ui.items, key = { it.id }) { o ->
-                            OwnerRow(o, ui.tags, onClick = { onOpen(o.id) }, onCall = { onCall(o) })
+                            OwnerRow(
+                                o, ui.tags,
+                                onClick = { if (selecting) selected = if (o.id in selected) selected - o.id else selected + o.id else onOpen(o.id) },
+                                onCall = { onCall(o) },
+                                checked = if (selecting) o.id in selected else null,
+                            )
                         }
                         if (ui.loadingMore) {
                             item {
@@ -331,7 +366,7 @@ private fun SortMenu(current: String, onPick: (String) -> Unit) {
 }
 
 @Composable
-private fun OwnerRow(o: OwnerSummary, tags: List<TagDto>, onClick: () -> Unit, onCall: () -> Unit) {
+private fun OwnerRow(o: OwnerSummary, tags: List<TagDto>, onClick: () -> Unit, onCall: () -> Unit, checked: Boolean? = null) {
     val title = o.shopName ?: o.name ?: "Shop not set up yet"
     Row(
         Modifier
@@ -370,11 +405,15 @@ private fun OwnerRow(o: OwnerSummary, tags: List<TagDto>, onClick: () -> Unit, o
                 }
             }
         }
-        FilledIconButton(
-            onClick = onCall,
-            modifier = Modifier.size(44.dp),
-            colors = IconButtonDefaults.filledIconButtonColors(containerColor = Tokens.Green, contentColor = Tokens.OnDark),
-        ) { Icon(Icons.Filled.Call, "Call") }
+        if (checked != null) {
+            Checkbox(checked = checked, onCheckedChange = { onClick() })
+        } else {
+            FilledIconButton(
+                onClick = onCall,
+                modifier = Modifier.size(44.dp),
+                colors = IconButtonDefaults.filledIconButtonColors(containerColor = Tokens.Green, contentColor = Tokens.OnDark),
+            ) { Icon(Icons.Filled.Call, "Call") }
+        }
     }
 }
 
