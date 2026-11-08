@@ -239,9 +239,9 @@ fun ChatsScreen(vm: ChatsViewModel, onOpen: (String) -> Unit) {
                 listOf(false to "All", true to "Unread (${ui.items.count { it.unread > 0 }})").forEach { (on, label) ->
                     FilterChip(
                         selected = ui.unreadOnly == on, onClick = { vm.setUnreadOnly(on) },
-                        label = { Text(label, style = fig(14, FontWeight.SemiBold)) },
+                        label = { Text(label, style = fig(14, FontWeight.SemiBold, Color.Unspecified)) },
                         shape = RoundedCornerShape(999.dp),
-                        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Tokens.Ink, selectedLabelColor = Tokens.OnDark),
+                        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Tokens.Ink, selectedLabelColor = Tokens.OnDark, labelColor = Tokens.Ink),
                     )
                 }
             }

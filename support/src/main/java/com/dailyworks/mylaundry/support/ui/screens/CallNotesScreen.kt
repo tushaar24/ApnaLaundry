@@ -47,6 +47,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -295,10 +296,10 @@ fun CallNotesScreen(vm: CallNotesViewModel, onBack: () -> Unit, onOpenShop: (Str
                                 FilterChip(
                                     selected = on,
                                     onClick = { vm.setOutcome(if (on) null else o.name) },
-                                    label = { Text(o.label, style = fig(14, FontWeight.SemiBold)) },
+                                    label = { Text(o.label, style = fig(14, FontWeight.SemiBold, Color.Unspecified)) },
                                     shape = RoundedCornerShape(999.dp),
                                     colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = Tokens.Ink, selectedLabelColor = Tokens.OnDark,
+                                        selectedContainerColor = Tokens.Ink, selectedLabelColor = Tokens.OnDark, labelColor = Tokens.Ink,
                                     ),
                                 )
                             }
@@ -327,11 +328,11 @@ fun CallNotesScreen(vm: CallNotesViewModel, onBack: () -> Unit, onOpenShop: (Str
                                 FilterChip(
                                     selected = on,
                                     onClick = { vm.toggleTag(t.id) },
-                                    label = { Text(t.name, style = fig(14, FontWeight.SemiBold)) },
+                                    label = { Text(t.name, style = fig(14, FontWeight.SemiBold, Color.Unspecified)) },
                                     leadingIcon = { Spacer(Modifier.size(8.dp).background(c, RoundedCornerShape(999.dp))) },
                                     shape = RoundedCornerShape(999.dp),
                                     colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = c.copy(alpha = 0.16f), selectedLabelColor = c,
+                                        selectedContainerColor = c.copy(alpha = 0.16f), selectedLabelColor = c, labelColor = Tokens.Ink,
                                     ),
                                 )
                             }

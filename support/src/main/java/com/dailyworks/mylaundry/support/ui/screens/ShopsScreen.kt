@@ -57,6 +57,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -298,7 +299,7 @@ private fun Chip(label: String, selected: Boolean, onClick: () -> Unit) {
     FilterChip(
         selected = selected,
         onClick = onClick,
-        label = { Text(label, style = fig(13, FontWeight.SemiBold)) },
+        label = { Text(label, style = fig(13, FontWeight.SemiBold, Color.Unspecified)) },
         shape = RoundedCornerShape(999.dp),
         colors = FilterChipDefaults.filterChipColors(
             containerColor = Tokens.Card,

@@ -20,6 +20,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -113,10 +114,10 @@ fun CallsScreen(vm: CallsViewModel, onOpenCall: (String) -> Unit) {
                 FilterChip(
                     selected = ui.mine == mine,
                     onClick = { vm.setMine(mine) },
-                    label = { Text(label, style = fig(14, FontWeight.SemiBold)) },
+                    label = { Text(label, style = fig(14, FontWeight.SemiBold, Color.Unspecified)) },
                     shape = RoundedCornerShape(999.dp),
                     colors = FilterChipDefaults.filterChipColors(
-                        containerColor = Tokens.Card, selectedContainerColor = Tokens.Ink, selectedLabelColor = Tokens.OnDark,
+                        containerColor = Tokens.Card, selectedContainerColor = Tokens.Ink, selectedLabelColor = Tokens.OnDark, labelColor = Tokens.Ink,
                     ),
                 )
             }
