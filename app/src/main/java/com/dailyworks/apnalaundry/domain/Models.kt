@@ -1,5 +1,7 @@
 package com.dailyworks.apnalaundry.domain
 
+import com.dailyworks.apnalaundry.core.i18n
+
 import kotlinx.serialization.Serializable
 
 /** Pure domain models. Mapped to/from Room entities in the data layer. */
@@ -151,6 +153,35 @@ data class DayClose(
     val cashCounted: Int?,
 )
 
+/** A shop expense (Expenses screen): what was paid, for what, how, on which day. */
+data class Expense(
+    val id: String,
+    val date: String,
+    val amt: Int,
+    val category: String,
+    val method: PayMethod,
+    val note: String,
+    val ts: Long,
+)
+
+/** What shop expenses are for. [key] is stored and synced; [label] is shown through tr() (i18n marks it for translation). */
+enum class ExpenseCategory(val key: String, val label: String, val emoji: String) {
+    RENT("rent", i18n("Rent"), "🏠"),
+    SALARY("salary", i18n("Staff salary"), "👥"),
+    ELECTRICITY("electricity", i18n("Electricity"), "⚡"),
+    SUPPLIES("supplies", i18n("Detergent & supplies"), "🧴"),
+    FUEL("fuel", i18n("Coal / gas for ironing"), "🔥"),
+    WATER("water", i18n("Water"), "💧"),
+    PACKING("packing", i18n("Bags & hangers"), "🛍️"),
+    TRANSPORT("transport", i18n("Transport & delivery"), "🛵"),
+    REPAIRS("repairs", i18n("Repairs & machines"), "🔧"),
+    OTHER("other", i18n("Other"), "📌");
+
+    companion object {
+        fun of(key: String) = entries.firstOrNull { it.key == key } ?: OTHER
+    }
+}
+
 /** Everything the domain layer needs to compute derived values. */
 data class LaundryState(
     val shop: Shop,
@@ -159,4 +190,5 @@ data class LaundryState(
     val orders: List<Order>,
     val ledger: List<LedgerEntry>,
     val closedDays: Set<String>,
+    val expenses: List<Expense> = emptyList(),
 )

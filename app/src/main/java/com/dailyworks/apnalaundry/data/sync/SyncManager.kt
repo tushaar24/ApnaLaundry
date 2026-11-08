@@ -91,14 +91,18 @@ class SyncManager(
             || db.orderDao().dirtyRows().isNotEmpty()
             || db.ledgerDao().dirtyRows().isNotEmpty()
             || db.dayCloseDao().dirtyRows().isNotEmpty()
+            || db.expenseDao().dirtyRows().isNotEmpty()
     }
 
     private suspend fun pullOnce(shop: String) {
-        val since = prefs.syncCheckpoint(shop)
+        // Once per shop after the update that added expenses: pull from the start, since older
+        // builds (or this one before the update) moved the checkpoint past expenses they ignored.
+        val since = if (prefs.expensesPulled(shop)) prefs.syncCheckpoint(shop) else 0L
         val res = api.pull(since, shop)
         if (!res.success) throw IllegalStateException(res.message ?: "Pull failed")
         applyPull(shops.db(shop), res.changes, onScreen = shop == shops.activeId.value)
         prefs.setSyncCheckpoint(shop, res.checkpoint)
+        prefs.setExpensesPulled(shop)
         if (shop == shops.activeId.value) repo.refreshTsCounter() // pulled ledger rows may carry higher ts values
     }
 
@@ -134,6 +138,10 @@ class SyncManager(
                 val local = db.dayCloseDao().get(dto.date)
                 if (local == null || dto.updatedAt > local.updatedAt) { db.dayCloseDao().upsert(dto.toEntity()); newer = true }
             }
+            for (dto in ch.expenses) {
+                val local = db.expenseDao().get(dto.id)
+                if (local == null || dto.updatedAt > local.updatedAt) { db.expenseDao().upsert(dto.toEntity()); newer = true }
+            }
         }
         if (newer && onScreen) remoteChanges.tryEmit(Unit)
     }
@@ -146,6 +154,7 @@ class SyncManager(
         val orders = db.orderDao().dirtyRows()
         val ledger = db.ledgerDao().dirtyRows()
         val dayCloses = db.dayCloseDao().dirtyRows()
+        val expenses = db.expenseDao().dirtyRows()
 
         val changes = SyncChanges(
             shop = shop?.toDto(),
@@ -154,6 +163,7 @@ class SyncManager(
             orders = orders.map { it.toDto() },
             ledger = ledger.map { it.toDto() },
             dayCloses = dayCloses.map { it.toDto() },
+            expenses = expenses.map { it.toDto() },
         )
         if (changes.isEmpty) return
 
@@ -168,5 +178,6 @@ class SyncManager(
         orders.forEach { db.orderDao().clearDirty(it.id, it.updatedAt) }
         ledger.forEach { db.ledgerDao().clearDirty(it.id, it.updatedAt) }
         dayCloses.forEach { db.dayCloseDao().clearDirty(it.date, it.updatedAt) }
+        expenses.forEach { db.expenseDao().clearDirty(it.id, it.updatedAt) }
     }
 }

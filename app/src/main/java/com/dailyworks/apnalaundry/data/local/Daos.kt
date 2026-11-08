@@ -66,6 +66,17 @@ interface OrderDao {
 }
 
 @Dao
+interface ExpenseDao {
+    @Query("SELECT * FROM expenses WHERE deleted = 0") fun observe(): Flow<List<ExpenseEntity>>
+    @Query("SELECT * FROM expenses") suspend fun getAll(): List<ExpenseEntity>
+    @Query("SELECT * FROM expenses WHERE id = :id") suspend fun get(id: String): ExpenseEntity?
+    @Query("SELECT * FROM expenses WHERE dirty = 1") suspend fun dirtyRows(): List<ExpenseEntity>
+    @Upsert suspend fun upsert(expense: ExpenseEntity)
+    @Query("UPDATE expenses SET dirty = 0 WHERE id = :id AND updatedAt = :updatedAt") suspend fun clearDirty(id: String, updatedAt: Long)
+    @Query("DELETE FROM expenses") suspend fun clear()
+}
+
+@Dao
 interface LedgerDao {
     @Query("SELECT * FROM ledger WHERE deleted = 0") fun observe(): Flow<List<LedgerEntity>>
     @Query("SELECT * FROM ledger WHERE deleted = 0") suspend fun observeOnce(): List<LedgerEntity>

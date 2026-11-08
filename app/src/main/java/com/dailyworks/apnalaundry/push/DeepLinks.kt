@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.StateFlow
  *   mylaundry://bill-design               Bill design
  *   mylaundry://add-shop                  Add a shop
  *   mylaundry://assistant                 Ask (Home where it isn't on)
+ *   mylaundry://expenses                  Expenses (1.0.19; older apps open Home)
  *
  * The same screens as https App Links, for WhatsApp buttons and SMS (which
  * can't carry a custom scheme) — verified through mylaundry.work's
@@ -69,7 +70,7 @@ object DeepLinks {
     )
     val SCREENS = setOf(
         "home", "new-order", "customers", "customer", "combined-bill", "order", "bill", "earnings",
-        "subscription", "rates", "add-service", "settings", "bill-design", "bill-details", "add-shop", "assistant", "demo",
+        "subscription", "rates", "add-service", "settings", "bill-design", "bill-details", "add-shop", "assistant", "demo", "expenses",
     )
     private val WITH_ID = setOf("customer", "combined-bill", "order", "bill")
 

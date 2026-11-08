@@ -46,18 +46,19 @@ class LaundryRepository(private val shops: ShopDirectory) {
     private val orderDao get() = db.orderDao()
     private val ledgerDao get() = db.ledgerDao()
     private val dayCloseDao get() = db.dayCloseDao()
+    private val expenseDao get() = db.expenseDao()
 
     @Volatile private var tsCounter = 100_000L
 
     /** The shop on screen, live; follows a shop switch. */
     @OptIn(ExperimentalCoroutinesApi::class)
     val state: Flow<LaundryState> = shops.currentFlow.flatMapLatest { d ->
-        val shopDays = combine(d.shopDao().observe(), d.dayCloseDao().observe()) { s, days -> s to days }
+        val shopDays = combine(d.shopDao().observe(), d.dayCloseDao().observe(), d.expenseDao().observe()) { s, days, ex -> Triple(s, days, ex) }
         combine(
             d.serviceDao().observe(), d.customerDao().observe(), d.orderDao().observe(), d.ledgerDao().observe(), shopDays,
         ) { services, customers, orders, ledger, sd ->
-            val (shopE, daysE) = sd
-            stateOf(shopE, services, customers, orders, ledger, daysE)
+            val (shopE, daysE, expensesE) = sd
+            stateOf(shopE, services, customers, orders, ledger, daysE, expensesE)
         }
     }
 
@@ -69,13 +70,14 @@ class LaundryRepository(private val shops: ShopDirectory) {
         val d = shops.db(shopId)
         return stateOf(
             d.shopDao().get(), d.serviceDao().getAll(), d.customerDao().getAll(),
-            d.orderDao().getAll(), d.ledgerDao().getAll(), d.dayCloseDao().getAll(),
+            d.orderDao().getAll(), d.ledgerDao().getAll(), d.dayCloseDao().getAll(), d.expenseDao().getAll(),
         )
     }
 
     private fun stateOf(
         shopE: ShopEntity?, services: List<ServiceEntity>, customers: List<CustomerEntity>,
         orders: List<OrderEntity>, ledger: List<LedgerEntity>, days: List<com.dailyworks.apnalaundry.data.local.DayCloseEntity>,
+        expenses: List<com.dailyworks.apnalaundry.data.local.ExpenseEntity>,
     ) = LaundryState(
         shop = shopE?.toDomain() ?: SeedData.shop,
         services = services.filter { !it.deleted }.map { it.toDomain() }.sortedBy { it.sortOrder },
@@ -83,6 +85,7 @@ class LaundryRepository(private val shops: ShopDirectory) {
         orders = orders.filter { !it.deleted }.map { it.toDomain() },
         ledger = ledger.filter { !it.deleted }.map { it.toDomain() },
         closedDays = days.filter { !it.deleted }.map { it.date }.toSet(),
+        expenses = expenses.filter { !it.deleted }.map { it.toDomain() }.sortedWith(compareByDescending<Expense> { it.date }.thenByDescending { it.ts }),
     )
 
     /**
@@ -156,8 +159,21 @@ class LaundryRepository(private val shops: ShopDirectory) {
 
     /** Wipe everything (logout). The next login pulls or reseeds. */
     suspend fun clearAll() = db.withTransaction {
-        orderDao.clear(); ledgerDao.clear(); customerDao.clear(); serviceDao.clear(); dayCloseDao.clear(); shopDao.clear()
+        orderDao.clear(); ledgerDao.clear(); customerDao.clear(); serviceDao.clear(); dayCloseDao.clear(); expenseDao.clear(); shopDao.clear()
     }
+
+    // ---------------- expenses ----------------
+    /** Adds or changes an expense (the row is re-stamped, so it syncs and wins). */
+    suspend fun saveExpense(e: Expense) = expenseDao.upsert(e.toEntity())
+
+    /** Deletes an expense (a tombstone, so other devices delete it too). */
+    suspend fun deleteExpense(id: String) {
+        val e = expenseDao.get(id) ?: return
+        expenseDao.upsert(e.copy(deleted = true, dirty = true, updatedAt = SyncClock.now()))
+    }
+
+    /** A new expense id, unique across devices. */
+    fun newExpenseId(): String = "x" + System.currentTimeMillis().toString(36) + (1000..9999).random().toString(36)
 
     /** Ledger ts values are minted locally; pulled rows may carry higher ones. */
     suspend fun refreshTsCounter() {

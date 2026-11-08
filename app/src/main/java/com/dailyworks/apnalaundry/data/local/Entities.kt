@@ -133,6 +133,21 @@ data class LedgerEntity(
     @ColumnInfo(defaultValue = "1") val dirty: Boolean = true,
 )
 
+/** A shop expense — rent, salary, supplies… (Expenses screen, 1.0.19). Synced like the rest. */
+@Entity(tableName = "expenses")
+data class ExpenseEntity(
+    @PrimaryKey val id: String,
+    val date: String,      // yyyy-MM-dd, the day it was paid
+    val amt: Int,          // rupees
+    val category: String,  // ExpenseCategory key (rent, salary, …)
+    val method: String,    // PayMethod: CASH | UPI
+    val note: String,
+    val ts: Long,          // when it was written down (orders a day's list)
+    @ColumnInfo(defaultValue = "0") val deleted: Boolean = false,
+    @ColumnInfo(defaultValue = "0") val updatedAt: Long = SyncClock.now(),
+    @ColumnInfo(defaultValue = "1") val dirty: Boolean = true,
+)
+
 @Entity(tableName = "day_close")
 data class DayCloseEntity(
     @PrimaryKey val date: String,

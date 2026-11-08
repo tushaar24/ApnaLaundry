@@ -92,6 +92,7 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
             "settings" -> navigator.openSettings()
             "bill-design" -> navigator.openBillDesign()
             "add-shop" -> navigator.openAddShop("push")
+            "expenses" -> navigator.openExpenses("push")
             "assistant" -> if (prefs.assistantOn.first()) navigator.openAssistant("push") else navigator.openHome()
             else -> navigator.openHome()
         }
@@ -294,6 +295,13 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
             arguments = listOf(navArgument("from") { type = NavType.StringType; defaultValue = "home" }),
         ) { entry ->
             com.dailyworks.apnalaundry.ui.screens.assistant.AssistantScreen(shopVm, navigator, entry.arguments?.getString("from") ?: "home")
+        }
+
+        composable(
+            Routes.EXPENSES,
+            arguments = listOf(navArgument("from") { type = NavType.StringType; defaultValue = "push" }),
+        ) { entry ->
+            com.dailyworks.apnalaundry.ui.screens.expenses.ExpensesScreen(shopVm, navigator, entry.arguments?.getString("from") ?: "push")
         }
 
         composable(Routes.SUBSCRIPTION) {

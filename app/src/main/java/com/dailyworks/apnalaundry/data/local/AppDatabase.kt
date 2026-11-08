@@ -13,8 +13,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         OrderEntity::class,
         LedgerEntity::class,
         DayCloseEntity::class,
+        ExpenseEntity::class,
     ],
-    version = 10,
+    version = 11,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -24,6 +25,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun orderDao(): OrderDao
     abstract fun ledgerDao(): LedgerDao
     abstract fun dayCloseDao(): DayCloseDao
+    abstract fun expenseDao(): ExpenseDao
 
     companion object {
         /** The main shop's file — the only one before multi-shop, so existing installs keep it as is. */
@@ -32,7 +34,7 @@ abstract class AppDatabase : RoomDatabase() {
         /** Opens a shop's database ([name] = its file) with every migration. */
         fun build(context: android.content.Context, name: String): AppDatabase =
             androidx.room.Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, name)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
                 .build()
 
         /**
@@ -91,6 +93,18 @@ abstract class AppDatabase : RoomDatabase() {
                 )
                 db.execSQL("DROP TABLE shop")
                 db.execSQL("ALTER TABLE shop_new RENAME TO shop")
+            }
+        }
+
+        /** v10 -> v11: the Expenses screen's table (same shape Room creates for [ExpenseEntity]). */
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `expenses` (`id` TEXT NOT NULL, `date` TEXT NOT NULL, `amt` INTEGER NOT NULL, " +
+                        "`category` TEXT NOT NULL, `method` TEXT NOT NULL, `note` TEXT NOT NULL, `ts` INTEGER NOT NULL, " +
+                        "`deleted` INTEGER NOT NULL DEFAULT 0, `updatedAt` INTEGER NOT NULL DEFAULT 0, `dirty` INTEGER NOT NULL DEFAULT 1, " +
+                        "PRIMARY KEY(`id`))",
+                )
             }
         }
 

@@ -122,6 +122,11 @@ class Prefs(private val context: Context) {
     suspend fun syncCheckpoint(shop: String): Long = context.dataStore.data.first()[checkpointKey(shop)] ?: 0L
     suspend fun setSyncCheckpoint(shop: String, v: Long) { context.dataStore.edit { it[checkpointKey(shop)] = v } }
 
+    // Expenses (1.0.19): has this shop had its one full pull since the update?
+    private fun expensesPulledKey(shop: String) = booleanPreferencesKey("expenses_pulled_$shop")
+    suspend fun expensesPulled(shop: String): Boolean = context.dataStore.data.first()[expensesPulledKey(shop)] == true
+    suspend fun setExpensesPulled(shop: String) { context.dataStore.edit { it[expensesPulledKey(shop)] = true } }
+
     suspend fun setCredentials(access: String, accessExpiresAt: Long, refresh: String, userId: String, phone: String) {
         context.dataStore.edit {
             it[ACCESS_TOKEN] = access

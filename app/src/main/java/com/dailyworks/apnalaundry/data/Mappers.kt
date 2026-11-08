@@ -1,6 +1,7 @@
 package com.dailyworks.apnalaundry.data
 
 import com.dailyworks.apnalaundry.data.local.CustomerEntity
+import com.dailyworks.apnalaundry.data.local.ExpenseEntity
 import com.dailyworks.apnalaundry.data.local.LedgerEntity
 import com.dailyworks.apnalaundry.data.local.OrderEntity
 import com.dailyworks.apnalaundry.data.local.ServiceEntity
@@ -52,6 +53,11 @@ fun LedgerEntity.toDomain() = LedgerEntry(
 fun LedgerEntry.toEntity() = LedgerEntity(
     id, custId, date, time, ts, kind.name, amt, method.name, tag.name, cover, toOld, toAdv, ref, note,
 )
+
+fun ExpenseEntity.toDomain() = Expense(id, date, amt, category, PayMethod.entries.firstOrNull { it.name == method } ?: PayMethod.CASH, note, ts)
+
+/** A fresh row: dirty, stamped now (so it syncs and wins last-write-wins). */
+fun Expense.toEntity() = ExpenseEntity(id, date, amt, category, method.name, note, ts)
 
 private val termsSer = ListSerializer(String.serializer())
 fun encodeTerms(v: List<String>): String = json.encodeToString(termsSer, v)

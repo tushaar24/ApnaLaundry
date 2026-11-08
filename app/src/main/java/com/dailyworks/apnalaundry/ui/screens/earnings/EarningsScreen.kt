@@ -27,9 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BarChart
-import androidx.compose.material.icons.outlined.Share
-import androidx.compose.material.icons.outlined.Visibility
-import androidx.compose.material.icons.outlined.VisibilityOff
+import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -108,7 +106,8 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
         ShopView(id, if (id == activeId) state.shop.name else shopLabel(shops[i], i), st)
     }
     val multi = views.size > 1
-    val hidden by shopVm.hideAmounts.collectAsStateWithLifecycle()
+    // Amounts always show here: the hide toggle left the header for Expenses (1.0.19); Home keeps its eye.
+    val hidden = false
     // A mylaundry://earnings?period=week link opens on that period.
     var period by remember { mutableStateOf(com.dailyworks.apnalaundry.push.DeepLinks.takeHint("earnings_period") ?: "today") }
     var payFilter by remember { mutableStateOf("all") }
@@ -159,14 +158,9 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
     val counted = periodOrders.filter { it.second.status != com.dailyworks.apnalaundry.domain.OrderStatus.CANCELLED }
     val sales = counted.sumOf { LaundryMath.amtOf(it.second) }
 
-    val shareText = buildString {
-        append(tr("{shop} — {period}", "shop" to views.joinToString(" + ") { it.name }, "period" to periodLabel)).append("\n")
-        append(tr("Money received: {amount}", "amount" to "₹${Money.grouping(e.received.toLong())}")).append("\n")
-        append("  ").append(tr("Cash {cash} · UPI {upi}", "cash" to "₹${Money.grouping(e.cash.toLong())}", "upi" to "₹${Money.grouping(e.upi.toLong())}")).append("\n")
-        append(tr("Orders delivered: {n} (work {amount})", "n" to e.ordersDelivered, "amount" to "₹${Money.grouping(e.work.toLong())}")).append("\n")
-        append(tr("Baaki added: {added} · Old baaki collected: {collected}", "added" to "₹${Money.grouping(e.baakiAdded.toLong())}", "collected" to "₹${Money.grouping(e.oldIn.toLong())}")).append("\n")
-        append(tr("Total baaki in market: {amount}", "amount" to "₹${Money.grouping(e.baakiMarket.toLong())}"))
-    }
+    // Expenses in the period across the shops shown, and the profit after them (1.0.19).
+    val spent = views.sumOf { v -> v.state.expenses.filter { inRange(it.date) }.sumOf { it.amt } }
+    val profit = e.received - spent
 
     Column(
         Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars),
@@ -177,9 +171,15 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(tr("Earnings"), style = bric(22, FontWeight.Bold), modifier = Modifier.weight(1f))
-            IconChip(if (hidden) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility, tr("Toggle amounts")) { shopVm.toggleHideAmounts() }
-            Spacer(Modifier.width(8.dp))
-            IconChip(Icons.Outlined.Share, tr("Share")) { Analytics.summaryShared(period); active = ActiveSheet.Share(shareText) }
+            // Expenses (1.0.19), where the hide / share icons were.
+            Row(
+                Modifier.rounded(999.dp).border(1.5.dp, Tokens.Blue, RoundedCornerShape(999.dp))
+                    .tap { navigator.openExpenses("earnings") }.padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Icon(Icons.AutoMirrored.Outlined.ReceiptLong, null, tint = Tokens.Blue, modifier = Modifier.size(18.dp))
+                Text(tr("Expenses"), style = fig(14, FontWeight.Bold, Tokens.Blue))
+            }
         }
 
         Column(
@@ -305,6 +305,30 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                 }
             }
 
+            // Profit after expenses (1.0.19) — taps through to Expenses.
+            AppCard(Modifier.tap { navigator.openExpenses("earnings_card") }) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(tr("Profit"), style = fig(15, FontWeight.Bold), modifier = Modifier.weight(1f))
+                        Text(tr("Expenses →"), style = fig(14, FontWeight.Bold, Tokens.Blue))
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Line(tr("Money received"), m(e.received), null)
+                    Line(tr("Expenses"), m(spent), "−")
+                    Box(Modifier.padding(vertical = 6.dp).fillMaxWidth().height(1.dp).background(Tokens.Divider))
+                    Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(tr("Profit"), Modifier.weight(1f), style = fig(16, FontWeight.Bold))
+                        Text(
+                            (if (profit < 0) "−" else "") + m(profit),
+                            style = fig(16, FontWeight.Bold, if (profit < 0) Tokens.ErrorRed else Tokens.GreenText), maxLines = 1, softWrap = false,
+                        )
+                    }
+                    if (spent == 0) {
+                        Text(tr("Add rent, salary and other costs in Expenses to see your real profit."), style = fig(12, color = Tokens.Muted))
+                    }
+                }
+            }
+
             // Work done by service
             if (e.byService.isNotEmpty()) {
                 AppCard {
@@ -418,13 +442,6 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
 }
 
 @Composable
-private fun IconChip(icon: androidx.compose.ui.graphics.vector.ImageVector, cd: String, onClick: () -> Unit) {
-    Box(Modifier.size(48.dp).tap(onClick = onClick), contentAlignment = Alignment.Center) {
-        Icon(icon, cd, tint = Tokens.InkSecondary, modifier = Modifier.size(22.dp))
-    }
-}
-
-@Composable
 private fun MoneySplit(label: String, value: String, note: String, modifier: Modifier) {
     Column(modifier) {
         Text(label, style = fig(12, FontWeight.SemiBold, Tokens.OnDarkMuted))
@@ -526,7 +543,7 @@ private fun statusChip(s: com.dailyworks.apnalaundry.domain.OrderStatus): Triple
 
 /** A From / To box for the custom range; tap opens the date picker. */
 @Composable
-private fun DateBox(label: String, iso: String, modifier: Modifier, onClick: () -> Unit) {
+internal fun DateBox(label: String, iso: String, modifier: Modifier, onClick: () -> Unit) {
     Row(
         modifier.heightIn(min = 52.dp).rounded(12.dp).background(Tokens.Card)
             .border(1.5.dp, Tokens.FieldBorder, RoundedCornerShape(12.dp)).tap(onClick = onClick).padding(horizontal = 12.dp, vertical = 6.dp),

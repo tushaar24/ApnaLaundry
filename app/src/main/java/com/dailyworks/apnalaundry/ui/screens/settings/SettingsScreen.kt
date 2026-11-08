@@ -123,6 +123,21 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
                 }
             }
 
+            // Expenses (1.0.19)
+            AppCard {
+                Row(
+                    Modifier.fillMaxWidth().tap { navigator.openExpenses("settings") }.padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(tr("Expenses"), style = fig(16, FontWeight.Bold))
+                        Text(tr("Rent, salary, supplies — and your profit"), style = fig(13, color = Tokens.Muted))
+                    }
+                    Text(tr("Open"), style = fig(15, FontWeight.Bold, Tokens.Blue))
+                }
+            }
+
             // Language: the whole app (and Ask) in it; saved on this phone.
             var languageOpen by remember { mutableStateOf(false) }
             AppCard {

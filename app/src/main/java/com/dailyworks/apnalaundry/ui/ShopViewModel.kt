@@ -341,6 +341,21 @@ class ShopViewModel(
     fun addOldBaaki(custId: String, amount: Int) = launchCmd { repo.addOldBaaki(custId, amount) }
     fun deleteService(id: String) = launchCmd { repo.deleteService(id, allowEmpty = servicesScratch.value) }
 
+    // ---- expenses (1.0.19) ----
+    fun newExpenseId(): String = repo.newExpenseId()
+
+    fun saveExpense(e: Expense, isNew: Boolean) = launchCmd {
+        repo.saveExpense(e)
+        Analytics.expenseSaved(e.category, e.amt, e.method, isNew)
+        CmdResult(if (isNew) tr("Expense added") else tr("Expense updated"))
+    }
+
+    fun deleteExpense(e: Expense) = launchCmd {
+        repo.deleteExpense(e.id)
+        Analytics.expenseDeleted(e.category, e.amt)
+        CmdResult(tr("Expense deleted"))
+    }
+
     fun upsertService(service: Service) = viewModelScope.launch { invalidateUndo(); repo.upsertService(service); sync.requestSync() }
     fun removeSampleServices() = viewModelScope.launch { repo.removeSampleServices(); sync.requestSync() }
     fun updateShop(name: String, expressPct: Int) =

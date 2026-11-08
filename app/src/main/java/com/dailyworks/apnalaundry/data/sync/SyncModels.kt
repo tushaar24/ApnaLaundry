@@ -2,6 +2,7 @@ package com.dailyworks.apnalaundry.data.sync
 
 import com.dailyworks.apnalaundry.data.local.CustomerEntity
 import com.dailyworks.apnalaundry.data.local.DayCloseEntity
+import com.dailyworks.apnalaundry.data.local.ExpenseEntity
 import com.dailyworks.apnalaundry.data.local.LedgerEntity
 import com.dailyworks.apnalaundry.data.local.OrderEntity
 import com.dailyworks.apnalaundry.data.local.ServiceEntity
@@ -82,6 +83,14 @@ data class DayCloseDto(
     val deleted: Boolean = false, val updatedAt: Long,
 )
 
+/** An expense (1.0.19). Older servers ignore the key; older apps never send it. */
+@Serializable
+data class ExpenseDto(
+    val id: String, val date: String = "", val amt: Int = 0, val category: String = "other",
+    val method: String = "CASH", val note: String = "", val ts: Long = 0,
+    val deleted: Boolean = false, val updatedAt: Long,
+)
+
 @Serializable
 data class SyncChanges(
     val shop: ShopDto? = null,
@@ -90,10 +99,11 @@ data class SyncChanges(
     val orders: List<OrderDto> = emptyList(),
     val ledger: List<LedgerDto> = emptyList(),
     val dayCloses: List<DayCloseDto> = emptyList(),
+    val expenses: List<ExpenseDto> = emptyList(),
 ) {
     val isEmpty: Boolean
         get() = shop == null && services.isEmpty() && customers.isEmpty()
-            && orders.isEmpty() && ledger.isEmpty() && dayCloses.isEmpty()
+            && orders.isEmpty() && ledger.isEmpty() && dayCloses.isEmpty() && expenses.isEmpty()
 }
 
 // Multi-shop: GET / POST /api/laundry/shops.
@@ -147,6 +157,9 @@ fun OrderDto.toEntity() = OrderEntity(
 
 fun LedgerEntity.toDto() = LedgerDto(id, custId, date, time, ts, kind, amt, method, tag, cover, toOld, toAdv, ref, note, deleted, updatedAt)
 fun LedgerDto.toEntity() = LedgerEntity(id, custId, date, time, ts, kind, amt, method, tag, cover, toOld, toAdv, ref, note, deleted, updatedAt, dirty = false)
+
+fun ExpenseEntity.toDto() = ExpenseDto(id, date, amt, category, method, note, ts, deleted, updatedAt)
+fun ExpenseDto.toEntity() = ExpenseEntity(id, date, amt, category, method, note, ts, deleted, updatedAt, dirty = false)
 
 fun DayCloseEntity.toDto() = DayCloseDto(date, closedAt, cashCounted, deleted, updatedAt)
 fun DayCloseDto.toEntity() = DayCloseEntity(date, closedAt, cashCounted, deleted, updatedAt, dirty = false)

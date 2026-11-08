@@ -102,13 +102,18 @@ Custom property keys are `snake_case`. `Charged` uses CleverTap's reserved
 | `Bill Printed` | `order_id`, `paper` (`58mm`\|`80mm`), `from` (`bill`\|`order_detail`\|`menu`) | the customer's bill printed on the Bluetooth printer (Android 1.0.18, print/ReceiptRender) |
 | `Bill Print Failed` | `order_id`, `reason` (as Tags Print Failed), `from` | bill printing failed (Android 1.0.18) |
 | `Combined Bill Sent` | `customer_id`, `orders`, `total`, `to_pay`, `channel` (`whatsapp`), `mode` (`image`\|`text`, 1.0.18+), `contacts` (as `Bill Sent`, 1.0.18+) | many orders of one customer sent as one bill |
-| `Summary Shared` | `period` | earnings day/week/month summary shared |
+| `Summary Shared` | `period` | earnings day/week/month summary shared (Android ≤1.0.18; the share button is gone in 1.0.19) |
 | `Rates Opened` | `from` (`home`\|`settings`) | rate card opened |
 | `Service Added` | `mode` (`PIECE`\|`WEIGHT`) | new service saved |
 | `Service Edited` | `service_id` | service edited |
 | `Service Deleted` | `service_id` | service deleted |
 | `Screen Viewed` | `screen` | each main screen is shown (`login`, `setup`, `home`, `customers`, `earnings`, `settings`, `new_order`, `order_detail`, `customer_khata`, `combined_bill`, `bill`, `rates`) |
 | `Earnings Period Changed` | `period` (`today`\|`week`\|`month`) | period toggle on Earnings |
+| `Expenses Opened` | `from` (`settings`\|`earnings`\|`earnings_card`\|`push`) | Expenses screen opened (Android 1.0.19) — Settings row, Earnings top-right button, Earnings profit card, or a `mylaundry://expenses` link |
+| `Expenses Period Changed` | `period` (`today`\|`week`\|`month`\|`all`\|`custom`) | period chips on Expenses (Android 1.0.19) |
+| `Expense Added` | `category` (`rent`\|`salary`\|`electricity`\|`supplies`\|`fuel`\|`water`\|`packing`\|`transport`\|`repairs`\|`other`), `amount`, `method` (`cash`\|`upi`) | a new expense saved (Android 1.0.19) |
+| `Expense Edited` | as `Expense Added` | an expense changed (Android 1.0.19) |
+| `Expense Deleted` | `category`, `amount` | an expense deleted (Android 1.0.19) |
 | `Order Search Opened` | — | search opened on Home |
 
 ### First customer on New order — A/B (Android 1.0.15, 2026-10-24)

@@ -22,6 +22,7 @@ object Routes {
     const val ASSISTANT = "assistant?from={from}"
     /** The simple "Add new service" form (services-from-scratch variant), opened from New order. */
     const val ADD_SERVICE = "add-service?from={from}"
+    const val EXPENSES = "expenses?from={from}"
 }
 
 /** Thin typed wrapper over the NavController used by every screen. */
@@ -44,6 +45,8 @@ class AppNavigator(val nav: NavHostController) {
     /** "Ask" — the assistant (only when the server has it on for this shop). */
     fun openAssistant(from: String = "home") = push("assistant?from=$from")
     fun openAddService(from: String) = push("add-service?from=$from")
+    /** Expenses (1.0.19); [from] = settings | earnings | earnings_card | push. */
+    fun openExpenses(from: String) = push("expenses?from=$from")
 
     /**
      * Opens a screen — once. A double tap on a slow phone (or a tap on the

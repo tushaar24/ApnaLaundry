@@ -509,6 +509,19 @@ object Analytics {
 
     fun serviceDeleted(serviceId: String) = track("Service Deleted", mapOf("service_id" to serviceId))
 
+    // ---- expenses (1.0.19) ----
+    /** [from]: settings | earnings (top-right button) | earnings_card | link. */
+    fun expensesOpened(from: String) = track("Expenses Opened", mapOf("from" to from))
+
+    fun expensesPeriodChanged(period: String) = track("Expenses Period Changed", mapOf("period" to period))
+
+    /** [category]: ExpenseCategory key. */
+    fun expenseSaved(category: String, amount: Int, method: PayMethod, isNew: Boolean) =
+        track(if (isNew) "Expense Added" else "Expense Edited", mapOf("category" to category, "amount" to amount, "method" to methodName(method)))
+
+    fun expenseDeleted(category: String, amount: Int) =
+        track("Expense Deleted", mapOf("category" to category, "amount" to amount))
+
     fun earningsPeriodChanged(period: String) =
         track("Earnings Period Changed", mapOf("period" to period))
 
