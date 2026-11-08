@@ -368,8 +368,18 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
         onMainScreen = route == Routes.HOME || route == Routes.CUSTOMERS || route == Routes.EARNINGS || route == Routes.SETTINGS,
     )
     // Staff (1.0.20): "added you as staff" / "removed you", and the owner's plan having ended.
-    com.dailyworks.apnalaundry.ui.screens.staff.StaffEventsHost(shopVm)
-    com.dailyworks.apnalaundry.ui.screens.staff.StaffRenewGate(shopVm, active = li && access.isStaff && !access.ownerPlanActive)
+    com.dailyworks.apnalaundry.ui.screens.staff.StaffEventsHost(shopVm, onSwitched = { navigator.openHome() })
+    com.dailyworks.apnalaundry.ui.screens.staff.StaffRenewGate(
+        shopVm, active = li && access.isStaff && !access.ownerPlanActive,
+        onSwitched = { navigator.openHome() },
+        onLogout = {
+            scope.launch {
+                authRepo.logout()
+                    .onSuccess { navigator.nav.navigate(Routes.LOGIN) { popUpTo(0) { inclusive = true } } }
+                    .onFailure { shopVm.showInfo(it.message ?: tr("Couldn't log out — try again")) }
+            }
+        },
+    )
     val shopReady by shopVm.shopReady.collectAsStateWithLifecycle()
     com.dailyworks.apnalaundry.ui.screens.staff.StaffLoadingGate(shopVm, active = li && access.isStaff && access.ownerPlanActive && !shopReady)
     }

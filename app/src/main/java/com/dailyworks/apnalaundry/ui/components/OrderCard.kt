@@ -109,7 +109,11 @@ fun OrderCard(
         o.lines.isEmpty() -> acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.TAKE_ORDERS)
         else -> true
     }
-    val doneText = when (o.status) {
+    val doneText = if (actLabel.isNotEmpty() && !canAct) when (o.status) { // staff without that switch: the status
+        OrderStatus.CREATED -> tr("To pick up")
+        OrderStatus.RECEIVED -> tr("Received")
+        else -> tr("Ready")
+    } else when (o.status) {
         OrderStatus.DELIVERED -> tr("Delivered") + (if (o.doneAt.isNotBlank()) " · ${o.doneAt}" else "")
         // The reason is saved in English; the usual ones show in the app's language.
         OrderStatus.CANCELLED -> tr("Cancelled") + (if (o.cancelReason.isNotBlank()) " · ${tr(o.cancelReason)}" else "")

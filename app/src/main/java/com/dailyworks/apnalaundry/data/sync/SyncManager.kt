@@ -91,6 +91,16 @@ class SyncManager(
             work()
             Result.Success
         } catch (e: NotLoggedInException) {
+            // Staff (1.0.20): a phone that was only someone's staff — its login died because the owner
+            // removed it (or deleted the shop). That shop's data leaves the phone now, not at the next login.
+            val main = shops.list().firstOrNull()
+            if (main?.staff != null) {
+                shops.forgetExtraShops()
+                repo.clearAll()
+                prefs.resetSyncState()
+                prefs.setSetupDone(false)
+                shops.staffEvents.tryEmit(com.dailyworks.apnalaundry.data.shops.StaffEvent.Removed(main.name))
+            }
             Result.Error("Not logged in", authDead = true)
         } catch (e: Exception) {
             Result.Error(e.message ?: "Sync failed")

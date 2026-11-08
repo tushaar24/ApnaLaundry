@@ -108,10 +108,13 @@ fun StaffHomeTop() {
     }
 }
 
+// "Staff Welcome Shown" once per app run, not on every return to Home.
+private var welcomeLogged = false
+
 /** Once, after the first staff login: what this person can do here. */
 @Composable
 fun StaffWelcomeCard(access: StaffAccess, onClose: () -> Unit) {
-    LaunchedEffect(Unit) { Analytics.staffWelcome("shown") }
+    LaunchedEffect(Unit) { if (!welcomeLogged) { welcomeLogged = true; Analytics.staffWelcome("shown") } }
     val can = StaffPermission.entries.filter { access.can(it) }.map { tr(it.label) }
     AppCard(bg = Tokens.BlueLight, borderColor = Tokens.BlueLight) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -131,7 +134,7 @@ fun StaffWelcomeCard(access: StaffAccess, onClose: () -> Unit) {
 
 /** "Sharma Laundry added you as staff — Open it?" and "… removed you", app-wide. */
 @Composable
-fun StaffEventsHost(shopVm: ShopViewModel) {
+fun StaffEventsHost(shopVm: ShopViewModel, onSwitched: () -> Unit) {
     var added by remember { mutableStateOf<ShopRef?>(null) }
     LaunchedEffect(Unit) {
         shopVm.staffEvents.collect { e ->
@@ -162,6 +165,7 @@ fun StaffEventsHost(shopVm: ShopViewModel) {
                     Analytics.staffAddedPrompt("open")
                     shopVm.switchShop(ref.id)
                     Analytics.staffShopOpened("added_prompt")
+                    onSwitched() // Home of that shop, not the page that was open
                 }) { Text(tr("Open {shop}", "shop" to ref.name), style = fig(15, FontWeight.Bold, Tokens.Blue)) }
             },
             dismissButton = { TextButton(onClick = { added = null; Analytics.staffAddedPrompt("later") }) { Text(tr("Later"), style = fig(15, FontWeight.Bold)) } },
@@ -198,7 +202,7 @@ fun StaffLoadingGate(shopVm: ShopViewModel, active: Boolean) {
  * 402). Over the whole app; it goes away by itself at the first sync after the owner renews.
  */
 @Composable
-fun StaffRenewGate(shopVm: ShopViewModel, active: Boolean) {
+fun StaffRenewGate(shopVm: ShopViewModel, active: Boolean, onSwitched: () -> Unit, onLogout: () -> Unit) {
     if (!active) return
     val access by shopVm.access.collectAsStateWithLifecycle()
     val state by shopVm.state.collectAsStateWithLifecycle()
@@ -228,8 +232,14 @@ fun StaffRenewGate(shopVm: ShopViewModel, active: Boolean) {
                     val to = others.first()
                     shopVm.switchShop(to.id)
                     if (to.staff != null) Analytics.staffShopOpened("switch") else Analytics.staffOwnShopOpened()
+                    onSwitched()
                 }
             }
+            // A phone that is only this shop's staff must still be able to leave.
+            Text(
+                tr("Log out"), style = fig(15, FontWeight.Bold, Tokens.Muted), textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().tap { Analytics.staffRenewAction("logout"); onLogout() }.padding(12.dp),
+            )
         }
     }
 }

@@ -89,12 +89,7 @@ class ShopViewModel(
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val access: StateFlow<com.dailyworks.apnalaundry.domain.StaffAccess> = shopDir.activeRef.flatMapLatest { ref ->
         val st = ref.staff
-        fun build(now: Long) = if (st == null) com.dailyworks.apnalaundry.domain.StaffAccess.OWNER
-        else com.dailyworks.apnalaundry.domain.StaffAccess(
-            isStaff = true,
-            permissions = st.permissions.filterValues { it }.keys.mapNotNull { com.dailyworks.apnalaundry.domain.StaffPermission.of(it) }.toSet(),
-            staffId = st.staffId, staffName = st.name, ownerName = st.ownerName, shopName = ref.name, ownerPlanActive = st.planOn(now),
-        )
+        fun build(now: Long) = accessOf(ref, now)
         kotlinx.coroutines.flow.flow {
             val now = System.currentTimeMillis()
             emit(build(now))
@@ -106,7 +101,17 @@ class ShopViewModel(
             }
         }
     }.onEach { a -> Analytics.setStaffMode(a.staffId.takeIf { a.isStaff }, a.shopName) }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, com.dailyworks.apnalaundry.domain.StaffAccess.OWNER)
+        // From the first frame: the shop entry is already known (a cold start from a link must not see owner access).
+        .stateIn(viewModelScope, SharingStarted.Eagerly, accessOf(shopDir.activeRef.value, System.currentTimeMillis()))
+
+    private fun accessOf(ref: com.dailyworks.apnalaundry.data.shops.ShopRef, now: Long): com.dailyworks.apnalaundry.domain.StaffAccess {
+        val st = ref.staff ?: return com.dailyworks.apnalaundry.domain.StaffAccess.OWNER
+        return com.dailyworks.apnalaundry.domain.StaffAccess(
+            isStaff = true,
+            permissions = st.permissions.filterValues { it }.keys.mapNotNull { com.dailyworks.apnalaundry.domain.StaffPermission.of(it) }.toSet(),
+            staffId = st.staffId, staffName = st.name, ownerName = st.ownerName, shopName = ref.name, ownerPlanActive = st.planOn(now),
+        )
+    }
 
     /** Staff (1.0.20): removed from / added to a shop — Home tells the person. */
     val staffEvents = shopDir.staffEvents

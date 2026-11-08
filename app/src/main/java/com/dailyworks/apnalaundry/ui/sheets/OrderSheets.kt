@@ -108,7 +108,7 @@ fun CollectPaymentSheet(state: LaundryState, orderId: Int, vm: ShopViewModel, on
         AppBottomSheet(title = tr("Mark delivered"), subtitle = c.name, onDismiss = onDismiss) {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Text(
-                    tr("{amount} goes to {name}'s khata. {owner} collects it.", "amount" to Money.rupees(max(0, due)), "name" to Selectors.firstName(c.name), "owner" to acc.ownerName.ifBlank { tr("The owner") }),
+                    tr("{amount} goes to {name}'s khata. {owner} collects it.", "amount" to Money.rupees(max(0, billDue)), "name" to Selectors.firstName(c.name), "owner" to acc.ownerName.ifBlank { tr("The owner") }),
                     style = fig(15, color = Tokens.InkSecondary),
                 )
                 PrimaryButton(tr("Mark delivered"), height = 56.dp) { vm.deliver(orderId, 0, PayMethod.NONE); onDismiss() }
@@ -537,7 +537,9 @@ fun ChangeStatusSheet(
     fun allowed(st: OrderStatus): Boolean {
         if (st == o.status) return true
         val from = when (o.status) {
-            OrderStatus.DELIVERED -> acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.DELIVER)
+            // Un-delivering also removes any after-delivery bill changes (ADJ rows): those are "Take orders".
+            OrderStatus.DELIVERED -> acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.DELIVER) &&
+                (state.ledger.none { it.ref == o.id && it.kind == com.dailyworks.apnalaundry.domain.LedgerKind.ADJ } || acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.TAKE_ORDERS))
             OrderStatus.CANCELLED -> acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.DISCOUNTS_CANCEL)
             else -> true
         }

@@ -224,7 +224,11 @@ fun StaffFormScreen(shopVm: ShopViewModel, navigator: AppNavigator, id: String) 
     var perms by rememberSaveable { mutableStateOf<List<String>>(existing?.permissions?.map { it.key } ?: emptyList()) }
     var saving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    var added by remember { mutableStateOf<StaffMember?>(null) }
+    // The "added" screen survives Android stopping the app while WhatsApp is open (rememberSaveable).
+    var addedId by rememberSaveable { mutableStateOf("") }
+    var addedName by rememberSaveable { mutableStateOf("") }
+    var addedPhone by rememberSaveable { mutableStateOf("") }
+    val added = if (addedId.isEmpty()) null else StaffMember(addedId, addedName, addedPhone, "", emptySet(), null)
     val scope = rememberCoroutineScope()
     val canSave = name.isNotBlank() && (!isNew || phone.length == 10) && !saving
 
@@ -244,7 +248,7 @@ fun StaffFormScreen(shopVm: ShopViewModel, navigator: AppNavigator, id: String) 
                 if (isNew) repo.add(name.trim(), phone, work, set) else repo.update(id, name.trim(), work, set)
             }.onSuccess { m ->
                 Analytics.staffSaved(isNew, m.id, work, set.map { it.key })
-                if (isNew) added = m else navigator.back()
+                if (isNew) { addedId = m.id; addedName = m.name; addedPhone = m.phone } else navigator.back()
             }.onFailure { e ->
                 val code = (e as? StaffException)?.code ?: "NETWORK"
                 Analytics.staffSaveFailed(mode, code)
@@ -506,7 +510,7 @@ fun StaffMemberScreen(shopVm: ShopViewModel, navigator: AppNavigator, id: String
 private fun Tile(label: String, value: String, modifier: Modifier) {
     AppCard(modifier) {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(value, style = bric(20, FontWeight.Bold), maxLines = 1)
+            com.dailyworks.apnalaundry.ui.components.FitText(value, style = bric(20, FontWeight.Bold))
             Text(label, style = fig(12, color = Tokens.Muted), maxLines = 2)
         }
     }

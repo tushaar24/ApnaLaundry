@@ -104,7 +104,7 @@ class ShopDirectory(private val context: Context, private val prefs: Prefs) {
 
     /** The shop on screen's entry — its [ShopRef.staff] says whether this is staff mode. */
     val activeRef: StateFlow<ShopRef> = combine(_active, shops) { id, list -> list.firstOrNull { it.id == id } ?: list.first() }
-        .stateIn(scope, SharingStarted.Eagerly, ShopRef(MAIN_SHOP))
+        .stateIn(scope, SharingStarted.Eagerly, shops.value.firstOrNull { it.id == _active.value } ?: shops.value.first())
 
     fun db(id: String): AppDatabase = dbs.getOrPut(id) { AppDatabase.build(context, fileOf(id)) }
 

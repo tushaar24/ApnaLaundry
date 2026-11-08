@@ -80,7 +80,8 @@ fun CustomerFormSheet(state: LaundryState, form: ActiveSheet.CustomerForm, vm: S
     var address by remember { mutableStateOf(existing?.address ?: "") }
     var oldBaaki by remember { mutableStateOf("") }
 
-    val dup = if (phone.length == 10) state.customers.firstOrNull { it.phone == phone && !(editing && it.id == form.editId) } else null
+    // A masked number (staff without numbers) matches other masked ones by its last 4 digits only: no check.
+    val dup = if (phone.length == 10 && !phone.startsWith("******")) state.customers.firstOrNull { it.phone == phone && !(editing && it.id == form.editId) } else null
     // v2 of the first-customer test: no address here (it's asked in its own sheet for home pickup / delivery).
     val addressShown = form.askAddress
     val addrNeeded = form.needAddress && form.ctx == "order" && addressShown

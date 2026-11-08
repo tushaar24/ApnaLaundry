@@ -22,7 +22,11 @@ object Selectors {
     fun firstName(name: String): String =
         if (name.startsWith("+")) name else name.substringBefore(" ")
 
-    fun fmtPhone(d: String): String = if (d.length == 10) d.substring(0, 5) + " " + d.substring(5) else d
+    fun fmtPhone(d: String): String = when {
+        d.startsWith("******") -> "•••••• " + d.takeLast(4) // hidden from staff (1.0.20)
+        d.length == 10 -> d.substring(0, 5) + " " + d.substring(5)
+        else -> d
+    }
 
     fun initials(name: String): String =
         name.split(" ").filter { it.isNotBlank() }.take(2).joinToString("") { it.first().uppercase() }
