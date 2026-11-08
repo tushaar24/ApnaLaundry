@@ -12,6 +12,10 @@ import com.dailyworks.apnalaundry.data.encodeTerms
 import com.dailyworks.apnalaundry.domain.BillDetails
 import com.dailyworks.apnalaundry.domain.Gst
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.KSerializer
 
 // Wire DTOs for /api/laundry/sync — field-for-field mirrors of the Room
 // entities (the server treats itemsJson/linesJson as opaque strings).
@@ -116,8 +120,38 @@ data class SyncChanges(
 )
 
 @Serializable data class PushRequest(val changes: SyncChanges)
-@Serializable data class PushResponse(val success: Boolean, val applied: Int = 0, val skipped: Int = 0, val message: String? = null)
-@Serializable data class PullResponse(val success: Boolean, val checkpoint: Long = 0, val changes: SyncChanges = SyncChanges(), val message: String? = null)
+/**
+ * [refused] (sync v2, servers from 10 Nov 2026): rows the server kept its own copy of — a delete
+ * is final against older edits, and a staff member's switches. Read leniently ([refusedChanges]),
+ * so one odd row can never fail a push.
+ */
+@Serializable data class PushResponse(
+    val success: Boolean, val applied: Int = 0, val skipped: Int = 0, val message: String? = null,
+    val refused: JsonObject? = null,
+)
+/** [seq] (sync v2): the shop's server sequence — the next pull's afterSeq. 0 from older servers. */
+@Serializable data class PullResponse(
+    val success: Boolean, val checkpoint: Long = 0, val changes: SyncChanges = SyncChanges(), val message: String? = null,
+    val seq: Long = 0,
+)
+
+private val lenient = Json { ignoreUnknownKeys = true; coerceInputValues = true }
+
+/** A push's refused rows as changes to apply locally; rows that don't parse are skipped. */
+fun refusedChanges(refused: JsonObject?): SyncChanges {
+    if (refused == null) return SyncChanges()
+    fun <T> list(key: String, ser: KSerializer<T>): List<T> =
+        (refused[key] as? JsonArray).orEmpty().mapNotNull { runCatching { lenient.decodeFromJsonElement(ser, it) }.getOrNull() }
+    return SyncChanges(
+        shop = refused["shop"]?.let { runCatching { lenient.decodeFromJsonElement(ShopDto.serializer(), it) }.getOrNull() },
+        services = list("services", ServiceDto.serializer()),
+        customers = list("customers", CustomerDto.serializer()),
+        orders = list("orders", OrderDto.serializer()),
+        ledger = list("ledger", LedgerDto.serializer()),
+        dayCloses = list("dayCloses", DayCloseDto.serializer()),
+        expenses = list("expenses", ExpenseDto.serializer()),
+    )
+}
 
 // ---- entity <-> DTO ----
 

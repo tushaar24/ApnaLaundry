@@ -13,16 +13,14 @@ import kotlinx.coroutines.sync.withLock
  * The offline-first sync engine. The Room DB stays the source of truth for
  * the UI; this pushes dirty rows and pulls server changes when online.
  *
- * One sync = pull then push:
- *  - pull?since=<checkpoint>: apply each server row unless the local copy has
- *    a newer `updatedAt` (same last-write-wins rule the server uses on push,
- *    so a dirty local edit is never clobbered by an older server copy).
+ * One sync = push then pull (sync v2, 1.0.20; docs/specs/staff.md):
  *  - push: send every dirty row; on success clear the dirty flag, guarded by
- *    `updatedAt` so rows edited mid-flight stay dirty.
- *
- * Known limits (single-device-per-account assumption, documented in
- * docs/specs): shop counters merge last-write-wins, and two devices minting
- * ids concurrently can collide.
+ *    `updatedAt` so rows edited mid-flight stay dirty. The last push to reach the
+ *    server wins. Rows it kept its own copy of (`refused`) are put back here.
+ *  - pull?afterSeq=<the shop's server sequence>: every row the server wrote since,
+ *    applied unless the local row still has unsent changes (those go up next round).
+ *    Before the first sequence (or against an older server) it pulls by the time
+ *    checkpoint, as before.
  *
  * Multi-shop: every shop syncs — the one on screen first — each with its own
  * database, checkpoint and X-Laundry-Shop; one shop failing doesn't stop the
@@ -44,7 +42,7 @@ class SyncManager(
     private val mutex = Mutex()
 
     suspend fun syncNow(): Result = runLocked {
-        forEachShop { pullOnce(it); pushOnce(it) }
+        forEachShop { pushOnce(it); pullOnce(it) }
     }
 
     /**
@@ -98,10 +96,14 @@ class SyncManager(
         // Once per shop after the update that added expenses: pull from the start, since older
         // builds (or this one before the update) moved the checkpoint past expenses they ignored.
         val since = if (prefs.expensesPulled(shop)) prefs.syncCheckpoint(shop) else 0L
-        val res = api.pull(since, shop)
+        // Sync v2: by the server sequence once there is one; the first pull (and any pull from a
+        // server before sync v2, which sends no seq) goes by the time checkpoint.
+        val seq = if (prefs.expensesPulled(shop)) prefs.syncSeq(shop) else 0L
+        val res = api.pull(since, shop, afterSeq = seq)
         if (!res.success) throw IllegalStateException(res.message ?: "Pull failed")
         applyPull(shops.db(shop), res.changes, onScreen = shop == shops.activeId.value)
         prefs.setSyncCheckpoint(shop, res.checkpoint)
+        if (res.seq > 0) prefs.setSyncSeq(shop, res.seq)
         prefs.setExpensesPulled(shop)
         if (shop == shops.activeId.value) repo.refreshTsCounter() // pulled ledger rows may carry higher ts values
     }
@@ -109,41 +111,56 @@ class SyncManager(
     /** Fires after a pull applies another device's changes (ends a pending Undo). */
     val remoteChanges = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
+    /**
+     * Server rows over local ones — except a local row with unsent changes, which goes up next
+     * round (and, being pushed last, wins). [newer]: a row really changed elsewhere, not our own
+     * push coming back.
+     */
     private suspend fun applyPull(db: AppDatabase, ch: SyncChanges, onScreen: Boolean) {
         if (ch.isEmpty) return
-        // Whether any pulled row was newer than ours — not just our own push echoed back.
+        val newer = applyRows(db, ch)
+        if (newer && onScreen) remoteChanges.tryEmit(Unit)
+    }
+
+    /** Writes [ch] into [db] (skipping locally dirty rows); whether any row was newer than ours. */
+    private suspend fun applyRows(db: AppDatabase, ch: SyncChanges, overDirty: Boolean = false): Boolean {
         var newer = false
+        fun take(localDirty: Boolean?, localUpdatedAt: Long?, remote: Long): Boolean {
+            if (localDirty == true && !overDirty) return false
+            if (localUpdatedAt == null || remote > localUpdatedAt) newer = true
+            return true
+        }
         db.withTransaction {
             ch.shop?.let { dto ->
                 val local = db.shopDao().get()
-                if (local == null || dto.updatedAt > local.updatedAt) { db.shopDao().upsert(dto.toEntity()); newer = true }
+                if (take(local?.dirty, local?.updatedAt, dto.updatedAt)) db.shopDao().upsert(dto.toEntity())
             }
             for (dto in ch.services) {
                 val local = db.serviceDao().get(dto.id)
-                if (local == null || dto.updatedAt > local.updatedAt) { db.serviceDao().upsert(dto.toEntity()); newer = true }
+                if (take(local?.dirty, local?.updatedAt, dto.updatedAt)) db.serviceDao().upsert(dto.toEntity())
             }
             for (dto in ch.customers) {
                 val local = db.customerDao().get(dto.id)
-                if (local == null || dto.updatedAt > local.updatedAt) { db.customerDao().upsert(dto.toEntity()); newer = true }
+                if (take(local?.dirty, local?.updatedAt, dto.updatedAt)) db.customerDao().upsert(dto.toEntity())
             }
             for (dto in ch.orders) {
                 val local = db.orderDao().get(dto.id)
-                if (local == null || dto.updatedAt > local.updatedAt) { db.orderDao().upsert(dto.toEntity()); newer = true }
+                if (take(local?.dirty, local?.updatedAt, dto.updatedAt)) db.orderDao().upsert(dto.toEntity())
             }
             for (dto in ch.ledger) {
                 val local = db.ledgerDao().get(dto.id)
-                if (local == null || dto.updatedAt > local.updatedAt) { db.ledgerDao().insert(dto.toEntity()); newer = true }
+                if (take(local?.dirty, local?.updatedAt, dto.updatedAt)) db.ledgerDao().insert(dto.toEntity())
             }
             for (dto in ch.dayCloses) {
                 val local = db.dayCloseDao().get(dto.date)
-                if (local == null || dto.updatedAt > local.updatedAt) { db.dayCloseDao().upsert(dto.toEntity()); newer = true }
+                if (take(local?.dirty, local?.updatedAt, dto.updatedAt)) db.dayCloseDao().upsert(dto.toEntity())
             }
             for (dto in ch.expenses) {
                 val local = db.expenseDao().get(dto.id)
-                if (local == null || dto.updatedAt > local.updatedAt) { db.expenseDao().upsert(dto.toEntity()); newer = true }
+                if (take(local?.dirty, local?.updatedAt, dto.updatedAt)) db.expenseDao().upsert(dto.toEntity())
             }
         }
-        if (newer && onScreen) remoteChanges.tryEmit(Unit)
+        return newer
     }
 
     private suspend fun pushOnce(shopId: String) {
@@ -179,5 +196,12 @@ class SyncManager(
         ledger.forEach { db.ledgerDao().clearDirty(it.id, it.updatedAt) }
         dayCloses.forEach { db.dayCloseDao().clearDirty(it.date, it.updatedAt) }
         expenses.forEach { db.expenseDao().clearDirty(it.id, it.updatedAt) }
+
+        // Sync v2: rows the server kept its own copy of — put that copy back here.
+        val refused = refusedChanges(res.refused)
+        if (!refused.isEmpty) {
+            applyRows(db, refused, overDirty = true)
+            if (shopId == shops.activeId.value) remoteChanges.tryEmit(Unit)
+        }
     }
 }

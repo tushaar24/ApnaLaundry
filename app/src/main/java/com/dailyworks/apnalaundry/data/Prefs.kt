@@ -122,6 +122,11 @@ class Prefs(private val context: Context) {
     suspend fun syncCheckpoint(shop: String): Long = context.dataStore.data.first()[checkpointKey(shop)] ?: 0L
     suspend fun setSyncCheckpoint(shop: String, v: Long) { context.dataStore.edit { it[checkpointKey(shop)] = v } }
 
+    // Sync v2 (1.0.20): the shop's last server sequence (0 = none yet: pull by the time checkpoint).
+    private fun seqKey(shop: String) = longPreferencesKey("sync_seq_$shop")
+    suspend fun syncSeq(shop: String): Long = context.dataStore.data.first()[seqKey(shop)] ?: 0L
+    suspend fun setSyncSeq(shop: String, v: Long) { context.dataStore.edit { it[seqKey(shop)] = v } }
+
     // Expenses (1.0.19): has this shop had its one full pull since the update?
     private fun expensesPulledKey(shop: String) = booleanPreferencesKey("expenses_pulled_$shop")
     suspend fun expensesPulled(shop: String): Boolean = context.dataStore.data.first()[expensesPulledKey(shop)] == true

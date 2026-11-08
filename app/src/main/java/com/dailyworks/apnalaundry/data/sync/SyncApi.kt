@@ -49,10 +49,12 @@ class SyncApi(private val client: HttpClient, private val tokens: TokenManager) 
         return res.body()
     }
 
-    suspend fun pull(since: Long, shop: String = MAIN_SHOP): PullResponse {
+    /** [afterSeq] (sync v2): rows the server numbered after it; 0 = by the [since] time checkpoint. */
+    suspend fun pull(since: Long, shop: String = MAIN_SHOP, afterSeq: Long = 0): PullResponse {
         val res = authed { token ->
             client.get("$base/sync/pull") {
                 parameter("since", since)
+                if (afterSeq > 0) parameter("afterSeq", afterSeq)
                 bearerAuth(token)
                 shop(shop)
             }
