@@ -153,7 +153,7 @@ Shown only when the server sends `experiments.staff` (LAUNDRY_STAFF_PHONES). The
 | `Staff Form Shown` | `mode` (`new`\|`edit`) | the add / edit staff page shown |
 | `Staff Occupation Picked` | `mode`, `occupation` (`counter`\|`washing`\|`ironing`\|`delivery`\|`manager`\|`other`) | a work chip tapped (fills the switches) |
 | `Staff Permission Toggled` | `mode`, `permission` (`take_orders`\|`deliver`\|`collect_money`\|`discounts_cancel`\|`delete_orders`\|`see_earnings`\|`edit_rates`\|`see_phones`\|`expenses`), `on` | a switch flipped |
-| `Staff Added` | `staff_id`, `occupation`, `permissions` (comma-separated keys), `permissions_on` | a staff member added |
+| `Staff Added` | `staff_id`, `occupation` (a work key, or the work the owner typed under Other), `permissions` (comma-separated keys), `permissions_on` | a staff member added |
 | `Staff Edited` | as `Staff Added` | a staff member's name / work / switches saved |
 | `Staff Save Failed` | `mode`, `code` (`PLAN_REQUIRED`\|`PHONE_TAKEN`\|`OWN_NUMBER`\|`PHONE_INVALID`\|`STAFF_LIMIT`\|`NETWORK`\|`name`\|`phone` = greyed Save tapped) | save refused / failed |
 | `Staff Form Closed` | `mode`, `name_entered`, `phone_entered` | the form left without saving |

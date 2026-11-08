@@ -214,7 +214,13 @@ fun StaffFormScreen(shopVm: ShopViewModel, navigator: AppNavigator, id: String) 
     }
     var name by rememberSaveable { mutableStateOf(existing?.name ?: "") }
     var phone by rememberSaveable { mutableStateOf("") }
-    var occupation by rememberSaveable { mutableStateOf(existing?.occupation ?: "") }
+    // A work chip's key, or "other" — then [otherWork] is what the owner typed (saved as the work).
+    val known = existing?.occupation?.let { StaffOccupation.of(it) }
+    var occupation by rememberSaveable {
+        mutableStateOf(if (existing != null && existing.occupation.isNotBlank() && known == null) StaffOccupation.OTHER.key else existing?.occupation ?: "")
+    }
+    var otherWork by rememberSaveable { mutableStateOf(if (existing != null && known == null) existing.occupation else "") }
+    val work = if (occupation == StaffOccupation.OTHER.key) otherWork.trim().ifBlank { StaffOccupation.OTHER.key } else occupation
     var perms by rememberSaveable { mutableStateOf<List<String>>(existing?.permissions?.map { it.key } ?: emptyList()) }
     var saving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -235,9 +241,9 @@ fun StaffFormScreen(shopVm: ShopViewModel, navigator: AppNavigator, id: String) 
         val set = perms.mapNotNull { StaffPermission.of(it) }.toSet()
         scope.launch {
             runCatching {
-                if (isNew) repo.add(name.trim(), phone, occupation, set) else repo.update(id, name.trim(), occupation, set)
+                if (isNew) repo.add(name.trim(), phone, work, set) else repo.update(id, name.trim(), work, set)
             }.onSuccess { m ->
-                Analytics.staffSaved(isNew, m.id, occupation, set.map { it.key })
+                Analytics.staffSaved(isNew, m.id, work, set.map { it.key })
                 if (isNew) added = m else navigator.back()
             }.onFailure { e ->
                 val code = (e as? StaffException)?.code ?: "NETWORK"
@@ -287,6 +293,13 @@ fun StaffFormScreen(shopVm: ShopViewModel, navigator: AppNavigator, id: String) 
                             Analytics.staffOccupationPicked(mode, o.key)
                         }
                     }
+                }
+                // "Other": the owner writes the work (e.g. Cashier); it shows on the staff card.
+                if (occupation == StaffOccupation.OTHER.key) {
+                    FieldBox(
+                        otherWork, { otherWork = it.take(30) }, Modifier.fillMaxWidth(),
+                        placeholder = tr("What work do they do? e.g. Cashier"), capitalization = KeyboardCapitalization.Sentences,
+                    )
                 }
                 Text(tr("Picking one fills the switches below. You can change any."), style = fig(12, color = Tokens.Muted))
             }
