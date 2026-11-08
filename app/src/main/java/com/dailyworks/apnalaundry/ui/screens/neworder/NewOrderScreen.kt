@@ -702,11 +702,7 @@ fun NewOrderScreen(
                 ) { result ->
                     saved = true
                     if (tourOn) shopVm.tourOrderSaved(result.orderId)
-                    // An edit with money still due shows the bill to take it now, like a new order;
-                    // from the bill itself, Back returns to it (it already shows "Paying now?").
-                    if (editId != null) {
-                        if (result.goToBill && from != "bill") navigator.replaceWithBill(result.orderId, "edit") else navigator.back()
-                    }
+                    if (editId != null) navigator.back()
                     else if (result.goToBill) navigator.openBill(result.orderId, "new")
                     else navigator.openHome()
                 }

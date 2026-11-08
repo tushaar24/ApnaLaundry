@@ -97,14 +97,7 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 // banner
                 Column(Modifier.fillMaxWidth().rounded(16.dp).background(Tokens.Ink).padding(16.dp)) {
-                    Text(
-                        when (from) {
-                            "new" -> tr("Order #{no} saved", "no" to o.no())
-                            "edit" -> tr("Order #{no} updated", "no" to o.no())
-                            else -> tr("Bill for order #{no}", "no" to o.no())
-                        },
-                        style = bric(20, FontWeight.Bold, Tokens.OnDark),
-                    )
+                    Text(if (from == "new") tr("Order #{no} saved", "no" to o.no()) else tr("Bill for order #{no}", "no" to o.no()), style = bric(20, FontWeight.Bold, Tokens.OnDark))
                     Text(
                         if (o.lines.isNotEmpty()) tr("{items} · Total {amount}", "items" to Selectors.itemsLabel(o), "amount" to Money.rupees(amt))
                         else tr("Total {amount}", "amount" to Money.rupees(amt)),

@@ -40,11 +40,6 @@ class AppNavigator(val nav: NavHostController) {
     fun openNewOrder(editId: Int? = null, custId: String? = null, from: String = "home", query: String = "") =
         push("new?edit=${editId ?: -1}&cust=${custId ?: ""}&from=$from&q=${android.net.Uri.encode(query)}")
     fun openBill(orderId: Int, from: String = "home") = push("bill/$orderId?from=$from")
-    /** The bill in place of the screen on top (a just-saved Edit order): Back from it goes where the edit began. */
-    fun replaceWithBill(orderId: Int, from: String) {
-        val top = nav.currentDestination?.id
-        nav.navigate("bill/$orderId?from=$from") { if (top != null) popUpTo(top) { inclusive = true } }
-    }
     fun openOrder(orderId: Int, from: String = "home") = push("order/$orderId?from=$from")
     fun openCustomer(custId: String, from: String = "customers") = push("customer/$custId?from=$from")
     fun openCombinedBill(custId: String) = push("combined-bill/$custId")

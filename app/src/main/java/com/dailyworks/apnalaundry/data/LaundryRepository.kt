@@ -407,7 +407,7 @@ class LaundryRepository(private val shops: ShopDirectory) {
         return CmdResult(msg, undo, statusWa(st, delivered))
     }
 
-    /** [from]: the bill screen's entry (new | edit | …), for analytics only. */
+    /** [from]: where the "Paying now?" card was (the bill's entry, or order_detail), for analytics only. */
     suspend fun prepay(orderId: Int, method: PayMethod, from: String? = null): CmdResult {
         val undo = snapshot()
         val st = current()
@@ -788,9 +788,7 @@ class LaundryRepository(private val shops: ShopDirectory) {
                 else -> tr("Order #{no} updated · new total {amount}", "no" to updated.no(), "amount" to money(after))
             }
             trackOrderSaved(updated, isEdit = true)
-            // Money still to collect on an open order: the bill, to take it now — like a new order (owner, 9 Nov).
-            val due = LaundryMath.isOpen(updated) && after - updated.pre > 0
-            return SaveOrderResult(o.id, goToBill = due, toast = toast, undo = undo, edited = true)
+            return SaveOrderResult(o.id, goToBill = false, toast = toast, undo = undo, edited = true)
         }
 
         // create

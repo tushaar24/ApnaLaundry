@@ -48,6 +48,7 @@ import com.dailyworks.apnalaundry.core.Money
 import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.domain.Gst
 import com.dailyworks.apnalaundry.domain.LaundryMath
+import com.dailyworks.apnalaundry.domain.PayMethod
 import com.dailyworks.apnalaundry.domain.OrderStatus
 import com.dailyworks.apnalaundry.domain.Route
 import com.dailyworks.apnalaundry.ui.Selectors
@@ -196,6 +197,19 @@ fun OrderDetailScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: I
                             DetailRow(tr("Total"), Money.rupees(amt), bold = true)
                             if (gst.on && gst.mode == Gst.INCL) Text(Gst.inclusiveLine(gst), style = fig(12, color = Tokens.Muted))
                             Text(paymentText(o, amt), style = fig(13, FontWeight.SemiBold, if (o.status == OrderStatus.DELIVERED && o.paid < amt) Tokens.OrangeText else Tokens.BlueText))
+                        }
+                    }
+                    // Paying now — the same card as on the bill right after a new order (owner, 9 Nov).
+                    val due = amt - o.pre
+                    if (LaundryMath.isOpen(o) && due > 0) {
+                        AppCard {
+                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text(tr("Paying now? {amount}", "amount" to Money.rupees(due)), style = fig(15, FontWeight.Bold))
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlineButton(tr("Got cash"), Modifier.weight(1f), height = 48.dp) { shopVm.prepay(o.id, PayMethod.CASH, "order_detail") }
+                                    OutlineButton(tr("Got UPI"), Modifier.weight(1f), height = 48.dp) { shopVm.prepay(o.id, PayMethod.UPI, "order_detail") }
+                                }
+                            }
                         }
                     }
                     // bill actions
