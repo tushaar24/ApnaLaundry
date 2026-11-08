@@ -126,7 +126,7 @@ fun OrderDetailScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: I
                     }
                     Column(Modifier.weight(1f)) {
                         Text(c.name, style = fig(18, FontWeight.Bold))
-                        Text("+91 ${Selectors.fmtPhone(c.phone)}", style = fig(13, color = Tokens.Muted))
+                        if (com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current.can(com.dailyworks.apnalaundry.domain.StaffPermission.SEE_PHONES)) Text("+91 ${Selectors.fmtPhone(c.phone)}", style = fig(13, color = Tokens.Muted))
                     }
                 }
 
@@ -165,7 +165,10 @@ fun OrderDetailScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: I
                 }
 
                 // action
-                if (actLabel.isNotEmpty()) {
+                // Staff (1.0.20): delivering needs "Mark delivered", counting clothes "Take orders".
+                val acc = com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current
+                val mayAct = when { o.status == OrderStatus.READY -> acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.DELIVER); o.lines.isEmpty() -> acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.TAKE_ORDERS); else -> true }
+                if (actLabel.isNotEmpty() && mayAct) {
                     PrimaryButton(actLabel, height = 56.dp) { onAct() }
                 } else if (o.status == OrderStatus.DELIVERED) {
                     Box(Modifier.fillMaxWidth().rounded(12.dp).background(Tokens.BlueLight).tap { active = ActiveSheet.ChangeStatus(o.id) }.padding(14.dp)) {
@@ -205,7 +208,8 @@ fun OrderDetailScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: I
                         PayingNowCard(o.id, due, "order_detail", shopVm) { active = ActiveSheet.PaySplit(o.id, "order_detail") }
                     }
                     // bill actions
-                    if (o.billSent) OutlineButton(tr("Bill sent ✓ · Send again"), Modifier.fillMaxWidth(), height = 48.dp, border = Tokens.BlueBorder, fg = Tokens.BlueText) { sendOnWhatsApp(o) }
+                    if (!acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.SEE_PHONES)) Unit // no customer numbers on this phone (staff)
+                    else if (o.billSent) OutlineButton(tr("Bill sent ✓ · Send again"), Modifier.fillMaxWidth(), height = 48.dp, border = Tokens.BlueBorder, fg = Tokens.BlueText) { sendOnWhatsApp(o) }
                     else PrimaryButton(tr("Send bill on WhatsApp"), height = 48.dp) { sendOnWhatsApp(o) }
                     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlineButton(tr("View bill"), Modifier.weight(1f).fillMaxHeight(), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { active = ActiveSheet.BillView(o.id) }
@@ -247,7 +251,7 @@ fun OrderDetailScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: I
 
                 // manage
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlineButton(tr("Edit"), Modifier.weight(1f), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { navigator.openNewOrder(editId = o.id, from = "order") }
+                    if (acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.TAKE_ORDERS)) OutlineButton(tr("Edit"), Modifier.weight(1f), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { navigator.openNewOrder(editId = o.id, from = "order") }
                     OutlineButton(tr("More"), Modifier.weight(1f), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { active = ActiveSheet.Menu(o.id) }
                 }
                 Spacer(Modifier.height(24.dp))

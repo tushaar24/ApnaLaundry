@@ -246,7 +246,7 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                 Icon(Icons.Filled.KeyboardArrowDown, tr("Switch shop"), tint = Tokens.Ink, modifier = Modifier.size(24.dp))
             }
             // Demo: the how-to video, played in the app (link from the server, saved; built-in fallback).
-            Row(
+            if (com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current.isOwner) Row(
                 Modifier.height(44.dp).rounded(999.dp).background(Tokens.Card).border(1.dp, Tokens.CardBorder, RoundedCornerShape(999.dp))
                     .tap { demoOpen = true; Analytics.demoVideoOpened("home") }.padding(start = 12.dp, end = 14.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -256,6 +256,8 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
             }
         }
         if (demoOpen) com.dailyworks.apnalaundry.ui.components.DemoVideoDialog(demoUrl) { demoOpen = false }
+        // Staff (1.0.20): "Ramesh · staff at Sharma Laundry", and the once-only welcome.
+        com.dailyworks.apnalaundry.ui.screens.staff.StaffHomeTop()
 
         val noOrders = state.orders.isEmpty()
 
@@ -321,7 +323,7 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                             Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 40.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                 Text(tr("No order found for “{query}”", "query" to q), style = fig(16, FontWeight.Bold), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                                 Text(tr("Check the spelling, or take a new order for them."), style = fig(14, color = Tokens.Muted), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                                Row(
+                                if (com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current.can(com.dailyworks.apnalaundry.domain.StaffPermission.TAKE_ORDERS)) Row(
                                     Modifier.padding(top = 4.dp).height(48.dp).rounded(12.dp).background(Tokens.Blue)
                                         .tap { navigator.openNewOrder(from = "home", query = q) }.padding(horizontal = 20.dp),
                                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -454,7 +456,7 @@ private fun EmptyHome(buttonModifier: Modifier = Modifier, onNewOrder: () -> Uni
                 tr("No orders yet. Take your first one — it takes less than a minute."),
                 style = fig(15, color = Tokens.Muted), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
-            PrimaryButton(tr("Create New Order"), buttonModifier, height = 56.dp, onClick = onNewOrder)
+            if (com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current.can(com.dailyworks.apnalaundry.domain.StaffPermission.TAKE_ORDERS)) PrimaryButton(tr("Create New Order"), buttonModifier, height = 56.dp, onClick = onNewOrder)
         }
 
         Column(
@@ -504,6 +506,7 @@ private fun RoundIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, cd:
  */
 @Composable
 private fun DashboardStrip(state: LaundryState, selDate: String, hidden: Boolean, onEye: () -> Unit, onOpen: () -> Unit) {
+    if (!com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current.can(com.dailyworks.apnalaundry.domain.StaffPermission.SEE_EARNINGS)) return // staff (1.0.20): sales are the owner's
     val day = state.orders.filter { it.pickupDate == selDate && it.status != OrderStatus.CANCELLED }
     val newOrders = day.size
     val sales = day.sumOf { LaundryMath.amtOf(it) }

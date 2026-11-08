@@ -67,8 +67,11 @@ fun OrderMenuSheet(
     val o = Selectors.order(state, orderId) ?: return onDismiss()
     val c = Selectors.customer(state, o.custId)
     val context = LocalContext.current
+    // Staff (1.0.20): only what this staff member may do.
+    val acc = com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current
+    val phones = acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.SEE_PHONES)
 
-    AppBottomSheet(title = c.name, subtitle = "#${o.no()} · +91 ${Selectors.fmtPhone(c.phone)}", onDismiss = onDismiss) {
+    AppBottomSheet(title = c.name, subtitle = if (phones) "#${o.no()} · +91 ${Selectors.fmtPhone(c.phone)}" else "#${o.no()}", onDismiss = onDismiss) {
         Column {
             MenuRow(Icons.Outlined.Visibility, tr("View order details")) { onDismiss(); navigator.openOrder(o.id) }
             if (o.lines.isNotEmpty()) MenuRow(Icons.AutoMirrored.Outlined.ReceiptLong, tr("View / send bill")) { onDismiss(); navigator.openBill(o.id) }
@@ -77,7 +80,7 @@ fun OrderMenuSheet(
                 MenuRow(Icons.Outlined.Print, tr("Print tags")) { onOpen(ActiveSheet.PrintTags(o.id, "menu")) }
             if (o.lines.isNotEmpty())
                 MenuRow(Icons.Outlined.Print, tr("Print bill")) { onOpen(ActiveSheet.PrintBill(o.id, "menu")) }
-            MenuRow(Icons.Outlined.Edit, tr("Edit order / bill")) { onDismiss(); navigator.openNewOrder(editId = o.id, from = "home") }
+            if (acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.TAKE_ORDERS)) MenuRow(Icons.Outlined.Edit, tr("Edit order / bill")) { onDismiss(); navigator.openNewOrder(editId = o.id, from = "home") }
             // Any state to any state — forward, backward, delivered included.
             MenuRow(Icons.Outlined.SwapVert, tr("Change status")) { onOpen(ActiveSheet.ChangeStatus(o.id)) }
             if (o.status == OrderStatus.CREATED)
@@ -85,13 +88,13 @@ fun OrderMenuSheet(
             if (o.status == OrderStatus.CREATED || o.status == OrderStatus.RECEIVED || o.status == OrderStatus.READY)
                 MenuRow(Icons.Outlined.LocalShipping, if (o.deliveryDate.isNotBlank()) tr("Reschedule delivery") else tr("Set delivery date")) { onOpen(ActiveSheet.Reschedule(o.id, "drop")) }
             MenuRow(Icons.Outlined.Person, tr("Open customer khata")) { onDismiss(); navigator.openCustomer(o.custId, "home") }
-            MenuRow(Icons.Filled.Call, tr("Call {name}", "name" to Selectors.firstName(c.name))) {
+            if (phones) MenuRow(Icons.Filled.Call, tr("Call {name}", "name" to Selectors.firstName(c.name))) {
                 onDismiss()
                 runCatching { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:+91${c.phone}"))) }
             }
-            if (o.status == OrderStatus.CREATED || o.status == OrderStatus.RECEIVED || o.status == OrderStatus.READY)
+            if (acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.DISCOUNTS_CANCEL) && (o.status == OrderStatus.CREATED || o.status == OrderStatus.RECEIVED || o.status == OrderStatus.READY))
                 MenuRow(Icons.Outlined.Cancel, if (o.status == OrderStatus.CREATED) tr("Cancel this pickup") else tr("Cancel order"), danger = true) { onOpen(ActiveSheet.Cancel(o.id)) }
-            MenuRow(Icons.Outlined.DeleteOutline, if (o.lines.isNotEmpty()) tr("Delete bill") else tr("Delete order"), danger = true) {
+            if (acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.DELETE_ORDERS)) MenuRow(Icons.Outlined.DeleteOutline, if (o.lines.isNotEmpty()) tr("Delete bill") else tr("Delete order"), danger = true) {
                 onOpen(ActiveSheet.DeleteOrder(o.id))
             }
         }

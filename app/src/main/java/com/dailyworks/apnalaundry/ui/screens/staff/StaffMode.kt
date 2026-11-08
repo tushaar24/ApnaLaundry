@@ -48,6 +48,7 @@ import com.dailyworks.apnalaundry.ui.components.fig
 import com.dailyworks.apnalaundry.ui.components.rounded
 import com.dailyworks.apnalaundry.ui.components.tap
 import com.dailyworks.apnalaundry.ui.theme.Tokens
+import kotlinx.coroutines.launch
 
 // Staff mode on the staff member's phone (1.0.20, docs/specs/staff.md): the strip and welcome on
 // Home, "added you / removed you", and the screen while the owner's plan has ended.
@@ -72,6 +73,22 @@ fun StaffStrip(access: StaffAccess, modifier: Modifier = Modifier) {
             tr("{name} · staff at {shop}", "name" to Selectors.firstName(access.staffName).ifBlank { tr("You") }, "shop" to access.shopName),
             style = fig(13, FontWeight.SemiBold, Tokens.BlueText), maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
+    }
+}
+
+/** Home's top in a shop worked as staff: the strip, and the welcome card until it's closed. */
+@Composable
+fun StaffHomeTop() {
+    val access = LocalStaffAccess.current
+    if (!access.isStaff) return
+    val prefs: com.dailyworks.apnalaundry.data.Prefs = org.koin.compose.koinInject()
+    val welcome by prefs.staffWelcomePending.collectAsStateWithLifecycle(initialValue = false)
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    StaffStrip(access)
+    if (welcome) {
+        Box(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            StaffWelcomeCard(access) { scope.launch { prefs.setStaffWelcomePending(false) } }
+        }
     }
 }
 

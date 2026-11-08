@@ -120,7 +120,8 @@ class ShopViewModel(
             if (!on) return@combine TourStage.DONE
             saved?.let { runCatching { TourStage.valueOf(it) }.getOrNull() }
                 ?: if (newShop && ready && s.orders.isEmpty()) TourStage.ORDER else TourStage.DONE
-        }.stateIn(viewModelScope, SharingStarted.Eagerly, TourStage.DONE)
+        }.combine(access) { stage, acc -> if (acc.isStaff) TourStage.DONE else stage } // never in a shop worked as staff
+            .stateIn(viewModelScope, SharingStarted.Eagerly, TourStage.DONE)
 
     /** The order the guide follows from ready to delivered: the one saved during it. */
     val tourOrderId: StateFlow<Int?> = prefs.tourOrder.stateIn(viewModelScope, SharingStarted.Eagerly, null)

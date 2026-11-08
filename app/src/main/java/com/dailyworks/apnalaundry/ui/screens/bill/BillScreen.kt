@@ -110,7 +110,7 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
                 AppCard {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(c.name, style = fig(16, FontWeight.Bold))
-                        Text("+91 ${Selectors.fmtPhone(c.phone)}", style = fig(13, color = Tokens.Muted))
+                        if (com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current.can(com.dailyworks.apnalaundry.domain.StaffPermission.SEE_PHONES)) Text("+91 ${Selectors.fmtPhone(c.phone)}", style = fig(13, color = Tokens.Muted))
                         Text(routeLine(o.pickup, o.delivery), style = fig(13, color = Tokens.InkSecondary))
                         Divider()
                         o.lines.forEach { l ->
@@ -148,7 +148,9 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
                     // ignore more taps meanwhile (each would send it again).
                     var sending by remember { mutableStateOf(false) }
                     val contactsCheck = rememberContactsCheck("bill")
-                    PrimaryButton(
+                    // Staff (1.0.20) without customer numbers: no WhatsApp send (view / download / print stay).
+                    val canSend = com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current.can(com.dailyworks.apnalaundry.domain.StaffPermission.SEE_PHONES)
+                    if (canSend) PrimaryButton(
                         when { sending -> tr("Opening WhatsApp…"); o.billSent -> tr("Send again"); else -> tr("Send on WhatsApp") },
                         Modifier.bringIntoViewRequester(sendInView).spotlightTarget(targets, "send"), enabled = !sending, height = 56.dp,
                     ) {
@@ -162,7 +164,7 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
                             } finally { sending = false }
                         }
                     }
-                    Text(
+                    if (canSend) Text(
                         if (o.billSent) tr("Sent to {name} ✓", "name" to Selectors.firstName(c.name)) else tr("Not sent yet"),
                         style = fig(13, FontWeight.Bold, if (o.billSent) Tokens.BlueText else Tokens.OrangeText),
                     )
@@ -194,10 +196,10 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
 
                 Spacer(Modifier.height(4.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlineButton(tr("Edit bill"), Modifier.weight(1f), height = 56.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { navigator.openNewOrder(editId = o.id, from = "bill") }
+                    if (com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current.can(com.dailyworks.apnalaundry.domain.StaffPermission.TAKE_ORDERS)) OutlineButton(tr("Edit bill"), Modifier.weight(1f), height = 56.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { navigator.openNewOrder(editId = o.id, from = "bill") }
                     PrimaryButton(tr("Done"), Modifier.weight(1f), height = 56.dp) { if (from == "new") navigator.openHome() else navigator.back() }
                 }
-                Text(
+                if (com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current.can(com.dailyworks.apnalaundry.domain.StaffPermission.DELETE_ORDERS)) Text(
                     tr("Delete bill"),
                     style = fig(14, FontWeight.Bold, Tokens.OrangeText),
                     modifier = Modifier.align(Alignment.CenterHorizontally).tap { active = ActiveSheet.DeleteOrder(o.id) }.padding(12.dp),

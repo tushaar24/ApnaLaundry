@@ -102,7 +102,13 @@ fun OrderCard(
         OrderStatus.READY -> tr("Mark delivered")
         else -> ""
     }
-    val canAct = actLabel.isNotEmpty()
+    // Staff (1.0.20): counting clothes needs "Take orders", delivering "Mark delivered".
+    val acc = com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current
+    val canAct = actLabel.isNotEmpty() && when {
+        o.status == OrderStatus.READY -> acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.DELIVER)
+        o.lines.isEmpty() -> acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.TAKE_ORDERS)
+        else -> true
+    }
     val doneText = when (o.status) {
         OrderStatus.DELIVERED -> tr("Delivered") + (if (o.doneAt.isNotBlank()) " · ${o.doneAt}" else "")
         // The reason is saved in English; the usual ones show in the app's language.
@@ -177,7 +183,7 @@ fun OrderCard(
                         Text(doneText, style = fig(14, FontWeight.SemiBold, Tokens.Muted), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
-                if (home && canAct) {
+                if (home && actLabel.isNotEmpty() && acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.SEE_PHONES)) {
                     IconSquare(Icons.Filled.Call, tr("Call")) { onCall() }
                 }
                 IconSquare(Icons.Filled.MoreVert, tr("More")) { onMore() }

@@ -102,6 +102,21 @@ fun CollectPaymentSheet(state: LaundryState, orderId: Int, vm: ShopViewModel, on
     val left = due - got
     val tour by vm.tour.collectAsStateWithLifecycle()
 
+    // Staff (1.0.20) who may deliver but not take money: hand over, the bill goes to khata.
+    val acc = com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current
+    if (!acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.COLLECT_MONEY)) {
+        AppBottomSheet(title = tr("Mark delivered"), subtitle = c.name, onDismiss = onDismiss) {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text(
+                    tr("{amount} goes to {name}'s khata. {owner} collects it.", "amount" to Money.rupees(max(0, due)), "name" to Selectors.firstName(c.name), "owner" to acc.ownerName.ifBlank { tr("The owner") }),
+                    style = fig(15, color = Tokens.InkSecondary),
+                )
+                PrimaryButton(tr("Mark delivered"), height = 56.dp) { vm.deliver(orderId, 0, PayMethod.NONE); onDismiss() }
+            }
+        }
+        return
+    }
+
     AppBottomSheet(title = tr("Collect payment"), subtitle = tr("From {name} before handing over", "name" to c.name), onDismiss = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Column(Modifier.fillMaxWidth().rounded(14.dp).background(Tokens.Card).padding(14.dp)) {
@@ -200,6 +215,7 @@ fun CollectPaymentSheet(state: LaundryState, orderId: Int, vm: ShopViewModel, on
  */
 @Composable
 fun PayingNowCard(orderId: Int, due: Int, from: String, vm: ShopViewModel, onSplit: () -> Unit) {
+    if (!com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current.can(com.dailyworks.apnalaundry.domain.StaffPermission.COLLECT_MONEY)) return // staff (1.0.20) without "Collect money"
     AppCard {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             // The amount in the heading, so the two buttons stay short on any phone.
@@ -516,13 +532,31 @@ fun ChangeStatusSheet(
 ) {
     val o = Selectors.order(state, orderId) ?: return onDismiss()
     val c = Selectors.customer(state, o.custId)
+    // Staff (1.0.20): only the moves this staff member may make (the server checks the same).
+    val acc = com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current
+    fun allowed(st: OrderStatus): Boolean {
+        if (st == o.status) return true
+        val from = when (o.status) {
+            OrderStatus.DELIVERED -> acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.DELIVER)
+            OrderStatus.CANCELLED -> acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.DISCOUNTS_CANCEL)
+            else -> true
+        }
+        val counting = o.lines.isEmpty() && (o.status == OrderStatus.CREATED || o.status == OrderStatus.RECEIVED)
+        val to = when (st) {
+            OrderStatus.DELIVERED -> acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.DELIVER) && (o.lines.isNotEmpty() || acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.TAKE_ORDERS))
+            OrderStatus.CANCELLED -> acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.DISCOUNTS_CANCEL)
+            OrderStatus.RECEIVED, OrderStatus.READY -> !counting || acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.TAKE_ORDERS)
+            else -> true
+        }
+        return from && to
+    }
     val steps = buildList {
         if (o.pickup == Route.HOME) add(OrderStatus.CREATED to tr("To pick up"))
         add(OrderStatus.RECEIVED to tr("Received · clothes at shop"))
         add(OrderStatus.READY to tr("Ready"))
         add(OrderStatus.DELIVERED to tr("Delivered"))
         add(OrderStatus.CANCELLED to tr("Cancelled"))
-    }
+    }.filter { allowed(it.first) }
     var sel by remember {
         mutableStateOf(
             when (o.status) {
@@ -531,7 +565,7 @@ fun ChangeStatusSheet(
                 OrderStatus.READY -> OrderStatus.DELIVERED
                 OrderStatus.DELIVERED -> OrderStatus.READY // only way is back
                 OrderStatus.CANCELLED -> OrderStatus.RECEIVED
-            },
+            }.let { if (allowed(it)) it else o.status },
         )
     }
 
