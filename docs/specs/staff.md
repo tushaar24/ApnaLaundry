@@ -121,9 +121,9 @@ shops, staff management, and the Ask assistant (v1).
 
 1. [x] Server: sync v2 (seq columns + counter, `afterSeq`, last-arrival-wins, deletes final). Additive; old apps unchanged. *(courses eae74ca, not deployed)*
 2. [x] Server: staff table, auth middleware, login contexts, staff API, plan gate, permission backstop, phone masking, id reservation, activity + pruning. *(courses 6b149e5 + bf14d3d: `experiments.staff` for owners in `LAUNDRY_STAFF_PHONES`; not deployed. Activity is derived on the server from each push, not sent by the app.)*
-3. [ ] Android: sync v2 client.
-4. [ ] Android: owner screens (Staff list, add / edit, staff page with activity).
-5. [ ] Android: contexts + staff login + staff mode (permission gating, strip, renew screen, wipe on removal), id pool, activity recording, analytics role.
+3. [x] Android: sync v2 client. *(20de145)*
+4. [x] Android: owner screens (Staff list, add / edit, staff page with activity). *(9ec2fc2)*
+5. [x] Android: contexts + staff login + staff mode (permission gating, strip, renew screen, wipe on removal), id pool, analytics role. *(4eb84e2 … cd4c3c1; activity is server-derived, so the app records nothing)*
 6. [ ] Translations (Sarvam), an old app against the new server, release.
 
 ## Testing decisions

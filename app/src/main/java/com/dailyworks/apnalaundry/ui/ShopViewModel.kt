@@ -218,7 +218,7 @@ class ShopViewModel(
                 .collect { (id, name) -> if (!name.isNullOrBlank()) shopDir.rename(id, name) }
         }
         viewModelScope.launch {
-            shopDir.shops.map { it.size }.distinctUntilChanged().collect { Analytics.updateProfile(mapOf("Shop_Count" to it)) }
+            shopDir.shops.map { l -> l.count { it.staff == null } }.distinctUntilChanged().collect { Analytics.updateProfile(mapOf("Shop_Count" to it)) } // own shops only
         }
     }
 

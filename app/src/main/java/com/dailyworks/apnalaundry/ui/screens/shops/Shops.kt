@@ -213,7 +213,7 @@ fun AddShopScreen(shopVm: ShopViewModel, navigator: AppNavigator, from: String) 
     val billing: BillingRepository = koinInject()
     val state by shopVm.state.collectAsStateWithLifecycle()
     val shops by shopVm.shops.collectAsStateWithLifecycle()
-    val free = shops.size < FREE_SHOPS
+    val free = shops.count { it.staff == null } < FREE_SHOPS // staff shops aren't the owner's
     // null = checking; the saved plan decides instantly, a refresh catches a plan bought elsewhere.
     var hasPlan by remember { mutableStateOf<Boolean?>(null) }
     LaunchedEffect(Unit) {

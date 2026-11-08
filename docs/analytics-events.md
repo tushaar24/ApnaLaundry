@@ -163,6 +163,23 @@ Shown only when the server sends `experiments.staff` (LAUNDRY_STAFF_PHONES). The
 | `Staff Remove Cancelled` | `staff_id` | the confirm's Cancel / tap outside |
 | `Staff Removed` | `staff_id` | removed — their phone loses the shop |
 
+### Staff — the staff member's side (Android 1.0.20)
+
+In a shop worked as staff, **every** event also carries `role` = `staff`, `staff_id` and `owner_shop`, and the person's CleverTap profile isn't updated (their profile is `staff-<phone>` when they have no shop of their own).
+
+| Event | Properties | When |
+|---|---|---|
+| `Staff Logged In` | `shops` (staff shops for this number), `has_own_shop` | a staff login. Never a sign-up: no `Logged In` / Meta / install-attribution events for it |
+| `Staff Shop Opened` | `how` (`login`\|`switch`\|`added_prompt`) | a staff shop opened |
+| `Staff Own Shop Opened` | — | back to the person's own shop from a staff one |
+| `Staff Welcome Shown` | — | the once-only "Welcome Ramesh! You're staff at …" card on Home |
+| `Staff Welcome Closed` | — | its "Got it" |
+| `Staff Added Prompt` | `answer` (`shown`\|`open`\|`later`) | "Sharma Laundry added you as staff. Open it?" |
+| `Staff Removed Notice Shown` | — | the owner removed this phone from a shop (it leaves the phone) |
+| `Staff Renew Shown` | — | the owner's plan has ended: "ask the owner to renew" over the staff shop |
+| `Staff Renew Action` | `action` (`call`\|`switch`) | on that screen |
+| `Staff Changes Refused` | `rows` | the server put back changes this staff member isn't allowed to make |
+
 ### First customer on New order — A/B (Android 1.0.15, 2026-10-24)
 
 How a brand-new shop adds its first customer. Assigned by the backend

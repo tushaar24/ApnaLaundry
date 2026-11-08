@@ -241,7 +241,7 @@ class AssistantViewModel(
      */
     suspend fun orderAllowed(): Boolean {
         val made = repo.liveOrderCountAllShops()
-        val planEnded = shopDir.list().size > FREE_SHOPS
+        val planEnded = shopDir.list().count { it.staff == null } > FREE_SHOPS // staff shops aren't the owner's
         if (billing.savedActive() || (!planEnded && made < billing.savedFreeOrders())) return true
         billing.refreshSaved() // paid on the website / another phone since?
         return billing.savedActive() || (!planEnded && made < billing.savedFreeOrders())
