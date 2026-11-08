@@ -274,7 +274,10 @@ private fun MainNav(graph: Graph, opens: Opens) {
     // phone registered for pushes, and the unread-chats badge on the tab.
     val waCookie by remember { graph.prefs.settings.map { it.waCookie } }.collectAsStateWithLifecycle(null)
     var waUnread by remember { mutableIntStateOf(0) }
-    LaunchedEffect(Unit) { WaNotifier.ensureChannel(context) }
+    LaunchedEffect(Unit) {
+        WaNotifier.ensureChannel(context)
+        com.dailyworks.mylaundry.support.data.PaymentsNotifier.ensureChannel(context)
+    }
     LaunchedEffect(waCookie) {
         if (waCookie == null) { waUnread = 0; return@LaunchedEffect }
         WaPush.register(context)

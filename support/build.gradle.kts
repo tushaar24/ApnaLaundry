@@ -21,8 +21,8 @@ android {
         applicationId = "com.dailyworks.mylaundry.support"
         minSdk = 26
         targetSdk = 36
-        versionCode = 8
-        versionName = "1.7"
+        versionCode = 9
+        versionName = "1.8"
         vectorDrawables { useSupportLibrary = true }
         buildConfigField("String", "API_BASE_URL", "\"https://shwetamakeover.online/api/laundry/support\"")    }
 

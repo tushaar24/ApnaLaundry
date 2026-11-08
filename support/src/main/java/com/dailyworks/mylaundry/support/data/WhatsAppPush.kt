@@ -72,6 +72,50 @@ object WaNotifier {
     fun clear(context: Context, waId: String) = NotificationManagerCompat.from(context).cancel("wa-$waId", 0)
 }
 
+/**
+ * "💰 New paying shop" (8 Nov 2026): the server pushes an owner's first-ever payment to every
+ * support-app phone signed in to the WhatsApp tab. Tapping it opens the shop ("open_shop_id").
+ */
+object PaymentsNotifier {
+    const val CHANNEL = "payments"
+
+    fun ensureChannel(context: Context) {
+        context.getSystemService(NotificationManager::class.java).createNotificationChannel(
+            NotificationChannel(CHANNEL, "New paying shops", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "A shop owner paid for the first time"
+            },
+        )
+    }
+
+    fun show(context: Context, userId: String, title: String, body: String) {
+        val nm = NotificationManagerCompat.from(context)
+        if (!nm.areNotificationsEnabled()) return
+        ensureChannel(context)
+        val open = PendingIntent.getActivity(
+            context,
+            ("paid-$userId").hashCode(),
+            Intent(context, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                .putExtra(ReminderAlarms.EXTRA_OPEN_SHOP, userId),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val n = NotificationCompat.Builder(context, CHANNEL)
+            .setSmallIcon(android.R.drawable.star_on)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(open)
+            .setAutoCancel(true)
+            .build()
+        try {
+            nm.notify("paid-$userId", 0, n)
+        } catch (_: SecurityException) {
+            // Notifications not allowed.
+        }
+    }
+}
+
 /** Registers this phone's Firebase token with the server (needs the WhatsApp sign-in). */
 object WaPush {
     /** False until support/google-services.json is added and the app rebuilt. */
@@ -104,6 +148,15 @@ class SupportMessagingService : FirebaseMessagingService() {
     // Only while the app is open — in the background Android shows the push itself.
     override fun onMessageReceived(message: RemoteMessage) {
         val d = message.data
+        if (d["type"] == "paid") {
+            PaymentsNotifier.show(
+                applicationContext,
+                d["open_shop_id"] ?: return,
+                d["title"] ?: message.notification?.title ?: "New paying shop",
+                d["body"] ?: message.notification?.body.orEmpty(),
+            )
+            return
+        }
         if (d["type"] != "whatsapp") return
         val waId = d["waId"] ?: return
         WaNotifier.show(
