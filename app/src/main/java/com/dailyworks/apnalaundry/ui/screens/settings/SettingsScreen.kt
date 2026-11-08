@@ -161,13 +161,14 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Column(Modifier.weight(1f)) {
+                        // Wraps like the other rows (it was cut to one line); a gap before Add / Open.
+                        Column(Modifier.weight(1f).padding(end = 12.dp)) {
                             Text(tr("Staff"), style = fig(16, FontWeight.Bold))
                             val names = staffList.orEmpty().map { com.dailyworks.apnalaundry.ui.Selectors.firstName(it.name) }
                             Text(
                                 if (names.isEmpty()) tr("Let your workers use MyLaundry on their phones")
                                 else names.take(3).joinToString(", ") + " · " + tr("{n} staff", "n" to names.size),
-                                style = fig(13, color = Tokens.Muted), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                style = fig(13, color = Tokens.Muted),
                             )
                         }
                         Text(if (staffList.isNullOrEmpty()) tr("Add") else tr("Open"), style = fig(15, FontWeight.Bold, Tokens.Blue))
