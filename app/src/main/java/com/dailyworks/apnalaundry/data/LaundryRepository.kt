@@ -407,7 +407,8 @@ class LaundryRepository(private val shops: ShopDirectory) {
         return CmdResult(msg, undo, statusWa(st, delivered))
     }
 
-    suspend fun prepay(orderId: Int, method: PayMethod): CmdResult {
+    /** [from]: the bill screen's entry (new | edit | …), for analytics only. */
+    suspend fun prepay(orderId: Int, method: PayMethod, from: String? = null): CmdResult {
         val undo = snapshot()
         val st = current()
         val o = st.orders.first { it.id == orderId }
@@ -418,7 +419,7 @@ class LaundryRepository(private val shops: ShopDirectory) {
             ledgerDao.insert(mkEntry(o.custId, LedgerKind.GOT, due, method, PayTag.PRE, cover = due, ref = o.id).toEntity())
             putOrder(o.copy(pre = o.pre + due).toEntity())
         }
-        Analytics.paymentReceived(due, method, "prepay", o.custId, o.id)
+        Analytics.paymentReceived(due, method, "prepay", o.custId, o.id, from)
         return CmdResult(
             if (method == PayMethod.UPI) tr("Got {amount} UPI · order fully paid", "amount" to money(due))
             else tr("Got {amount} cash · order fully paid", "amount" to money(due)),
@@ -787,7 +788,9 @@ class LaundryRepository(private val shops: ShopDirectory) {
                 else -> tr("Order #{no} updated · new total {amount}", "no" to updated.no(), "amount" to money(after))
             }
             trackOrderSaved(updated, isEdit = true)
-            return SaveOrderResult(o.id, goToBill = false, toast = toast, undo = undo, edited = true)
+            // Money still to collect on an open order: the bill, to take it now — like a new order (owner, 9 Nov).
+            val due = LaundryMath.isOpen(updated) && after - updated.pre > 0
+            return SaveOrderResult(o.id, goToBill = due, toast = toast, undo = undo, edited = true)
         }
 
         // create

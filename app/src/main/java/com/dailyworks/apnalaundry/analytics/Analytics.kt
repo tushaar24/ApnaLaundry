@@ -424,13 +424,14 @@ object Analytics {
 
     // ---- payments & khata ----
 
-    fun paymentReceived(amount: Int, method: PayMethod, type: String, customerId: String, orderId: Int?) =
+    /** [from]: for a prepay on the bill, how the bill was reached (new = just created, edit = just edited, …). */
+    fun paymentReceived(amount: Int, method: PayMethod, type: String, customerId: String, orderId: Int?, from: String? = null) =
         track(
             "Payment Received",
             mapOf(
                 "amount" to amount, "method" to methodName(method), "type" to type,
                 "customer_id" to customerId, "order_id" to orderId,
-            ),
+            ) + (if (from != null) mapOf("from" to from) else emptyMap()),
         )
 
     fun oldBaakiAdded(amount: Int, customerId: String) =

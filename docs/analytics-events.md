@@ -84,7 +84,7 @@ Custom property keys are `snake_case`. `Charged` uses CleverTap's reserved
 
 | Event | Properties | Fired when |
 | ----- | ---------- | ---------- |
-| `Payment Received` | `amount`, `method` (`cash`\|`upi`), `type` (`delivery`\|`prepay`\|`khata`), `customer_id`, `order_id?` | any money-in |
+| `Payment Received` | `amount`, `method` (`cash`\|`upi`), `type` (`delivery`\|`prepay`\|`khata`), `customer_id`, `order_id?`, `from?` (prepay on the bill, Android 1.0.19: `new` = right after creating, `edit` = right after editing, else where the bill was opened from) | any money-in |
 | `Old Baaki Added` | `amount`, `customer_id` | pre-app debt recorded |
 | `Charged` | `Amount` (bill total), `payment_method`, `order_id`, `Items` (per-service) | on every `Order Delivered` — revenue event |
 

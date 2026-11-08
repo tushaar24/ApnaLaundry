@@ -97,7 +97,14 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 // banner
                 Column(Modifier.fillMaxWidth().rounded(16.dp).background(Tokens.Ink).padding(16.dp)) {
-                    Text(if (from == "new") tr("Order #{no} saved", "no" to o.no()) else tr("Bill for order #{no}", "no" to o.no()), style = bric(20, FontWeight.Bold, Tokens.OnDark))
+                    Text(
+                        when (from) {
+                            "new" -> tr("Order #{no} saved", "no" to o.no())
+                            "edit" -> tr("Order #{no} updated", "no" to o.no())
+                            else -> tr("Bill for order #{no}", "no" to o.no())
+                        },
+                        style = bric(20, FontWeight.Bold, Tokens.OnDark),
+                    )
                     Text(
                         if (o.lines.isNotEmpty()) tr("{items} · Total {amount}", "items" to Selectors.itemsLabel(o), "amount" to Money.rupees(amt))
                         else tr("Total {amount}", "amount" to Money.rupees(amt)),
@@ -189,8 +196,8 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
                             // The amount in the heading, so the two buttons stay short on any phone.
                             Text(tr("Paying now? {amount}", "amount" to Money.rupees(due)), style = fig(15, FontWeight.Bold))
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlineButton(tr("Got cash"), Modifier.weight(1f), height = 48.dp) { shopVm.prepay(o.id, PayMethod.CASH) }
-                                OutlineButton(tr("Got UPI"), Modifier.weight(1f), height = 48.dp) { shopVm.prepay(o.id, PayMethod.UPI) }
+                                OutlineButton(tr("Got cash"), Modifier.weight(1f), height = 48.dp) { shopVm.prepay(o.id, PayMethod.CASH, from) }
+                                OutlineButton(tr("Got UPI"), Modifier.weight(1f), height = 48.dp) { shopVm.prepay(o.id, PayMethod.UPI, from) }
                             }
                         }
                     }
