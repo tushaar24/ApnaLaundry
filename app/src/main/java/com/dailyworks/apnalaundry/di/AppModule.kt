@@ -42,15 +42,16 @@ val appModule = module {
     single { BillingRepository(get(), get()) }
     single { CheckoutBridge() }
 
-    single { LaundryRepository(get()) }
+    single { com.dailyworks.apnalaundry.data.sync.IdPool(get(), get(), get()) }
+    single { LaundryRepository(get(), get()) }
     single { LogoStore(androidContext(), get(), get()) }
     single { ShopsRepository(get(), get(), get()) }
-    single { SyncManager(get(), get(), get(), get()) }
+    single { SyncManager(get(), get(), get(), get(), get()) }
     single { SyncScheduler(get()) }
     single { FirebasePhoneAuth() }
     single { TourVoice(androidContext(), get()) }
     single { ExperimentsRepository(get(), get(), get()) }
-    single { com.dailyworks.apnalaundry.data.staff.StaffRepository(get(), get(), get()) }
+    single { com.dailyworks.apnalaundry.data.staff.StaffRepository(get(), get(), get(), get()) }
     single { com.dailyworks.apnalaundry.data.attribution.InstallAttributionRepository(androidContext(), get(), get(), get()) }
     single { AssistantApi(get(), get(), get()) }
     single { com.dailyworks.apnalaundry.data.AppConfigRepository(get(), get()) }

@@ -38,7 +38,11 @@ data class CmdResult(val toast: String, val undo: Snapshot? = null, val wa: Stri
  * has its own database, so every command below stays the one-shop code it
  * always was, and switching shops just points it at another file.
  */
-class LaundryRepository(private val shops: ShopDirectory) {
+class LaundryRepository(
+    private val shops: ShopDirectory,
+    // Staff (1.0.20): reserved numbers when several phones work in the shop (null in tests).
+    private val idPool: com.dailyworks.apnalaundry.data.sync.IdPool? = null,
+) {
     private val db: AppDatabase get() = shops.current
     private val shopDao get() = db.shopDao()
     private val serviceDao get() = db.serviceDao()
@@ -693,9 +697,11 @@ class LaundryRepository(private val shops: ShopDirectory) {
         }
         val id = db.withTransaction {
             val shopE = shopDao.get()!!
-            val id = "c${shopE.nextCust}"
+            // A shop with staff: a number reserved for this phone (never one another phone hands out).
+            val n = idPool?.take(shops.activeId.value, "customer")?.takeIf { customerDao.get("c$it") == null } ?: shopE.nextCust
+            val id = "c$n"
             customerDao.upsert(Customer(id, name, phone, address, 0, "—", 9).toEntity())
-            shopDao.upsert(shopE.copy(nextCust = shopE.nextCust + 1, dirty = true, updatedAt = SyncClock.now()))
+            shopDao.upsert(shopE.copy(nextCust = maxOf(shopE.nextCust, n + 1), dirty = true, updatedAt = SyncClock.now()))
             id
         }
         if (oldBaaki > 0) ledgerDao.insert(mkEntry(id, LedgerKind.OLD, oldBaaki).toEntity())
@@ -851,7 +857,8 @@ class LaundryRepository(private val shops: ShopDirectory) {
         // inside it, so a concurrent shop edit is never written over.
         val order = db.withTransaction {
             val shopE = shopDao.get()!!
-            val id = shopE.nextOrder
+            // A shop with staff: a number reserved for this phone (never one another phone hands out).
+            val id = idPool?.take(shops.activeId.value, "order")?.takeIf { orderDao.get(it) == null } ?: shopE.nextOrder
             val order = Order(
                 id = id, custId = fields.custId, pickup = fields.pickup, delivery = fields.delivery,
                 pickupDate = fields.pickupDate, pickupTime = fields.pickupTime, deliveryDate = fields.deliveryDate,
@@ -863,7 +870,7 @@ class LaundryRepository(private val shops: ShopDirectory) {
                 gstOn = gstOn && gstPct > 0, gstPct = gstPct, gstMode = gstMode, note = note.trim().take(500),
             )
             orderDao.upsert(order.toEntity())
-            shopDao.upsert(shopE.copy(nextOrder = id + 1, dirty = true, updatedAt = SyncClock.now()))
+            shopDao.upsert(shopE.copy(nextOrder = maxOf(shopE.nextOrder, id + 1), dirty = true, updatedAt = SyncClock.now()))
             touchCustomer(custId)
             order
         }

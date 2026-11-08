@@ -130,6 +130,17 @@ class Prefs(private val context: Context) {
     suspend fun syncCheckpoint(shop: String): Long = context.dataStore.data.first()[checkpointKey(shop)] ?: 0L
     suspend fun setSyncCheckpoint(shop: String, v: Long) { context.dataStore.edit { it[checkpointKey(shop)] = v } }
 
+    // Staff (1.0.20): reserved number blocks per shop and kind ("next,end"), and whether an owner's
+    // shop has staff (then it numbers from those blocks too). See data/sync/IdPool.
+    private fun idBlockKey(shop: String, kind: String) = stringPreferencesKey("id_block_${shop}_$kind")
+    suspend fun idBlock(shop: String, kind: String): Pair<Int, Int>? =
+        context.dataStore.data.first()[idBlockKey(shop, kind)]?.split(",")?.mapNotNull { it.toIntOrNull() }
+            ?.takeIf { it.size == 2 }?.let { it[0] to it[1] }
+    suspend fun setIdBlock(shop: String, kind: String, next: Int, end: Int) { context.dataStore.edit { it[idBlockKey(shop, kind)] = "$next,$end" } }
+    private fun hasStaffKey(shop: String) = booleanPreferencesKey("shop_has_staff_$shop")
+    suspend fun shopHasStaff(shop: String): Boolean = context.dataStore.data.first()[hasStaffKey(shop)] == true
+    suspend fun setShopHasStaff(shop: String, v: Boolean) { context.dataStore.edit { it[hasStaffKey(shop)] = v } }
+
     // Sync v2 (1.0.20): the shop's last server sequence (0 = none yet: pull by the time checkpoint).
     private fun seqKey(shop: String) = longPreferencesKey("sync_seq_$shop")
     suspend fun syncSeq(shop: String): Long = context.dataStore.data.first()[seqKey(shop)] ?: 0L

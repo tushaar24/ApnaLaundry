@@ -62,6 +62,7 @@ class StaffRepository(
     private val client: HttpClient,
     private val tokens: TokenManager,
     private val shops: ShopDirectory,
+    private val prefs: com.dailyworks.apnalaundry.data.Prefs,
 ) {
     private val base = BuildConfig.API_BASE_URL
 
@@ -77,6 +78,8 @@ class StaffRepository(
         val body = res.body<ListWire>()
         _planActive.value = body.planActive
         _staff.value = body.staff.map { it.toDomain() }
+        // A shop with staff numbers its orders from reserved blocks (data/sync/IdPool).
+        prefs.setShopHasStaff(shops.activeId.value, body.staff.isNotEmpty())
     }
 
     /** Adds a staff member; their app can log in right away. */

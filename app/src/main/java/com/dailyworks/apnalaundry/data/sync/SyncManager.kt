@@ -31,6 +31,7 @@ class SyncManager(
     private val prefs: Prefs,
     private val api: SyncApi,
     private val repo: LaundryRepository,
+    private val idPool: IdPool? = null,
 ) {
     sealed interface Result {
         data object Success : Result
@@ -42,7 +43,13 @@ class SyncManager(
     private val mutex = Mutex()
 
     suspend fun syncNow(): Result = runLocked {
-        forEachShop { pushOnce(it); pullOnce(it) }
+        forEachShop { pushOnce(it); pullOnce(it); topUpIds(it) }
+    }
+
+    /** Staff (1.0.20): keeps this phone's reserved order / customer numbers topped up. */
+    private suspend fun topUpIds(shop: String) {
+        val s = shops.db(shop).shopDao().get() ?: return
+        idPool?.topUp(shop, s.nextOrder, s.nextCust)
     }
 
     /**
