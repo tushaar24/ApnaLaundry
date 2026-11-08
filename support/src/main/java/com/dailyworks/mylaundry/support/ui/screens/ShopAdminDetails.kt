@@ -35,6 +35,11 @@ import com.dailyworks.mylaundry.support.ui.components.SectionCard
 import com.dailyworks.mylaundry.support.ui.components.ago
 import com.dailyworks.mylaundry.support.ui.theme.Tokens
 import com.dailyworks.mylaundry.support.ui.theme.fig
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
+import com.dailyworks.mylaundry.support.data.OwnerSummary
+import com.dailyworks.mylaundry.support.ui.components.StateBadge
+import com.dailyworks.mylaundry.support.ui.theme.bric
 import java.util.Locale
 import kotlin.math.roundToLong
 
@@ -92,9 +97,14 @@ fun ShopAdminDetails(userId: String) {
         }
         return
     }
+    AdminSections(o, ct, ctLoaded, showTotals = true)
+}
 
+/** The owner-panel sections (totals optional — the shop card shows its own). */
+@Composable
+fun AdminSections(o: AdminOwner, ct: Map<String, String>?, ctLoaded: Boolean, showTotals: Boolean) {
     // Totals
-    SectionCard("Totals") {
+    if (showTotals) SectionCard("Totals") {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Stat("Total orders", "%,d".format(Locale.ENGLISH, o.totals?.orders ?: 0), Modifier.weight(1f))
             Stat("Total sales", inr(o.totals?.sales ?: 0.0), Modifier.weight(1f))
@@ -204,5 +214,79 @@ private fun Stat(label: String, value: String, modifier: Modifier = Modifier) {
     Column(modifier.background(Tokens.Bg, RoundedCornerShape(12.dp)).padding(10.dp)) {
         Text(label, style = fig(12, FontWeight.SemiBold, Tokens.Muted))
         Text(value, style = fig(18, FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/**
+ * The shop at a glance for the calls flow (call notes, the queue): who it is, plan, usage,
+ * last call, total orders + sales, and "All details" with everything the shop page shows
+ * (admin login for the sales / details parts).
+ */
+@Composable
+fun ShopCard(userId: String, onOpenShop: ((String) -> Unit)? = null) {
+    val graph = (LocalContext.current.applicationContext as SupportApp).graph
+    val settings by graph.prefs.settings.collectAsStateWithLifecycle(null)
+    val signedIn = settings?.waCookie != null
+    var summary by remember(userId) { mutableStateOf<OwnerSummary?>(null) }
+    var admin by remember(userId) { mutableStateOf<AdminOwner?>(null) }
+    var ct by remember(userId) { mutableStateOf<Map<String, String>?>(null) }
+    var ctLoaded by remember(userId) { mutableStateOf(false) }
+    var expanded by rememberSaveable(userId) { mutableStateOf(false) }
+    LaunchedEffect(userId) { summary = runCatching { graph.api.shop(userId).owner }.getOrNull() }
+    LaunchedEffect(userId, signedIn) { if (signedIn) admin = runCatching { graph.wa.owner(userId) }.getOrNull() }
+    LaunchedEffect(userId, signedIn, expanded) {
+        if (signedIn && expanded && !ctLoaded) {
+            ct = runCatching { graph.wa.clevertap(userId) }.getOrNull()
+            ctLoaded = true
+        }
+    }
+
+    SectionCard {
+        val o = summary
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(o?.shopName ?: admin?.shop?.name ?: "Shop", style = bric(20), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                val who = listOfNotNull(o?.name, o?.phone?.let { "+91 ${it.take(5)} ${it.drop(5)}" }).joinToString(" · ")
+                if (who.isNotEmpty()) Text(who, style = fig(13, color = Tokens.InkSecondary))
+            }
+            o?.let { StateBadge(it.subscription.state) }
+        }
+        if (o != null) {
+            Text(
+                "${o.orders} orders · ${o.customers} customers · active ${ago(o.lastActiveAt)} · joined ${ago(o.joinedAt)}",
+                style = fig(13, color = Tokens.Muted),
+            )
+            val c = o.calls
+            Text(
+                if (c.count == 0) "Never called before"
+                else "Called ${c.count}× · last ${ago(c.lastAt)}" + (c.lastAgent?.let { " by $it" } ?: ""),
+                style = fig(13, FontWeight.SemiBold, if (c.count == 0) Tokens.Orange else Tokens.BlueText),
+            )
+        }
+        val a = admin
+        if (a?.totals != null) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Stat("Total orders", "%,d".format(Locale.ENGLISH, a.totals.orders), Modifier.weight(1f))
+                Stat("Total sales", inr(a.totals.sales), Modifier.weight(1f))
+                Stat("Baaki", if (a.baakiCustomers > 0) inr(a.baakiMarket) else "—", Modifier.weight(1f))
+            }
+        } else if (!signedIn) {
+            Text("Sign in on the WhatsApp tab to see sales and all the shop's details here.", style = fig(12, color = Tokens.Faint))
+        }
+        Row {
+            if (signedIn) {
+                TextButton(onClick = { expanded = !expanded }) {
+                    Text(if (expanded) "Hide details ▴" else "All details ▾", style = fig(14, FontWeight.Bold, Tokens.Blue))
+                }
+            }
+            onOpenShop?.let { open ->
+                TextButton(onClick = { open(userId) }) { Text("Open shop page", style = fig(14, FontWeight.Bold, Tokens.Blue)) }
+            }
+        }
+    }
+    if (expanded) {
+        val a = admin
+        if (a != null) AdminSections(a, ct, ctLoaded, showTotals = false)
+        else SectionCard { Text("Loading…", style = fig(14, color = Tokens.Muted)) }
     }
 }

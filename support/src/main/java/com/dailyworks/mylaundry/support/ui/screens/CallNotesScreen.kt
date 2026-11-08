@@ -318,6 +318,8 @@ fun CallNotesScreen(vm: CallNotesViewModel, onBack: () -> Unit, onOpenShop: (Str
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     StatusCard(ui, call, onEnded = vm::finalize, onOpenShop = onOpenShop)
+                    // Who you're talking to: plan, usage, sales, and all the shop's details.
+                    call.userId?.let { ShopCard(it, onOpenShop) }
 
                     SectionCard("How did it go?") {
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

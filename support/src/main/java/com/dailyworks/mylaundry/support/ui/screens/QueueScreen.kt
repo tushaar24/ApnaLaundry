@@ -145,6 +145,8 @@ fun QueueScreen(graph: Graph, placing: Boolean, onBack: () -> Unit, onCall: (Que
                     }
                 }
             }
+            // The next person's shop: plan, usage, sales, all details.
+            current?.let { c -> item(key = "shop-" + c.userId) { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { ShopCard(c.userId, onOpenShop) } } }
             if (queue.isNotEmpty()) item { Text("Everyone · ${queue.size}", style = fig(16, FontWeight.Bold), modifier = Modifier.padding(top = 6.dp)) }
             itemsIndexed(queue) { i, item ->
                 val isNext = item == current
