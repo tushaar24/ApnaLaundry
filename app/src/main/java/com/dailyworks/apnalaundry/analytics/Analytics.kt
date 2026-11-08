@@ -590,13 +590,17 @@ object Analytics {
     fun expenseCategorySheetClosed(mode: String, how: String, query: String) =
         track("Expense Category Sheet Closed", mapOf("mode" to mode, "how" to how, "query" to query))
 
-    /** The greyed Save tapped. [missing]: amount | category | amount_category. */
+    /** The greyed Save tapped. [missing]: amount (the only thing Save needs). */
     fun expenseSaveBlocked(mode: String, missing: String) = track("Expense Save Blocked", mapOf("mode" to mode, "missing" to missing))
 
-    fun expenseSaved(category: String, amount: Int, custom: Boolean, isNew: Boolean, hasNote: Boolean, daysAgo: Int) =
+    /** [categoryPicked] false = no category chosen, so it went to Other. */
+    fun expenseSaved(category: String, amount: Int, custom: Boolean, isNew: Boolean, hasNote: Boolean, daysAgo: Int, categoryPicked: Boolean) =
         track(
             if (isNew) "Expense Added" else "Expense Edited",
-            mapOf("category" to category, "custom" to custom, "amount" to amount, "has_note" to hasNote, "days_ago" to daysAgo),
+            mapOf(
+                "category" to category, "custom" to custom, "amount" to amount, "has_note" to hasNote, "days_ago" to daysAgo,
+                "category_picked" to categoryPicked,
+            ),
         )
 
     /** "Delete expense" tapped (the confirm dialog opens). */

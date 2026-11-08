@@ -345,9 +345,10 @@ class ShopViewModel(
     // ---- expenses (1.0.19) ----
     fun newExpenseId(): String = repo.newExpenseId()
 
-    fun saveExpense(e: Expense, isNew: Boolean) = launchCmd {
+    /** [categoryPicked] false = saved without a category (it went to Other). */
+    fun saveExpense(e: Expense, isNew: Boolean, categoryPicked: Boolean) = launchCmd {
         repo.saveExpense(e)
-        Analytics.expenseSaved(e.category, e.amt, ExpenseCategory.known(e.category) == null, isNew, e.note.isNotBlank(), AppDate.daysBetween(e.date, AppDate.TODAY))
+        Analytics.expenseSaved(e.category, e.amt, ExpenseCategory.known(e.category) == null, isNew, e.note.isNotBlank(), AppDate.daysBetween(e.date, AppDate.TODAY), categoryPicked)
         CmdResult(if (isNew) tr("Expense added") else tr("Expense updated"))
     }
 

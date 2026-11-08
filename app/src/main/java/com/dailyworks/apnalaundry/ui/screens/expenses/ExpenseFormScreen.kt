@@ -76,8 +76,8 @@ import com.dailyworks.apnalaundry.ui.theme.Tokens
 
 /**
  * Add or change an expense (1.0.19), a page of its own: the amount, the day and an optional
- * note, then what it was for — "+ Add category" opens [CategorySheet] over the page. [id] empty
- * = a new expense.
+ * note, then what it was for — optional ("+ Add category" opens [CategorySheet] over the page;
+ * none = Other). [id] empty = a new expense.
  */
 @Composable
 fun ExpenseFormScreen(shopVm: ShopViewModel, navigator: AppNavigator, id: String) {
@@ -148,7 +148,7 @@ fun ExpenseFormScreen(shopVm: ShopViewModel, navigator: AppNavigator, id: String
             Labelled(tr("Note (optional)")) {
                 FieldBox(note, { note = it.take(200) }, Modifier.fillMaxWidth())
             }
-            Labelled(tr("Category")) {
+            Labelled(tr("Category (optional)")) {
                 if (category.isBlank()) {
                     OutlineButton("+ " + tr("Add category"), Modifier.fillMaxWidth(), height = 52.dp) {
                         Analytics.expenseCategoryTapped(mode, "add")
@@ -170,17 +170,15 @@ fun ExpenseFormScreen(shopVm: ShopViewModel, navigator: AppNavigator, id: String
         }
 
         Column(Modifier.fillMaxWidth().background(Tokens.Card).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (amt > 0 && category.isBlank()) {
-                Text(tr("Add a category to save."), style = fig(13, color = Tokens.Muted), modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
-            }
             PrimaryButton(
-                tr("Save"), Modifier.fillMaxWidth(), enabled = amt > 0 && category.isNotBlank(), height = 56.dp,
+                tr("Save"), Modifier.fillMaxWidth(), enabled = amt > 0, height = 56.dp,
                 onDisabledClick = {
-                    Analytics.expenseSaveBlocked(mode, listOfNotNull("amount".takeIf { amt <= 0 }, "category".takeIf { category.isBlank() }).joinToString("_"))
+                    Analytics.expenseSaveBlocked(mode, "amount")
                 },
             ) {
-                val x = initial.copy(amt = amt, category = category, date = date, note = note.trim())
-                shopVm.saveExpense(if (isNew) x.copy(id = shopVm.newExpenseId(), ts = System.currentTimeMillis()) else x, isNew)
+                // No category picked: Other.
+                val x = initial.copy(amt = amt, category = category.ifBlank { ExpenseCategory.OTHER.key }, date = date, note = note.trim())
+                shopVm.saveExpense(if (isNew) x.copy(id = shopVm.newExpenseId(), ts = System.currentTimeMillis()) else x, isNew, category.isNotBlank())
                 navigator.back()
             }
         }

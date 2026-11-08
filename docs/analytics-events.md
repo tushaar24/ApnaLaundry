@@ -129,8 +129,8 @@ Custom property keys are `snake_case`. `Charged` uses CleverTap's reserved
 | `Expense Category Delete Cancelled` | `mode`, `category` | the delete confirm's Cancel / a tap outside (Android 1.0.19) |
 | `Expense Category Deleted` | `mode`, `category`, `expenses` (moved to Other) | a category deleted; its expenses move to Other (Android 1.0.19) |
 | `Expense Category Sheet Closed` | `mode`, `how` (`picked`\|`added`\|`dismissed`), `query` (what was in the search box, "" = nothing) | the category list closed (Android 1.0.19) |
-| `Expense Save Blocked` | `mode`, `missing` (`amount`\|`category`\|`amount_category`) | the greyed Save tapped (Android 1.0.19) |
-| `Expense Added` | `category` (`rent`\|`salary`\|`electricity`\|`supplies`\|`fuel`\|`water`\|`packing`\|`transport`\|`repairs`\|`other`, or the name of a category the owner added), `custom` (bool), `amount`, `has_note` (bool), `days_ago` | a new expense saved (Android 1.0.19) |
+| `Expense Save Blocked` | `mode`, `missing` (`amount` — the only thing Save needs) | the greyed Save tapped (Android 1.0.19) |
+| `Expense Added` | `category` (`rent`\|`salary`\|`electricity`\|`supplies`\|`fuel`\|`water`\|`packing`\|`transport`\|`repairs`\|`other`, or the name of a category the owner added), `custom` (bool), `amount`, `has_note` (bool), `days_ago`, `category_picked` (bool — false: no category chosen, saved as `other`) | a new expense saved (Android 1.0.19) |
 | `Expense Edited` | as `Expense Added` | an expense changed and saved (Android 1.0.19) |
 | `Expense Page Closed` | `mode`, `amount_entered` (bool), `category_picked` (bool) | the page left without Save / Delete — back arrow or the phone's Back (Android 1.0.19) |
 | `Expense Delete Tapped` | `category`, `amount` | "Delete expense" tapped — the confirm dialog opens (Android 1.0.19) |
