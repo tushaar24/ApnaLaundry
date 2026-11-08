@@ -83,7 +83,7 @@ data class PaymentRow(
 )
 
 @Serializable
-data class TagDto(val id: String, val name: String, val color: String, val calls: Int? = null)
+data class TagDto(val id: String, val name: String, val color: String, val calls: Int? = null, val reminders: Int? = null)
 
 @Serializable
 data class RecordingDto(
@@ -177,10 +177,17 @@ data class ReminderDto(
     val phone: String? = null,
     val ownerName: String? = null,
     val shopName: String? = null,
+    /** What it's about ("Call", "Follow up", or the team's own tags). */
+    val tags: List<TagDto> = emptyList(),
 ) {
     val title get() = shopName ?: ownerName ?: "+91 ${phone.orEmpty()}"
-    val isCall get() = kind == "call"
+
+    /** "Call · Payment" (falls back to the old kind when a reminder has no tags). */
+    val tagLine get() = tags.joinToString(" · ") { it.name }.ifBlank { if (kind == "follow_up") "Follow up" else "Reminder" }
 }
+
+/** The tag a new reminder starts with ("Call"). */
+const val DEFAULT_REMINDER_TAG = "rtag_call"
 
 @Serializable internal data class RemindersEnvelope(val reminders: List<ReminderDto> = emptyList())
 @Serializable internal data class ReminderEnvelope(val reminder: ReminderDto)

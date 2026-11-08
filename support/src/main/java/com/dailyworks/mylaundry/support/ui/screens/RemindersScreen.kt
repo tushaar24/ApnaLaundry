@@ -55,6 +55,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import com.dailyworks.mylaundry.support.data.TagDto
+import com.dailyworks.mylaundry.support.ui.components.parseColor
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -78,7 +83,9 @@ data class RemindersUi(
     val whenFilter: RemindersWhen = RemindersWhen.TODAY,
     /** For [RemindersWhen.DATE]. */
     val date: LocalDate? = null,
-    val kind: String? = null, // null = all, "call", "follow_up"
+    /** Tag filter: reminders with any of these tags; empty = all. */
+    val tagIds: Set<String> = emptySet(),
+    val tags: List<TagDto> = emptyList(),
     val items: List<ReminderDto> = emptyList(),
     val loading: Boolean = true,
     val refreshing: Boolean = false,
@@ -87,7 +94,7 @@ data class RemindersUi(
     val saving: Boolean = false,
     val message: String? = null,
 ) {
-    val shown get() = items.filter { (kind == null || it.kind == kind) && (!mine || it.agentName == agent) }
+    val shown get() = items.filter { r -> (tagIds.isEmpty() || r.tags.any { it.id in tagIds }) && (!mine || r.agentName == agent) }
 }
 
 class RemindersViewModel(private val graph: Graph, private val appContext: Context) : ViewModel() {
@@ -100,6 +107,7 @@ class RemindersViewModel(private val graph: Graph, private val appContext: Conte
             _ui.update { it.copy(agent = graph.prefs.settings.first().agentName) }
             load()
         }
+        loadTags()
     }
 
     fun setWhen(w: RemindersWhen, date: LocalDate? = null) {
@@ -108,7 +116,13 @@ class RemindersViewModel(private val graph: Graph, private val appContext: Conte
     }
 
     fun setMine(mine: Boolean) = _ui.update { it.copy(mine = mine) }
-    fun setKind(kind: String?) = _ui.update { it.copy(kind = kind) }
+    fun toggleTag(id: String?) = _ui.update {
+        it.copy(tagIds = if (id == null) emptySet() else if (id in it.tagIds) it.tagIds - id else it.tagIds + id)
+    }
+
+    fun loadTags() {
+        viewModelScope.launch { runCatching { graph.api.reminderTags() }.onSuccess { t -> _ui.update { it.copy(tags = t) } } }
+    }
 
     fun load(refreshing: Boolean = false) {
         loadJob?.cancel()
@@ -169,9 +183,9 @@ class RemindersViewModel(private val graph: Graph, private val appContext: Conte
 
     fun edit(r: ReminderDto?) = _ui.update { it.copy(editing = r, message = null) }
 
-    fun reschedule(r: ReminderDto, at: Instant, kind: String, note: String) {
+    fun reschedule(r: ReminderDto, at: Instant, tagIds: List<String>, note: String) {
         _ui.update { it.copy(saving = true) }
-        change { graph.api.updateReminder(r.id, dueAtIso = at.toString(), kind = kind, note = note, done = false) }
+        change { graph.api.updateReminder(r.id, dueAtIso = at.toString(), tagIds = tagIds, note = note, done = false) }
     }
 }
 
@@ -201,6 +215,7 @@ fun RemindersScreen(
     val context = LocalContext.current
     LifecycleResumeEffect(Unit) {
         vm.load()
+        vm.loadTags()
         onPauseOrDispose { }
     }
     val chipColors = FilterChipDefaults.filterChipColors(
@@ -237,8 +252,26 @@ fun RemindersScreen(
             item {
                 FilterChip(selected = !ui.mine, onClick = { vm.setMine(false) }, label = { Text("Everyone", style = fig(13, FontWeight.SemiBold, Color.Unspecified)) }, shape = RoundedCornerShape(999.dp), colors = chipColors)
             }
-            items(listOf(null to "All", "call" to "Calls", "follow_up" to "Follow-ups")) { (k, label) ->
-                FilterChip(selected = ui.kind == k, onClick = { vm.setKind(k) }, label = { Text(label, style = fig(13, FontWeight.SemiBold, Color.Unspecified)) }, shape = RoundedCornerShape(999.dp), colors = chipColors)
+        }
+        // Tags (any of the picked ones), like the call tags
+        LazyRow(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            item {
+                FilterChip(
+                    selected = ui.tagIds.isEmpty(), onClick = { vm.toggleTag(null) },
+                    label = { Text("All tags", style = fig(13, FontWeight.SemiBold, Color.Unspecified)) },
+                    shape = RoundedCornerShape(999.dp), colors = chipColors,
+                )
+            }
+            items(ui.tags, key = { it.id }) { t ->
+                val on = t.id in ui.tagIds
+                val c = parseColor(t.color)
+                FilterChip(
+                    selected = on, onClick = { vm.toggleTag(t.id) },
+                    label = { Text(t.name, style = fig(13, FontWeight.SemiBold, Color.Unspecified)) },
+                    leadingIcon = { Spacer(Modifier.size(8.dp).background(c, RoundedCornerShape(999.dp))) },
+                    shape = RoundedCornerShape(999.dp),
+                    colors = FilterChipDefaults.filterChipColors(containerColor = Tokens.Card, selectedContainerColor = c.copy(alpha = 0.16f), selectedLabelColor = c, labelColor = Tokens.Ink),
+                )
             }
         }
         val shown = ui.shown
@@ -302,11 +335,11 @@ fun RemindersScreen(
             title = "Reschedule · ${r.title}",
             saving = ui.saving,
             error = ui.message,
-            initialKind = r.kind,
+            initialTagIds = r.tags.map { it.id },
             initialNote = r.note,
             initialAt = parseInstant(r.dueAt)?.takeIf { it.isAfter(Instant.now()) },
             onDismiss = { vm.edit(null) },
-            onSave = { at, kind, note -> vm.reschedule(r, at, kind, note) },
+            onSave = { at, tagIds, note -> vm.reschedule(r, at, tagIds, note) },
         )
     }
 }
@@ -320,7 +353,7 @@ private fun DoneRow(r: ReminderDto, onReopen: () -> Unit, onOpenShop: () -> Unit
                 val doneAt = parseInstant(r.doneAt)?.atZone(ZoneId.systemDefault())
                 Text(
                     listOfNotNull(
-                        if (r.isCall) "Call" else "Follow up",
+                        r.tagLine,
                         doneAt?.let { "done ${it.format(DateTimeFormatter.ofPattern("d MMM, h:mm a", Locale.ENGLISH))}" },
                         "by ${r.agentName}",
                     ).joinToString(" · "),

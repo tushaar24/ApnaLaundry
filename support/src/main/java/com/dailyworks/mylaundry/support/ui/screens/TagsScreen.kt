@@ -24,6 +24,8 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -60,6 +62,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class TagsUi(
+    /** false = call tags, true = reminder tags. */
+    val reminders: Boolean = false,
     val tags: List<TagDto> = emptyList(),
     val loading: Boolean = true,
     val error: String? = null,
@@ -72,11 +76,16 @@ class TagsViewModel(private val graph: Graph) : ViewModel() {
 
     init { load() }
 
+    fun setReminders(on: Boolean) {
+        _ui.update { it.copy(reminders = on, tags = emptyList(), message = null) }
+        load()
+    }
+
     fun load() {
         _ui.update { it.copy(loading = it.tags.isEmpty(), error = null) }
         viewModelScope.launch {
             try {
-                val tags = graph.api.tags()
+                val tags = if (_ui.value.reminders) graph.api.reminderTags() else graph.api.tags()
                 _ui.update { it.copy(tags = tags, loading = false) }
             } catch (e: ApiException) {
                 _ui.update { it.copy(loading = false, error = e.message) }
@@ -96,9 +105,13 @@ class TagsViewModel(private val graph: Graph) : ViewModel() {
         }
     }
 
-    fun create(name: String, color: String) = act { graph.api.createTag(name, color) }
-    fun update(id: String, name: String, color: String) = act { graph.api.updateTag(id, name, color) }
-    fun delete(id: String) = act { graph.api.deleteTag(id) }
+    fun create(name: String, color: String) = act {
+        if (_ui.value.reminders) graph.api.createReminderTag(name, color) else graph.api.createTag(name, color)
+    }
+    fun update(id: String, name: String, color: String) = act {
+        if (_ui.value.reminders) graph.api.updateReminderTag(id, name, color) else graph.api.updateTag(id, name, color)
+    }
+    fun delete(id: String) = act { if (_ui.value.reminders) graph.api.deleteReminderTag(id) else graph.api.deleteTag(id) }
 }
 
 @Composable
@@ -111,8 +124,19 @@ fun TagsScreen(vm: TagsViewModel) {
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             Text("Tags", style = bric(26), modifier = Modifier.padding(start = 16.dp, top = 12.dp))
+            Row(Modifier.padding(start = 16.dp, top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(false to "Call tags", true to "Reminder tags").forEach { (on, label) ->
+                    FilterChip(
+                        selected = ui.reminders == on, onClick = { vm.setReminders(on) },
+                        label = { Text(label, style = fig(14, FontWeight.SemiBold, androidx.compose.ui.graphics.Color.Unspecified)) },
+                        shape = RoundedCornerShape(999.dp),
+                        colors = FilterChipDefaults.filterChipColors(containerColor = Tokens.Card, selectedContainerColor = Tokens.Ink, selectedLabelColor = Tokens.OnDark, labelColor = Tokens.Ink),
+                    )
+                }
+            }
             Text(
-                "Label calls so the team can filter shop owners by them.",
+                if (ui.reminders) "What reminders are about (Call, Follow up, …). Filter reminders by them."
+                else "Label calls so the team can filter shop owners by them.",
                 style = fig(14, color = Tokens.Muted),
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 8.dp),
             )
@@ -135,8 +159,9 @@ fun TagsScreen(vm: TagsViewModel) {
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             TagChip(t.name, t.color)
+                            val n = (if (ui.reminders) t.reminders else t.calls) ?: 0
                             Text(
-                                "${t.calls ?: 0} call${if (t.calls == 1) "" else "s"}",
+                                "$n ${if (ui.reminders) "reminder" else "call"}${if (n == 1) "" else "s"}",
                                 style = fig(13, color = Tokens.Muted),
                                 modifier = Modifier.weight(1f).padding(start = 10.dp),
                             )
@@ -167,7 +192,10 @@ fun TagsScreen(vm: TagsViewModel) {
         AlertDialog(
             onDismissRequest = { deleting = null },
             title = { Text("Delete “${t.name}”?", style = fig(18, FontWeight.Bold)) },
-            text = { Text("It will be removed from ${t.calls ?: 0} call(s). This can't be undone.", style = fig(15)) },
+            text = {
+                val n = (if (ui.reminders) t.reminders else t.calls) ?: 0
+                Text("It will be removed from $n ${if (ui.reminders) "reminder" else "call"}(s). This can't be undone.", style = fig(15))
+            },
             confirmButton = {
                 TextButton(onClick = { deleting = null; vm.delete(t.id) }) { Text("Delete", style = fig(15, FontWeight.Bold, Tokens.Red)) }
             },

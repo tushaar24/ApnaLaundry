@@ -76,7 +76,7 @@ object ReminderAlarms {
                 if (r != null) {
                     putExtra("id", r.id)
                     putExtra("userId", r.userId)
-                    putExtra("title", if (r.isCall) "Call ${r.title}" else "Follow up: ${r.title}")
+                    putExtra("title", "⏰ ${r.title} · ${r.tagLine}")
                     putExtra("text", r.note.ifBlank { "+91 ${r.phone.orEmpty()}" })
                 }
             },

@@ -161,9 +161,9 @@ class CallsViewModel(private val graph: Graph, private val appContext: android.c
 
     fun edit(r: ReminderDto?) = _ui.update { it.copy(editing = r, message = null) }
 
-    fun reschedule(r: ReminderDto, at: Instant, kind: String, note: String) {
+    fun reschedule(r: ReminderDto, at: Instant, tagIds: List<String>, note: String) {
         _ui.update { it.copy(saving = true) }
-        change { graph.api.updateReminder(r.id, dueAtIso = at.toString(), kind = kind, note = note) }
+        change { graph.api.updateReminder(r.id, dueAtIso = at.toString(), tagIds = tagIds, note = note) }
     }
 }
 
@@ -279,11 +279,11 @@ fun CallsScreen(
             title = "Reschedule · ${r.title}",
             saving = ui.saving,
             error = ui.message,
-            initialKind = r.kind,
+            initialTagIds = r.tags.map { it.id },
             initialNote = r.note,
             initialAt = parseInstant(r.dueAt)?.takeIf { it.isAfter(Instant.now()) },
             onDismiss = { vm.edit(null) },
-            onSave = { at, kind, note -> vm.reschedule(r, at, kind, note) },
+            onSave = { at, tagIds, note -> vm.reschedule(r, at, tagIds, note) },
         )
     }
 }

@@ -50,6 +50,14 @@ import androidx.compose.ui.unit.dp
 import com.dailyworks.mylaundry.support.data.ReminderDto
 import com.dailyworks.mylaundry.support.ui.theme.Tokens
 import com.dailyworks.mylaundry.support.ui.theme.fig
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import com.dailyworks.mylaundry.support.SupportApp
+import com.dailyworks.mylaundry.support.data.ApiException
+import com.dailyworks.mylaundry.support.data.DEFAULT_REMINDER_TAG
+import com.dailyworks.mylaundry.support.data.TagDto
+import com.dailyworks.mylaundry.support.ui.screens.TagEditDialog
+import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -63,23 +71,32 @@ fun reminderTime(at: Instant): String =
     at.atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("EEE d MMM, h:mm a", Locale.ENGLISH))
 
 /**
- * Schedule (or change) a reminder: call or follow up, when (quick picks or any date + time)
- * and a note. [onSave] gets the time, the kind ("call" | "follow_up") and the note.
+ * Schedule (or change) a reminder: its tags ("Call", "Follow up", the team's own — "+ New tag"
+ * adds one), when (quick picks or any date + time) and a note. [onSave] gets the time, the
+ * tag ids and the note.
  */
 @Composable
 fun ReminderDialog(
     title: String,
     saving: Boolean,
     error: String?,
-    initialKind: String = "call",
+    initialTagIds: List<String> = listOf(DEFAULT_REMINDER_TAG),
     initialNote: String = "",
     initialAt: Instant? = null,
     onDismiss: () -> Unit,
-    onSave: (Instant, String, String) -> Unit,
+    onSave: (Instant, List<String>, String) -> Unit,
 ) {
     val context = LocalContext.current
     val zone = ZoneId.systemDefault()
-    var kind by remember { mutableStateOf(initialKind) }
+    val graph = (context.applicationContext as SupportApp).graph
+    var allTags by remember { mutableStateOf<List<TagDto>?>(null) }
+    var tagIds by remember { mutableStateOf(initialTagIds.toSet()) }
+    var newTagOpen by remember { mutableStateOf(false) }
+    var tagError by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(Unit) {
+        allTags = runCatching { graph.api.reminderTags() }.getOrElse { tagError = (it as? ApiException)?.message; emptyList() }
+    }
     var note by remember { mutableStateOf(initialNote) }
     var at by remember { mutableStateOf(initialAt) }
     val now = ZonedDateTime.now(zone)
@@ -112,15 +129,33 @@ fun ReminderDialog(
         title = { Text(title, style = fig(18, FontWeight.Bold)) },
         text = {
             Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("call" to "Call", "follow_up" to "Follow up").forEach { (k, label) ->
+                Text("Tags", style = fig(13, FontWeight.Bold, Tokens.Muted))
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val tags = allTags
+                    if (tags == null) Text("Loading tags…", style = fig(13, color = Tokens.Muted))
+                    tags?.forEach { t ->
+                        val on = t.id in tagIds
+                        val c = parseColor(t.color)
                         FilterChip(
-                            selected = kind == k, onClick = { kind = k },
-                            label = { Text(label, style = fig(14, FontWeight.SemiBold, Color.Unspecified)) },
-                            shape = RoundedCornerShape(999.dp), colors = chipColors,
+                            selected = on,
+                            onClick = { tagIds = if (on) tagIds - t.id else tagIds + t.id },
+                            label = { Text(t.name, style = fig(14, FontWeight.SemiBold, Color.Unspecified)) },
+                            leadingIcon = { Spacer(Modifier.size(8.dp).background(c, RoundedCornerShape(999.dp))) },
+                            shape = RoundedCornerShape(999.dp),
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = c.copy(alpha = 0.16f), selectedLabelColor = c, labelColor = Tokens.Ink,
+                            ),
+                        )
+                    }
+                    if (tags != null) {
+                        FilterChip(
+                            selected = false, onClick = { newTagOpen = true },
+                            label = { Text("+ New tag", style = fig(14, FontWeight.SemiBold, Tokens.Blue)) },
+                            shape = RoundedCornerShape(999.dp),
                         )
                     }
                 }
+                tagError?.let { Text(it, style = fig(12, color = Tokens.Red)) }
                 Text("When", style = fig(13, FontWeight.Bold, Tokens.Muted))
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     picks.forEach { (label, t) ->
@@ -147,12 +182,33 @@ fun ReminderDialog(
         },
         confirmButton = {
             val t = at
-            TextButton(onClick = { if (t != null) onSave(t, kind, note.trim()) }, enabled = !saving && t != null && t.isAfter(Instant.now())) {
+            TextButton(onClick = { if (t != null) onSave(t, tagIds.toList(), note.trim()) }, enabled = !saving && t != null && t.isAfter(Instant.now())) {
                 Text(if (saving) "Saving…" else "Save", style = fig(15, FontWeight.Bold, Tokens.Blue))
             }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", style = fig(15, FontWeight.SemiBold)) } },
     )
+    if (newTagOpen) {
+        TagEditDialog(
+            title = "New reminder tag",
+            initialName = "",
+            initialColor = null,
+            onDismiss = { newTagOpen = false },
+            onSave = { name, color ->
+                newTagOpen = false
+                scope.launch {
+                    try {
+                        val t = graph.api.createReminderTag(name, color)
+                        allTags = (allTags.orEmpty() + t).sortedBy { it.name.lowercase() }
+                        tagIds = tagIds + t.id
+                        tagError = null
+                    } catch (e: ApiException) {
+                        tagError = e.message
+                    }
+                }
+            },
+        )
+    }
 }
 
 /** "Overdue · Mon 10 Nov, 10:00 am" / "Today, 4:00 pm" / "Tue 11 Nov, 10:00 am". */
@@ -189,7 +245,11 @@ fun ReminderRow(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("⏰ $whenText", style = fig(13, FontWeight.Bold, if (overdue) Tokens.Red else Tokens.BlueText), modifier = Modifier.weight(1f))
-            Text(if (r.isCall) "Call" else "Follow up", style = fig(12, FontWeight.Bold, Tokens.Muted))
+        }
+        if (r.tags.isNotEmpty()) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                r.tags.forEach { TagChip(it.name, it.color) }
+            }
         }
         if (showShop) Text(r.title, style = fig(16, FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (r.note.isNotBlank()) Text(r.note, style = fig(14, color = Tokens.InkSecondary))

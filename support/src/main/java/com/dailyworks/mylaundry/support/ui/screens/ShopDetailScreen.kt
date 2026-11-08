@@ -124,12 +124,12 @@ class ShopDetailViewModel(private val graph: Graph, private val userId: String) 
         }
     }
 
-    fun saveReminder(context: android.content.Context, at: java.time.Instant, kind: String, note: String) {
+    fun saveReminder(context: android.content.Context, at: java.time.Instant, tagIds: List<String>, note: String) {
         val editing = _ui.value.editing
         reminderChange(context) {
             val agent = graph.prefs.current().agentName
-            if (editing == null) graph.api.createReminder(userId, agent, at.toString(), kind, note)
-            else graph.api.updateReminder(editing.id, dueAtIso = at.toString(), kind = kind, note = note)
+            if (editing == null) graph.api.createReminder(userId, agent, at.toString(), tagIds, note)
+            else graph.api.updateReminder(editing.id, dueAtIso = at.toString(), tagIds = tagIds, note = note)
         }
     }
 
@@ -179,11 +179,11 @@ fun ShopDetailScreen(
             title = if (editing == null) "Remind me" else "Reschedule",
             saving = ui.savingReminder,
             error = ui.reminderError,
-            initialKind = editing?.kind ?: "call",
+            initialTagIds = editing?.tags?.map { it.id } ?: listOf(com.dailyworks.mylaundry.support.data.DEFAULT_REMINDER_TAG),
             initialNote = editing?.note.orEmpty(),
             initialAt = editing?.let { parseInstant(it.dueAt) }?.takeIf { it.isAfter(java.time.Instant.now()) },
             onDismiss = { vm.remind(false) },
-            onSave = { at, kind, note -> vm.saveReminder(context, at, kind, note) },
+            onSave = { at, tagIds, note -> vm.saveReminder(context, at, tagIds, note) },
         )
     }
     var askOutsideCall by remember { mutableStateOf(false) }

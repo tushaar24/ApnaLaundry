@@ -128,9 +128,10 @@ class SupportApi(private val baseUrl: String = BuildConfig.API_BASE_URL) {
             }
         }.call
 
-    suspend fun reminders(fromIso: String?, toIso: String?, agent: String? = null, open: Boolean = true, userId: String? = null): List<ReminderDto> =
+    suspend fun reminders(fromIso: String?, toIso: String?, agent: String? = null, open: Boolean = true, userId: String? = null, tagIds: Set<String> = emptySet()): List<ReminderDto> =
         call<RemindersEnvelope> {
             client.get(url("/reminders")) {
+                if (tagIds.isNotEmpty()) parameter("tag", tagIds.joinToString(","))
                 fromIso?.let { parameter("from", it) }
                 toIso?.let { parameter("to", it) }
                 agent?.let { parameter("agent", it) }
@@ -139,7 +140,7 @@ class SupportApi(private val baseUrl: String = BuildConfig.API_BASE_URL) {
             }
         }.reminders
 
-    suspend fun createReminder(userId: String, agentName: String, dueAtIso: String, kind: String, note: String): ReminderDto =
+    suspend fun createReminder(userId: String, agentName: String, dueAtIso: String, tagIds: List<String>, note: String): ReminderDto =
         call<ReminderEnvelope> {
             client.post(url("/reminders")) {
                 contentType(ContentType.Application.Json)
@@ -147,26 +148,46 @@ class SupportApi(private val baseUrl: String = BuildConfig.API_BASE_URL) {
                     put("userId", JsonPrimitive(userId))
                     put("agentName", JsonPrimitive(agentName))
                     put("dueAt", JsonPrimitive(dueAtIso))
-                    put("kind", JsonPrimitive(kind))
+                    put("tagIds", buildJsonArray { tagIds.forEach { add(JsonPrimitive(it)) } })
                     put("note", JsonPrimitive(note))
                 })
             }
         }.reminder
 
     /** PATCH only the fields given. */
-    suspend fun updateReminder(id: String, dueAtIso: String? = null, note: String? = null, kind: String? = null, done: Boolean? = null, callId: String? = null): ReminderDto =
+    suspend fun updateReminder(id: String, dueAtIso: String? = null, note: String? = null, tagIds: List<String>? = null, done: Boolean? = null, callId: String? = null): ReminderDto =
         call<ReminderEnvelope> {
             client.patch(url("/reminders/$id")) {
                 contentType(ContentType.Application.Json)
                 setBody(buildJsonObject {
                     dueAtIso?.let { put("dueAt", JsonPrimitive(it)) }
                     note?.let { put("note", JsonPrimitive(it)) }
-                    kind?.let { put("kind", JsonPrimitive(it)) }
+                    tagIds?.let { ids -> put("tagIds", buildJsonArray { ids.forEach { add(JsonPrimitive(it)) } }) }
                     done?.let { put("done", JsonPrimitive(it)) }
                     callId?.let { put("callId", JsonPrimitive(it)) }
                 })
             }
         }.reminder
+
+    suspend fun reminderTags(): List<TagDto> = call<TagsEnvelope> { client.get(url("/reminder-tags")) }.tags
+
+    suspend fun createReminderTag(name: String, color: String): TagDto = call<TagEnvelope> {
+        client.post(url("/reminder-tags")) {
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject { put("name", JsonPrimitive(name)); put("color", JsonPrimitive(color)) })
+        }
+    }.tag
+
+    suspend fun updateReminderTag(id: String, name: String, color: String): TagDto = call<TagEnvelope> {
+        client.patch(url("/reminder-tags/$id")) {
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject { put("name", JsonPrimitive(name)); put("color", JsonPrimitive(color)) })
+        }
+    }.tag
+
+    suspend fun deleteReminderTag(id: String) {
+        call<OkBody> { client.delete(url("/reminder-tags/$id")) }
+    }
 
     suspend fun deleteReminder(id: String) {
         call<OkBody> { client.delete(url("/reminders/$id")) }

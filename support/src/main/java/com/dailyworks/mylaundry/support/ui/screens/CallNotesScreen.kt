@@ -225,12 +225,12 @@ class CallNotesViewModel(private val graph: Graph, private val callId: String) :
 
     fun remind(open: Boolean) = _ui.update { it.copy(reminding = open, reminderError = null) }
 
-    fun saveReminder(context: android.content.Context, at: java.time.Instant, kind: String, note: String) {
+    fun saveReminder(context: android.content.Context, at: java.time.Instant, tagIds: List<String>, note: String) {
         val userId = _ui.value.call?.userId ?: return
         _ui.update { it.copy(savingReminder = true, reminderError = null) }
         viewModelScope.launch {
             try {
-                graph.api.createReminder(userId, graph.prefs.current().agentName, at.toString(), kind, note)
+                graph.api.createReminder(userId, graph.prefs.current().agentName, at.toString(), tagIds, note)
                 _ui.update { it.copy(savingReminder = false, reminding = false, reminderSet = reminderTime(at)) }
                 ReminderAlarms.syncSoon(context.applicationContext)
             } catch (e: ApiException) {
@@ -422,7 +422,7 @@ fun CallNotesScreen(vm: CallNotesViewModel, onBack: () -> Unit, onOpenShop: (Str
             error = ui.reminderError,
             initialNote = if (ui.outcome == Outcome.CALL_BACK.name) "Call back" else "",
             onDismiss = { vm.remind(false) },
-            onSave = { at, kind, note -> vm.saveReminder(context, at, kind, note) },
+            onSave = { at, tagIds, note -> vm.saveReminder(context, at, tagIds, note) },
         )
     }
 
