@@ -119,7 +119,8 @@ Custom property keys are `snake_case`. `Charged` uses CleverTap's reserved
 | `Expense Date Changed` | `mode`, `days_ago` | the sheet's date changed (Android 1.0.19) |
 | `Expense Category Tapped` | `mode`, `action` (`add` = "+ Add category" \| `change` = the chosen category's box) | the page's category button tapped — opens the half-screen category list (Android 1.0.19) |
 | `Expense Category Picked` | `mode`, `category` (`rent`\|`salary`\|`electricity`\|`supplies`\|`fuel`\|`water`\|`packing`\|`transport`\|`repairs`\|`other`, or the name of a category the owner added), `custom` (bool), `searched` (bool) | a category tapped in the list (Android 1.0.19) |
-| `Expense New Category Tapped` | `mode`, `from` (`button` = "+ New" beside the search \| `search_row` = "Add … as a new category" \| `keyboard` = Done), `typed` (bool — false: the box waits for a name) | a new category asked for in the list (Android 1.0.19) |
+| `Expense New Category Tapped` | `mode`, `from` (`button` = "+ New" beside the search — opens the name box \| `search_row` = "Add … as a new category" — adds at once), `typed` (bool — the search had text) | a new category asked for in the list (Android 1.0.19) |
+| `Expense New Category Cancelled` | `mode`, `typed` (bool — a name was in the box) | Cancel on the new-category name box — back to the list (Android 1.0.19) |
 | `Expense Category Added` | `mode`, `name`, `from` (as New Category Tapped) | a new category added — the name the owner typed (Android 1.0.19) |
 | `Expense Category Sheet Closed` | `mode`, `how` (`picked`\|`added`\|`dismissed`), `query` (what was in the search box, "" = nothing) | the category list closed (Android 1.0.19) |
 | `Expense Save Blocked` | `mode`, `missing` (`amount`\|`category`\|`amount_category`) | the greyed Save tapped (Android 1.0.19) |

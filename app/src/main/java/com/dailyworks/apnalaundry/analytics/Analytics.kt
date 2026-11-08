@@ -549,11 +549,15 @@ object Analytics {
         track("Expense Category Picked", mapOf("mode" to mode, "category" to category, "custom" to custom, "searched" to searched))
 
     /**
-     * "+ New" beside the search ([from] button), the "Add … as a new category" row (search_row) or
-     * the keyboard's Done (keyboard); [typed] = a name was in the box (else the box waits for one).
+     * "+ New" beside the search ([from] button — the sheet switches to a name box, [typed] = the
+     * search was filled in) or the "Add … as a new category" row ([from] search_row — adds at once).
      */
     fun expenseNewCategoryTapped(mode: String, from: String, typed: Boolean) =
         track("Expense New Category Tapped", mapOf("mode" to mode, "from" to from, "typed" to typed))
+
+    /** Cancel on the new-category name box (back to the list); [typed] = a name was in it. */
+    fun expenseNewCategoryCancelled(mode: String, typed: Boolean) =
+        track("Expense New Category Cancelled", mapOf("mode" to mode, "typed" to typed))
 
     /** A new category added: the name the owner typed; [from] as New Category Tapped. */
     fun expenseCategoryAdded(mode: String, name: String, from: String) =

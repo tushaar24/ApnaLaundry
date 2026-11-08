@@ -238,15 +238,17 @@ private fun CategoryBox(category: String, modifier: Modifier, onClick: () -> Uni
 
 /**
  * A half-screen sheet over the form: every category in one list — the shop's own first
- * ([custom]), then the common ones — with a search box. "+ New" beside it, or the "Add … as a
- * new category" row when the search matches none exactly, adds what was typed. [onPick] gets the
+ * ([custom]), then the common ones — with a search box. "+ New" beside it switches the sheet to
+ * a name box (whatever was searched filled in) with Cancel / Add; the "Add … as a new category"
+ * row, shown when the search matches none exactly, adds the search at once. [onPick] gets the
  * stored category (a common key or the name).
  */
 @Composable
 private fun CategorySheet(selected: String, custom: List<String>, mode: String, onPick: (String) -> Unit, onBack: () -> Unit) {
     var query by remember { mutableStateOf("") }
-    var naming by remember { mutableStateOf(false) } // "+ New" tapped with nothing typed yet
-    val focus = remember { FocusRequester() }
+    var creating by remember { mutableStateOf(false) } // "+ New": naming a category
+    var newName by remember { mutableStateOf("") }
+    val nameFocus = remember { FocusRequester() }
     val q = query.trim().replace(Regex("\\s+"), " ")
     val own = custom.map { Triple(it, ExpenseCategory.emoji(it), it) }
     val common = ExpenseCategory.entries.map { Triple(it.key, it.emoji, tr(it.label)) }
@@ -264,10 +266,11 @@ private fun CategorySheet(selected: String, custom: List<String>, mode: String, 
         onPick(key)
     }
 
-    fun addNew(from: String) {
-        Analytics.expenseNewCategoryTapped(mode, from, q.isNotEmpty())
-        if (q.isEmpty()) { naming = true; runCatching { focus.requestFocus() }; return }
-        val key = ExpenseCategory.keyFor(q.take(30))
+    /** [name] as the expense's category: a new one, or the existing one it names. */
+    fun add(name: String, from: String) {
+        val clean = name.trim().replace(Regex("\\s+"), " ").take(30)
+        if (clean.isEmpty()) return
+        val key = ExpenseCategory.keyFor(clean)
         val existing = custom.firstOrNull { it.equals(key, ignoreCase = true) }
         if (existing == null && ExpenseCategory.known(key) == null) {
             Analytics.expenseCategoryAdded(mode, key, from)
@@ -278,33 +281,55 @@ private fun CategorySheet(selected: String, custom: List<String>, mode: String, 
     }
 
     AppBottomSheet(
-        title = tr("Choose category"),
+        title = if (creating) tr("Add category") else tr("Choose category"),
         onDismiss = { Analytics.expenseCategorySheetClosed(mode, "dismissed", q.take(30)); onBack() },
     ) {
+        if (creating) {
+            LaunchedEffect(Unit) { runCatching { nameFocus.requestFocus() } }
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                FieldBox(
+                    newName, { newName = it.take(30) }, Modifier.fillMaxWidth(),
+                    placeholder = tr("Type the new category name"), height = 56.dp, textStyle = fig(17, FontWeight.SemiBold),
+                    capitalization = KeyboardCapitalization.Words,
+                    imeAction = ImeAction.Done, onImeAction = { add(newName, "button") },
+                    fieldModifier = Modifier.focusRequester(nameFocus),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlineButton(tr("Cancel"), Modifier.weight(1f), height = 52.dp) {
+                        Analytics.expenseNewCategoryCancelled(mode, newName.isNotBlank())
+                        creating = false
+                    }
+                    PrimaryButton(tr("Add"), Modifier.weight(1f), enabled = newName.isNotBlank(), height = 52.dp) { add(newName, "button") }
+                }
+            }
+            return@AppBottomSheet
+        }
         Column(Modifier.fillMaxWidth().height(listHeight), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FieldBox(
                     query, { query = it.take(30) }, Modifier.weight(1f),
-                    placeholder = if (naming) tr("Type the new category name") else tr("Search category"),
-                    height = 48.dp,
-                    capitalization = KeyboardCapitalization.Words,
-                    imeAction = ImeAction.Done, onImeAction = { if (q.isNotEmpty()) addNew("keyboard") },
-                    fieldModifier = Modifier.focusRequester(focus),
+                    placeholder = tr("Search category"), height = 48.dp,
+                    capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Done,
                     leading = { Icon(Icons.Outlined.Search, null, tint = Tokens.Muted, modifier = Modifier.size(20.dp)) },
                 )
-                OutlineButton("+ " + tr("New"), Modifier.width(92.dp), height = 48.dp) { addNew("button") }
+                OutlineButton("+ " + tr("New"), Modifier.width(92.dp), height = 48.dp) {
+                    Analytics.expenseNewCategoryTapped(mode, "button", q.isNotEmpty())
+                    newName = if (exact) "" else q
+                    creating = true
+                }
             }
             LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
                 if (q.isNotEmpty() && !exact) {
                     item(key = "add") {
                         Row(
                             Modifier.padding(bottom = 6.dp).fillMaxWidth().heightIn(min = 52.dp).rounded(12.dp).background(Tokens.BlueLight)
-                                .tap { addNew("search_row") }.padding(horizontal = 12.dp, vertical = 8.dp),
+                                .tap { Analytics.expenseNewCategoryTapped(mode, "search_row", true); add(q, "search_row") }
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
                             Text("+", style = fig(20, FontWeight.Bold, Tokens.Blue))
                             Text(
-                                tr("Add “{name}” as a new category", "name" to q.take(30)),
+                                tr("Add \u201c{name}\u201d as a new category", "name" to q.take(30)),
                                 style = fig(15, FontWeight.Bold, Tokens.Blue), modifier = Modifier.weight(1f),
                             )
                         }
