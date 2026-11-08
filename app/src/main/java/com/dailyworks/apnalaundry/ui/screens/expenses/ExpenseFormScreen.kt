@@ -82,7 +82,13 @@ import com.dailyworks.apnalaundry.ui.theme.Tokens
 @Composable
 fun ExpenseFormScreen(shopVm: ShopViewModel, navigator: AppNavigator, id: String) {
     val state by shopVm.state.collectAsStateWithLifecycle()
+    val loaded by shopVm.loaded.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    // An existing expense: wait for the shop's data (after Android restored the app it starts empty).
+    if (id.isNotEmpty() && !loaded) {
+        Box(Modifier.fillMaxSize().background(Tokens.Bg))
+        return
+    }
     val initial = remember(id) {
         if (id.isEmpty()) Expense("", AppDate.TODAY, 0, "", PayMethod.CASH, "", 0)
         else state.expenses.firstOrNull { it.id == id }
@@ -90,6 +96,11 @@ fun ExpenseFormScreen(shopVm: ShopViewModel, navigator: AppNavigator, id: String
     if (initial == null) { // deleted meanwhile (another phone)
         LaunchedEffect(Unit) { navigator.back() }
         return
+    }
+    // Deleted on another phone while this page is open: say so and leave — saving would bring it back.
+    val gone = initial.id.isNotEmpty() && state.expenses.none { it.id == initial.id }
+    LaunchedEffect(gone) {
+        if (gone) { shopVm.showInfo(tr("This expense was deleted on another phone")); navigator.back() }
     }
     val isNew = initial.id.isEmpty()
     val mode = if (isNew) "new" else "edit"
@@ -102,6 +113,7 @@ fun ExpenseFormScreen(shopVm: ShopViewModel, navigator: AppNavigator, id: String
     var added by rememberSaveable { mutableStateOf(listOf<String>()) }
     var choosing by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var done by remember { mutableStateOf(false) } // saved or deleted: the page is on its way out
     val amt = amount.toIntOrNull() ?: 0
     // Categories this shop added itself, most used first, then those named on this page.
     val custom = remember(state.expenses, added) {
@@ -140,7 +152,7 @@ fun ExpenseFormScreen(shopVm: ShopViewModel, navigator: AppNavigator, id: String
                 )
             }
             DateBox(tr("Date"), date, Modifier.fillMaxWidth()) {
-                showDatePicker(context, date, null) { d ->
+                showDatePicker(context, date, null, maxIso = AppDate.TODAY) { d ->
                     if (d != date) Analytics.expenseDateChanged(mode, AppDate.daysBetween(d, AppDate.TODAY))
                     date = d
                 }
@@ -176,6 +188,8 @@ fun ExpenseFormScreen(shopVm: ShopViewModel, navigator: AppNavigator, id: String
                     Analytics.expenseSaveBlocked(mode, "amount")
                 },
             ) {
+                if (done) return@PrimaryButton // a double tap on a slow phone: save once, go back once
+                done = true
                 // No category picked: Other.
                 val x = initial.copy(amt = amt, category = category.ifBlank { ExpenseCategory.OTHER.key }, date = date, note = note.trim())
                 shopVm.saveExpense(if (isNew) x.copy(id = shopVm.newExpenseId(), ts = System.currentTimeMillis()) else x, isNew, category.isNotBlank())
@@ -212,7 +226,7 @@ fun ExpenseFormScreen(shopVm: ShopViewModel, navigator: AppNavigator, id: String
             title = { Text(tr("Delete this expense?"), style = fig(18, FontWeight.Bold)) },
             text = { Text(tr("{amount} for {what} will be removed.", "amount" to Money.rupees(initial.amt), "what" to ExpenseCategory.label(initial.category)), style = fig(15)) },
             confirmButton = {
-                TextButton(onClick = { confirmDelete = false; shopVm.deleteExpense(initial); navigator.back() }) {
+                TextButton(onClick = { if (!done) { done = true; confirmDelete = false; shopVm.deleteExpense(initial); navigator.back() } }) {
                     Text(tr("Delete"), style = fig(15, FontWeight.Bold, Tokens.DeleteRed))
                 }
             },
@@ -282,7 +296,7 @@ private fun CategorySheet(
     val listHeight = (LocalConfiguration.current.screenHeightDp * 0.5f - 130f).coerceAtLeast(220f).dp
 
     fun pick(key: String, how: String) {
-        Analytics.expenseCategoryPicked(mode, key, ExpenseCategory.known(key) == null, q.isNotEmpty())
+        if (how == "picked") Analytics.expenseCategoryPicked(mode, key, ExpenseCategory.known(key) == null, q.isNotEmpty())
         Analytics.expenseCategorySheetClosed(mode, how, q.take(30))
         onPick(key)
     }

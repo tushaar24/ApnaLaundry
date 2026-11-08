@@ -308,8 +308,9 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
                 }
             }
 
-            // Profit after expenses (1.0.19) — taps through to Expenses.
-            AppCard(Modifier.tap(enabled = acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.EXPENSES)) { Analytics.expensesEntryTapped("earnings_card"); navigator.openExpenses("earnings_card") }) {
+            // Profit after expenses (1.0.19) — taps through to Expenses. It shows the expense total, so
+            // staff (1.0.20) need the Expenses switch for it.
+            if (acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.EXPENSES)) AppCard(Modifier.tap(enabled = acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.EXPENSES)) { Analytics.expensesEntryTapped("earnings_card"); navigator.openExpenses("earnings_card") }) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(tr("Profit"), style = fig(15, FontWeight.Bold), modifier = Modifier.weight(1f))

@@ -68,7 +68,11 @@ fun ExpensesScreen(shopVm: ShopViewModel, navigator: AppNavigator, from: String)
     var customFrom by rememberSaveable { mutableStateOf(AppDate.add(AppDate.TODAY, -29)) }
     var customTo by rememberSaveable { mutableStateOf(AppDate.TODAY) }
 
+    // Once per visit (not again on coming back from the add / edit page).
+    var logged by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) {
+        if (logged) return@LaunchedEffect
+        logged = true
         Analytics.screen("expenses")
         Analytics.expensesOpened(from, state.expenses.size)
     }
