@@ -77,6 +77,17 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
     LaunchedEffect(shop.name) { if (!nameFocused) name = shop.name }
     LaunchedEffect(Unit) { Analytics.screen("settings") }
 
+    // Staff (1.0.20): shown when the server turns it on for this owner (experiments.staff).
+    val prefs: com.dailyworks.apnalaundry.data.Prefs = org.koin.compose.koinInject()
+    val staffOn by prefs.staffEnabled.collectAsStateWithLifecycle(initialValue = false)
+    val staffRepo: com.dailyworks.apnalaundry.data.staff.StaffRepository = org.koin.compose.koinInject()
+    val shopDir: com.dailyworks.apnalaundry.data.shops.ShopDirectory = org.koin.compose.koinInject()
+    val activeShop by shopDir.activeId.collectAsStateWithLifecycle()
+    val staffList by staffRepo.staff.collectAsStateWithLifecycle()
+    LaunchedEffect(staffOn, activeShop) {
+        if (staffOn) { staffRepo.clear(); runCatching { staffRepo.refresh() } }
+    }
+
     Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars)) {
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp),
@@ -135,6 +146,31 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
                         Text(tr("Rent, salary, supplies — and your profit"), style = fig(13, color = Tokens.Muted))
                     }
                     Text(tr("Open"), style = fig(15, FontWeight.Bold, Tokens.Blue))
+                }
+            }
+
+            // Staff (1.0.20): who works in this shop from their own phone.
+            if (staffOn) {
+                AppCard {
+                    Row(
+                        Modifier.fillMaxWidth().tap {
+                            Analytics.staffEntryTapped("settings", staffList?.size ?: -1)
+                            navigator.openStaff("settings")
+                        }.padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(tr("Staff"), style = fig(16, FontWeight.Bold))
+                            val names = staffList.orEmpty().map { com.dailyworks.apnalaundry.ui.Selectors.firstName(it.name) }
+                            Text(
+                                if (names.isEmpty()) tr("Let your workers use MyLaundry on their phones")
+                                else names.take(3).joinToString(", ") + " · " + tr("{n} staff", "n" to names.size),
+                                style = fig(13, color = Tokens.Muted), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            )
+                        }
+                        Text(if (staffList.isNullOrEmpty()) tr("Add") else tr("Open"), style = fig(15, FontWeight.Bold, Tokens.Blue))
+                    }
                 }
             }
 
@@ -259,8 +295,8 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
                 }
             }
 
-            // Coming later
-            AppCard(bg = Tokens.NeutralFill, borderColor = Tokens.NeutralFill) {
+            // Coming later (until staff is on for this owner)
+            if (!staffOn) AppCard(bg = Tokens.NeutralFill, borderColor = Tokens.NeutralFill) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(tr("Coming later"), style = fig(13, FontWeight.Bold, Tokens.Muted))
                     Text(tr("Staff logins"), style = fig(14, color = Tokens.InkSecondary))

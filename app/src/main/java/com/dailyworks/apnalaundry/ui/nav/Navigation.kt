@@ -24,6 +24,9 @@ object Routes {
     const val ADD_SERVICE = "add-service?from={from}"
     const val EXPENSES = "expenses?from={from}"
     const val EXPENSE = "expense?id={id}"
+    const val STAFF = "staff?from={from}"
+    const val STAFF_MEMBER = "staff-member/{id}"
+    const val STAFF_FORM = "staff-form?id={id}"
 }
 
 /** Thin typed wrapper over the NavController used by every screen. */
@@ -50,6 +53,10 @@ class AppNavigator(val nav: NavHostController) {
     fun openExpenses(from: String) = push("expenses?from=$from")
     /** Add an expense ([id] empty) or change one — a page of its own. */
     fun openExpense(id: String) = push("expense?id=${android.net.Uri.encode(id)}")
+    /** Staff (1.0.20): the shop's staff list, one member (7-day log), add ([id] empty) / edit. */
+    fun openStaff(from: String) = push("staff?from=$from")
+    fun openStaffMember(id: String) = push("staff-member/${android.net.Uri.encode(id)}")
+    fun openStaffForm(id: String) = push("staff-form?id=${android.net.Uri.encode(id)}")
 
     /**
      * Opens a screen — once. A double tap on a slow phone (or a tap on the

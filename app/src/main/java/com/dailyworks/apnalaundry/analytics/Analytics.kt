@@ -623,6 +623,54 @@ object Analytics {
     fun expenseDeleted(category: String, amount: Int) =
         track("Expense Deleted", mapOf("category" to category, "amount" to amount))
 
+    // ---- staff, the owner's side (1.0.20, docs/specs/staff.md) ----
+
+    /** The Settings → Staff row tapped. [staff] = how many the shop has (-1 = not loaded yet). */
+    fun staffEntryTapped(from: String, staff: Int) = track("Staff Entry Tapped", mapOf("from" to from, "staff" to staff))
+
+    /** The Staff screen shown (Settings, or a link). [staff] = how many the shop has (-1 = not loaded). */
+    fun staffOpened(from: String, staff: Int) = track("Staff Opened", mapOf("from" to from, "staff" to staff))
+
+    /** The owner has no plan: Staff shows "needs a plan". */
+    fun staffPlanRequiredShown(from: String) = track("Staff Plan Required Shown", mapOf("from" to from))
+
+    fun staffAddTapped(staff: Int) = track("Staff Add Tapped", mapOf("staff" to staff))
+
+    fun staffRowTapped(staffId: String) = track("Staff Row Tapped", mapOf("staff_id" to staffId))
+
+    /** mode: new | edit. */
+    fun staffFormShown(mode: String) = track("Staff Form Shown", mapOf("mode" to mode))
+
+    fun staffOccupationPicked(mode: String, occupation: String) =
+        track("Staff Occupation Picked", mapOf("mode" to mode, "occupation" to occupation))
+
+    fun staffPermissionToggled(mode: String, permission: String, on: Boolean) =
+        track("Staff Permission Toggled", mapOf("mode" to mode, "permission" to permission, "on" to on))
+
+    /** [permissions]: the switches on, comma-separated keys. */
+    fun staffSaved(isNew: Boolean, staffId: String, occupation: String, permissions: List<String>) =
+        track(
+            if (isNew) "Staff Added" else "Staff Edited",
+            mapOf("staff_id" to staffId, "occupation" to occupation, "permissions" to permissions.joinToString(","), "permissions_on" to permissions.size),
+        )
+
+    /** [code]: the server's (PLAN_REQUIRED, PHONE_TAKEN, OWN_NUMBER, PHONE_INVALID, STAFF_LIMIT…) or the field missing. */
+    fun staffSaveFailed(mode: String, code: String) = track("Staff Save Failed", mapOf("mode" to mode, "code" to code))
+
+    /** The form closed without saving. */
+    fun staffFormClosed(mode: String, nameEntered: Boolean, phoneEntered: Boolean) =
+        track("Staff Form Closed", mapOf("mode" to mode, "name_entered" to nameEntered, "phone_entered" to phoneEntered))
+
+    /** "Share the app on WhatsApp" after adding (or on the staff page). */
+    fun staffAppLinkShared(staffId: String, from: String) = track("Staff App Link Shared", mapOf("staff_id" to staffId, "from" to from))
+
+    /** A staff member's page with their 7-day log. */
+    fun staffActivityViewed(staffId: String, rows: Int) = track("Staff Activity Viewed", mapOf("staff_id" to staffId, "rows" to rows))
+
+    fun staffRemoveTapped(staffId: String) = track("Staff Remove Tapped", mapOf("staff_id" to staffId))
+    fun staffRemoveCancelled(staffId: String) = track("Staff Remove Cancelled", mapOf("staff_id" to staffId))
+    fun staffRemoved(staffId: String) = track("Staff Removed", mapOf("staff_id" to staffId))
+
     fun earningsPeriodChanged(period: String) =
         track("Earnings Period Changed", mapOf("period" to period))
 

@@ -304,6 +304,21 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
             com.dailyworks.apnalaundry.ui.screens.expenses.ExpensesScreen(shopVm, navigator, entry.arguments?.getString("from") ?: "push")
         }
         composable(
+            Routes.STAFF,
+            arguments = listOf(navArgument("from") { type = NavType.StringType; defaultValue = "push" }),
+        ) { entry ->
+            com.dailyworks.apnalaundry.ui.screens.staff.StaffListScreen(navigator, entry.arguments?.getString("from") ?: "push")
+        }
+        composable(Routes.STAFF_MEMBER) { entry ->
+            com.dailyworks.apnalaundry.ui.screens.staff.StaffMemberScreen(shopVm, navigator, entry.arguments?.getString("id").orEmpty())
+        }
+        composable(
+            Routes.STAFF_FORM,
+            arguments = listOf(navArgument("id") { type = NavType.StringType; defaultValue = "" }),
+        ) { entry ->
+            com.dailyworks.apnalaundry.ui.screens.staff.StaffFormScreen(shopVm, navigator, entry.arguments?.getString("id").orEmpty())
+        }
+        composable(
             Routes.EXPENSE,
             arguments = listOf(navArgument("id") { type = NavType.StringType; defaultValue = "" }),
         ) { entry ->

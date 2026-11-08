@@ -37,6 +37,8 @@ class Prefs(private val context: Context) {
     private val SERVICES_SETUP = stringPreferencesKey("services_setup")
     // Server switch (2026-11-04): ask for Contacts at the first WhatsApp bill send — "ask" | "no_ask"; unset = don't ask.
     private val BILL_CONTACTS_ASK = stringPreferencesKey("bill_contacts_ask")
+    // Staff (1.0.20): the server's experiments.staff — Settings shows Staff instead of "Coming later".
+    private val STAFF_ENABLED = booleanPreferencesKey("staff_enabled")
     // The assistant ("Ask" on Home) is on for this shop, as the server last said; unset = off.
     private val ASSISTANT_ON = booleanPreferencesKey("assistant_on")
     // Ask reads its answers out loud (phone's text-to-speech); unset = on.
@@ -91,6 +93,7 @@ class Prefs(private val context: Context) {
     val customerFlow: Flow<String?> = context.dataStore.data.map { it[CUSTOMER_FLOW] }
     val servicesSetup: Flow<String?> = context.dataStore.data.map { it[SERVICES_SETUP] }
     val billContactsAsk: Flow<String?> = context.dataStore.data.map { it[BILL_CONTACTS_ASK] }
+    val staffEnabled: Flow<Boolean> = context.dataStore.data.map { it[STAFF_ENABLED] == true }
     val assistantOn: Flow<Boolean> = context.dataStore.data.map { it[ASSISTANT_ON] ?: false }
     val assistantSpeak: Flow<Boolean> = context.dataStore.data.map { it[ASSISTANT_SPEAK] ?: true }
     val demoVideoUrl: Flow<String?> = context.dataStore.data.map { it[DEMO_VIDEO_URL] }
@@ -109,6 +112,7 @@ class Prefs(private val context: Context) {
     suspend fun setGuideNewShop(v: Boolean) { context.dataStore.edit { it[GUIDE_NEW_SHOP] = v } }
     suspend fun setCustomerFlow(v: String?) { context.dataStore.edit { if (v == null) it.remove(CUSTOMER_FLOW) else it[CUSTOMER_FLOW] = v } }
     suspend fun setServicesSetup(v: String?) { context.dataStore.edit { if (v == null) it.remove(SERVICES_SETUP) else it[SERVICES_SETUP] = v } }
+    suspend fun setStaffEnabled(v: Boolean) { context.dataStore.edit { it[STAFF_ENABLED] = v } }
     suspend fun setBillContactsAsk(v: String?) { context.dataStore.edit { if (v == null) it.remove(BILL_CONTACTS_ASK) else it[BILL_CONTACTS_ASK] = v } }
     suspend fun setAssistantOn(v: Boolean) { context.dataStore.edit { it[ASSISTANT_ON] = v } }
     suspend fun setAssistantSpeak(v: Boolean) { context.dataStore.edit { it[ASSISTANT_SPEAK] = v } }

@@ -139,6 +139,30 @@ Custom property keys are `snake_case`. `Charged` uses CleverTap's reserved
 | `Expense Deleted` | `category`, `amount` | an expense deleted (Android 1.0.19) |
 | `Order Search Opened` | — | search opened on Home |
 
+### Staff — the owner's side (Android 1.0.20, docs/specs/staff.md)
+
+Shown only when the server sends `experiments.staff` (LAUNDRY_STAFF_PHONES). The staff members' own events are in the next section.
+
+| Event | Properties | When |
+|---|---|---|
+| `Staff Entry Tapped` | `from` (`settings`), `staff` (how many, -1 = not loaded) | the Settings → Staff row tapped |
+| `Staff Opened` | `from`, `staff` | the Staff list shown |
+| `Staff Plan Required Shown` | `from` | the owner has no plan: Staff shows "needs a MyLaundry plan" |
+| `Staff Add Tapped` | `staff` | "+ Add staff" tapped (opens the paywall without a plan) |
+| `Staff Row Tapped` | `staff_id` | a staff member tapped in the list |
+| `Staff Form Shown` | `mode` (`new`\|`edit`) | the add / edit staff page shown |
+| `Staff Occupation Picked` | `mode`, `occupation` (`counter`\|`washing`\|`ironing`\|`delivery`\|`manager`\|`other`) | a work chip tapped (fills the switches) |
+| `Staff Permission Toggled` | `mode`, `permission` (`take_orders`\|`deliver`\|`collect_money`\|`discounts_cancel`\|`delete_orders`\|`see_earnings`\|`edit_rates`\|`see_phones`\|`expenses`), `on` | a switch flipped |
+| `Staff Added` | `staff_id`, `occupation`, `permissions` (comma-separated keys), `permissions_on` | a staff member added |
+| `Staff Edited` | as `Staff Added` | a staff member's name / work / switches saved |
+| `Staff Save Failed` | `mode`, `code` (`PLAN_REQUIRED`\|`PHONE_TAKEN`\|`OWN_NUMBER`\|`PHONE_INVALID`\|`STAFF_LIMIT`\|`NETWORK`\|`name`\|`phone` = greyed Save tapped) | save refused / failed |
+| `Staff Form Closed` | `mode`, `name_entered`, `phone_entered` | the form left without saving |
+| `Staff App Link Shared` | `staff_id`, `from` (`added`\|`member`) | "Share the app on WhatsApp" |
+| `Staff Activity Viewed` | `staff_id`, `rows` | a staff member's page with the 7-day log loaded |
+| `Staff Remove Tapped` | `staff_id` | "Remove staff" tapped (confirm opens) |
+| `Staff Remove Cancelled` | `staff_id` | the confirm's Cancel / tap outside |
+| `Staff Removed` | `staff_id` | removed — their phone loses the shop |
+
 ### First customer on New order — A/B (Android 1.0.15, 2026-10-24)
 
 How a brand-new shop adds its first customer. Assigned by the backend
