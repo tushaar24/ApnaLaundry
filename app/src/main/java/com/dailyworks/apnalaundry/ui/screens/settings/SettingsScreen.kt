@@ -58,7 +58,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import com.dailyworks.apnalaundry.ui.components.OutlineButton
 import com.dailyworks.apnalaundry.ui.components.PrimaryButton
-import com.dailyworks.apnalaundry.ui.components.SUPPORT_PHONE_SHOWN
 import com.dailyworks.apnalaundry.ui.components.callSupport
 import com.dailyworks.apnalaundry.ui.components.whatsAppSupport
 
@@ -254,10 +253,7 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
             SectionLabel(tr("Help"))
             AppCard {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Column {
-                        Text(tr("Need help? Talk to us"), style = fig(16, FontWeight.Bold))
-                        Text(SUPPORT_PHONE_SHOWN, style = fig(14, color = Tokens.Muted))
-                    }
+                    Text(tr("Need help? Talk to us"), style = fig(16, FontWeight.Bold))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlineButton(tr("Call us"), Modifier.weight(1f), height = 48.dp) {
                             Analytics.supportContacted("call", "settings")

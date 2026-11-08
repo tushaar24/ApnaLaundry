@@ -2,7 +2,6 @@ package com.dailyworks.apnalaundry.ui.tour
 
 import com.dailyworks.apnalaundry.core.i18n
 import com.dailyworks.apnalaundry.core.tr
-import com.dailyworks.apnalaundry.ui.components.SUPPORT_PHONE_SHOWN
 
 /**
  * The guide: one walk through the whole app on the shop's own first order —
@@ -248,7 +247,8 @@ object TourSteps {
     val done get() = TourStep(
         "tour_done", TourPart.EARNINGS,
         tr("You are ready!") + " 🎉",
-        tr("Now you know the whole app. Need help? Call us on {phone}.", "phone" to SUPPORT_PHONE_SHOWN),
-        say = tr("You are ready! Now you know the whole app. Need help? Call us on {phone}.", "phone" to "7 6 7 6 3, 6 3 7 9 3"),
+        // No number here: calls and WhatsApp go to different numbers now (owner, 10 Nov 2026).
+        tr("Now you know the whole app. Need help? Tap Call us."),
+        say = tr("You are ready! Now you know the whole app. Need help? Tap Call us."),
     )
 }
