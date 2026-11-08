@@ -36,6 +36,7 @@ import com.dailyworks.apnalaundry.ui.screens.neworder.NewOrderScreen
 import com.dailyworks.apnalaundry.ui.screens.order.OrderDetailScreen
 import com.dailyworks.apnalaundry.ui.screens.onboarding.BillDesignScreen
 import com.dailyworks.apnalaundry.ui.screens.paywall.OrderLimitGate
+import com.dailyworks.apnalaundry.domain.StaffPermission
 import com.dailyworks.apnalaundry.ui.screens.paywall.PaywallScreen
 import com.dailyworks.apnalaundry.ui.screens.rates.RatesScreen
 import com.dailyworks.apnalaundry.ui.screens.settings.SettingsScreen
@@ -76,6 +77,17 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
         if (link == null || !li || !sd) return@LaunchedEffect
         val t = DeepLinks.consume() ?: return@LaunchedEffect
         Analytics.deepLinkOpened(t.label)
+        // Staff (1.0.20): a link to something this staff member can't do opens Home instead.
+        val acc = shopVm.access.value
+        val allowed = when (t.screen) {
+            "new-order" -> acc.can(StaffPermission.TAKE_ORDERS)
+            "earnings" -> acc.can(StaffPermission.SEE_EARNINGS)
+            "rates", "add-service" -> acc.can(StaffPermission.EDIT_RATES)
+            "expenses" -> acc.can(StaffPermission.EXPENSES)
+            "subscription", "bill-design", "bill-details", "add-shop", "assistant", "demo" -> acc.isOwner
+            else -> true
+        }
+        if (!allowed) { navigator.openHome(); return@LaunchedEffect }
         when (t.screen) {
             "new-order" -> navigator.openNewOrder(custId = t.params["cust"], from = "push")
             "customers" -> navigator.openCustomers(t.params["filter"] ?: "all")
@@ -101,10 +113,17 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
     // Keep the saved subscription fresh in the background (app start / login):
     // the free-orders gate on New order reads it instead of waiting on the network.
     val billing: BillingRepository = koinInject()
-    LaunchedEffect(li) { if (li) billing.refreshSaved() }
+    // Staff (1.0.20): a phone that is only staff has no account of its own — the owner's calls
+    // (billing, experiments, attribution, the assistant, the shop list) would only get a 403.
+    val shopDir: com.dailyworks.apnalaundry.data.shops.ShopDirectory = koinInject()
+    val shopsList by shopDir.shops.collectAsStateWithLifecycle()
+    val staffOnly = shopsList.firstOrNull()?.staff != null
+    LaunchedEffect(li) { if (li && !staffOnly) billing.refreshSaved() }
+    // Where this phone works as staff (an owner can be added as staff too): app start / login.
+    LaunchedEffect(li) { if (li) shopVm.refreshStaffContexts() }
     // A/B groups (the guide, the first-customer flow): fetched at app start / right after login, while setup runs.
     val experiments: ExperimentsRepository = koinInject()
-    LaunchedEffect(li) { if (li) { experiments.restore(); experiments.refresh() } }
+    LaunchedEffect(li) { if (li && !staffOnly) { experiments.restore(); experiments.refresh() } }
     // Whether this phone lets the app read contacts, on the CleverTap profile (Contacts_Permission).
     val appContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
     LaunchedEffect(li) {
@@ -115,15 +134,15 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
     }
     // Which ad the install came from (Play's install referrer): sent to the server once per account.
     val installAttribution: com.dailyworks.apnalaundry.data.attribution.InstallAttributionRepository = koinInject()
-    LaunchedEffect(li) { if (li) installAttribution.reportIfNeeded() }
+    LaunchedEffect(li) { if (li && !staffOnly) installAttribution.reportIfNeeded() }
     // The assistant ("Ask" on Home): on only where the server says so (an older server: off).
     val assistantApi: com.dailyworks.apnalaundry.data.assistant.AssistantApi = koinInject()
-    LaunchedEffect(li) { if (li) assistantApi.refreshEnabled() }
+    LaunchedEffect(li) { if (li && !staffOnly) assistantApi.refreshEnabled() }
     // The demo video link (server-set; saved, else the built-in one).
     val appConfig: com.dailyworks.apnalaundry.data.AppConfigRepository = koinInject()
     LaunchedEffect(Unit) { appConfig.refresh() }
     // The owner's shops (multi-shop): a shop added on another phone shows up here.
-    LaunchedEffect(li) { if (li) shopVm.refreshShops() }
+    LaunchedEffect(li) { if (li && !staffOnly) shopVm.refreshShops() }
 
     LaunchedEffect(li) {
         if (!li && navController.currentDestination?.route?.let { it != Routes.LOGIN } == true) {
@@ -156,6 +175,8 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
         scope.launch { if (prefs.setupDone.first()) navigator.toHomeAfterSetup() else navigator.toRatesSetup() }
     }
 
+    val access by shopVm.access.collectAsStateWithLifecycle()
+    androidx.compose.runtime.CompositionLocalProvider(com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess provides access) {
     Box(Modifier.fillMaxSize()) {
     NavHost(navController = navController, startDestination = start) {
         composable(Routes.LOGIN) {
@@ -335,15 +356,20 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
     }
 
     // hard_trial: the no-close paywall right after login (before setup) until the trial is active.
+    // Never in a shop worked as staff (staff don't pay; the owner's plan decides).
     HardTrialGate(
-        active = li && (paywallPending || paywallGroup == PAYWALL_HARD_TRIAL),
+        active = li && !access.isStaff && (paywallPending || paywallGroup == PAYWALL_HARD_TRIAL),
         pending = paywallPending,
         onUnblocked = { if (navAfterGate) { navAfterGate = false; afterLogin() } },
     )
     // free1: the paywall once, after the first order + the guide finished or skipped.
     FirstOrderPaywall(
-        eligible = li && paywallGroup == PAYWALL_FREE1 && tourStage == TourStage.DONE && shopState.orders.isNotEmpty(),
+        eligible = li && !access.isStaff && paywallGroup == PAYWALL_FREE1 && tourStage == TourStage.DONE && shopState.orders.isNotEmpty(),
         onMainScreen = route == Routes.HOME || route == Routes.CUSTOMERS || route == Routes.EARNINGS || route == Routes.SETTINGS,
     )
+    // Staff (1.0.20): "added you as staff" / "removed you", and the owner's plan having ended.
+    com.dailyworks.apnalaundry.ui.screens.staff.StaffEventsHost(shopVm)
+    com.dailyworks.apnalaundry.ui.screens.staff.StaffRenewGate(shopVm, active = li && access.isStaff && !access.ownerPlanActive)
+    }
     }
 }

@@ -83,13 +83,24 @@ fun ShopsSheet(shopVm: ShopViewModel, navigator: AppNavigator, from: String, onD
     LaunchedEffect(shops) { phones = shopVm.shopPhones(shops.map { it.id }) }
     AppBottomSheet(title = tr("Your shops"), subtitle = tr("Each shop has its own customers, khata and bills"), onDismiss = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Staff (1.0.20): the person's own shops first, then "Staff at …" (someone else's shops).
+            val ownAccount = shops.firstOrNull()?.staff == null
             shops.forEachIndexed { i, s ->
                 val on = s.id == activeId
+                if (s.staff != null && shops.indexOfFirst { it.staff != null } == i) {
+                    Text(tr("Staff at"), style = fig(13, FontWeight.Bold, Tokens.Muted), modifier = Modifier.padding(top = 6.dp))
+                }
                 Row(
                     Modifier.fillMaxWidth().heightIn(min = 60.dp).rounded(14.dp)
                         .background(if (on) Tokens.BlueLight else Tokens.Card)
                         .border(1.5.dp, if (on) Tokens.Blue else Tokens.CardBorder, RoundedCornerShape(14.dp))
-                        .tap { shopVm.switchShop(s.id); onDismiss(); navigator.openHome() }
+                        .tap {
+                            if (s.id != activeId) {
+                                if (s.staff != null) Analytics.staffShopOpened("switch")
+                                else if (shops.firstOrNull { it.id == activeId }?.staff != null) Analytics.staffOwnShopOpened()
+                            }
+                            shopVm.switchShop(s.id); onDismiss(); navigator.openHome()
+                        }
                         .padding(start = 14.dp, end = 4.dp, top = 6.dp, bottom = 6.dp), // the ✏️ button keeps its own space
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -100,9 +111,15 @@ fun ShopsSheet(shopVm: ShopViewModel, navigator: AppNavigator, from: String, onD
                         phones[s.id]?.takeIf { it.isNotEmpty() }?.let {
                             Text(BillDetails.fmtBillPhone(it), style = fig(13, color = Tokens.Muted), maxLines = 1)
                         }
+                        s.staff?.let { st ->
+                            Text(
+                                if (st.ownerName.isNotBlank()) tr("Staff · {owner}'s shop", "owner" to st.ownerName) else tr("You work here as staff"),
+                                style = fig(13, color = Tokens.Muted), maxLines = 1,
+                            )
+                        }
                         if (on) Text(tr("Open now"), style = fig(12, FontWeight.SemiBold, Tokens.Blue), maxLines = 1)
                     }
-                    Row { // ✏️ and delete side by side, no gap
+                    if (s.staff == null) Row { // ✏️ and delete side by side, no gap — the owner's own shops only
                         // Edit this shop (switches to it first if it isn't open).
                         Box(
                             Modifier.size(44.dp).rounded(999.dp).tap { shopVm.openShop(s.id) { onDismiss(); navigator.openBillDesign() } },
@@ -119,7 +136,8 @@ fun ShopsSheet(shopVm: ShopViewModel, navigator: AppNavigator, from: String, onD
                 }
             }
             Spacer(Modifier.height(4.dp))
-            SheetAction(Icons.Filled.Add, tr("Add a shop"), tr("Its own customers, khata and bills")) {
+            // Adding a shop is for owners (a phone that is only staff has no account of its own).
+            if (ownAccount) SheetAction(Icons.Filled.Add, tr("Add a shop"), tr("Its own customers, khata and bills")) {
                 onDismiss(); navigator.openAddShop(from)
             }
         }
@@ -291,7 +309,7 @@ fun ShopsCard(shopVm: ShopViewModel, hasPlan: Boolean, onSwitch: () -> Unit, onA
                 contentAlignment = Alignment.Center,
             ) { Text(tr("Switch"), style = fig(15, FontWeight.Bold, Tokens.Blue)) }
         }
-        Row(
+        if (shops.firstOrNull()?.staff == null) Row( // owners only: a staff-only phone has no account to add shops to
             Modifier.fillMaxWidth().height(48.dp).rounded(12.dp).border(1.5.dp, Tokens.Blue, RoundedCornerShape(12.dp))
                 .tap(onClick = onAdd).padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically,

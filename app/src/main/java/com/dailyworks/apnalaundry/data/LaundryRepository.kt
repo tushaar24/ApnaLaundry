@@ -787,7 +787,8 @@ class LaundryRepository(
     suspend fun liveOrderCount(): Int = orderDao.countLive()
 
     /** Orders not deleted across every shop (the free orders are per owner, not per shop). */
-    suspend fun liveOrderCountAllShops(): Int = shops.list().sumOf { shops.db(it.id).orderDao().countLive() }
+    /** The owner's own shops (orders made as staff in someone else's shop don't count). */
+    suspend fun liveOrderCountAllShops(): Int = shops.list().filter { it.staff == null }.sumOf { shops.db(it.id).orderDao().countLive() }
 
     // ---------------- new / edit order ----------------
     data class SaveOrderResult(val orderId: Int, val goToBill: Boolean, val toast: String?, val undo: Snapshot?, val edited: Boolean)

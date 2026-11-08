@@ -218,6 +218,11 @@ class SyncManager(
         val refused = refusedChanges(res.refused)
         if (!refused.isEmpty) {
             applyRows(db, refused, overDirty = true)
+            if (shops.ref(shopId)?.staff != null) {
+                val rows = refused.services.size + refused.customers.size + refused.orders.size + refused.ledger.size +
+                    refused.dayCloses.size + refused.expenses.size
+                if (rows > 0) com.dailyworks.apnalaundry.analytics.Analytics.staffChangesRefused(rows)
+            }
             if (shopId == shops.activeId.value) remoteChanges.tryEmit(Unit)
         }
     }

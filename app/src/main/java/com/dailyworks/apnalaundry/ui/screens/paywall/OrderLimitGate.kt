@@ -65,6 +65,9 @@ private enum class Access { OPEN, PAYWALL }
  */
 @Composable
 fun OrderLimitGate(onBack: () -> Unit, content: @Composable () -> Unit) {
+    // Staff (1.0.20): a shop worked as staff never shows the paywall (the owner pays; the server
+    // stops staff with OWNER_PLAN_ENDED when the owner's plan ends).
+    if (com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current.isStaff) { content(); return }
     val repo: LaundryRepository = koinInject()
     val billing: BillingRepository = koinInject()
     val shopDir: ShopDirectory = koinInject()
@@ -76,7 +79,7 @@ fun OrderLimitGate(onBack: () -> Unit, content: @Composable () -> Unit) {
     LaunchedEffect(Unit) {
         made = repo.liveOrderCountAllShops()
         limit = billing.savedFreeOrders()
-        planEnded = shopDir.list().size > FREE_SHOPS
+        planEnded = shopDir.list().count { it.staff == null } > FREE_SHOPS // staff shops aren't the owner's
         if (billing.savedActive() || (!planEnded && made < limit)) {
             access = Access.OPEN
             return@LaunchedEffect

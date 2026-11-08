@@ -115,10 +115,14 @@ fun BottomNav(
     onSelect: (NavTab) -> Unit,
 ) {
     // Ask only where the server has the assistant on (else New order alone, full width).
-    val askOn by org.koin.compose.koinInject<com.dailyworks.apnalaundry.data.Prefs>().assistantOn
+    val askPref by org.koin.compose.koinInject<com.dailyworks.apnalaundry.data.Prefs>().assistantOn
         .collectAsStateWithLifecycle(initialValue = false)
+    // Staff (1.0.20): no Ask in a shop worked as staff; the blue button needs "Take orders".
+    val acc = com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current
+    val askOn = askPref && acc.isOwner
+    val newOrder = onNewOrder?.takeIf { acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.TAKE_ORDERS) }
     // Every button's tap → "Bottom Bar Tapped" (which button, on which tab, in which bar).
-    val style = when { onNewOrder != null -> "pills"; askOn -> "notched"; else -> "flat" }
+    val style = when { newOrder != null -> "pills"; askOn -> "notched"; else -> "flat" }
     val on = current.name.lowercase()
     val select: (NavTab) -> Unit = { tab ->
         com.dailyworks.apnalaundry.analytics.Analytics.bottomBarTapped(tab.name.lowercase(), on, style)
@@ -126,18 +130,18 @@ fun BottomNav(
     }
     // Customers / Earnings / Settings: no action buttons — Ask sits in the middle of the
     // bar, the big black button in its notch (owner, 2026-10-25). Orders: the panel below.
-    if (onNewOrder == null) {
+    if (newOrder == null) {
         NotchedTabs(current, itemModifier, askOn, select)
         return
     }
     val primary = {
         com.dailyworks.apnalaundry.analytics.Analytics.bottomBarTapped(if (current == NavTab.CUSTOMERS) "add_customer" else "new_order", on, style)
-        onNewOrder()
+        newOrder()
     }
     val shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     Column(Modifier.fillMaxWidth().shadow(14.dp, shape).background(Tokens.Card, shape)) {
         // The two big actions (owner's mock, 2026-10-25): black "Ask", blue "+ New order".
-        if (onNewOrder != null) {
+        run {
             Row(
                 Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 2.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -170,7 +174,7 @@ fun BottomNav(
             Modifier.fillMaxWidth().heightIn(min = 72.dp).padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            NavTab.entries.filter { it != NavTab.ASK }.forEach { tab ->
+            NavTab.entries.filter { it != NavTab.ASK && (it != NavTab.EARNINGS || acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.SEE_EARNINGS)) }.forEach { tab ->
                 val selected = tab == current
                 val color = if (selected) Tokens.Blue else Tokens.Muted
                 Column(
@@ -204,7 +208,8 @@ private fun NotchedTabs(current: NavTab, itemModifier: (NavTab) -> Modifier, ask
             .padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        NavTab.entries.filter { it != NavTab.ASK || askOn }.forEach { tab ->
+        val acc = com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current
+        NavTab.entries.filter { (it != NavTab.ASK || askOn) && (it != NavTab.EARNINGS || acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.SEE_EARNINGS)) }.forEach { tab ->
             if (tab == NavTab.ASK) {
                 AskNavButton(Modifier.weight(1f).then(itemModifier(tab))) { onSelect(tab) }
                 return@forEach

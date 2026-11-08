@@ -84,8 +84,10 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
     val shopDir: com.dailyworks.apnalaundry.data.shops.ShopDirectory = org.koin.compose.koinInject()
     val activeShop by shopDir.activeId.collectAsStateWithLifecycle()
     val staffList by staffRepo.staff.collectAsStateWithLifecycle()
-    LaunchedEffect(staffOn, activeShop) {
-        if (staffOn) { staffRepo.clear(); runCatching { staffRepo.refresh() } }
+    // Staff (1.0.20): in a shop worked as staff, Settings keeps only what staff may touch.
+    val acc = com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current
+    LaunchedEffect(staffOn, activeShop, acc.isOwner) {
+        if (staffOn && acc.isOwner) { staffRepo.clear(); runCatching { staffRepo.refresh() } }
     }
 
     Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars)) {
@@ -104,8 +106,8 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
             )
             if (shopsOpen) com.dailyworks.apnalaundry.ui.screens.shops.ShopsSheet(shopVm, navigator, "settings") { shopsOpen = false }
 
-            // Shop name
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Shop name (the owner's)
+            if (acc.isOwner) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SectionLabel(tr("Shop name"))
                 FieldBox(
                     value = name,
@@ -120,7 +122,7 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
             }
 
             // Services
-            AppCard {
+            if (acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.EDIT_RATES)) AppCard {
                 Row(
                     Modifier.fillMaxWidth().tap { navigator.openRates("settings") }.padding(16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -135,7 +137,7 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
             }
 
             // Expenses (1.0.19)
-            AppCard {
+            if (acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.EXPENSES)) AppCard {
                 Row(
                     Modifier.fillMaxWidth().tap { Analytics.expensesEntryTapped("settings"); navigator.openExpenses("settings") }.padding(16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -150,7 +152,7 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
             }
 
             // Staff (1.0.20): who works in this shop from their own phone.
-            if (staffOn) {
+            if (staffOn && acc.isOwner) {
                 AppCard {
                     Row(
                         Modifier.fillMaxWidth().tap {
@@ -197,8 +199,8 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
                 )
             }
 
-            // Bill design & details (same screen as onboarding step 3)
-            AppCard {
+            // Bill design & details (same screen as onboarding step 3) — the owner's
+            if (acc.isOwner) AppCard {
                 Row(
                     Modifier.fillMaxWidth().tap { navigator.openBillDesign() }.padding(16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -215,7 +217,7 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
             // Subscription row (manage / cancel the plan) — also while a cancelled
             // plan still runs, so the owner can see until when.
             val billing by paywallVm.ui.collectAsStateWithLifecycle()
-            if (billing.hasActive || billing.inGrace) {
+            if (acc.isOwner && (billing.hasActive || billing.inGrace)) {
                 val until = if (billing.inGrace) com.dailyworks.apnalaundry.ui.screens.paywall.fmtChargeDate(
                     com.dailyworks.apnalaundry.ui.screens.paywall.accessUntilIso(billing.status?.subscription),
                 ) else ""
@@ -270,7 +272,7 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
             }
             // The guide is an A/B test: only its group gets the replay.
             val guideOn by shopVm.guideOn.collectAsStateWithLifecycle()
-            if (guideOn) AppCard {
+            if (guideOn && acc.isOwner) AppCard {
                 Row(
                     Modifier.fillMaxWidth().tap {
                         shopVm.tourReplay()
@@ -287,8 +289,8 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
                 }
             }
 
-            // Phone
-            AppCard {
+            // Phone (the owner's)
+            if (acc.isOwner) AppCard {
                 Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(tr("Phone"), style = fig(15, FontWeight.SemiBold, Tokens.Muted))
                     Text("+91 ${shop.phone}", style = fig(15, FontWeight.Bold), maxLines = 1, softWrap = false)
@@ -296,7 +298,7 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
             }
 
             // Coming later (until staff is on for this owner)
-            if (!staffOn) AppCard(bg = Tokens.NeutralFill, borderColor = Tokens.NeutralFill) {
+            if (!staffOn && acc.isOwner) AppCard(bg = Tokens.NeutralFill, borderColor = Tokens.NeutralFill) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(tr("Coming later"), style = fig(13, FontWeight.Bold, Tokens.Muted))
                     Text(tr("Staff logins"), style = fig(14, color = Tokens.InkSecondary))
