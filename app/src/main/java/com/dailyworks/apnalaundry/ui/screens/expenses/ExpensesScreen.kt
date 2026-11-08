@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -30,8 +31,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -53,7 +58,6 @@ import com.dailyworks.apnalaundry.ui.components.FitText
 import com.dailyworks.apnalaundry.ui.components.OutlineButton
 import com.dailyworks.apnalaundry.ui.components.PillChip
 import com.dailyworks.apnalaundry.ui.components.PrimaryButton
-import com.dailyworks.apnalaundry.ui.components.Segmented
 import com.dailyworks.apnalaundry.ui.components.TopBar
 import com.dailyworks.apnalaundry.ui.components.bric
 import com.dailyworks.apnalaundry.ui.components.fig
@@ -81,7 +85,7 @@ fun ExpensesScreen(shopVm: ShopViewModel, navigator: AppNavigator, from: String)
 
     LaunchedEffect(Unit) {
         Analytics.screen("expenses")
-        Analytics.expensesOpened(from)
+        Analytics.expensesOpened(from, state.expenses.size)
     }
 
     val today = AppDate.TODAY
@@ -102,14 +106,18 @@ fun ExpensesScreen(shopVm: ShopViewModel, navigator: AppNavigator, from: String)
 
     val list = state.expenses.filter { inRange(it.date) }
     val spent = list.sumOf { it.amt }
-    val cash = list.filter { it.method == PayMethod.CASH }.sumOf { it.amt }
     val received = EarningsMath.compute(state, inRange).received
     val profit = received - spent
-    val byCategory = list.groupBy { ExpenseCategory.of(it.category) }
+    val byCategory = list.groupBy { it.category }
         .map { (c, xs) -> c to xs.sumOf { it.amt } }
         .sortedByDescending { it.second }
 
-    fun newExpense() = Expense("", today, 0, ExpenseCategory.RENT.key, PayMethod.CASH, "", 0)
+    // Categories this shop added itself, most used first.
+    val custom = state.expenses.map { it.category }
+        .filter { it.isNotBlank() && ExpenseCategory.known(it) == null }
+        .groupingBy { it }.eachCount().entries.sortedByDescending { it.value }.map { it.key }
+
+    fun newExpense() = Expense("", today, 0, "", PayMethod.CASH, "", 0)
 
     Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars)) {
         TopBar(tr("Expenses"), onBack = { navigator.back() })
@@ -125,10 +133,16 @@ fun ExpensesScreen(shopVm: ShopViewModel, navigator: AppNavigator, from: String)
             if (period == "custom") {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     DateBox(tr("From"), customFrom, Modifier.weight(1f)) {
-                        showDatePicker(context, customFrom, null) { d -> customFrom = d; if (customTo < d) customTo = d }
+                        showDatePicker(context, customFrom, null) { d ->
+                            customFrom = d; if (customTo < d) customTo = d
+                            Analytics.expensesCustomDateSet("from", AppDate.daysBetween(customFrom, customTo) + 1)
+                        }
                     }
                     DateBox(tr("To"), customTo, Modifier.weight(1f)) {
-                        showDatePicker(context, customTo, customFrom) { d -> customTo = d }
+                        showDatePicker(context, customTo, customFrom) { d ->
+                            customTo = d
+                            Analytics.expensesCustomDateSet("to", AppDate.daysBetween(customFrom, customTo) + 1)
+                        }
                     }
                 }
             }
@@ -138,10 +152,6 @@ fun ExpensesScreen(shopVm: ShopViewModel, navigator: AppNavigator, from: String)
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(tr("Spent · {period}", "period" to periodTitle), style = fig(13, FontWeight.SemiBold, Tokens.OnDarkMuted))
                     FitText(Money.rupees(spent), style = bric(34, FontWeight.Bold, Tokens.OnDark))
-                    Text(
-                        tr("Cash {cash} · UPI {upi}", "cash" to Money.rupees(cash), "upi" to Money.rupees(spent - cash)),
-                        style = fig(13, color = Tokens.OnDarkMuted),
-                    )
                 }
             }
 
@@ -172,7 +182,7 @@ fun ExpensesScreen(shopVm: ShopViewModel, navigator: AppNavigator, from: String)
                         byCategory.forEach { (c, amt) ->
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text("${c.emoji}  ${tr(c.label)}", style = fig(14, FontWeight.SemiBold), modifier = Modifier.weight(1f))
+                                    Text("${ExpenseCategory.emoji(c)}  ${ExpenseCategory.label(c)}", style = fig(14, FontWeight.SemiBold), modifier = Modifier.weight(1f))
                                     Text(Money.rupees(amt), style = fig(14, FontWeight.Bold))
                                 }
                                 Box(Modifier.fillMaxWidth().height(6.dp).rounded(99.dp).background(Tokens.NeutralFill)) {
@@ -204,7 +214,12 @@ fun ExpensesScreen(shopVm: ShopViewModel, navigator: AppNavigator, from: String)
                             Text(if (day == today) tr("Today") else AppDate.plain(day), style = fig(13, FontWeight.Bold, Tokens.Muted), modifier = Modifier.weight(1f))
                             Text(Money.rupees(xs.sumOf { it.amt }), style = fig(13, FontWeight.Bold, Tokens.Muted))
                         }
-                        xs.forEach { x -> ExpenseRow(x) { editing = x } }
+                        xs.forEach { x ->
+                            ExpenseRow(x) {
+                                Analytics.expenseRowTapped(x.category, ExpenseCategory.known(x.category) == null, x.amt)
+                                editing = x
+                            }
+                        }
                     }
                 }
             }
@@ -212,12 +227,16 @@ fun ExpensesScreen(shopVm: ShopViewModel, navigator: AppNavigator, from: String)
         PrimaryButton(
             "+ " + tr("Add expense"),
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-        ) { editing = newExpense() }
+        ) {
+            Analytics.expenseAddTapped(state.expenses.size)
+            editing = newExpense()
+        }
     }
 
     editing?.let { e ->
         ExpenseSheet(
             initial = e,
+            custom = custom,
             onDismiss = { editing = null },
             onSave = { x ->
                 val isNew = x.id.isEmpty()
@@ -239,65 +258,124 @@ private fun MoneyLine(label: String, value: String, color: androidx.compose.ui.g
 
 @Composable
 private fun ExpenseRow(x: Expense, onClick: () -> Unit) {
-    val c = ExpenseCategory.of(x.category)
     AppCard(Modifier.tap(onClick = onClick)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Box(Modifier.size(40.dp).rounded(999.dp).background(Tokens.OrangeLight), contentAlignment = Alignment.Center) {
-                Text(c.emoji, style = fig(18))
+                Text(ExpenseCategory.emoji(x.category), style = fig(18))
             }
             Column(Modifier.weight(1f)) {
-                Text(tr(c.label), style = fig(15, FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                val sub = listOfNotNull(x.note.ifBlank { null }, if (x.method == PayMethod.UPI) tr("UPI") else tr("Cash")).joinToString(" · ")
-                Text(sub, style = fig(13, color = Tokens.Muted), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(ExpenseCategory.label(x.category), style = fig(15, FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (x.note.isNotBlank()) Text(x.note, style = fig(13, color = Tokens.Muted), maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             Text(Money.rupees(x.amt), style = fig(16, FontWeight.Bold))
         }
     }
 }
 
-/** Add or change an expense: amount, what for, cash or UPI, the day, a note. */
+/**
+ * Add or change an expense: the amount, the day and an optional note, then what it was for —
+ * a common category, one the shop added before ([custom]), or a new one named right here.
+ */
 @Composable
-private fun ExpenseSheet(initial: Expense, onDismiss: () -> Unit, onSave: (Expense) -> Unit, onDelete: (() -> Unit)?) {
+private fun ExpenseSheet(initial: Expense, custom: List<String>, onDismiss: () -> Unit, onSave: (Expense) -> Unit, onDelete: (() -> Unit)?) {
     val context = LocalContext.current
     var amount by remember { mutableStateOf(if (initial.amt > 0) initial.amt.toString() else "") }
-    var category by remember { mutableStateOf(initial.category) }
-    var method by remember { mutableStateOf(if (initial.method == PayMethod.UPI) PayMethod.UPI else PayMethod.CASH) }
     var date by remember { mutableStateOf(initial.date) }
     var note by remember { mutableStateOf(initial.note) }
+    var category by remember { mutableStateOf(initial.category) }
+    // Named in this sheet: kept as a chip until the sheet closes (it is saved with the expense).
+    var added by remember { mutableStateOf(listOf<String>()) }
+    var naming by remember { mutableStateOf(false) }
+    var newName by remember { mutableStateOf("") }
     var confirmDelete by remember { mutableStateOf(false) }
     val amt = amount.toIntOrNull() ?: 0
+    val mine = (custom + added).distinctBy { it.lowercase() }
+    val mode = if (initial.id.isEmpty()) "new" else "edit"
+    LaunchedEffect(Unit) { Analytics.expenseSheetShown(mode) }
 
-    AppBottomSheet(title = if (initial.id.isEmpty()) tr("Add expense") else tr("Edit expense"), onDismiss = onDismiss) {
+    fun pick(c: String) {
+        category = c
+        Analytics.expenseCategoryPicked(mode, c, ExpenseCategory.known(c) == null)
+    }
+
+    fun addCategory() {
+        val name = newName.trim().replace(Regex("\\s+"), " ")
+        if (name.isEmpty()) return
+        val key = ExpenseCategory.keyFor(name)
+        val existing = mine.firstOrNull { it.equals(key, ignoreCase = true) }
+        if (existing == null && ExpenseCategory.known(key) == null) {
+            added = added + key
+            Analytics.expenseCategoryAdded(mode, key)
+        }
+        pick(existing ?: key)
+        naming = false
+        newName = ""
+    }
+
+    AppBottomSheet(
+        title = if (initial.id.isEmpty()) tr("Add expense") else tr("Edit expense"),
+        onDismiss = { Analytics.expenseSheetDismissed(mode, amt > 0, category.isNotBlank()); onDismiss() },
+    ) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             FieldBox(
                 amount, { v -> amount = v.filter(Char::isDigit).take(7) },
                 Modifier.fillMaxWidth(), placeholder = tr("Amount"), prefix = "₹", keyboardType = KeyboardType.Number,
             )
-            Text(tr("What for?"), style = fig(13, FontWeight.Bold, Tokens.Muted))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                ExpenseCategory.entries.forEach { c ->
-                    PillChip("${c.emoji} ${tr(c.label)}", category == c.key) { category = c.key }
+            DateBox(tr("Date"), date, Modifier.fillMaxWidth()) {
+                showDatePicker(context, date, null) { d ->
+                    if (d != date) Analytics.expenseDateChanged(mode, AppDate.daysBetween(d, AppDate.TODAY))
+                    date = d
                 }
             }
-            Text(tr("Paid by"), style = fig(13, FontWeight.Bold, Tokens.Muted))
-            Segmented(listOf(tr("Cash") to (method == PayMethod.CASH), tr("UPI") to (method == PayMethod.UPI))) { i ->
-                method = if (i == 0) PayMethod.CASH else PayMethod.UPI
-            }
-            DateBox(tr("Date"), date, Modifier.fillMaxWidth()) { showDatePicker(context, date, null) { d -> date = d } }
             FieldBox(note, { note = it.take(200) }, Modifier.fillMaxWidth(), placeholder = tr("Note (optional)"))
-            PrimaryButton(tr("Save"), Modifier.fillMaxWidth(), enabled = amt > 0) {
-                onSave(initial.copy(amt = amt, category = category, method = method, date = date, note = note.trim()))
+
+            Text(tr("Category"), style = fig(13, FontWeight.Bold, Tokens.Muted), modifier = Modifier.padding(top = 4.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                ExpenseCategory.entries.forEach { c ->
+                    PillChip("${c.emoji} ${tr(c.label)}", category == c.key) { pick(c.key) }
+                }
+                mine.forEach { n -> PillChip("🏷️ $n", category == n) { pick(n) } }
+                if (!naming) PillChip("+ " + tr("New category"), false) { naming = true; Analytics.expenseNewCategoryTapped(mode) }
             }
-            onDelete?.let { OutlineButton(tr("Delete expense"), Modifier.fillMaxWidth(), border = Tokens.DeleteRed, fg = Tokens.DeleteRed) { confirmDelete = true } }
+            if (naming) {
+                val focus = remember { FocusRequester() }
+                LaunchedEffect(Unit) { focus.requestFocus() }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FieldBox(
+                        newName, { newName = it.take(30) }, Modifier.weight(1f),
+                        placeholder = tr("New category name"),
+                        capitalization = KeyboardCapitalization.Words,
+                        imeAction = ImeAction.Done, onImeAction = { addCategory() },
+                        fieldModifier = Modifier.focusRequester(focus),
+                    )
+                    PrimaryButton(tr("Add"), Modifier.width(84.dp), enabled = newName.isNotBlank(), height = 52.dp) { addCategory() }
+                }
+            }
+
+            PrimaryButton(
+                tr("Save"), Modifier.fillMaxWidth().padding(top = 4.dp), enabled = amt > 0 && category.isNotBlank(),
+                onDisabledClick = {
+                    Analytics.expenseSaveBlocked(mode, listOfNotNull("amount".takeIf { amt <= 0 }, "category".takeIf { category.isBlank() }).joinToString("_"))
+                },
+            ) {
+                onSave(initial.copy(amt = amt, category = category, date = date, note = note.trim()))
+            }
+            if (amt > 0 && category.isBlank()) {
+                Text(tr("Pick a category to save."), style = fig(13, color = Tokens.Muted), modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+            }
+            onDelete?.let { OutlineButton(tr("Delete expense"), Modifier.fillMaxWidth(), border = Tokens.DeleteRed, fg = Tokens.DeleteRed) {
+                    Analytics.expenseDeleteTapped(initial.category, initial.amt)
+                    confirmDelete = true
+                } }
         }
     }
     if (confirmDelete) {
         AlertDialog(
-            onDismissRequest = { confirmDelete = false },
+            onDismissRequest = { confirmDelete = false; Analytics.expenseDeleteCancelled(initial.category, initial.amt) },
             title = { Text(tr("Delete this expense?"), style = fig(18, FontWeight.Bold)) },
-            text = { Text(tr("{amount} for {what} will be removed.", "amount" to Money.rupees(initial.amt), "what" to tr(ExpenseCategory.of(initial.category).label)), style = fig(15)) },
+            text = { Text(tr("{amount} for {what} will be removed.", "amount" to Money.rupees(initial.amt), "what" to ExpenseCategory.label(initial.category)), style = fig(15)) },
             confirmButton = { TextButton(onClick = { confirmDelete = false; onDelete?.invoke() }) { Text(tr("Delete"), style = fig(15, FontWeight.Bold, Tokens.DeleteRed)) } },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(tr("Cancel"), style = fig(15, FontWeight.Bold)) } },
+            dismissButton = { TextButton(onClick = { confirmDelete = false; Analytics.expenseDeleteCancelled(initial.category, initial.amt) }) { Text(tr("Cancel"), style = fig(15, FontWeight.Bold)) } },
             containerColor = Tokens.Card,
         )
     }

@@ -510,14 +510,59 @@ object Analytics {
     fun serviceDeleted(serviceId: String) = track("Service Deleted", mapOf("service_id" to serviceId))
 
     // ---- expenses (1.0.19) ----
-    /** [from]: settings | earnings (top-right button) | earnings_card | link. */
-    fun expensesOpened(from: String) = track("Expenses Opened", mapOf("from" to from))
+    // mode: new | edit (the add / change sheet). category: an ExpenseCategory key, or the name
+    // of a category the owner added (custom = true).
+
+    /** An entry point tapped. [from]: settings (row) | earnings (top-right button) | earnings_card (Profit card). */
+    fun expensesEntryTapped(from: String) = track("Expenses Entry Tapped", mapOf("from" to from))
+
+    /** The Expenses screen shown. [from]: as Entry Tapped, or push (a mylaundry://expenses link); [expenses] = how many the shop has. */
+    fun expensesOpened(from: String, expenses: Int) = track("Expenses Opened", mapOf("from" to from, "expenses" to expenses))
 
     fun expensesPeriodChanged(period: String) = track("Expenses Period Changed", mapOf("period" to period))
 
-    /** [category]: ExpenseCategory key. */
-    fun expenseSaved(category: String, amount: Int, method: PayMethod, isNew: Boolean) =
-        track(if (isNew) "Expense Added" else "Expense Edited", mapOf("category" to category, "amount" to amount, "method" to methodName(method)))
+    /** A Custom period's From / To picked: [which] from | to, [days] = how many days the period covers. */
+    fun expensesCustomDateSet(which: String, days: Int) = track("Expenses Custom Date Set", mapOf("which" to which, "days" to days))
+
+    /** "+ Add expense" at the bottom of Expenses. */
+    fun expenseAddTapped(expenses: Int) = track("Expense Add Tapped", mapOf("expenses" to expenses))
+
+    /** An expense in the list tapped (opens it to change or delete). */
+    fun expenseRowTapped(category: String, custom: Boolean, amount: Int) =
+        track("Expense Row Tapped", mapOf("category" to category, "custom" to custom, "amount" to amount))
+
+    fun expenseSheetShown(mode: String) = track("Expense Sheet Shown", mapOf("mode" to mode))
+
+    /** The sheet closed without Save or Delete (swipe down, back, a tap outside). */
+    fun expenseSheetDismissed(mode: String, amountEntered: Boolean, categoryPicked: Boolean) =
+        track("Expense Sheet Dismissed", mapOf("mode" to mode, "amount_entered" to amountEntered, "category_picked" to categoryPicked))
+
+    /** The sheet's date changed: [daysAgo] = how many days before today. */
+    fun expenseDateChanged(mode: String, daysAgo: Int) = track("Expense Date Changed", mapOf("mode" to mode, "days_ago" to daysAgo))
+
+    fun expenseCategoryPicked(mode: String, category: String, custom: Boolean) =
+        track("Expense Category Picked", mapOf("mode" to mode, "category" to category, "custom" to custom))
+
+    /** "+ New category" chip tapped (the name box opens). */
+    fun expenseNewCategoryTapped(mode: String) = track("Expense New Category Tapped", mapOf("mode" to mode))
+
+    /** A new category named and added: the name the owner typed. */
+    fun expenseCategoryAdded(mode: String, name: String) = track("Expense Category Added", mapOf("mode" to mode, "name" to name))
+
+    /** The greyed Save tapped. [missing]: amount | category | amount_category. */
+    fun expenseSaveBlocked(mode: String, missing: String) = track("Expense Save Blocked", mapOf("mode" to mode, "missing" to missing))
+
+    fun expenseSaved(category: String, amount: Int, custom: Boolean, isNew: Boolean, hasNote: Boolean, daysAgo: Int) =
+        track(
+            if (isNew) "Expense Added" else "Expense Edited",
+            mapOf("category" to category, "custom" to custom, "amount" to amount, "has_note" to hasNote, "days_ago" to daysAgo),
+        )
+
+    /** "Delete expense" tapped (the confirm dialog opens). */
+    fun expenseDeleteTapped(category: String, amount: Int) = track("Expense Delete Tapped", mapOf("category" to category, "amount" to amount))
+
+    /** The confirm dialog's Cancel (or a tap outside it). */
+    fun expenseDeleteCancelled(category: String, amount: Int) = track("Expense Delete Cancelled", mapOf("category" to category, "amount" to amount))
 
     fun expenseDeleted(category: String, amount: Int) =
         track("Expense Deleted", mapOf("category" to category, "amount" to amount))

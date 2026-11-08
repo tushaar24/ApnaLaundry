@@ -139,8 +139,8 @@ data class ExpenseEntity(
     @PrimaryKey val id: String,
     val date: String,      // yyyy-MM-dd, the day it was paid
     val amt: Int,          // rupees
-    val category: String,  // ExpenseCategory key (rent, salary, …)
-    val method: String,    // PayMethod: CASH | UPI
+    val category: String,  // ExpenseCategory key (rent, salary, …) or a name the owner added
+    val method: String,    // PayMethod: CASH | UPI (CASH since the sheet stopped asking)
     val note: String,
     val ts: Long,          // when it was written down (orders a day's list)
     @ColumnInfo(defaultValue = "0") val deleted: Boolean = false,

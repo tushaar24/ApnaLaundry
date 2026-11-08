@@ -1,9 +1,13 @@
 {
   "_note": "Hand corrections that always win over the machine translation (translate.py applies them on every run). Mostly one-word buttons, where the translator can't tell a verb from a noun.",
-  "hi": { "Change": "बदलें", "Charge by": "किस हिसाब से दाम" },
-  "bn": { "Change": "বদলান" },
-  "kn": { "Change": "ಬದಲಿಸಿ", "Delete": "ಅಳಿಸಿ", "Call": "ಕರೆ ಮಾಡಿ" },
-  "ml": { "Change": "മാറ്റുക", "Delete": "ഡിലീറ്റ് ചെയ്യുക" },
-  "or": { "Change": "ବଦଳାନ୍ତୁ" },
-  "te": { "Done": "అయింది", "Later": "తర్వాత" }
+  "hi": { "Change": "बदलें", "Charge by": "किस हिसाब से दाम", "Spent · {period}": "खर्च · {period}" },
+  "bn": { "Change": "বদলান", "Spent · {period}": "খরচ · {period}" },
+  "kn": { "Change": "ಬದಲಿಸಿ", "Delete": "ಅಳಿಸಿ", "Call": "ಕರೆ ಮಾಡಿ", "Open": "ತೆರೆಯಿರಿ" },
+  "ml": { "Change": "മാറ്റുക", "Delete": "ഡിലീറ്റ് ചെയ്യുക", "Spent · {period}": "ചെലവ് · {period}" },
+  "or": { "Change": "ବଦଳାନ୍ତୁ", "Spent · {period}": "ଖର୍ଚ୍ଚ · {period}", "Open": "ଖୋଲନ୍ତୁ" },
+  "te": { "Done": "అయింది", "Later": "తర్వాత", "Spent · {period}": "ఖర్చు · {period}", "Open": "తెరవండి" },
+  "mr": { "Spent · {period}": "खर्च · {period}" },
+  "gu": { "Spent · {period}": "ખર્ચ · {period}" },
+  "ta": { "Spent · {period}": "செலவு · {period}", "Open": "திற" },
+  "pa": { "Spent · {period}": "ਖਰਚ · {period}" }
 }

@@ -1,6 +1,7 @@
 package com.dailyworks.apnalaundry.domain
 
 import com.dailyworks.apnalaundry.core.i18n
+import com.dailyworks.apnalaundry.core.tr
 
 import kotlinx.serialization.Serializable
 
@@ -164,7 +165,11 @@ data class Expense(
     val ts: Long,
 )
 
-/** What shop expenses are for. [key] is stored and synced; [label] is shown through tr() (i18n marks it for translation). */
+/**
+ * The common things shop expenses are for. [key] is stored and synced; [label] is shown through
+ * tr() (i18n marks it for translation). An owner can add their own category in the expense
+ * sheet: it is stored as the name they typed (1.0.19).
+ */
 enum class ExpenseCategory(val key: String, val label: String, val emoji: String) {
     RENT("rent", i18n("Rent"), "🏠"),
     SALARY("salary", i18n("Staff salary"), "👥"),
@@ -178,7 +183,18 @@ enum class ExpenseCategory(val key: String, val label: String, val emoji: String
     OTHER("other", i18n("Other"), "📌");
 
     companion object {
-        fun of(key: String) = entries.firstOrNull { it.key == key } ?: OTHER
+        /** The common category stored as [key], or null for a name the owner added. */
+        fun known(key: String) = entries.firstOrNull { it.key == key }
+
+        /** What the owner sees for a stored category: a common one in their language, else their name for it. */
+        fun label(category: String) = known(category)?.let { tr(it.label) } ?: category.ifBlank { tr(OTHER.label) }
+
+        fun emoji(category: String) = known(category)?.emoji ?: "🏷️"
+
+        /** A name the owner typed as a stored category: the common one's key when it names one (any case, English or their language). */
+        fun keyFor(name: String) = entries.firstOrNull {
+            it.key.equals(name, ignoreCase = true) || it.label.equals(name, ignoreCase = true) || tr(it.label).equals(name, ignoreCase = true)
+        }?.key ?: name
     }
 }
 

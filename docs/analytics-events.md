@@ -109,10 +109,23 @@ Custom property keys are `snake_case`. `Charged` uses CleverTap's reserved
 | `Service Deleted` | `service_id` | service deleted |
 | `Screen Viewed` | `screen` | each main screen is shown (`login`, `setup`, `home`, `customers`, `earnings`, `settings`, `new_order`, `order_detail`, `customer_khata`, `combined_bill`, `bill`, `rates`) |
 | `Earnings Period Changed` | `period` (`today`\|`week`\|`month`) | period toggle on Earnings |
-| `Expenses Opened` | `from` (`settings`\|`earnings`\|`earnings_card`\|`push`) | Expenses screen opened (Android 1.0.19) — Settings row, Earnings top-right button, Earnings profit card, or a `mylaundry://expenses` link |
+| `Expenses Entry Tapped` | `from` (`settings`\|`earnings`\|`earnings_card`) | an Expenses entry point tapped — the Settings row, the Earnings top-right button, the Earnings Profit card (Android 1.0.19) |
+| `Expenses Opened` | `from` (as Entry Tapped, or `push` = a `mylaundry://expenses` link), `expenses` (how many the shop has) | the Expenses screen shown (Android 1.0.19; also `Screen Viewed` `expenses`) |
 | `Expenses Period Changed` | `period` (`today`\|`week`\|`month`\|`all`\|`custom`) | period chips on Expenses (Android 1.0.19) |
-| `Expense Added` | `category` (`rent`\|`salary`\|`electricity`\|`supplies`\|`fuel`\|`water`\|`packing`\|`transport`\|`repairs`\|`other`), `amount`, `method` (`cash`\|`upi`) | a new expense saved (Android 1.0.19) |
-| `Expense Edited` | as `Expense Added` | an expense changed (Android 1.0.19) |
+| `Expenses Custom Date Set` | `which` (`from`\|`to`), `days` (days the period covers) | a Custom period's From / To picked (Android 1.0.19) |
+| `Expense Add Tapped` | `expenses` (how many the shop has) | "+ Add expense" tapped (Android 1.0.19) |
+| `Expense Row Tapped` | `category` (`rent`\|`salary`\|`electricity`\|`supplies`\|`fuel`\|`water`\|`packing`\|`transport`\|`repairs`\|`other`, or the name of a category the owner added), `custom` (bool), `amount` | an expense in the list tapped to change or delete it (Android 1.0.19) |
+| `Expense Sheet Shown` | `mode` (`new`\|`edit`) | the add / change expense sheet shown (Android 1.0.19) |
+| `Expense Date Changed` | `mode`, `days_ago` | the sheet's date changed (Android 1.0.19) |
+| `Expense Category Picked` | `mode`, `category` (`rent`\|`salary`\|`electricity`\|`supplies`\|`fuel`\|`water`\|`packing`\|`transport`\|`repairs`\|`other`, or the name of a category the owner added), `custom` (bool) | a category chip tapped in the sheet (Android 1.0.19) |
+| `Expense New Category Tapped` | `mode` | "+ New category" tapped — the name box opens (Android 1.0.19) |
+| `Expense Category Added` | `mode`, `name` | a new category named and added — the name the owner typed (Android 1.0.19) |
+| `Expense Save Blocked` | `mode`, `missing` (`amount`\|`category`\|`amount_category`) | the greyed Save tapped (Android 1.0.19) |
+| `Expense Added` | `category` (`rent`\|`salary`\|`electricity`\|`supplies`\|`fuel`\|`water`\|`packing`\|`transport`\|`repairs`\|`other`, or the name of a category the owner added), `custom` (bool), `amount`, `has_note` (bool), `days_ago` | a new expense saved (Android 1.0.19) |
+| `Expense Edited` | as `Expense Added` | an expense changed and saved (Android 1.0.19) |
+| `Expense Sheet Dismissed` | `mode`, `amount_entered` (bool), `category_picked` (bool) | the sheet closed without Save / Delete — swipe down, back, tap outside (Android 1.0.19) |
+| `Expense Delete Tapped` | `category`, `amount` | "Delete expense" tapped — the confirm dialog opens (Android 1.0.19) |
+| `Expense Delete Cancelled` | `category`, `amount` | the confirm dialog's Cancel, or a tap outside it (Android 1.0.19) |
 | `Expense Deleted` | `category`, `amount` | an expense deleted (Android 1.0.19) |
 | `Order Search Opened` | — | search opened on Home |
 

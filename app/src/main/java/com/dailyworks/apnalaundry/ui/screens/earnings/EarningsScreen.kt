@@ -174,7 +174,7 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
             // Expenses (1.0.19), where the hide / share icons were.
             Row(
                 Modifier.rounded(999.dp).border(1.5.dp, Tokens.Blue, RoundedCornerShape(999.dp))
-                    .tap { navigator.openExpenses("earnings") }.padding(horizontal = 14.dp, vertical = 8.dp),
+                    .tap { Analytics.expensesEntryTapped("earnings"); navigator.openExpenses("earnings") }.padding(horizontal = 14.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Icon(Icons.AutoMirrored.Outlined.ReceiptLong, null, tint = Tokens.Blue, modifier = Modifier.size(18.dp))
@@ -306,7 +306,7 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
             }
 
             // Profit after expenses (1.0.19) — taps through to Expenses.
-            AppCard(Modifier.tap { navigator.openExpenses("earnings_card") }) {
+            AppCard(Modifier.tap { Analytics.expensesEntryTapped("earnings_card"); navigator.openExpenses("earnings_card") }) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(tr("Profit"), style = fig(15, FontWeight.Bold), modifier = Modifier.weight(1f))

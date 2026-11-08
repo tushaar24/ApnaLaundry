@@ -126,7 +126,7 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
             // Expenses (1.0.19)
             AppCard {
                 Row(
-                    Modifier.fillMaxWidth().tap { navigator.openExpenses("settings") }.padding(16.dp),
+                    Modifier.fillMaxWidth().tap { Analytics.expensesEntryTapped("settings"); navigator.openExpenses("settings") }.padding(16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dailyworks.apnalaundry.data.CmdResult
 import android.net.Uri
+import com.dailyworks.apnalaundry.core.AppDate
 import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.data.LaundryRepository
 import com.dailyworks.apnalaundry.data.LogoStore
@@ -346,7 +347,7 @@ class ShopViewModel(
 
     fun saveExpense(e: Expense, isNew: Boolean) = launchCmd {
         repo.saveExpense(e)
-        Analytics.expenseSaved(e.category, e.amt, e.method, isNew)
+        Analytics.expenseSaved(e.category, e.amt, ExpenseCategory.known(e.category) == null, isNew, e.note.isNotBlank(), AppDate.daysBetween(e.date, AppDate.TODAY))
         CmdResult(if (isNew) tr("Expense added") else tr("Expense updated"))
     }
 
