@@ -23,6 +23,7 @@ object Routes {
     /** The simple "Add new service" form (services-from-scratch variant), opened from New order. */
     const val ADD_SERVICE = "add-service?from={from}"
     const val EXPENSES = "expenses?from={from}"
+    const val EXPENSE = "expense?id={id}"
 }
 
 /** Thin typed wrapper over the NavController used by every screen. */
@@ -47,6 +48,8 @@ class AppNavigator(val nav: NavHostController) {
     fun openAddService(from: String) = push("add-service?from=$from")
     /** Expenses (1.0.19); [from] = settings | earnings | earnings_card | push. */
     fun openExpenses(from: String) = push("expenses?from=$from")
+    /** Add an expense ([id] empty) or change one — a page of its own. */
+    fun openExpense(id: String) = push("expense?id=${android.net.Uri.encode(id)}")
 
     /**
      * Opens a screen — once. A double tap on a slow phone (or a tap on the

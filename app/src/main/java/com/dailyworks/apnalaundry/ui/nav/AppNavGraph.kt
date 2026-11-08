@@ -303,6 +303,12 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
         ) { entry ->
             com.dailyworks.apnalaundry.ui.screens.expenses.ExpensesScreen(shopVm, navigator, entry.arguments?.getString("from") ?: "push")
         }
+        composable(
+            Routes.EXPENSE,
+            arguments = listOf(navArgument("id") { type = NavType.StringType; defaultValue = "" }),
+        ) { entry ->
+            com.dailyworks.apnalaundry.ui.screens.expenses.ExpenseFormScreen(shopVm, navigator, entry.arguments?.getString("id").orEmpty())
+        }
 
         composable(Routes.SUBSCRIPTION) {
             PaywallScreen(

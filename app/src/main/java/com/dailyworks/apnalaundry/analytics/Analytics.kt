@@ -510,7 +510,7 @@ object Analytics {
     fun serviceDeleted(serviceId: String) = track("Service Deleted", mapOf("service_id" to serviceId))
 
     // ---- expenses (1.0.19) ----
-    // mode: new | edit (the add / change sheet). category: an ExpenseCategory key, or the name
+    // mode: new | edit (the add / change page). category: an ExpenseCategory key, or the name
     // of a category the owner added (custom = true).
 
     /** An entry point tapped. [from]: settings (row) | earnings (top-right button) | earnings_card (Profit card). */
@@ -531,11 +531,12 @@ object Analytics {
     fun expenseRowTapped(category: String, custom: Boolean, amount: Int) =
         track("Expense Row Tapped", mapOf("category" to category, "custom" to custom, "amount" to amount))
 
-    fun expenseSheetShown(mode: String) = track("Expense Sheet Shown", mapOf("mode" to mode))
+    /** The add / change expense page shown. */
+    fun expensePageShown(mode: String) = track("Expense Page Shown", mapOf("mode" to mode))
 
-    /** The sheet closed without Save or Delete (swipe down, back, a tap outside). */
-    fun expenseSheetDismissed(mode: String, amountEntered: Boolean, categoryPicked: Boolean) =
-        track("Expense Sheet Dismissed", mapOf("mode" to mode, "amount_entered" to amountEntered, "category_picked" to categoryPicked))
+    /** The page left without Save or Delete (the back arrow or the phone's Back). */
+    fun expensePageClosed(mode: String, amountEntered: Boolean, categoryPicked: Boolean) =
+        track("Expense Page Closed", mapOf("mode" to mode, "amount_entered" to amountEntered, "category_picked" to categoryPicked))
 
     /** The sheet's date changed: [daysAgo] = how many days before today. */
     fun expenseDateChanged(mode: String, daysAgo: Int) = track("Expense Date Changed", mapOf("mode" to mode, "days_ago" to daysAgo))

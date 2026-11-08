@@ -1,0 +1,343 @@
+package com.dailyworks.apnalaundry.ui.screens.expenses
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dailyworks.apnalaundry.analytics.Analytics
+import com.dailyworks.apnalaundry.core.AppDate
+import com.dailyworks.apnalaundry.core.Money
+import com.dailyworks.apnalaundry.core.tr
+import com.dailyworks.apnalaundry.domain.Expense
+import com.dailyworks.apnalaundry.domain.ExpenseCategory
+import com.dailyworks.apnalaundry.domain.PayMethod
+import com.dailyworks.apnalaundry.ui.ShopViewModel
+import com.dailyworks.apnalaundry.ui.components.AppBottomSheet
+import com.dailyworks.apnalaundry.ui.components.FieldBox
+import com.dailyworks.apnalaundry.ui.components.OutlineButton
+import com.dailyworks.apnalaundry.ui.components.PrimaryButton
+import com.dailyworks.apnalaundry.ui.components.TopBar
+import com.dailyworks.apnalaundry.ui.components.bric
+import com.dailyworks.apnalaundry.ui.components.fig
+import com.dailyworks.apnalaundry.ui.components.rounded
+import com.dailyworks.apnalaundry.ui.components.showDatePicker
+import com.dailyworks.apnalaundry.ui.components.tap
+import com.dailyworks.apnalaundry.ui.nav.AppNavigator
+import com.dailyworks.apnalaundry.ui.screens.earnings.DateBox
+import com.dailyworks.apnalaundry.ui.theme.Tokens
+
+/**
+ * Add or change an expense (1.0.19), a page of its own: the amount, the day and an optional
+ * note, then what it was for — "+ Add category" opens [CategorySheet] over the page. [id] empty
+ * = a new expense.
+ */
+@Composable
+fun ExpenseFormScreen(shopVm: ShopViewModel, navigator: AppNavigator, id: String) {
+    val state by shopVm.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val initial = remember(id) {
+        if (id.isEmpty()) Expense("", AppDate.TODAY, 0, "", PayMethod.CASH, "", 0)
+        else state.expenses.firstOrNull { it.id == id }
+    }
+    if (initial == null) { // deleted meanwhile (another phone)
+        LaunchedEffect(Unit) { navigator.back() }
+        return
+    }
+    val isNew = initial.id.isEmpty()
+    val mode = if (isNew) "new" else "edit"
+
+    var amount by rememberSaveable { mutableStateOf(if (initial.amt > 0) initial.amt.toString() else "") }
+    var date by rememberSaveable { mutableStateOf(initial.date) }
+    var note by rememberSaveable { mutableStateOf(initial.note) }
+    var category by rememberSaveable { mutableStateOf(initial.category) }
+    // Named in the category list: shown there until the page closes (it is saved with the expense).
+    var added by rememberSaveable { mutableStateOf(listOf<String>()) }
+    var choosing by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
+    val amt = amount.toIntOrNull() ?: 0
+    // Categories this shop added itself, most used first, then those named on this page.
+    val custom = remember(state.expenses, added) {
+        (added + state.expenses.map { it.category }
+            .filter { it.isNotBlank() && ExpenseCategory.known(it) == null }
+            .groupingBy { it }.eachCount().entries.sortedByDescending { it.value }.map { it.key })
+            .distinctBy { it.lowercase() }
+    }
+    val amountFocus = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        Analytics.expensePageShown(mode)
+        if (isNew) runCatching { amountFocus.requestFocus() }
+    }
+
+    fun close() {
+        Analytics.expensePageClosed(mode, amt > 0, category.isNotBlank())
+        navigator.back()
+    }
+    BackHandler { close() }
+
+    Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars).imePadding()) {
+        TopBar(if (isNew) tr("Add expense") else tr("Edit expense"), onBack = { close() })
+        Column(
+            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(top = 8.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
+        ) {
+            Labelled(tr("Amount")) {
+                FieldBox(
+                    amount, { v -> amount = v.filter(Char::isDigit).take(7) },
+                    Modifier.fillMaxWidth(), prefix = "₹", keyboardType = KeyboardType.Number,
+                    height = 60.dp, textStyle = bric(24, FontWeight.Bold),
+                    fieldModifier = Modifier.focusRequester(amountFocus),
+                )
+            }
+            DateBox(tr("Date"), date, Modifier.fillMaxWidth()) {
+                showDatePicker(context, date, null) { d ->
+                    if (d != date) Analytics.expenseDateChanged(mode, AppDate.daysBetween(d, AppDate.TODAY))
+                    date = d
+                }
+            }
+            Labelled(tr("Note (optional)")) {
+                FieldBox(note, { note = it.take(200) }, Modifier.fillMaxWidth())
+            }
+            Labelled(tr("Category")) {
+                if (category.isBlank()) {
+                    OutlineButton("+ " + tr("Add category"), Modifier.fillMaxWidth(), height = 52.dp) {
+                        Analytics.expenseCategoryTapped(mode, "add")
+                        choosing = true
+                    }
+                } else {
+                    CategoryBox(category, Modifier.fillMaxWidth()) {
+                        Analytics.expenseCategoryTapped(mode, "change")
+                        choosing = true
+                    }
+                }
+            }
+            if (!isNew) {
+                OutlineButton(tr("Delete expense"), Modifier.fillMaxWidth().padding(top = 8.dp), border = Tokens.DeleteRed, fg = Tokens.DeleteRed) {
+                    Analytics.expenseDeleteTapped(initial.category, initial.amt)
+                    confirmDelete = true
+                }
+            }
+        }
+
+        Column(Modifier.fillMaxWidth().background(Tokens.Card).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (amt > 0 && category.isBlank()) {
+                Text(tr("Add a category to save."), style = fig(13, color = Tokens.Muted), modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+            }
+            PrimaryButton(
+                tr("Save"), Modifier.fillMaxWidth(), enabled = amt > 0 && category.isNotBlank(), height = 56.dp,
+                onDisabledClick = {
+                    Analytics.expenseSaveBlocked(mode, listOfNotNull("amount".takeIf { amt <= 0 }, "category".takeIf { category.isBlank() }).joinToString("_"))
+                },
+            ) {
+                val x = initial.copy(amt = amt, category = category, date = date, note = note.trim())
+                shopVm.saveExpense(if (isNew) x.copy(id = shopVm.newExpenseId(), ts = System.currentTimeMillis()) else x, isNew)
+                navigator.back()
+            }
+        }
+    }
+
+    if (choosing) {
+        CategorySheet(
+            selected = category, custom = custom, mode = mode,
+            onPick = { c ->
+                if (ExpenseCategory.known(c) == null && custom.none { it.equals(c, ignoreCase = true) }) added = added + c
+                category = c
+                choosing = false
+            },
+            onBack = { choosing = false },
+        )
+    }
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false; Analytics.expenseDeleteCancelled(initial.category, initial.amt) },
+            title = { Text(tr("Delete this expense?"), style = fig(18, FontWeight.Bold)) },
+            text = { Text(tr("{amount} for {what} will be removed.", "amount" to Money.rupees(initial.amt), "what" to ExpenseCategory.label(initial.category)), style = fig(15)) },
+            confirmButton = {
+                TextButton(onClick = { confirmDelete = false; shopVm.deleteExpense(initial); navigator.back() }) {
+                    Text(tr("Delete"), style = fig(15, FontWeight.Bold, Tokens.DeleteRed))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDelete = false; Analytics.expenseDeleteCancelled(initial.category, initial.amt) }) {
+                    Text(tr("Cancel"), style = fig(15, FontWeight.Bold))
+                }
+            },
+            containerColor = Tokens.Card,
+        )
+    }
+}
+
+@Composable
+private fun Labelled(label: String, content: @Composable () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(label, style = fig(14, FontWeight.SemiBold))
+        content()
+    }
+}
+
+/** The chosen category on the form, like the date box above it; a tap changes it. */
+@Composable
+private fun CategoryBox(category: String, modifier: Modifier, onClick: () -> Unit) {
+    Row(
+        modifier.heightIn(min = 52.dp).rounded(12.dp).background(Tokens.Card)
+            .border(1.5.dp, Tokens.FieldBorder, RoundedCornerShape(12.dp)).tap(onClick = onClick).padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(ExpenseCategory.emoji(category), style = fig(18))
+        Text(ExpenseCategory.label(category), style = fig(15, FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Text(tr("Change"), style = fig(14, FontWeight.Bold, Tokens.Blue))
+    }
+}
+
+/**
+ * A half-screen sheet over the form: every category in one list — the shop's own first
+ * ([custom]), then the common ones — with a search box. "+ New" beside it, or the "Add … as a
+ * new category" row when the search matches none exactly, adds what was typed. [onPick] gets the
+ * stored category (a common key or the name).
+ */
+@Composable
+private fun CategorySheet(selected: String, custom: List<String>, mode: String, onPick: (String) -> Unit, onBack: () -> Unit) {
+    var query by remember { mutableStateOf("") }
+    var naming by remember { mutableStateOf(false) } // "+ New" tapped with nothing typed yet
+    val focus = remember { FocusRequester() }
+    val q = query.trim().replace(Regex("\\s+"), " ")
+    val own = custom.map { Triple(it, ExpenseCategory.emoji(it), it) }
+    val common = ExpenseCategory.entries.map { Triple(it.key, it.emoji, tr(it.label)) }
+    fun matches(key: String, label: String) = q.isEmpty() || label.contains(q, ignoreCase = true) ||
+        ExpenseCategory.known(key)?.label?.contains(q, ignoreCase = true) == true
+    val ownShown = own.filter { matches(it.first, it.third) }
+    val commonShown = common.filter { matches(it.first, it.third) }
+    val exact = q.isNotEmpty() && (own + common).any { it.third.equals(q, ignoreCase = true) || it.first == ExpenseCategory.keyFor(q) }
+    // Title and handle take the rest: the whole sheet is about half the screen.
+    val listHeight = (LocalConfiguration.current.screenHeightDp * 0.5f - 130f).coerceAtLeast(220f).dp
+
+    fun pick(key: String, how: String) {
+        Analytics.expenseCategoryPicked(mode, key, ExpenseCategory.known(key) == null, q.isNotEmpty())
+        Analytics.expenseCategorySheetClosed(mode, how, q.take(30))
+        onPick(key)
+    }
+
+    fun addNew(from: String) {
+        Analytics.expenseNewCategoryTapped(mode, from, q.isNotEmpty())
+        if (q.isEmpty()) { naming = true; runCatching { focus.requestFocus() }; return }
+        val key = ExpenseCategory.keyFor(q.take(30))
+        val existing = custom.firstOrNull { it.equals(key, ignoreCase = true) }
+        if (existing == null && ExpenseCategory.known(key) == null) {
+            Analytics.expenseCategoryAdded(mode, key, from)
+            pick(key, "added")
+        } else {
+            pick(existing ?: key, "picked")
+        }
+    }
+
+    AppBottomSheet(
+        title = tr("Choose category"),
+        onDismiss = { Analytics.expenseCategorySheetClosed(mode, "dismissed", q.take(30)); onBack() },
+    ) {
+        Column(Modifier.fillMaxWidth().height(listHeight), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FieldBox(
+                    query, { query = it.take(30) }, Modifier.weight(1f),
+                    placeholder = if (naming) tr("Type the new category name") else tr("Search category"),
+                    height = 48.dp,
+                    capitalization = KeyboardCapitalization.Words,
+                    imeAction = ImeAction.Done, onImeAction = { if (q.isNotEmpty()) addNew("keyboard") },
+                    fieldModifier = Modifier.focusRequester(focus),
+                    leading = { Icon(Icons.Outlined.Search, null, tint = Tokens.Muted, modifier = Modifier.size(20.dp)) },
+                )
+                OutlineButton("+ " + tr("New"), Modifier.width(92.dp), height = 48.dp) { addNew("button") }
+            }
+            LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
+                if (q.isNotEmpty() && !exact) {
+                    item(key = "add") {
+                        Row(
+                            Modifier.padding(bottom = 6.dp).fillMaxWidth().heightIn(min = 52.dp).rounded(12.dp).background(Tokens.BlueLight)
+                                .tap { addNew("search_row") }.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Text("+", style = fig(20, FontWeight.Bold, Tokens.Blue))
+                            Text(
+                                tr("Add “{name}” as a new category", "name" to q.take(30)),
+                                style = fig(15, FontWeight.Bold, Tokens.Blue), modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+                }
+                if (ownShown.isNotEmpty()) {
+                    if (q.isEmpty()) item(key = "own") { SectionLabel(tr("Your categories")) }
+                    items(ownShown, key = { "o:" + it.first }) { (key, emoji, label) -> CategoryRow(emoji, label, key == selected) { pick(key, "picked") } }
+                }
+                if (commonShown.isNotEmpty()) {
+                    if (q.isEmpty() && ownShown.isNotEmpty()) item(key = "common") { SectionLabel(tr("Common categories")) }
+                    items(commonShown, key = { "c:" + it.first }) { (key, emoji, label) -> CategoryRow(emoji, label, key == selected) { pick(key, "picked") } }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionLabel(text: String) {
+    Text(text, style = fig(13, FontWeight.Bold, Tokens.Muted), modifier = Modifier.padding(top = 6.dp, bottom = 2.dp))
+}
+
+@Composable
+private fun CategoryRow(emoji: String, label: String, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 52.dp).tap(onClick = onClick).padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(Modifier.size(40.dp).rounded(999.dp).background(Tokens.OrangeLight), contentAlignment = Alignment.Center) {
+            Text(emoji, style = fig(18))
+        }
+        Text(label, style = fig(15, if (selected) FontWeight.Bold else FontWeight.SemiBold), modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+        if (selected) Icon(Icons.Filled.Check, null, tint = Tokens.Blue, modifier = Modifier.size(22.dp))
+    }
+}
