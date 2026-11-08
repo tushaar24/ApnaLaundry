@@ -1,5 +1,9 @@
 package com.dailyworks.apnalaundry.data.shops
 
+import com.dailyworks.apnalaundry.data.sync.StaffContextWire
+
+import com.dailyworks.apnalaundry.data.MAIN_SHOP
+
 import com.dailyworks.apnalaundry.data.LaundryRepository
 import com.dailyworks.apnalaundry.data.sync.PlanRequiredException
 import com.dailyworks.apnalaundry.data.sync.SyncApi
@@ -16,13 +20,47 @@ class ShopsRepository(
      * the saved list (just the main shop for everyone until they add one).
      */
     suspend fun refresh() {
+        // Someone who is only staff has no shops of their own (the server would say 403).
+        if (dir.ref(MAIN_SHOP)?.staff != null) return
         val server = runCatching { api.listShops() }.getOrNull() ?: return
         val local = dir.list()
-        // Deleted on another phone: drop it here too (its data and file).
-        local.filter { l -> l.id != com.dailyworks.apnalaundry.data.MAIN_SHOP && server.none { it.id == l.id } }
+        // Deleted on another phone: drop it here too (its data and file). Staff entries aren't
+        // the owner's shops — they come from [refreshStaff].
+        local.filter { l -> l.id != MAIN_SHOP && l.staff == null && server.none { it.id == l.id } }
             .forEach { dir.remove(it.id) }
         // The main shop's name may be blank on the server before its first sync.
         dir.save(server.map { s -> s.copy(name = s.name.ifBlank { local.firstOrNull { it.id == s.id }?.name.orEmpty() }) })
+    }
+
+    /**
+     * Staff (1.0.20): where this phone works as staff, from the server (app start; login gives
+     * the same list). New ones are announced ("Sharma Laundry added you as staff"), ones the
+     * owner removed leave the phone. Offline / an older server: nothing changes.
+     */
+    suspend fun refreshStaff() {
+        val res = runCatching { api.contexts(MAIN_SHOP) }.getOrNull() ?: return
+        applyStaff(res.contexts, announce = true)
+    }
+
+    /** Saves the staff entries from [contexts] (login, [refreshStaff]); returns the new entries. */
+    suspend fun applyStaff(contexts: List<StaffContextWire>, announce: Boolean, asMain: Boolean = false): List<ShopRef> {
+        val mainStaff = dir.ref(MAIN_SHOP)?.staff
+        val before = dir.list().mapNotNull { it.staff?.staffId }.toSet()
+        var entries = contexts.filter { !it.token.isNullOrBlank() }.map { c ->
+            ShopRef(
+                id = staffShopId(c.staffId), name = c.shopName,
+                staff = StaffCtx(c.staffId, c.token!!, c.name, c.ownerName, c.permissions, c.ownerPlanActive),
+            )
+        }
+        // Only staff: the main slot keeps the shop it already holds (its data is in the main database).
+        if (mainStaff != null && !asMain) {
+            val main = entries.firstOrNull { it.staff?.staffId == mainStaff.staffId } ?: return emptyList() // removed: the next sync logs out
+            entries = listOf(main) + entries.filter { it !== main }
+        }
+        dir.saveStaff(entries, mainStaff = asMain || mainStaff != null)
+        val added = entries.filter { it.staff!!.staffId !in before }
+        if (announce) added.forEach { dir.staffEvents.tryEmit(StaffEvent.Added(dir.ref(it.id) ?: it)) }
+        return added
     }
 
     /**

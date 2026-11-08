@@ -127,10 +127,20 @@ object Analytics {
         updateProfile(mapOf("Contacts_Permission" to if (granted) "granted" else "not_granted"))
     }
 
+    // Staff (1.0.20): while the shop on screen is someone else's (worked as staff), every event
+    // carries role = staff, the staff id and the owner's shop — staff use never looks like an
+    // owner's (sign-ups, funnels). null = the person's own shop (events as before).
+    @Volatile private var staffMode: Map<String, Any>? = null
+
+    fun setStaffMode(staffId: String?, shopName: String?) {
+        staffMode = staffId?.let { mapOf("role" to "staff", "staff_id" to it, "owner_shop" to shopName.orEmpty()) }
+    }
+
     private fun track(name: String, props: Map<String, Any?> = emptyMap()) {
         if (!enabled) return
         val clean = HashMap<String, Any>()
         for ((k, v) in props) if (v != null) clean[k] = v
+        staffMode?.let { clean.putAll(it) }
         paywallVariant?.let { clean["paywall_variant"] = it }
         customerFlow?.let { clean["customer_flow"] = it }
         servicesSetup?.let { clean["services_setup"] = it }
@@ -622,6 +632,39 @@ object Analytics {
 
     fun expenseDeleted(category: String, amount: Int) =
         track("Expense Deleted", mapOf("category" to category, "amount" to amount))
+
+    // ---- staff, the staff member's side (1.0.20, docs/specs/staff.md) ----
+
+    /**
+     * A staff login (never a sign-up: no Logged In / Meta events for it). [shops] = how many shops
+     * this number works at as staff; [hasOwnShop] = it also runs a shop of its own.
+     */
+    fun staffLoggedIn(shops: Int, hasOwnShop: Boolean) =
+        track("Staff Logged In", mapOf("shops" to shops, "has_own_shop" to hasOwnShop))
+
+    /** A staff shop opened. [how]: login | switch | added_prompt. */
+    fun staffShopOpened(how: String) = track("Staff Shop Opened", mapOf("how" to how))
+
+    /** Back to the person's own shop from a staff one (the shop switcher). */
+    fun staffOwnShopOpened() = track("Staff Own Shop Opened")
+
+    /** The once-only "Welcome Ramesh — you're staff at …" card on Home. [how]: shown | closed. */
+    fun staffWelcome(how: String) = track(if (how == "shown") "Staff Welcome Shown" else "Staff Welcome Closed")
+
+    /** "Sharma Laundry added you as staff. Open it?" — [answer]: shown | open | later. */
+    fun staffAddedPrompt(answer: String) = track("Staff Added Prompt", mapOf("answer" to answer))
+
+    /** The owner removed this phone from a shop; the person is told. */
+    fun staffRemovedNotice() = track("Staff Removed Notice Shown")
+
+    /** The owner's plan has ended: the staff shop shows "ask the owner to renew". */
+    fun staffRenewShown() = track("Staff Renew Shown")
+
+    /** On that screen: "Switch shop" / "Call the owner". */
+    fun staffRenewAction(action: String) = track("Staff Renew Action", mapOf("action" to action))
+
+    /** The server put back changes this staff member isn't allowed to make. [rows] = how many. */
+    fun staffChangesRefused(rows: Int) = track("Staff Changes Refused", mapOf("rows" to rows))
 
     // ---- staff, the owner's side (1.0.20, docs/specs/staff.md) ----
 

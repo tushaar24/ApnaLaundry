@@ -22,6 +22,10 @@ class NotLoggedInException : Exception("Not logged in")
 class SyncHttpException(val status: Int) : Exception("Sync request failed with HTTP $status")
 /** Adding a shop needs a plan — the server refused (403 PLAN_REQUIRED). */
 class PlanRequiredException : Exception("Adding a shop needs a plan")
+/** Staff (1.0.20): the owner removed this phone's staff login for [shop] (or deleted the shop). */
+class StaffRemovedException(val shop: String) : Exception("Removed from this shop")
+/** Staff (1.0.20): the owner's plan has ended — staff can't work in [shop] until it's renewed. */
+class OwnerPlanEndedException(val shop: String) : Exception("The owner's plan has ended")
 
 /**
  * Authenticated calls to /api/laundry/sync. Attaches a valid access token
@@ -32,12 +36,16 @@ class PlanRequiredException : Exception("Adding a shop needs a plan")
  * shop sends no header, so its calls are byte-for-byte what they were before
  * — and still work against a server that predates multi-shop.
  */
-class SyncApi(private val client: HttpClient, private val tokens: TokenManager) {
+class SyncApi(
+    private val client: HttpClient,
+    private val tokens: TokenManager,
+    private val shops: com.dailyworks.apnalaundry.data.shops.ShopDirectory,
+) {
 
     private val base = BuildConfig.API_BASE_URL
 
     suspend fun push(changes: SyncChanges, shop: String = MAIN_SHOP): PushResponse {
-        val res = authed { token ->
+        val res = authed(shop) { token ->
             client.post("$base/sync/push") {
                 contentType(ContentType.Application.Json)
                 bearerAuth(token)
@@ -51,7 +59,7 @@ class SyncApi(private val client: HttpClient, private val tokens: TokenManager) 
 
     /** [afterSeq] (sync v2): rows the server numbered after it; 0 = by the [since] time checkpoint. */
     suspend fun pull(since: Long, shop: String = MAIN_SHOP, afterSeq: Long = 0): PullResponse {
-        val res = authed { token ->
+        val res = authed(shop) { token ->
             client.get("$base/sync/pull") {
                 parameter("since", since)
                 if (afterSeq > 0) parameter("afterSeq", afterSeq)
@@ -94,7 +102,7 @@ class SyncApi(private val client: HttpClient, private val tokens: TokenManager) 
 
     /** Token of an order's public bill page (mylaundry.work/b/<token>); the order must be synced. */
     suspend fun billLink(orderId: Int, shop: String = MAIN_SHOP): String {
-        val res = authed { token ->
+        val res = authed(shop) { token ->
             client.post("$base/bills/$orderId/link") { bearerAuth(token); shop(shop) }
         }
         val body: BillLinkResponse = runCatching { res.body<BillLinkResponse>() }.getOrDefault(BillLinkResponse(false))
@@ -133,14 +141,58 @@ class SyncApi(private val client: HttpClient, private val tokens: TokenManager) 
         if (res.status.value !in 200..299 && res.status.value != 404) throw SyncHttpException(res.status.value)
     }
 
+    /** The owner's extra shops name themselves; the main shop and staff entries send nothing (the server pins a staff login to its shop). */
     private fun HttpRequestBuilder.shop(id: String) {
-        if (id != MAIN_SHOP) header("X-Laundry-Shop", id)
+        if (id != MAIN_SHOP && shops.ref(id)?.staff == null) header("X-Laundry-Shop", id)
+    }
+
+    /**
+     * A block of order (or customer) numbers for this phone (POST /ids/reserve), so phones in one
+     * shop never hand out the same number. [floor] = this phone's own next number.
+     */
+    suspend fun reserveIds(kind: String, count: Int, floor: Int, shop: String = MAIN_SHOP): IntRange {
+        val res = authed(shop) { token ->
+            client.post("$base/ids/reserve") {
+                contentType(ContentType.Application.Json)
+                bearerAuth(token)
+                shop(shop)
+                setBody(ReserveRequest(kind, count, floor))
+            }
+        }
+        if (res.status.value !in 200..299) throw SyncHttpException(res.status.value)
+        val body = res.body<ReserveResponse>()
+        return body.from until body.to
+    }
+
+    /** Where this phone works as staff (GET /me/contexts), with each one's token. */
+    suspend fun contexts(shop: String = MAIN_SHOP): ContextsResponse {
+        val res = authed(shop) { token -> client.get("$base/me/contexts") { bearerAuth(token) } }
+        if (res.status.value !in 200..299) throw SyncHttpException(res.status.value)
+        return res.body()
     }
 
     /** A shop logo's bytes (public, immutable per id). */
     suspend fun fetchLogo(logoId: String): ByteArray? {
         val res = client.get("$base/public/logos/$logoId")
         return if (res.status.value in 200..299) res.body<ByteArray>() else null
+    }
+
+    /**
+     * [shop]'s login: a staff entry's own token, else the owner's. A staff entry (not the main
+     * slot) answering 401 was removed — [StaffRemovedException], never a logout; 402 = the owner's
+     * plan has ended ([OwnerPlanEndedException]).
+     */
+    private suspend fun authed(shop: String, block: suspend (String) -> HttpResponse): HttpResponse {
+        val staff = shops.ref(shop)?.staff
+        if (staff != null && shop != MAIN_SHOP) {
+            val res = block(staff.token)
+            if (res.status.value == 401) throw StaffRemovedException(shop)
+            if (res.status.value == 402) throw OwnerPlanEndedException(shop)
+            return res
+        }
+        val res = authed(block)
+        if (res.status.value == 402 && staff != null) throw OwnerPlanEndedException(shop)
+        return res
     }
 
     private suspend fun authed(block: suspend (String) -> HttpResponse): HttpResponse {

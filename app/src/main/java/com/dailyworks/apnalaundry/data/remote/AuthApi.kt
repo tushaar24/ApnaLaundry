@@ -22,6 +22,8 @@ import java.util.Locale
 import java.util.TimeZone
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 // Wire types for /api/laundry/auth/* (success and error responses share the
 // same shape; `code` carries the server's stable error code).
@@ -57,6 +59,10 @@ data class CredentialsResponse(
     val sessionExpiresAt: String? = null,
     /** verify-otp only: account created just now, so the server holds no data for it yet. */
     val isNewUser: Boolean = false,
+    /** Staff (1.0.20): the verified number (sent when there's no [user]: a staff-only login). */
+    val phone: String? = null,
+    /** Staff (1.0.20): shops this number works at as staff, each with its own token. */
+    val contexts: List<com.dailyworks.apnalaundry.data.sync.StaffContextWire> = emptyList(),
     val code: String? = null,
     val message: String? = null,
     val attemptsRemaining: Int? = null,
@@ -101,7 +107,8 @@ class AuthApi(private val client: HttpClient = defaultClient()) {
         val res = client.post("$base/auth/verify-otp") {
             contentType(ContentType.Application.Json)
             bearerAuth(challengeToken)
-            setBody(mapOf("challengeId" to challengeId, "otp" to otp, "deviceId" to deviceId))
+            // staffOk (1.0.20): this build knows staff logins — a staff-only number gets its shops, not an account.
+            setBody(buildJsonObject { put("challengeId", challengeId); put("otp", otp); put("deviceId", deviceId); put("staffOk", true) })
         }
         return ApiReply(res.status.value, runCatching<CredentialsResponse> { res.body() }.getOrNull())
     }
@@ -110,7 +117,7 @@ class AuthApi(private val client: HttpClient = defaultClient()) {
     suspend fun firebaseLogin(idToken: String, deviceId: String): ApiReply<CredentialsResponse> {
         val res = client.post("$base/auth/firebase") {
             contentType(ContentType.Application.Json)
-            setBody(mapOf("idToken" to idToken, "deviceId" to deviceId))
+            setBody(buildJsonObject { put("idToken", idToken); put("deviceId", deviceId); put("staffOk", true) })
         }
         return ApiReply(res.status.value, runCatching<CredentialsResponse> { res.body() }.getOrNull())
     }

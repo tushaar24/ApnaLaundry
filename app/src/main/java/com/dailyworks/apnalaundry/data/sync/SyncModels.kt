@@ -129,11 +129,31 @@ data class SyncChanges(
     val success: Boolean, val applied: Int = 0, val skipped: Int = 0, val message: String? = null,
     val refused: JsonObject? = null,
 )
-/** [seq] (sync v2): the shop's server sequence — the next pull's afterSeq. 0 from older servers. */
+/**
+ * [seq] (sync v2): the shop's server sequence — the next pull's afterSeq. 0 from older servers.
+ * [staff]: a staff login's current switches (the owner may have changed them).
+ */
 @Serializable data class PullResponse(
     val success: Boolean, val checkpoint: Long = 0, val changes: SyncChanges = SyncChanges(), val message: String? = null,
     val seq: Long = 0,
+    val staff: StaffContextWire? = null,
 )
+
+/** A shop this phone works at as staff (login `contexts`, GET /me/contexts, a staff pull). */
+@Serializable data class StaffContextWire(
+    val staffId: String = "",
+    val token: String? = null,
+    val name: String = "",
+    val occupation: String = "",
+    val permissions: Map<String, Boolean> = emptyMap(),
+    val shopId: String = "main",
+    val shopName: String = "",
+    val ownerName: String = "",
+    val ownerPlanActive: Boolean = true,
+)
+@Serializable data class ContextsResponse(val success: Boolean = false, val contexts: List<StaffContextWire> = emptyList(), val hasOwnShop: Boolean = true)
+@Serializable data class ReserveRequest(val kind: String, val count: Int, val floor: Int)
+@Serializable data class ReserveResponse(val success: Boolean = false, val from: Int = 0, val to: Int = 0)
 
 private val lenient = Json { ignoreUnknownKeys = true; coerceInputValues = true }
 

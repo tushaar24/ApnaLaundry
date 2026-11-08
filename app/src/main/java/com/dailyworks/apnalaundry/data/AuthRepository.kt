@@ -201,6 +201,7 @@ class AuthRepository(
 
     /** Server credentials in hand: store them, then the initial sync / seed. */
     private suspend fun finishLogin(body: CredentialsResponse) {
+        if (body.user == null && body.contexts.isNotEmpty()) return finishStaffLogin(body)
         val user = body.user ?: throw AuthException(i18n("Verification failed — try again"))
 
         // Local data left over from a DIFFERENT account (e.g. a dead session
@@ -263,6 +264,62 @@ class AuthRepository(
         Analytics.loggedIn(isNewUser = !existingAccount, needsSetup = !onboarded)
         MetaEvents.identify(user.id, user.phone)
         MetaEvents.loginSuccess(isNewUser = !existingAccount)
+
+        // Staff (1.0.20): this number also works in other shops as staff.
+        if (body.contexts.isNotEmpty()) {
+            shopsRepo.applyStaff(body.contexts, announce = false)
+            Analytics.staffLoggedIn(body.contexts.size, hasOwnShop = true)
+            // Their own shop has no orders (installed earlier, never used): open the staff shop.
+            if (!repo.hasOrders()) {
+                shops.switchTo(com.dailyworks.apnalaundry.data.shops.staffShopId(body.contexts.first().staffId))
+                prefs.setSetupDone(true)
+                prefs.setStaffWelcomePending(true)
+                Analytics.staffShopOpened("login")
+            }
+            syncManager.syncNow()
+        }
+    }
+
+    /**
+     * Staff (1.0.20, docs/specs/staff.md): a number that is only someone's staff. No account and
+     * no setup — the main slot is their (first) staff shop, its staff token this phone's login,
+     * and the app opens straight on the owner's shop. No sign-up events (not a new owner).
+     */
+    private suspend fun finishStaffLogin(body: CredentialsResponse) {
+        val phone = body.phone ?: throw AuthException(i18n("Verification failed — try again"))
+        val prevPhone = prefs.userPhone.first()
+        if (prevPhone != null && prevPhone != phone) {
+            shops.forgetExtraShops()
+            repo.clearAll()
+            prefs.setLastSyncCheckpoint(0)
+            prefs.setSetupDone(false)
+        }
+        // Back on this phone: keep the shop the main database already holds first; another shop
+        // there would mix two shops' data, so it's cleared.
+        val held = shops.ref(MAIN_SHOP)?.staff?.staffId
+        val contexts = body.contexts.filter { !it.token.isNullOrBlank() }.sortedByDescending { it.staffId == held }
+        val first = contexts.firstOrNull() ?: throw AuthException(i18n("Verification failed — try again"))
+        if (held != first.staffId) {
+            shops.forgetExtraShops()
+            repo.clearAll()
+            prefs.setSyncCheckpoint(MAIN_SHOP, 0L)
+            prefs.setSyncSeq(MAIN_SHOP, 0L)
+        }
+        prefs.setCredentials(
+            access = first.token!!, accessExpiresAt = parseIsoMs("2099-12-31T00:00:00.000Z"),
+            refresh = first.token, userId = "staff-$phone", phone = phone,
+        )
+        shopsRepo.applyStaff(contexts, announce = false, asMain = true)
+        prefs.setSetupDone(true)
+        prefs.setStaffWelcomePending(true)
+        // CleverTap: the person's own profile (not the owner's); every event says role = staff.
+        Analytics.identify("staff-$phone", phone, first.name.ifBlank { null })
+        Analytics.setStaffMode(first.staffId, first.shopName)
+        CrashReporting.setUser("staff-$phone")
+        prefs.setLoggedIn(true)
+        syncManager.syncNow()
+        Analytics.staffLoggedIn(contexts.size, hasOwnShop = false)
+        Analytics.staffShopOpened("login")
     }
 
     private companion object {

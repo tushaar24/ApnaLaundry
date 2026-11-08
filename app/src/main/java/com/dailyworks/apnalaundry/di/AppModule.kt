@@ -37,7 +37,7 @@ val appModule = module {
     single<HttpClient> { AuthApi.defaultClient(androidContext()) }
     single { AuthApi(get()) }
     single { TokenManager(get(), get()) }
-    single { SyncApi(get(), get()) }
+    single { SyncApi(get(), get(), get()) }
     single { BillingApi(get(), get()) }
     single { BillingRepository(get(), get()) }
     single { CheckoutBridge() }

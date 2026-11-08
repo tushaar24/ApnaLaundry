@@ -60,6 +60,14 @@ class SyncManager(
                 work(id)
             } catch (e: NotLoggedInException) {
                 throw e
+            } catch (e: StaffRemovedException) {
+                // Staff (1.0.20): the owner removed this phone from that shop — it leaves the phone.
+                val name = shops.ref(e.shop)?.name.orEmpty()
+                shops.remove(e.shop)
+                shops.staffEvents.tryEmit(com.dailyworks.apnalaundry.data.shops.StaffEvent.Removed(name))
+            } catch (e: OwnerPlanEndedException) {
+                // Not an error: the shop shows "ask the owner to renew" until the plan is back.
+                shops.updateStaff(e.shop) { it.copy(ownerPlanActive = false) }
             } catch (e: Exception) {
                 if (failed == null) failed = e
             }
@@ -102,6 +110,8 @@ class SyncManager(
         val res = api.pull(since, shop, afterSeq = seq)
         if (!res.success) throw IllegalStateException(res.message ?: "Pull failed")
         applyPull(shops.db(shop), res.changes, onScreen = shop == shops.activeId.value)
+        // A staff login: the owner's current switches (and the plan is on, or the pull would be 402).
+        res.staff?.let { st -> shops.updateStaff(shop) { it.copy(permissions = st.permissions, ownerPlanActive = true, name = st.name.ifBlank { it.name }) } }
         prefs.setSyncCheckpoint(shop, res.checkpoint)
         if (res.seq > 0) prefs.setSyncSeq(shop, res.seq)
         prefs.setExpensesPulled(shop)

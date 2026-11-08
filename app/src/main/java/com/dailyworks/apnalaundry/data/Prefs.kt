@@ -39,6 +39,8 @@ class Prefs(private val context: Context) {
     private val BILL_CONTACTS_ASK = stringPreferencesKey("bill_contacts_ask")
     // Staff (1.0.20): the server's experiments.staff — Settings shows Staff instead of "Coming later".
     private val STAFF_ENABLED = booleanPreferencesKey("staff_enabled")
+    // Staff (1.0.20): show the once-only "Welcome — you're staff at …" card on Home.
+    private val STAFF_WELCOME = booleanPreferencesKey("staff_welcome_pending")
     // The assistant ("Ask" on Home) is on for this shop, as the server last said; unset = off.
     private val ASSISTANT_ON = booleanPreferencesKey("assistant_on")
     // Ask reads its answers out loud (phone's text-to-speech); unset = on.
@@ -94,6 +96,8 @@ class Prefs(private val context: Context) {
     val servicesSetup: Flow<String?> = context.dataStore.data.map { it[SERVICES_SETUP] }
     val billContactsAsk: Flow<String?> = context.dataStore.data.map { it[BILL_CONTACTS_ASK] }
     val staffEnabled: Flow<Boolean> = context.dataStore.data.map { it[STAFF_ENABLED] == true }
+    val staffWelcomePending: Flow<Boolean> = context.dataStore.data.map { it[STAFF_WELCOME] == true }
+    suspend fun setStaffWelcomePending(v: Boolean) { context.dataStore.edit { it[STAFF_WELCOME] = v } }
     val assistantOn: Flow<Boolean> = context.dataStore.data.map { it[ASSISTANT_ON] ?: false }
     val assistantSpeak: Flow<Boolean> = context.dataStore.data.map { it[ASSISTANT_SPEAK] ?: true }
     val demoVideoUrl: Flow<String?> = context.dataStore.data.map { it[DEMO_VIDEO_URL] }

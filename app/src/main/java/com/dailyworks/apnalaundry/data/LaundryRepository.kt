@@ -141,6 +141,9 @@ class LaundryRepository(private val shops: ShopDirectory) {
 
     suspend fun hasShop(): Boolean = shopDao.get() != null
 
+    /** Any order in the shop on screen (staff login: an unused own shop opens the staff one). */
+    suspend fun hasOrders(): Boolean = orderDao.countLive() > 0
+
     /**
      * Onboarding (shop name + rate list) is behind this account. The server
      * keeps no flag and the seed is pushed at first login, so "has a shop"

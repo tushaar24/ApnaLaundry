@@ -82,6 +82,27 @@ class ShopViewModel(
     val guideOn: StateFlow<Boolean> = combine(prefs.guideVariant, prefs.servicesSetup) { g, s -> s != ExperimentsRepository.SERVICES_SCRATCH && g == ExperimentsRepository.GUIDE }
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
+    /**
+     * Staff (1.0.20): what the person may do on the shop on screen — [StaffAccess.OWNER] on their
+     * own shop. Every event says role = staff while it's a staff shop (Analytics.setStaffMode).
+     */
+    val access: StateFlow<com.dailyworks.apnalaundry.domain.StaffAccess> = shopDir.activeRef.map { ref ->
+        val st = ref.staff
+        if (st == null) com.dailyworks.apnalaundry.domain.StaffAccess.OWNER
+        else com.dailyworks.apnalaundry.domain.StaffAccess(
+            isStaff = true,
+            permissions = st.permissions.filterValues { it }.keys.mapNotNull { com.dailyworks.apnalaundry.domain.StaffPermission.of(it) }.toSet(),
+            staffId = st.staffId, staffName = st.name, ownerName = st.ownerName, shopName = ref.name, ownerPlanActive = st.ownerPlanActive,
+        )
+    }.onEach { a -> Analytics.setStaffMode(a.staffId.takeIf { a.isStaff }, a.shopName) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, com.dailyworks.apnalaundry.domain.StaffAccess.OWNER)
+
+    /** Staff (1.0.20): removed from / added to a shop — Home tells the person. */
+    val staffEvents = shopDir.staffEvents
+
+    /** Staff (1.0.20): where this phone works as staff, from the server (app start). */
+    fun refreshStaffContexts() = viewModelScope.launch { shopsRepo.refreshStaff() }
+
     /** A/B (server-assigned, new accounts on 1.0.15+): how New order adds the first customer. */
     val customerFlow: StateFlow<CustomerFlow> = prefs.customerFlow.map { CustomerFlow.of(it) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, CustomerFlow.LEGACY)

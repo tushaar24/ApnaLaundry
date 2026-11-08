@@ -43,6 +43,26 @@ enum class StaffOccupation(val key: String, val label: String, val preset: Set<S
     }
 }
 
+/**
+ * What the person may do on the shop on screen (1.0.20): everything on their own shop; on a shop
+ * they work at as staff, the basics plus the owner's switches. Screens hide what [can] says no to.
+ */
+data class StaffAccess(
+    val isStaff: Boolean = false,
+    val permissions: Set<StaffPermission> = emptySet(),
+    val staffId: String = "",
+    val staffName: String = "",
+    val ownerName: String = "",
+    val shopName: String = "",
+    val ownerPlanActive: Boolean = true,
+) {
+    fun can(p: StaffPermission) = !isStaff || p in permissions
+    /** Owner-only things: shop details, bill design, plans, shops, staff, the Ask assistant. */
+    val isOwner get() = !isStaff
+
+    companion object { val OWNER = StaffAccess() }
+}
+
 /** A staff member, as the owner's Staff screens show them. */
 data class StaffMember(
     val id: String,
