@@ -147,7 +147,7 @@ fun CustomersScreen(shopVm: ShopViewModel, navigator: AppNavigator, initialFilte
                         Column(Modifier.fillMaxWidth().padding(top = 40.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Text(if (q.isNotEmpty()) tr("No customer found for “{query}”", "query" to q) else tr("No customers here"), style = fig(16, FontWeight.SemiBold), textAlign = TextAlign.Center)
                             val label = if (q.isNotEmpty()) (if (qd.length >= 3) tr("Add customer with this number") else tr("Add “{name}” as customer", "name" to q.replaceFirstChar { it.uppercase() })) else tr("Add customer")
-                            Box(Modifier.rounded(12.dp).background(Tokens.Blue).tap {
+                            if (com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current.can(com.dailyworks.apnalaundry.domain.StaffPermission.TAKE_ORDERS)) Box(Modifier.rounded(12.dp).background(Tokens.Blue).tap {
                                 active = ActiveSheet.CustomerForm(editId = null, ctx = "list", trigger = "list_with_query", prefillName = if (qd.length >= 3) "" else q.replaceFirstChar { it.uppercase() }, prefillPhone = if (qd.length >= 3) qd.takeLast(10) else "")
                             }.heightIn(min = 48.dp).padding(horizontal = 20.dp, vertical = 12.dp), contentAlignment = Alignment.Center) {
                                 Text(label, style = fig(15, FontWeight.Bold, Tokens.OnDark), textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -205,7 +205,7 @@ private fun NoCustomers(modifier: Modifier, onAdd: () -> Unit) {
             style = fig(15, color = Tokens.Muted), textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(24.dp))
-        PrimaryButton(tr("Add customers"), height = 56.dp, onClick = onAdd)
+        if (com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current.can(com.dailyworks.apnalaundry.domain.StaffPermission.TAKE_ORDERS)) PrimaryButton(tr("Add customers"), height = 56.dp, onClick = onAdd)
     }
 }
 
@@ -236,7 +236,8 @@ private fun CustomerRow(state: com.dailyworks.apnalaundry.domain.LaundryState, c
                 Text(c.name, style = fig(16, FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 // The phone first: on a narrow phone it's the order history that gets cut.
                 Text(
-                    Selectors.fmtPhone(c.phone) + " · " + (if (count > 0) tr("Last order {when} · {n} orders", "when" to lastLabel(c), "n" to count) else tr("New customer")),
+                    (if (com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current.can(com.dailyworks.apnalaundry.domain.StaffPermission.SEE_PHONES)) Selectors.fmtPhone(c.phone) + " · " else "") +
+                        (if (count > 0) tr("Last order {when} · {n} orders", "when" to lastLabel(c), "n" to count) else tr("New customer")),
                     style = fig(13, color = Tokens.Muted), maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
             }

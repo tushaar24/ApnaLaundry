@@ -97,6 +97,8 @@ fun CustomerScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: Strin
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 40.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            // Staff (1.0.20): only what this staff member may do here.
+            val acc = com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current
             // header
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Box(Modifier.size(52.dp).rounded(999.dp).background(Tokens.NeutralFill), contentAlignment = Alignment.Center) {
@@ -105,11 +107,12 @@ fun CustomerScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: Strin
                 Column(Modifier.weight(1f)) {
                     Text(c.name, style = bric(24, FontWeight.Bold), maxLines = 2, overflow = TextOverflow.Ellipsis)
                     val orderCount = Selectors.orderCount(state, c)
-                    Text("+91 ${Selectors.fmtPhone(c.phone)} · " + (if (orderCount == 1) tr("{n} order", "n" to orderCount) else tr("{n} orders", "n" to orderCount)), style = fig(13, color = Tokens.Muted))
+                    val count = if (orderCount == 1) tr("{n} order", "n" to orderCount) else tr("{n} orders", "n" to orderCount)
+                    Text(if (acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.SEE_PHONES)) "+91 ${Selectors.fmtPhone(c.phone)} · $count" else count, style = fig(13, color = Tokens.Muted))
                     if (c.address.isNotBlank()) Text(c.address, style = fig(13, color = Tokens.Muted), maxLines = 3, overflow = TextOverflow.Ellipsis)
                 }
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.TAKE_ORDERS)) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlineButton(tr("New order"), Modifier.weight(1f), height = 48.dp) { navigator.openNewOrder(custId = custId, from = "customer") }
                 OutlineButton(tr("Edit"), Modifier.weight(1f), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) {
                     active = ActiveSheet.CustomerForm(editId = custId, ctx = "list", trigger = "customer_page")
@@ -131,8 +134,8 @@ fun CustomerScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: Strin
                 )
                 if (bal > 0) {
                     Spacer(Modifier.height(2.dp))
-                    PrimaryButton(tr("Receive payment"), height = 48.dp) { active = ActiveSheet.Receive(custId) }
-                    OutlineButton(tr("Remind on WhatsApp"), Modifier.fillMaxWidth(), height = 48.dp, border = Tokens.OrangeBorder, fg = Tokens.OrangeText) {
+                    if (acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.COLLECT_MONEY)) PrimaryButton(tr("Receive payment"), height = 48.dp) { active = ActiveSheet.Receive(custId) }
+                    if (acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.SEE_PHONES)) OutlineButton(tr("Remind on WhatsApp"), Modifier.fillMaxWidth(), height = 48.dp, border = Tokens.OrangeBorder, fg = Tokens.OrangeText) {
                         Analytics.reminderSent(custId, bal)
                         sendReminderOnWhatsApp(context, state, custId, bal)
                         shopVm.showInfo(tr("Opening WhatsApp · reminder to {name} for {amount}", "name" to nm, "amount" to Money.rupees(bal)))
@@ -158,7 +161,7 @@ fun CustomerScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: Strin
                     }
                 }
             }
-            Text(
+            if (acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.COLLECT_MONEY)) Text(
                 tr("+ Add old khata from notebook"), style = fig(14, FontWeight.Bold, Tokens.Blue),
                 modifier = Modifier.tap { active = ActiveSheet.AddOld(custId) }.padding(vertical = 12.dp),
             )

@@ -210,7 +210,8 @@ fun CustomerFormSheet(state: LaundryState, form: ActiveSheet.CustomerForm, vm: S
                 Text(tr("or type the details"), style = fig(12, color = Tokens.Muted), modifier = Modifier.align(Alignment.CenterHorizontally))
             }
             Field(tr("Name"), name, { fieldEdited("name"); name = it }, tr("Customer name"), modifier = Modifier.onFocusChanged { if (it.hasFocus) fieldFocused("name") })
-            Field(tr("Phone"), phone, modifier = Modifier.onFocusChanged { if (it.hasFocus) fieldFocused("phone") }, onChange = {
+            // Staff (1.0.20) without customer numbers: an existing customer's number stays hidden (and as it is).
+            if (!(editing && phone.startsWith("******"))) Field(tr("Phone"), phone, modifier = Modifier.onFocusChanged { if (it.hasFocus) fieldFocused("phone") }, onChange = {
                 fieldEdited("phone")
                 val digits = it.filter { c -> c.isDigit() }
                 if (digits.length > 10 && !phoneTrimLogged) {
@@ -236,7 +237,7 @@ fun CustomerFormSheet(state: LaundryState, form: ActiveSheet.CustomerForm, vm: S
                     placeholder = tr("House, area, landmark"), height = 80.dp, singleLine = false,
                     borderColor = if (addrNeeded && address.isBlank()) Tokens.OrangeBorder else Tokens.FieldBorder)
             }
-            if (form.ctx == "list" && !editing) {
+            if (form.ctx == "list" && !editing && com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current.can(com.dailyworks.apnalaundry.domain.StaffPermission.COLLECT_MONEY)) {
                 Field(tr("Old khata from your notebook"), oldBaaki, { fieldEdited("old_khata"); oldBaaki = it.filter { c -> c.isDigit() }.take(6) }, "0", prefix = "₹", kb = KeyboardType.Number,
                     modifier = Modifier.onFocusChanged { if (it.hasFocus) fieldFocused("old_khata") })
             }

@@ -60,6 +60,22 @@ import kotlinx.coroutines.launch
  */
 val LocalStaffAccess = androidx.compose.runtime.compositionLocalOf { StaffAccess.OWNER }
 
+/** A page the owner keeps for themselves (rates, for staff without "Change rates"): ask them, go back. */
+@Composable
+fun OwnerOnlyPage(title: String, onBack: () -> Unit) {
+    val access = LocalStaffAccess.current
+    BackHandler { onBack() }
+    Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars)) {
+        com.dailyworks.apnalaundry.ui.components.TopBar(title, onBack = onBack)
+        Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("🔒", style = fig(36))
+            Text(tr("Only {owner} can change this", "owner" to access.ownerName.ifBlank { tr("the owner") }), style = bric(20, FontWeight.Bold), textAlign = TextAlign.Center)
+            Text(tr("Ask them to change services and prices for you."), style = fig(15, color = Tokens.InkSecondary), textAlign = TextAlign.Center)
+            OutlineButton(tr("Go back"), Modifier.fillMaxWidth(), height = 52.dp) { onBack() }
+        }
+    }
+}
+
 /** "Ramesh · Sharma Laundry": always on Home in a shop worked as staff. */
 @Composable
 fun StaffStrip(access: StaffAccess, modifier: Modifier = Modifier) {

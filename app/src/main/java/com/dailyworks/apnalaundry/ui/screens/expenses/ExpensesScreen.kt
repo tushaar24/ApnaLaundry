@@ -134,8 +134,8 @@ fun ExpensesScreen(shopVm: ShopViewModel, navigator: AppNavigator, from: String)
                 }
             }
 
-            // Profit = money received − expenses
-            AppCard {
+            // Profit = money received − expenses (needs the shop's takings: owners, or staff with "See earnings")
+            if (com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current.can(com.dailyworks.apnalaundry.domain.StaffPermission.SEE_EARNINGS)) AppCard {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(tr("Profit"), style = fig(15, FontWeight.Bold))
                     Spacer(Modifier.height(4.dp))

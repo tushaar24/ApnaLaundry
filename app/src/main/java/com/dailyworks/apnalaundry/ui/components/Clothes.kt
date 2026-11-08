@@ -168,15 +168,19 @@ fun ClothesEditor(
     /** Services-from-scratch variant: the add-cloth row starts folded as "+ Add cloth", with less text. */
     simpleAdd: Boolean = false,
 ) {
+    // Staff (1.0.20) without "Change rates": no new services or clothes on the rate list.
+    val rates = com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current.can(com.dailyworks.apnalaundry.domain.StaffPermission.EDIT_RATES)
+    val addService = onAddService?.takeIf { rates }
+    val addItem = onAddItem?.takeIf { rates }
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // tiles (2 columns); null = the "+ Add service" tile
-        val slots: List<Service?> = if (onAddService != null) services + null else services
+        val slots: List<Service?> = if (addService != null) services + null else services
         val rows = slots.chunked(2)
         rows.forEach { pair ->
             Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 pair.forEach { s ->
                     if (s == null) {
-                        AddServiceTile(Modifier.weight(1f).fillMaxHeight(), onClick = onAddService!!)
+                        AddServiceTile(Modifier.weight(1f).fillMaxHeight(), onClick = addService!!)
                         return@forEach
                     }
                     val (n, kg, amt) = serviceStat(state, s)
@@ -213,7 +217,7 @@ fun ClothesEditor(
                         onInc = { state.bump(cur.id, item.name, 1) },
                     )
                 }
-                if (onAddItem != null) AddItemRow(cur, simple = simpleAdd) { name, price -> onAddItem(cur, name, price) }
+                if (addItem != null) AddItemRow(cur, simple = simpleAdd) { name, price -> addItem(cur, name, price) }
             }
         } else {
             val rate = cur.ratePerKg ?: 0

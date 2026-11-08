@@ -118,6 +118,8 @@ fun RatesScreen(shopVm: ShopViewModel, from: String, onDone: () -> Unit, onBack:
  */
 @Composable
 fun RatesEditor(shopVm: ShopViewModel, setupHeader: (@Composable () -> Unit)?, onDone: () -> Unit, onBack: () -> Unit) {
+    // Staff (1.0.20) without "Change rates": the owner's rate list isn't theirs to change.
+    if (!com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current.can(com.dailyworks.apnalaundry.domain.StaffPermission.EDIT_RATES)) { com.dailyworks.apnalaundry.ui.screens.staff.OwnerOnlyPage(tr("Rates"), onBack); return }
     val state by shopVm.state.collectAsStateWithLifecycle()
     val scratch by shopVm.servicesScratch.collectAsStateWithLifecycle()
     var page by remember { mutableStateOf<RatePage>(RatePage.List) }

@@ -139,7 +139,7 @@ fun CombinedBillScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: S
             }
             Column(Modifier.weight(1f)) {
                 Text(if (preview) tr("Combined bill · preview") else tr("Combined bill"), style = bric(22, FontWeight.Bold))
-                Text("${c.name} · +91 ${Selectors.fmtPhone(c.phone)}", style = fig(14, color = Tokens.Muted), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(if (com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current.can(com.dailyworks.apnalaundry.domain.StaffPermission.SEE_PHONES)) "${c.name} · +91 ${Selectors.fmtPhone(c.phone)}" else c.name, style = fig(14, color = Tokens.Muted), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
 
@@ -229,7 +229,7 @@ fun CombinedBillScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: S
                 ) { Icon(Icons.Outlined.Download, tr("Download"), tint = Tokens.Ink, modifier = Modifier.size(24.dp)) }
                 var sending by remember { mutableStateOf(false) }
                 val contactsCheck = rememberContactsCheck("combined_bill")
-                PrimaryButton(if (sending) tr("Opening WhatsApp…") else tr("Send on WhatsApp"), Modifier.weight(1f), enabled = !sending, height = 56.dp) {
+                if (com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current.can(com.dailyworks.apnalaundry.domain.StaffPermission.SEE_PHONES)) PrimaryButton(if (sending) tr("Opening WhatsApp…") else tr("Send on WhatsApp"), Modifier.weight(1f), enabled = !sending, height = 56.dp) {
                     sending = true
                     scope.launch {
                         // Sent before leaving: leaving first would cancel it.

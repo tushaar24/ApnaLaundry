@@ -985,6 +985,9 @@ private fun ExtraCard(
     isPct: Boolean, onMode: (Boolean) -> Unit,
     value: String, onChange: (String) -> Unit, effect: String,
 ) {
+    // Staff (1.0.20) without "Give discounts": no Discount card. Gated here, not in NewOrderScreen:
+    // that one function is at ART's size limit (see memory / 43e6135).
+    if (title == tr("Discount") && !com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current.can(com.dailyworks.apnalaundry.domain.StaffPermission.DISCOUNTS_CANCEL)) return
     AppCard {
         Column(Modifier.fillMaxWidth()) {
             Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {

@@ -59,6 +59,9 @@ object Analytics {
 
     fun updateProfile(fields: Map<String, Any>) {
         if (!enabled) return
+        // Staff (1.0.20): work in someone else's shop never lands on the person's own profile
+        // (order counts, shop name … are the owner's shop's).
+        if (staffMode != null) return
         ct?.pushProfile(HashMap(fields))
     }
 

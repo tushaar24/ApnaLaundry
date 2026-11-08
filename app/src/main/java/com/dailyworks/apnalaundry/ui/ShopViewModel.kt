@@ -310,8 +310,8 @@ class ShopViewModel(
         toastJob?.cancel()
         // Undo toasts stay long enough to act on; plain notices are brief.
         toastJob = viewModelScope.launch { delay(if (r.undo != null) 7000 else 2500); _toast.value = null }
-        // A status change: ask whether to tell the customer on WhatsApp.
-        if (r.wa != null) _waPrompt.value = r.wa
+        // A status change: ask whether to tell the customer on WhatsApp (not without their number: staff).
+        if (r.wa != null && access.value.can(com.dailyworks.apnalaundry.domain.StaffPermission.SEE_PHONES)) _waPrompt.value = r.wa
     }
 
     fun showInfo(text: String) = publish(CmdResult(text, null))

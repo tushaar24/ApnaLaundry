@@ -91,8 +91,11 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
 
     // Multi-shop: this shop (default), all shops, or the ones picked. Other
     // shops are read from their own databases, once per pick.
-    val shops by shopVm.shops.collectAsStateWithLifecycle()
+    val allShops by shopVm.shops.collectAsStateWithLifecycle()
     val activeId by shopVm.activeShopId.collectAsStateWithLifecycle()
+    // Staff (1.0.20): the owner's own shops only; in a shop worked as staff, just that one.
+    val acc = com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current
+    val shops = if (acc.isStaff) allShops.filter { it.id == activeId } else allShops.filter { it.staff == null }
     var picked by rememberSaveable { mutableStateOf(listOf<String>()) } // empty = this shop
     val selected = picked.filter { id -> shops.any { it.id == id } }.ifEmpty { listOf(activeId) }
     val repo: LaundryRepository = koinInject()
@@ -172,7 +175,7 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
         ) {
             Text(tr("Earnings"), style = bric(22, FontWeight.Bold), modifier = Modifier.weight(1f))
             // Expenses (1.0.19), where the hide / share icons were.
-            Row(
+            if (acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.EXPENSES)) Row(
                 Modifier.rounded(999.dp).border(1.5.dp, Tokens.Blue, RoundedCornerShape(999.dp))
                     .tap { Analytics.expensesEntryTapped("earnings"); navigator.openExpenses("earnings") }.padding(horizontal = 14.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -306,7 +309,7 @@ fun EarningsScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
             }
 
             // Profit after expenses (1.0.19) — taps through to Expenses.
-            AppCard(Modifier.tap { Analytics.expensesEntryTapped("earnings_card"); navigator.openExpenses("earnings_card") }) {
+            AppCard(Modifier.tap(enabled = acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.EXPENSES)) { Analytics.expensesEntryTapped("earnings_card"); navigator.openExpenses("earnings_card") }) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(tr("Profit"), style = fig(15, FontWeight.Bold), modifier = Modifier.weight(1f))

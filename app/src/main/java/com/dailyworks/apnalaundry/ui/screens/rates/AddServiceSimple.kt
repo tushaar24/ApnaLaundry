@@ -65,6 +65,8 @@ import com.dailyworks.apnalaundry.ui.theme.Tokens
  */
 @Composable
 fun AddServiceSimplePage(existing: List<Service>, onAdd: (Service) -> Unit, onBack: () -> Unit) {
+    // Staff (1.0.20) without "Change rates".
+    if (!com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current.can(com.dailyworks.apnalaundry.domain.StaffPermission.EDIT_RATES)) { com.dailyworks.apnalaundry.ui.screens.staff.OwnerOnlyPage(tr("Add new service"), onBack); return }
     var name by remember { mutableStateOf("") }
     var mode by remember { mutableStateOf(PricingMode.PIECE) }
     val rows = remember { mutableStateListOf(ClothRow()) }
