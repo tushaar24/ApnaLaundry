@@ -330,6 +330,9 @@ class ShopViewModel(
     fun saveCount(id: Int, next: OrderStatus, lines: List<OrderLine>, deliveryDate: String = "") =
         launchCmd { repo.saveCount(id, next, lines, deliveryDate) }
     fun prepay(id: Int, method: PayMethod, from: String? = null) = launchCmd { repo.prepay(id, method, from) }
+    /** Before delivery, part cash and part UPI ("Paying now?" → Part cash, part UPI). */
+    fun prepaySplit(id: Int, cash: Int, upi: Int, from: String? = null) =
+        launchCmd { repo.prepaySplit(id, listOf(PayMethod.CASH to cash, PayMethod.UPI to upi), from) }
     /** Part / any amount before delivery (the assistant); extra beyond the order goes to the khata. */
     fun prepayPart(id: Int, amount: Int, method: PayMethod) = launchCmd { repo.prepayPart(id, amount, method) }
     fun cancelOrder(id: Int, reason: String) = launchCmd { repo.cancelOrder(id, reason) }

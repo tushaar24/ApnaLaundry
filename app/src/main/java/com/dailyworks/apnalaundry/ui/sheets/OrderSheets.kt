@@ -46,8 +46,10 @@ import com.dailyworks.apnalaundry.domain.PayMethod
 import com.dailyworks.apnalaundry.ui.Selectors
 import com.dailyworks.apnalaundry.ui.ShopViewModel
 import com.dailyworks.apnalaundry.ui.components.AppBottomSheet
+import com.dailyworks.apnalaundry.ui.components.AppCard
 import com.dailyworks.apnalaundry.ui.components.ClothesEditor
 import com.dailyworks.apnalaundry.ui.components.FieldBox
+import com.dailyworks.apnalaundry.ui.components.OutlineButton
 import com.dailyworks.apnalaundry.ui.components.PillChip
 import com.dailyworks.apnalaundry.ui.components.PrimaryButton
 import com.dailyworks.apnalaundry.ui.components.bric
@@ -187,6 +189,89 @@ fun CollectPaymentSheet(state: LaundryState, orderId: Int, vm: ShopViewModel, on
             Box(Modifier.fillMaxWidth().height(48.dp).rounded(14.dp).background(Tokens.NeutralFill).tap { vm.deliver(orderId, 0, PayMethod.NONE); onDismiss() }, contentAlignment = Alignment.Center) {
                 Text(tr("Nothing now · add all to khata"), style = fig(15, FontWeight.Bold, Tokens.InkSecondary))
             }
+        }
+    }
+}
+
+/**
+ * "Paying now? ₹X" — the rest of an open order's bill, before delivery: Got cash / Got UPI for
+ * all of it, or part cash, part UPI ([onSplit] opens [PayNowSplitSheet]). On the bill and the
+ * order page; [from] = analytics.
+ */
+@Composable
+fun PayingNowCard(orderId: Int, due: Int, from: String, vm: ShopViewModel, onSplit: () -> Unit) {
+    AppCard {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            // The amount in the heading, so the two buttons stay short on any phone.
+            Text(tr("Paying now? {amount}", "amount" to Money.rupees(due)), style = fig(15, FontWeight.Bold))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlineButton(tr("Got cash"), Modifier.weight(1f), height = 48.dp) { vm.prepay(orderId, PayMethod.CASH, from) }
+                OutlineButton(tr("Got UPI"), Modifier.weight(1f), height = 48.dp) { vm.prepay(orderId, PayMethod.UPI, from) }
+            }
+            Text(
+                tr("Part cash, part UPI"), style = fig(14, FontWeight.Bold, Tokens.Blue),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().tap { Analytics.payingNowSplitTapped(orderId, from); onSplit() }.padding(vertical = 4.dp),
+            )
+        }
+    }
+}
+
+/**
+ * Part cash, part UPI before delivery: two boxes — cash starts at the full amount, UPI follows
+ * "amount − cash" until typed in (like the delivery sheet). Less than due stays on the order
+ * for delivery; more goes to the khata.
+ */
+@Composable
+fun PayNowSplitSheet(state: LaundryState, orderId: Int, from: String, vm: ShopViewModel, onDismiss: () -> Unit) {
+    val o = Selectors.order(state, orderId) ?: return onDismiss()
+    val due = max(0, LaundryMath.amtOf(o) - o.pre)
+    val oldBal = Selectors.balance(state, o.custId, o.id)
+    var cashText by remember { mutableStateOf(due.toString()) }
+    var upiText by remember { mutableStateOf("0") }
+    var upiTouched by remember { mutableStateOf(false) }
+    val cash = cashText.toIntOrNull() ?: 0
+    val upi = upiText.toIntOrNull() ?: 0
+    val got = cash + upi
+    val left = due - got
+
+    AppBottomSheet(title = tr("Part cash, part UPI"), subtitle = tr("Paying now? {amount}", "amount" to Money.rupees(due)), onDismiss = onDismiss) {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(tr("Cash"), style = fig(13, FontWeight.Bold, Tokens.Muted))
+                    FieldBox(
+                        value = cashText,
+                        onValueChange = {
+                            cashText = it.filter { ch -> ch.isDigit() }.take(6)
+                            if (!upiTouched) upiText = max(0, due - (cashText.toIntOrNull() ?: 0)).toString()
+                        },
+                        prefix = "₹", height = 52.dp, keyboardType = KeyboardType.Number, textStyle = bric(20, FontWeight.Bold),
+                    )
+                }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(tr("UPI"), style = fig(13, FontWeight.Bold, Tokens.Muted))
+                    FieldBox(
+                        value = upiText,
+                        onValueChange = { upiText = it.filter { ch -> ch.isDigit() }.take(6); upiTouched = true },
+                        prefix = "₹", height = 52.dp, keyboardType = KeyboardType.Number, textStyle = bric(20, FontWeight.Bold),
+                    )
+                }
+            }
+            val (bg, fg, text) = when {
+                got <= 0 -> Triple(Tokens.Bg, Tokens.Muted, tr("Type cash and UPI"))
+                left > 0 -> Triple(Tokens.OrangeLight, Tokens.OrangeDeep, Money.rupees(left) + " · " + tr("To be paid at delivery"))
+                left < 0 && oldBal > 0 -> Triple(Tokens.BlueLight, Tokens.BlueText, tr("{amount} to khata", "amount" to Money.rupees(-left)))
+                left < 0 -> Triple(Tokens.BlueLight, Tokens.BlueText, tr("{amount} extra — kept as advance", "amount" to Money.rupees(-left)))
+                else -> Triple(Tokens.NeutralFill, Tokens.Ink, tr("Full payment — all clear"))
+            }
+            Box(Modifier.fillMaxWidth().rounded(12.dp).background(bg).padding(14.dp)) {
+                Text(text, style = fig(14, FontWeight.SemiBold, fg))
+            }
+            PrimaryButton(
+                if (got > 0) tr("Got {amount} (cash + UPI)", "amount" to Money.rupees(got)) else tr("Type cash and UPI"),
+                enabled = got > 0, height = 56.dp,
+            ) { vm.prepaySplit(orderId, cash, upi, from); onDismiss() }
         }
     }
 }

@@ -48,7 +48,6 @@ import com.dailyworks.apnalaundry.core.Money
 import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.domain.Gst
 import com.dailyworks.apnalaundry.domain.LaundryMath
-import com.dailyworks.apnalaundry.domain.PayMethod
 import com.dailyworks.apnalaundry.domain.OrderStatus
 import com.dailyworks.apnalaundry.domain.Route
 import com.dailyworks.apnalaundry.ui.Selectors
@@ -63,6 +62,7 @@ import com.dailyworks.apnalaundry.ui.components.rounded
 import com.dailyworks.apnalaundry.ui.components.tap
 import com.dailyworks.apnalaundry.ui.nav.AppNavigator
 import com.dailyworks.apnalaundry.ui.sheets.ActiveSheet
+import com.dailyworks.apnalaundry.ui.sheets.PayingNowCard
 import com.dailyworks.apnalaundry.ui.sheets.SheetHost
 import com.dailyworks.apnalaundry.ui.theme.Tokens
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -202,15 +202,7 @@ fun OrderDetailScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: I
                     // Paying now — the same card as on the bill right after a new order (owner, 9 Nov).
                     val due = amt - o.pre
                     if (LaundryMath.isOpen(o) && due > 0) {
-                        AppCard {
-                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Text(tr("Paying now? {amount}", "amount" to Money.rupees(due)), style = fig(15, FontWeight.Bold))
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    OutlineButton(tr("Got cash"), Modifier.weight(1f), height = 48.dp) { shopVm.prepay(o.id, PayMethod.CASH, "order_detail") }
-                                    OutlineButton(tr("Got UPI"), Modifier.weight(1f), height = 48.dp) { shopVm.prepay(o.id, PayMethod.UPI, "order_detail") }
-                                }
-                            }
-                        }
+                        PayingNowCard(o.id, due, "order_detail", shopVm) { active = ActiveSheet.PaySplit(o.id, "order_detail") }
                     }
                     // bill actions
                     if (o.billSent) OutlineButton(tr("Bill sent ✓ · Send again"), Modifier.fillMaxWidth(), height = 48.dp, border = Tokens.BlueBorder, fg = Tokens.BlueText) { sendOnWhatsApp(o) }

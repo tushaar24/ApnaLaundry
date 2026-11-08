@@ -51,6 +51,7 @@ import com.dailyworks.apnalaundry.ui.components.rounded
 import com.dailyworks.apnalaundry.ui.components.tap
 import com.dailyworks.apnalaundry.ui.nav.AppNavigator
 import com.dailyworks.apnalaundry.ui.sheets.ActiveSheet
+import com.dailyworks.apnalaundry.ui.sheets.PayingNowCard
 import com.dailyworks.apnalaundry.ui.sheets.SheetHost
 import com.dailyworks.apnalaundry.ui.theme.Tokens
 import com.dailyworks.apnalaundry.ui.tour.Spotlight
@@ -184,16 +185,7 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
 
                 // paying now
                 if (open && due > 0) {
-                    AppCard {
-                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            // The amount in the heading, so the two buttons stay short on any phone.
-                            Text(tr("Paying now? {amount}", "amount" to Money.rupees(due)), style = fig(15, FontWeight.Bold))
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlineButton(tr("Got cash"), Modifier.weight(1f), height = 48.dp) { shopVm.prepay(o.id, PayMethod.CASH, from) }
-                                OutlineButton(tr("Got UPI"), Modifier.weight(1f), height = 48.dp) { shopVm.prepay(o.id, PayMethod.UPI, from) }
-                            }
-                        }
-                    }
+                    PayingNowCard(o.id, due, from, shopVm) { active = ActiveSheet.PaySplit(o.id, from) }
                 } else if (open && fullyPaid) {
                     Box(Modifier.fillMaxWidth().rounded(12.dp).background(Tokens.BlueLight).padding(14.dp)) {
                         Text(tr("Fully paid — nothing to collect at delivery"), style = fig(14, FontWeight.SemiBold, Tokens.BlueText))

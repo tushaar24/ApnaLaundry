@@ -10,6 +10,8 @@ import com.dailyworks.apnalaundry.ui.nav.AppNavigator
 sealed interface ActiveSheet {
     data class Menu(val orderId: Int) : ActiveSheet
     data class Pay(val orderId: Int) : ActiveSheet
+    /** Before delivery: part cash, part UPI, from a "Paying now?" card ([from] = analytics). */
+    data class PaySplit(val orderId: Int, val from: String) : ActiveSheet
     data class Ready(val orderId: Int) : ActiveSheet
     data class Count(val orderId: Int, val next: OrderStatus, val thenPay: Boolean = false) : ActiveSheet
     data class ChangeStatus(val orderId: Int) : ActiveSheet
@@ -56,6 +58,7 @@ fun SheetHost(
         null -> Unit
         is ActiveSheet.Menu -> OrderMenuSheet(state, active.orderId, navigator, onOpen, onDismiss)
         is ActiveSheet.Pay -> CollectPaymentSheet(state, active.orderId, vm, onDismiss)
+        is ActiveSheet.PaySplit -> PayNowSplitSheet(state, active.orderId, active.from, vm, onDismiss)
         is ActiveSheet.Count -> CountClothesSheet(
             state, active.orderId, active.next, vm, onDismiss,
             // Straight to Delivered with no bill yet: count first, then collect.

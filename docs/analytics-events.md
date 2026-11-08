@@ -84,7 +84,8 @@ Custom property keys are `snake_case`. `Charged` uses CleverTap's reserved
 
 | Event | Properties | Fired when |
 | ----- | ---------- | ---------- |
-| `Payment Received` | `amount`, `method` (`cash`\|`upi`), `type` (`delivery`\|`prepay`\|`khata`), `customer_id`, `order_id?`, `from?` (Android 1.0.19, a prepay from a "Paying now?" card: `order_detail` = the order page, `new` = the bill right after creating, else where the bill was opened from) | any money-in |
+| `Payment Received` | `amount`, `method` (`cash`\|`upi`), `type` (`delivery`\|`prepay`\|`khata`), `customer_id`, `order_id?`, `from?` (Android 1.0.19, a prepay from a "Paying now?" card: `order_detail` = the order page, `new` = the bill right after creating, else where the bill was opened from), `split?` (true = one part of a part-cash, part-UPI payment before delivery, Android 1.0.19) | any money-in |
+| `Paying Now Split Tapped` | `order_id`, `from` (`order_detail` or the bill's entry) | "Part cash, part UPI" on a "Paying now?" card — the split sheet opens (Android 1.0.19) |
 | `Old Baaki Added` | `amount`, `customer_id` | pre-app debt recorded |
 | `Charged` | `Amount` (bill total), `payment_method`, `order_id`, `Items` (per-service) | on every `Order Delivered` — revenue event |
 

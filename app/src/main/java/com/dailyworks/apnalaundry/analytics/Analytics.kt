@@ -424,15 +424,25 @@ object Analytics {
 
     // ---- payments & khata ----
 
-    /** [from]: for a prepay on the bill, how the bill was reached (new = just created, edit = just edited, …). */
-    fun paymentReceived(amount: Int, method: PayMethod, type: String, customerId: String, orderId: Int?, from: String? = null) =
+    /**
+     * [from]: a prepay from a "Paying now?" card — order_detail, or how the bill was reached (new …).
+     * [split]: one part of a part-cash, part-UPI payment before delivery.
+     */
+    fun paymentReceived(
+        amount: Int, method: PayMethod, type: String, customerId: String, orderId: Int?,
+        from: String? = null, split: Boolean = false,
+    ) =
         track(
             "Payment Received",
             mapOf(
                 "amount" to amount, "method" to methodName(method), "type" to type,
                 "customer_id" to customerId, "order_id" to orderId,
-            ) + (if (from != null) mapOf("from" to from) else emptyMap()),
+            ) + (if (from != null) mapOf("from" to from) else emptyMap()) + (if (split) mapOf("split" to true) else emptyMap()),
         )
+
+    /** "Part cash, part UPI" on a "Paying now?" card (the split sheet opens). */
+    fun payingNowSplitTapped(orderId: Int, from: String) =
+        track("Paying Now Split Tapped", mapOf("order_id" to orderId, "from" to from))
 
     fun oldBaakiAdded(amount: Int, customerId: String) =
         track("Old Baaki Added", mapOf("amount" to amount, "customer_id" to customerId))

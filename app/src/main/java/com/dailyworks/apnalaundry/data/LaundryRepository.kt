@@ -465,6 +465,57 @@ class LaundryRepository(private val shops: ShopDirectory) {
         )
     }
 
+    /**
+     * A payment before delivery in parts — part cash, part UPI (the "Paying now?" card, owner
+     * 9 Nov). Each part is its own GOT entry, so Earnings' cash / UPI split stays right. Up to
+     * what's due goes on the order (PRE, like [prepay]); anything over is a khata payment — old
+     * baaki first, then advance — like [prepayPart]. [from]: analytics only.
+     */
+    suspend fun prepaySplit(orderId: Int, parts: List<Pair<PayMethod, Int>>, from: String? = null): CmdResult {
+        val undo = snapshot()
+        val st = current()
+        val o = st.orders.first { it.id == orderId }
+        val ps = parts.filter { it.second > 0 }
+        val amount = ps.sumOf { it.second }
+        if (!LaundryMath.isOpen(o) || amount <= 0) return CmdResult(tr("Nothing to record on order #{no}", "no" to o.no()))
+        val due = LaundryMath.amtOf(o) - o.pre
+        var dueLeft = maxOf(0, due)
+        var onOrder = 0
+        val entries = mutableListOf<LedgerEntry>()
+        val extras = mutableListOf<Pair<PayMethod, Int>>()
+        for ((m, amt) in ps) {
+            val put = minOf(amt, dueLeft); dueLeft -= put; onOrder += put
+            if (put > 0) entries += mkEntry(o.custId, LedgerKind.GOT, put, m, PayTag.PRE, cover = put, ref = o.id)
+            if (amt > put) extras += m to (amt - put)
+        }
+        val extra = extras.sumOf { it.second }
+        if (extra > 0) {
+            // The order itself is paid off, so its total no longer counts against the rest.
+            val oldBal = LaundryMath.balance(o.custId, st.ledger, st.orders, o.id)
+            var oldLeft = LaundryMath.receiveAllocation(oldBal, extra).first
+            for ((m, amt) in extras) {
+                val toOld = minOf(amt, oldLeft); oldLeft -= toOld
+                entries += mkEntry(o.custId, LedgerKind.GOT, amt, m, PayTag.RECEIVE, toOld = toOld, toAdv = amt - toOld)
+            }
+        }
+        db.withTransaction {
+            entries.forEach { ledgerDao.insert(it.toEntity()) }
+            if (onOrder > 0) putOrder(o.copy(pre = o.pre + onOrder).toEntity())
+        }
+        entries.forEach { e ->
+            if (e.tag == PayTag.PRE) Analytics.paymentReceived(e.amt, e.method, "prepay", o.custId, o.id, from, split = true)
+            else Analytics.paymentReceived(e.amt, e.method, "khata", o.custId, null, from, split = true)
+        }
+        val left = due - onOrder
+        val onOrderPart = if (left > 0) tr("order #{no} {amount} still due", "no" to o.no(), "amount" to money(left))
+        else tr("order #{no} fully paid", "no" to o.no())
+        return CmdResult(
+            tr("Got {amount} (cash + UPI)", "amount" to money(amount)) + " · " + onOrderPart +
+                (if (extra > 0) " · " + tr("{amount} to khata", "amount" to money(extra)) else ""),
+            undo,
+        )
+    }
+
     suspend fun cancelOrder(orderId: Int, reason: String): CmdResult {
         val undo = snapshot()
         val st = current()
