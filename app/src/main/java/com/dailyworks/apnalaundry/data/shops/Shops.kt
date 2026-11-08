@@ -170,7 +170,7 @@ class ShopDirectory(private val context: Context, private val prefs: Prefs) {
     suspend fun remove(id: String) {
         if (id == MAIN_SHOP) return
         if (_active.value == id) switchTo(MAIN_SHOP)
-        save(list().filter { it.id != id })
+        write(list().filter { it.id != id }) // not save(): that keeps staff entries, and this may be one
         dbs.remove(id)?.close()
         context.deleteDatabase(fileOf(id))
         prefs.setSyncCheckpoint(id, 0L)

@@ -370,6 +370,8 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
     // Staff (1.0.20): "added you as staff" / "removed you", and the owner's plan having ended.
     com.dailyworks.apnalaundry.ui.screens.staff.StaffEventsHost(shopVm)
     com.dailyworks.apnalaundry.ui.screens.staff.StaffRenewGate(shopVm, active = li && access.isStaff && !access.ownerPlanActive)
+    val shopReady by shopVm.shopReady.collectAsStateWithLifecycle()
+    com.dailyworks.apnalaundry.ui.screens.staff.StaffLoadingGate(shopVm, active = li && access.isStaff && access.ownerPlanActive && !shopReady)
     }
     }
 }

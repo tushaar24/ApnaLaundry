@@ -44,7 +44,10 @@ class SyncManager(
 
     suspend fun syncNow(): Result = runLocked {
         forEachShop { pushOnce(it); pullOnce(it); topUpIds(it) }
+        // A staff member's number switch changed: the re-pull it needs, right away.
+        if (sync2Pending) { sync2Pending = false; forEachShop { pullOnce(it) } }
     }
+    @Volatile private var sync2Pending = false
 
     /** Staff (1.0.20): keeps this phone's reserved order / customer numbers topped up. */
     private suspend fun topUpIds(shop: String) {
@@ -94,7 +97,12 @@ class SyncManager(
         }
     }
 
-    suspend fun hasPendingChanges(): Boolean = shops.list().any { hasPendingChanges(shops.db(it.id)) }
+    /**
+     * [skipLocked]: leave out staff shops whose owner's plan has ended — their changes can't go up
+     * until the owner renews, so they mustn't block a logout.
+     */
+    suspend fun hasPendingChanges(skipLocked: Boolean = false): Boolean =
+        shops.list().filter { !skipLocked || it.staff?.planOn() != false }.any { hasPendingChanges(shops.db(it.id)) }
 
     private suspend fun hasPendingChanges(db: AppDatabase): Boolean {
         val shopDirty = db.shopDao().get()?.dirty == true
@@ -110,22 +118,36 @@ class SyncManager(
     private suspend fun pullOnce(shop: String) {
         // Once per shop after the update that added expenses: pull from the start, since older
         // builds (or this one before the update) moved the checkpoint past expenses they ignored.
-        val since = if (prefs.expensesPulled(shop)) prefs.syncCheckpoint(shop) else 0L
+        // A database with no shop row has nothing yet (new staff shop, wiped data): everything,
+        // whatever the saved positions say.
+        val fresh = shops.db(shop).shopDao().get() == null
+        val since = if (prefs.expensesPulled(shop) && !fresh) prefs.syncCheckpoint(shop) else 0L
         // Sync v2: by the server sequence once there is one; the first pull (and any pull from a
         // server before sync v2, which sends no seq) goes by the time checkpoint.
-        val seq = if (prefs.expensesPulled(shop)) prefs.syncSeq(shop) else 0L
+        val seq = if (prefs.expensesPulled(shop) && !fresh) prefs.syncSeq(shop) else 0L
         val res = api.pull(since, shop, afterSeq = seq)
         if (!res.success) throw IllegalStateException(res.message ?: "Pull failed")
         applyPull(shops.db(shop), res.changes, onScreen = shop == shops.activeId.value)
         // A staff login: the owner's current switches (and the plan is on, or the pull would be 402).
+        var phonesChanged = false
         res.staff?.let { st ->
+            val before = shops.ref(shop)?.staff
+            phonesChanged = before != null && (before.permissions["see_phones"] == true) != (st.permissions["see_phones"] == true)
             shops.updateStaff(shop) {
                 it.copy(permissions = st.permissions, ownerPlanActive = st.ownerPlanActive, ownerPlanUntil = st.ownerPlanUntil, name = st.name.ifBlank { it.name })
             }
         }
+        // An owner's shop: whether it has staff (then it numbers orders from reserved blocks).
+        if (shops.ref(shop)?.staff == null) res.hasStaff?.let { prefs.setShopHasStaff(shop, it) }
         prefs.setSyncCheckpoint(shop, res.checkpoint)
         if (res.seq > 0) prefs.setSyncSeq(shop, res.seq)
         prefs.setExpensesPulled(shop)
+        if (phonesChanged) {
+            // Customer numbers shown / hidden now: pull every customer again (the server masks them).
+            prefs.setSyncCheckpoint(shop, 0L)
+            prefs.setSyncSeq(shop, 0L)
+            sync2Pending = true
+        }
         if (shop == shops.activeId.value) repo.refreshTsCounter() // pulled ledger rows may carry higher ts values
     }
 
@@ -218,8 +240,9 @@ class SyncManager(
         dayCloses.forEach { db.dayCloseDao().clearDirty(it.date, it.updatedAt) }
         expenses.forEach { db.expenseDao().clearDirty(it.id, it.updatedAt) }
 
-        // Sync v2: rows the server kept its own copy of — put that copy back here.
-        val refused = refusedChanges(res.refused)
+        // Sync v2: rows the server kept its own copy of — put that copy back here. Not the shop row:
+        // a staff phone's counters always come back, and the next pull brings the shop anyway.
+        val refused = refusedChanges(res.refused).copy(shop = null)
         if (!refused.isEmpty) {
             applyRows(db, refused, overDirty = true)
             if (shops.ref(shopId)?.staff != null) {

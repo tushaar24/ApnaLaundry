@@ -137,6 +137,8 @@ data class SyncChanges(
     val success: Boolean, val checkpoint: Long = 0, val changes: SyncChanges = SyncChanges(), val message: String? = null,
     val seq: Long = 0,
     val staff: StaffContextWire? = null,
+    /** An owner's shop: whether it has staff (then phones number from reserved blocks). null = older server. */
+    val hasStaff: Boolean? = null,
 )
 
 /** A shop this phone works at as staff (login `contexts`, GET /me/contexts, a staff pull). */

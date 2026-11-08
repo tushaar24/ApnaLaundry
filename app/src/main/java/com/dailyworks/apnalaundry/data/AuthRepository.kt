@@ -208,7 +208,10 @@ class AuthRepository(
         // followed by logging in with another number) must never be pushed
         // into this one.
         val prevPhone = prefs.userPhone.first()
-        if (prevPhone != null && prevPhone != user.phone) {
+        // Staff (1.0.20): this phone held only someone else's shop (a staff login) — its data isn't
+        // this account's either, even with the same number (staff who were removed, then log in).
+        val wasStaffOnly = shops.list().firstOrNull()?.staff != null
+        if ((prevPhone != null && prevPhone != user.phone) || wasStaffOnly) {
             shops.forgetExtraShops() // back on the main shop, extra shops' data gone
             repo.clearAll()
             prefs.resetSyncState() // checkpoints, sync v2 positions, number blocks: the old account's
@@ -235,6 +238,9 @@ class AuthRepository(
         // Its A/B groups too (services setup decides what setup step 2 is), before the
         // first setup screen draws. Bounded: offline, setup goes on with the defaults.
         if (body.isNewUser) runCatching { kotlinx.coroutines.withTimeout(5_000) { experiments.refresh() } }
+        // Staff shops this number also works at — saved before loggedIn flips, so the app-start
+        // refresh doesn't announce them as new ("added you as staff") at every login.
+        if (body.contexts.isNotEmpty()) shopsRepo.applyStaff(body.contexts, announce = false)
         prefs.setLoggedIn(true)
 
         // Initial sync: pull this account's data if it exists. Failures are
@@ -267,7 +273,6 @@ class AuthRepository(
 
         // Staff (1.0.20): this number also works in other shops as staff.
         if (body.contexts.isNotEmpty()) {
-            shopsRepo.applyStaff(body.contexts, announce = false)
             Analytics.staffLoggedIn(body.contexts.size, hasOwnShop = true)
             // Their own shop has no orders (installed earlier, never used): open the staff shop.
             if (!repo.hasOrders()) {
@@ -337,10 +342,10 @@ class AuthRepository(
      * doesn't block logout.
      */
     suspend fun logout(): Result<Unit> = runCatching {
-        if (syncManager.hasPendingChanges()) {
+        if (syncManager.hasPendingChanges(skipLocked = true)) {
             val r = syncManager.syncNow()
             val authDead = (r as? SyncManager.Result.Error)?.authDead == true
-            if (!authDead && syncManager.hasPendingChanges()) {
+            if (!authDead && syncManager.hasPendingChanges(skipLocked = true)) {
                 // Shown as is by the logout message (AppNavGraph; not logged): translated here.
                 throw AuthException(tr("Couldn't sync your latest changes — check internet and try again"))
             }

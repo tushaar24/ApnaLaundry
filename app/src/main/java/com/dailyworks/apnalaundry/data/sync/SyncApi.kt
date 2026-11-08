@@ -184,6 +184,8 @@ class SyncApi(
      */
     private suspend fun authed(shop: String, block: suspend (String) -> HttpResponse): HttpResponse {
         val staff = shops.ref(shop)?.staff
+        // A staff shop whose entry isn't there (yet / any more): never fall back to the main login.
+        if (staff == null && shop.startsWith("staff-")) throw IllegalStateException("No login for $shop")
         if (staff != null && shop != MAIN_SHOP) {
             val res = block(staff.token)
             if (res.status.value == 401) throw StaffRemovedException(shop)

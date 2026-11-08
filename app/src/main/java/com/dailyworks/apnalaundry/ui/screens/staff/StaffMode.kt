@@ -171,6 +171,29 @@ fun StaffEventsHost(shopVm: ShopViewModel) {
 }
 
 /**
+ * A staff shop whose first download hasn't arrived (just opened, slow network): nothing to work
+ * on yet — saving an order would have no shop to number it. Goes away when the shop comes in.
+ */
+@Composable
+fun StaffLoadingGate(shopVm: ShopViewModel, active: Boolean) {
+    if (!active) return
+    val access by shopVm.access.collectAsStateWithLifecycle()
+    var slow by remember { mutableStateOf(false) }
+    LaunchedEffect(access.staffId) { slow = false; shopVm.syncSoon(); kotlinx.coroutines.delay(15_000); slow = true }
+    BackHandler { }
+    Box(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars).tap { }, contentAlignment = Alignment.Center) {
+        Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            androidx.compose.material3.CircularProgressIndicator(color = Tokens.Blue)
+            Text(tr("Loading {shop}…", "shop" to access.shopName.ifBlank { tr("the shop") }), style = bric(20, FontWeight.Bold), textAlign = TextAlign.Center)
+            if (slow) {
+                Text(tr("Taking long? Check the internet."), style = fig(15, color = Tokens.InkSecondary), textAlign = TextAlign.Center)
+                OutlineButton(tr("Try again"), Modifier.fillMaxWidth(), height = 52.dp) { slow = false; shopVm.syncSoon() }
+            }
+        }
+    }
+}
+
+/**
  * The owner's plan has ended: staff can't work in the shop until it's renewed (the server says
  * 402). Over the whole app; it goes away by itself at the first sync after the owner renews.
  */

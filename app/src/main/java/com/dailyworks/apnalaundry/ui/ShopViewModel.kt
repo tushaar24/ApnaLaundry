@@ -111,6 +111,13 @@ class ShopViewModel(
     /** Staff (1.0.20): removed from / added to a shop — Home tells the person. */
     val staffEvents = shopDir.staffEvents
 
+    /** Staff (1.0.20): false while a staff shop's first download hasn't brought its shop row. */
+    val shopReady: StateFlow<Boolean> = repo.shopFlow.map { it != null }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    /** Sync now (the staff Loading screen's Try again). */
+    fun syncSoon() = sync.requestSync()
+
     /** Staff (1.0.20): where this phone works as staff, from the server (app start). */
     fun refreshStaffContexts() = viewModelScope.launch { shopsRepo.refreshStaff() }
 
@@ -459,7 +466,9 @@ class ShopViewModel(
         onDone: (String) -> Unit,
     ) = viewModelScope.launch {
         invalidateUndo()
-        val (id, res) = repo.saveCustomer(editId, name, phone, address, oldBaaki, fromList)
+        // A staff shop still downloading has no shop row yet (its counters): say so, don't crash.
+        val (id, res) = runCatching { repo.saveCustomer(editId, name, phone, address, oldBaaki, fromList) }
+            .getOrElse { if (it is NullPointerException) { publish(CmdResult(tr("Still loading the shop — try again in a moment"))); return@launch } else throw it }
         res?.let { publish(it) }
         sync.requestSync()
         onDone(id)
@@ -477,11 +486,13 @@ class ShopViewModel(
         onDone: (LaundryRepository.SaveOrderResult) -> Unit,
     ) = viewModelScope.launch {
         invalidateUndo()
-        val res = repo.saveOrder(
-            editId, custId, pickup, delivery, pickupDate, pickupTime24, deliveryDate, deliveryTime24, ddAuto,
-            fee, express, exAmt, discount, lines, quickAmount, quickPieces, serialNo = serialNo,
-            exPct = exPct, discPct = discPct, gstOn = gstOn, gstPct = gstPct, gstMode = gstMode, note = note,
-        )
+        val res = runCatching {
+            repo.saveOrder(
+                editId, custId, pickup, delivery, pickupDate, pickupTime24, deliveryDate, deliveryTime24, ddAuto,
+                fee, express, exAmt, discount, lines, quickAmount, quickPieces, serialNo = serialNo,
+                exPct = exPct, discPct = discPct, gstOn = gstOn, gstPct = gstPct, gstMode = gstMode, note = note,
+            )
+        }.getOrElse { if (it is NullPointerException) { publish(CmdResult(tr("Still loading the shop — try again in a moment"))); return@launch } else throw it }
         res.toast?.let { publish(CmdResult(it, res.undo)) }
         if (!res.edited) _orderCreated.value = res.orderId
         sync.requestSync()
