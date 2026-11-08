@@ -175,6 +175,7 @@ fun CallsScreen(
     onCallReminder: (ReminderDto) -> Unit,
     onQueueReminders: (List<ReminderDto>) -> Unit,
     onOpenQueue: () -> Unit,
+    onAllReminders: () -> Unit = {},
 ) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     LifecycleResumeEffect(Unit) {
@@ -237,6 +238,11 @@ fun CallsScreen(
                                         Text("Call all (${scheduled.size})", style = fig(14, FontWeight.Bold, Tokens.Green))
                                     }
                                 }
+                            }
+                        }
+                        item(key = "all-reminders") {
+                            TextButton(onClick = onAllReminders, contentPadding = PaddingValues(0.dp)) {
+                                Text("All reminders — upcoming, by date, done →", style = fig(14, FontWeight.Bold, Tokens.Blue))
                             }
                         }
                         if (scheduled.isEmpty()) {

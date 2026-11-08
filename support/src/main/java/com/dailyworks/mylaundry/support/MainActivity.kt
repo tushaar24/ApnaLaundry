@@ -59,6 +59,8 @@ import com.dailyworks.mylaundry.support.data.QueueItem
 import com.dailyworks.mylaundry.support.data.ReminderAlarms
 import com.dailyworks.mylaundry.support.data.ReminderDto
 import com.dailyworks.mylaundry.support.ui.screens.QueueScreen
+import com.dailyworks.mylaundry.support.ui.screens.RemindersScreen
+import com.dailyworks.mylaundry.support.ui.screens.RemindersViewModel
 import com.dailyworks.mylaundry.support.data.WaNotifier
 import com.dailyworks.mylaundry.support.data.WaPush
 import com.dailyworks.mylaundry.support.ui.screens.ChatScreen
@@ -332,6 +334,7 @@ private fun MainNav(graph: Graph, opens: Opens) {
                         onOpen = { id -> nav.navigate("shop/$id") },
                         onCall = onCall,
                         onQueue = { owners -> startQueue(owners.map { o -> QueueItem(o.id, o.phone, o.shopName ?: o.name ?: "+91 ${o.phone}") }) },
+                        onReminders = { nav.navigate("reminders") { launchSingleTop = true } },
                     )
                 }
             }
@@ -346,6 +349,20 @@ private fun MainNav(graph: Graph, opens: Opens) {
                             startQueue(rs.map { r -> QueueItem(r.userId, r.phone.orEmpty(), r.title, reminderId = r.id, note = r.note.ifBlank { null }) })
                         },
                         onOpenQueue = { nav.navigate("queue") { launchSingleTop = true } },
+                        onAllReminders = { nav.navigate("reminders") { launchSingleTop = true } },
+                    )
+                }
+            }
+            composable("reminders") {
+                Box(Modifier.statusBarsPadding()) {
+                    RemindersScreen(
+                        viewModel { RemindersViewModel(graph, context.applicationContext) },
+                        onBack = { if (!nav.popBackStack()) nav.navigate("shops") },
+                        onOpenShop = { nav.navigate("shop/$it") },
+                        onCallReminder = onCallReminder,
+                        onQueueReminders = { rs ->
+                            startQueue(rs.map { r -> QueueItem(r.userId, r.phone.orEmpty(), r.title, reminderId = r.id, note = r.note.ifBlank { null }) })
+                        },
                     )
                 }
             }

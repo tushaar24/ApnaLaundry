@@ -63,6 +63,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.dailyworks.mylaundry.support.Graph
@@ -104,6 +105,8 @@ data class ShopsUi(
     val error: String? = null,
     val tags: List<TagDto> = emptyList(),
     val agents: List<String> = emptyList(),
+    /** My open reminders due by the end of today (overdue included) — the Reminders badge. */
+    val remindersDue: Int = 0,
 ) {
     val endReached get() = items.size >= total
 }
@@ -117,6 +120,16 @@ class ShopsViewModel(private val graph: Graph) : ViewModel() {
     init {
         reload()
         loadOptions()
+    }
+
+    fun loadRemindersDue() {
+        viewModelScope.launch {
+            val me = graph.prefs.current().agentName
+            val endOfToday = java.time.LocalDate.now().plusDays(1).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant()
+            runCatching {
+                graph.api.reminders(fromIso = java.time.Instant.now().minus(365, java.time.temporal.ChronoUnit.DAYS).toString(), toIso = endOfToday.toString(), agent = me)
+            }.onSuccess { list -> _ui.update { it.copy(remindersDue = list.size) } }
+        }
     }
 
     fun loadOptions() {
@@ -188,8 +201,13 @@ fun ShopsScreen(
     onOpen: (String) -> Unit,
     onCall: (OwnerSummary) -> Unit,
     onQueue: (List<OwnerSummary>) -> Unit = {},
+    onReminders: () -> Unit = {},
 ) {
     val ui by vm.ui.collectAsStateWithLifecycle()
+    LifecycleResumeEffect(Unit) {
+        vm.loadRemindersDue()
+        onPauseOrDispose { }
+    }
     var showFilters by remember { mutableStateOf(false) }
     // Select mode: tick owners, then "Call queue" calls them one after another.
     var selecting by remember { mutableStateOf(false) }
@@ -198,7 +216,20 @@ fun ShopsScreen(
 
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Shop owners", style = bric(26))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Shop owners", style = bric(26), modifier = Modifier.weight(1f))
+                // All reminders (filters by day / whose / kind); the badge = due today or overdue.
+                OutlinedButton(onClick = onReminders, shape = RoundedCornerShape(999.dp), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)) {
+                    Text("⏰ Reminders", style = fig(14, FontWeight.Bold, Tokens.Blue))
+                    if (ui.remindersDue > 0) {
+                        Spacer(Modifier.size(6.dp))
+                        Text(
+                            "${ui.remindersDue}", style = fig(12, FontWeight.Bold, Tokens.OnDark),
+                            modifier = Modifier.background(Tokens.Red, RoundedCornerShape(999.dp)).padding(horizontal = 7.dp, vertical = 1.dp),
+                        )
+                    }
+                }
+            }
             OutlinedTextField(
                 value = f.q,
                 onValueChange = { vm.setFilters(f.copy(q = it), debounce = true) },
