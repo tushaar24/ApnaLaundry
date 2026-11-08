@@ -107,6 +107,7 @@ class SupportApi(private val baseUrl: String = BuildConfig.API_BASE_URL) {
         client.get(url("/calls")) {
             parameter("page", page)
             parameter("pageSize", pageSize)
+            parameter("withUnknown", 1) // incoming calls from numbers that aren't an owner's
             agent?.let { parameter("agent", it) }
             tagId?.let { parameter("tag", it) }
         }
@@ -126,6 +127,14 @@ class SupportApi(private val baseUrl: String = BuildConfig.API_BASE_URL) {
                 })
             }
         }.call
+
+    /** Asked while this phone rings: the incoming MyLaundry call ringing [agentPhone], if any. */
+    suspend fun incoming(agentPhone: String, ringingNumber: String?): IncomingDto = call {
+        client.get(url("/calls/incoming")) {
+            parameter("agentPhone", agentPhone)
+            ringingNumber?.let { parameter("from", it) }
+        }
+    }
 
     /** A call through MyLaundry: the server rings [agentPhone], then the shop owner. */
     suspend fun bridgeCall(userId: String, agentName: String, agentPhone: String): CallDto =

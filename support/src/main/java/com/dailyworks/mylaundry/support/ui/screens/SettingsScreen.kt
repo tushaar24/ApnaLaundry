@@ -63,14 +63,16 @@ fun supportPermissions(): Array<String> = buildList {
     add(Manifest.permission.READ_PHONE_STATE)
     add(Manifest.permission.READ_CALL_LOG)
     add(if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE)
+    if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
 }.toTypedArray()
 
 private val PERMISSION_LABELS = mapOf(
     Manifest.permission.CALL_PHONE to "Place calls",
-    Manifest.permission.READ_PHONE_STATE to "Know when a call ends",
+    Manifest.permission.READ_PHONE_STATE to "Know when a call rings or ends",
     Manifest.permission.READ_CALL_LOG to "Read talk time",
     Manifest.permission.READ_MEDIA_AUDIO to "Find recordings",
     Manifest.permission.READ_EXTERNAL_STORAGE to "Find recordings",
+    Manifest.permission.POST_NOTIFICATIONS to "Show which shop is calling",
 )
 
 /** Readable folder name from a SAF tree URI ("primary:Recordings/Call" -> "Recordings/Call"). */

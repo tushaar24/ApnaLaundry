@@ -19,6 +19,13 @@ backend repo (`routes/laundry-support.js`).
   the notes screen follows the call live and shows the recording and "What was
   said" when they're ready. Talk time and No answer / Busy come from Vobiz.
   The agent's number must be in the backend's `LAUNDRY_VOBIZ_AGENT_PHONES`.
+- **Incoming calls** (1.2): when an owner calls the MyLaundry number, the server
+  rings the agent who last talked to them, then every agent, then takes a
+  voicemail. While the phone rings, the app shows "<shop> is calling" with the
+  shop's plan, orders and last call (needs phone + notification permissions);
+  on picking up, Vobiz also says the shop's name. The call is logged under the
+  shop as Incoming (or Missed call / left a message), recorded and transcribed;
+  calls from numbers that aren't a shop show as "new number" in Calls.
 - While calling through MyLaundry isn't set up on the server, Call falls back to
   the phone's dialer: the call's real talk time comes from the call log, and the
   dialer's recording is found and uploaded in the background. Unanswered calls

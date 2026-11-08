@@ -2,6 +2,7 @@ package com.dailyworks.mylaundry.support
 
 import android.Manifest
 import android.content.ActivityNotFoundException
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -29,6 +30,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,6 +50,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.dailyworks.mylaundry.support.data.ApiException
+import com.dailyworks.mylaundry.support.data.IncomingNotifier
 import com.dailyworks.mylaundry.support.data.OwnerSummary
 import com.dailyworks.mylaundry.support.ui.components.Loading
 import com.dailyworks.mylaundry.support.ui.screens.CallNotesScreen
@@ -64,14 +67,24 @@ import com.dailyworks.mylaundry.support.ui.screens.TagsViewModel
 import com.dailyworks.mylaundry.support.ui.theme.SupportTheme
 import com.dailyworks.mylaundry.support.ui.theme.Tokens
 import com.dailyworks.mylaundry.support.ui.theme.fig
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    // A "… is calling" notification was tapped: open that call's notes.
+    private val openCall = MutableStateFlow<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        openCall.value = intent?.getStringExtra(IncomingNotifier.EXTRA_CALL_ID)
         val graph = (application as SupportApp).graph
-        setContent { SupportTheme { SupportRoot(graph) } }
+        setContent { SupportTheme { SupportRoot(graph, openCall) } }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        intent.getStringExtra(IncomingNotifier.EXTRA_CALL_ID)?.let { openCall.value = it }
     }
 }
 
@@ -85,7 +98,7 @@ private val TABS = listOf(
 )
 
 @Composable
-private fun SupportRoot(graph: Graph) {
+private fun SupportRoot(graph: Graph, openCall: MutableStateFlow<String?>) {
     // null until DataStore answers, so setup doesn't flash for a configured agent.
     val agent by remember { graph.prefs.settings }.collectAsStateWithLifecycle<com.dailyworks.mylaundry.support.data.Settings?>(null)
     val a = agent
@@ -96,12 +109,12 @@ private fun SupportRoot(graph: Graph) {
         a.agentName.isBlank() || a.agentPhone.length != 10 -> Box(Modifier.fillMaxSize().background(Tokens.Bg).statusBarsPadding()) {
             SettingsScreen(graph, isSetup = true, onDone = {})
         }
-        else -> MainNav(graph)
+        else -> MainNav(graph, openCall)
     }
 }
 
 @Composable
-private fun MainNav(graph: Graph) {
+private fun MainNav(graph: Graph, openCall: MutableStateFlow<String?>) {
     val nav = rememberNavController()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -163,6 +176,13 @@ private fun MainNav(graph: Graph) {
                 placing = false
             }
         }
+    }
+
+    val callToOpen by openCall.collectAsStateWithLifecycle()
+    LaunchedEffect(callToOpen) {
+        val id = callToOpen ?: return@LaunchedEffect
+        openCall.value = null
+        nav.navigate("call/$id") { launchSingleTop = true }
     }
 
     // A call still pending when the app comes back (even after process death):
@@ -236,6 +256,7 @@ private fun MainNav(graph: Graph) {
                 CallNotesScreen(
                     vm = viewModel { CallNotesViewModel(graph, id) },
                     onBack = { if (!nav.popBackStack()) nav.navigate("shops") },
+                    onOpenShop = { userId -> nav.navigate("shop/$userId") },
                 )
             }
         }

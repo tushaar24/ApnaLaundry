@@ -63,7 +63,17 @@ fun CallCard(call: CallDto, showShop: Boolean, onClick: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         if (showShop) {
-            Text(call.shopName ?: call.ownerName ?: "+91 ${call.phone}", style = fig(15, FontWeight.Bold))
+            val who = call.shopName ?: call.ownerName ?: "+91 ${call.phone}"
+            Text(if (call.userId == null) "$who · new number" else who, style = fig(15, FontWeight.Bold))
+        }
+        if (call.incoming) {
+            val (label, color) = when {
+                call.live?.status == "voicemail" -> "Missed call · left a message" to Tokens.Red
+                call.missed -> "Missed call — call them back" to Tokens.Red
+                call.isLive -> "Incoming call — ringing" to Tokens.GreenText
+                else -> "Incoming call" to Tokens.BlueText
+            }
+            Text(label, style = fig(13, FontWeight.Bold, color))
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -96,6 +106,8 @@ fun CallCard(call: CallDto, showShop: Boolean, onClick: () -> Unit) {
 /** Player when the recording is on the server; otherwise this phone's upload status. */
 @Composable
 fun RecordingLine(call: CallDto) {
+    // A missed incoming call with no message: its recording is just ringing.
+    if (call.live?.status == "missed") return
     if (call.recording.uploaded) {
         RecordingPlayer(call.id)
         return

@@ -98,7 +98,9 @@ data class RecordingDto(
 /** Progress of a call through MyLaundry (Vobiz). */
 @Serializable
 data class LiveDto(
-    val status: String? = null, // agent_ringing | owner_ringing | connected | ended | agent_missed
+    // We called: agent_ringing | owner_ringing | connected | ended | agent_missed.
+    // They called: agent_ringing | connected | voicemail | ended | missed.
+    val status: String? = null,
     val hangupCause: String? = null,
 )
 
@@ -112,7 +114,8 @@ data class TranscriptDto(
 @Serializable
 data class CallDto(
     val id: String,
-    val userId: String,
+    /** null = an incoming call from a number that isn't a shop owner's. */
+    val userId: String? = null,
     val phone: String,
     val agentName: String,
     val startedAt: String,
@@ -126,14 +129,27 @@ data class CallDto(
     val ownerName: String? = null,
     /** "vobiz" = placed through MyLaundry (recorded + transcribed by the server); null = the phone's dialer. */
     val via: String? = null,
+    /** "inbound" = the owner (or a new number) called the MyLaundry number. */
+    val direction: String? = null,
     val live: LiveDto? = null,
     val transcript: TranscriptDto? = null,
 ) {
     val throughMyLaundry get() = via == "vobiz"
+    val incoming get() = direction == "inbound"
 
-    /** A call through MyLaundry that hasn't finished yet. */
-    val isLive get() = throughMyLaundry && live?.status !in setOf("ended", "agent_missed")
+    /** An incoming call nobody picked up ("voicemail" = they left a message). */
+    val missed get() = incoming && live?.status in setOf("missed", "voicemail")
+
+    /** A call through MyLaundry that hasn't finished yet (none stays live past 2 hours). */
+    val isLive: Boolean
+        get() = throughMyLaundry && endedAt == null && live?.status != "agent_missed" &&
+            runCatching { java.time.Instant.parse(startedAt) }.getOrNull()
+                ?.let { System.currentTimeMillis() - it.toEpochMilli() < 2 * 3600_000 } == true
 }
+
+/** GET /calls/incoming: the incoming call ringing this agent right now, and who it is. */
+@Serializable
+data class IncomingDto(val call: CallDto? = null, val owner: OwnerSummary? = null)
 
 @Serializable
 data class ShopDetail(

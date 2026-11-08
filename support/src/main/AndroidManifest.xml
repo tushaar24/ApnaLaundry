@@ -4,7 +4,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Place calls straight from the app. -->
     <uses-permission android:name="android.permission.CALL_PHONE" />
-    <!-- Know when the call has ended (finalize it + start the recording upload). -->
+    <!-- Know when the call has ended (finalize it + start the recording upload), and when
+         the phone rings (who is calling the MyLaundry number). -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <!-- Real talk time from the call log (0s = not answered). -->
     <uses-permission android:name="android.permission.READ_CALL_LOG" />
@@ -13,6 +14,9 @@
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
+
+    <!-- "Sharma Laundry is calling" while an incoming MyLaundry call rings. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <uses-feature
         android:name="android.hardware.telephony"
@@ -36,5 +40,14 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- The phone rings: is it an incoming MyLaundry call, and from which shop? -->
+        <receiver
+            android:name=".data.IncomingCallReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.PHONE_STATE" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

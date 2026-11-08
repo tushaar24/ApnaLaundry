@@ -249,7 +249,7 @@ class CallNotesViewModel(private val graph: Graph, private val callId: String) :
 }
 
 @Composable
-fun CallNotesScreen(vm: CallNotesViewModel, onBack: () -> Unit) {
+fun CallNotesScreen(vm: CallNotesViewModel, onBack: () -> Unit, onOpenShop: (String) -> Unit = {}) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var newTagOpen by remember { mutableStateOf(false) }
@@ -286,7 +286,7 @@ fun CallNotesScreen(vm: CallNotesViewModel, onBack: () -> Unit) {
                     Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    StatusCard(ui, call, onEnded = vm::finalize)
+                    StatusCard(ui, call, onEnded = vm::finalize, onOpenShop = onOpenShop)
 
                     SectionCard("How did it go?") {
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -345,7 +345,7 @@ fun CallNotesScreen(vm: CallNotesViewModel, onBack: () -> Unit) {
                         }
                     }
 
-                    call.transcript?.let { TranscriptCard(it) }
+                    call.transcript?.let { TranscriptCard(it, if (call.live?.status == "voicemail") "Their message" else "What was said") }
 
                     SectionCard("Recording") {
                         RecordingLine(call)
@@ -385,12 +385,19 @@ fun CallNotesScreen(vm: CallNotesViewModel, onBack: () -> Unit) {
 }
 
 @Composable
-private fun StatusCard(ui: CallNotesUi, call: CallDto, onEnded: () -> Unit) {
+private fun StatusCard(ui: CallNotesUi, call: CallDto, onEnded: () -> Unit, onOpenShop: (String) -> Unit) {
     SectionCard {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Icon(Icons.Filled.Call, null, tint = if (ui.pending != null || call.isLive) Tokens.Green else Tokens.Muted)
             Column(Modifier.weight(1f)) {
                 val title = when {
+                    call.incoming -> when (call.live?.status) {
+                        "agent_ringing" -> "Incoming call — ringing your team…"
+                        "connected" -> "On the call — you can write notes now"
+                        "voicemail" -> if (call.endedAt == null) "Nobody picked up — they're leaving a message…" else "Missed call — they left a message"
+                        "missed" -> "Missed call — call them back"
+                        else -> if (call.endedAt == null) "Incoming call…" else "Incoming call · ${duration(call.durationSec)}"
+                    }
                     call.throughMyLaundry -> when (call.live?.status) {
                         "agent_ringing" -> "Your phone is ringing — pick up"
                         "owner_ringing" -> "Ringing the shop owner…"
@@ -410,6 +417,17 @@ private fun StatusCard(ui: CallNotesUi, call: CallDto, onEnded: () -> Unit) {
                 CircularProgressIndicator(Modifier.size(20.dp), color = Tokens.Blue, strokeWidth = 2.dp)
             }
         }
+        // They called: the shop's page has their details and the Call button to call back.
+        if (call.incoming) {
+            val userId = call.userId
+            if (userId != null) {
+                OutlinedButton(onClick = { onOpenShop(userId) }, shape = RoundedCornerShape(12.dp)) {
+                    Text(if (call.missed) "Open shop to call back" else "Open shop", style = fig(14, FontWeight.Bold, Tokens.Blue))
+                }
+            } else {
+                Text("+91 ${call.phone} isn't a MyLaundry shop yet.", style = fig(13, color = Tokens.Muted))
+            }
+        }
         // Without phone-state permission we can't see the hang-up: let the agent say so.
         if (ui.pending != null && ui.inCall == null && !ui.finalizing) {
             OutlinedButton(onClick = onEnded, shape = RoundedCornerShape(12.dp)) {
@@ -421,8 +439,8 @@ private fun StatusCard(ui: CallNotesUi, call: CallDto, onEnded: () -> Unit) {
 
 /** What was said on a call through MyLaundry (Sarvam's transcript, made by the server). */
 @Composable
-private fun TranscriptCard(t: TranscriptDto) {
-    SectionCard("What was said") {
+private fun TranscriptCard(t: TranscriptDto, title: String) {
+    SectionCard(title) {
         when (t.status) {
             "done" -> {
                 val lines = t.text.orEmpty().lines().filter { it.isNotBlank() }
