@@ -1,5 +1,6 @@
 package com.dailyworks.mylaundry.support.ui.screens
 
+import com.dailyworks.mylaundry.support.data.showPhone
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -296,7 +297,7 @@ private fun Header(
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(o.shopName ?: "Shop not set up yet", style = bric(22, color = if (o.shopName == null) Tokens.Muted else Tokens.Ink))
                 o.name?.let { Text(it, style = fig(14, color = Tokens.InkSecondary)) }
-                Text("+91 ${o.phone.take(5)} ${o.phone.drop(5)}", style = fig(15, FontWeight.SemiBold))
+                Text(showPhone(o.phone), style = fig(15, FontWeight.SemiBold))
             }
             StateBadge(o.subscription.state)
         }
@@ -308,7 +309,7 @@ private fun Header(
         ) {
             Icon(Icons.Filled.Call, null)
             Spacer(Modifier.size(8.dp))
-            Text("Call +91 ${o.phone.take(5)} ${o.phone.drop(5)}", style = fig(16, FontWeight.Bold, Tokens.OnDark))
+            Text("Call the owner", style = fig(16, FontWeight.Bold, Tokens.OnDark))
         }
         // Their chat on the MyLaundry WhatsApp number (the WhatsApp tab).
         OutlinedButton(

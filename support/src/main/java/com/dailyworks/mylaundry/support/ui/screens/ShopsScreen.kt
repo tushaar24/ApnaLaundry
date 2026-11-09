@@ -1,5 +1,6 @@
 package com.dailyworks.mylaundry.support.ui.screens
 
+import com.dailyworks.mylaundry.support.data.showPhone
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -425,7 +426,7 @@ private fun OwnerRow(o: OwnerSummary, tags: List<TagDto>, onClick: () -> Unit, o
                 )
                 StateBadge(o.subscription.state)
             }
-            Text("+91 ${o.phone.take(5)} ${o.phone.drop(5)} · joined ${ago(o.joinedAt)}", style = fig(13, color = Tokens.InkSecondary))
+            Text("${showPhone(o.phone)} · joined ${ago(o.joinedAt)}", style = fig(13, color = Tokens.InkSecondary))
             Text(
                 "${o.orders} orders · ${o.customers} customers · active ${ago(o.lastActiveAt)}",
                 style = fig(13, color = Tokens.Muted),

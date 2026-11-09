@@ -180,7 +180,7 @@ data class ReminderDto(
     /** What it's about ("Call", "Follow up", or the team's own tags). */
     val tags: List<TagDto> = emptyList(),
 ) {
-    val title get() = shopName ?: ownerName ?: "+91 ${phone.orEmpty()}"
+    val title get() = shopName ?: ownerName ?: showPhone(phone).ifBlank { "Shop owner" }
 
     /** "Call · Payment" (falls back to the old kind when a reminder has no tags). */
     val tagLine get() = tags.joinToString(" · ") { it.name }.ifBlank { if (kind == "follow_up") "Follow up" else "Reminder" }
@@ -263,6 +263,16 @@ data class QueueEntry(
     val items: List<QueueEntry> = emptyList(), val keepState: Boolean = false,
 )
 @Serializable internal data class QueueItemsBody(val items: List<QueueEntry>)
+
+/**
+ * How a user's number shows in this app (owner, 9 Nov 2026): never in full — "+91 •••••• 3210".
+ * The server already sends them masked (******3210); this masks anything else too.
+ */
+fun showPhone(phone: String?): String {
+    val digits = phone.orEmpty().filter(Char::isDigit)
+    if (digits.isEmpty()) return ""
+    return "+91 •••••• ${digits.takeLast(4)}"
+}
 
 /** Outcomes where the owner wasn't reached: the queue offers Call again. */
 val NOT_REACHED = setOf(Outcome.NO_ANSWER.name, Outcome.BUSY.name, Outcome.SWITCHED_OFF.name)

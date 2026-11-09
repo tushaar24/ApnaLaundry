@@ -60,7 +60,7 @@ data class WaConversation(
     val windowOpen: Boolean = false,
     val last: WaLast = WaLast(),
 ) {
-    val title get() = shopName ?: contactName ?: ownerName ?: "+$waId"
+    val title get() = shopName ?: contactName ?: ownerName ?: showPhone(phone).ifBlank { "Unknown number" }
 }
 
 @Serializable
@@ -78,7 +78,7 @@ data class WaContact(
     /** Free-form replies only within 24 hours of their last message; otherwise a template. */
     val windowOpen: Boolean = false,
 ) {
-    val title get() = shopName ?: contactName ?: ownerName ?: "+$waId"
+    val title get() = shopName ?: contactName ?: ownerName ?: showPhone(phone).ifBlank { "Unknown number" }
 }
 
 @Serializable

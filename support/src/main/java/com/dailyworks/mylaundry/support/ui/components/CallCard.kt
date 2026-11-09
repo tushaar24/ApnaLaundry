@@ -1,5 +1,6 @@
 package com.dailyworks.mylaundry.support.ui.components
 
+import com.dailyworks.mylaundry.support.data.showPhone
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import androidx.compose.foundation.background
@@ -63,7 +64,7 @@ fun CallCard(call: CallDto, showShop: Boolean, onClick: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         if (showShop) {
-            val who = call.shopName ?: call.ownerName ?: "+91 ${call.phone}"
+            val who = call.shopName ?: call.ownerName ?: showPhone(call.phone)
             Text(if (call.userId == null) "$who · new number" else who, style = fig(15, FontWeight.Bold))
         }
         if (call.incoming) {

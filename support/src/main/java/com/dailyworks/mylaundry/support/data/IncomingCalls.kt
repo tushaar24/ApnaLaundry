@@ -88,7 +88,7 @@ object IncomingNotifier {
             },
         )
         val who = owner?.shopName ?: owner?.name ?: call.shopName ?: call.ownerName
-        val title = if (who != null) "$who is calling" else "New number +91 ${call.phone} is calling"
+        val title = if (who != null) "$who is calling" else "New number ${showPhone(call.phone)} is calling"
         val text = if (owner != null) summary(owner) else "Not a MyLaundry shop yet"
         val open = PendingIntent.getActivity(
             context,

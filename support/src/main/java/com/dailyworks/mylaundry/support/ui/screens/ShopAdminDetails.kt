@@ -1,5 +1,6 @@
 package com.dailyworks.mylaundry.support.ui.screens
 
+import com.dailyworks.mylaundry.support.data.showPhone
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -141,7 +142,7 @@ fun AdminSections(o: AdminOwner, ct: Map<String, String>?, ctLoaded: Boolean, sh
         KeyValue("Baaki (dues)", if (o.baakiCustomers > 0) "${inr(o.baakiMarket)} with ${o.baakiCustomers}" else "None", if (o.baakiCustomers > 0) Tokens.OrangeText else Tokens.Ink)
         o.customers.take(5).forEach { c ->
             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                Text(c.name ?: c.phone ?: "Customer", style = fig(14, FontWeight.SemiBold), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Text(c.name ?: showPhone(c.phone).ifBlank { "Customer" }, style = fig(14, FontWeight.SemiBold), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 Text("${c.orders} orders · ${inr(c.billed)}" + if (c.balance > 0) " · owes ${inr(c.balance)}" else "", style = fig(13, color = Tokens.Muted))
             }
         }
@@ -181,7 +182,7 @@ fun AdminSections(o: AdminOwner, ct: Map<String, String>?, ctLoaded: Boolean, sh
     // Shop + account
     SectionCard("Shop") {
         o.shop?.name?.let { KeyValue("Shop name", it) }
-        o.shop?.phone?.takeIf { it != o.user.phone }?.let { KeyValue("Shop phone", "+91 $it") }
+        o.shop?.phone?.takeIf { it != o.user.phone }?.let { KeyValue("Shop phone", showPhone(it)) }
         o.shop?.closeTime?.let { KeyValue("Closes at", it) }
         o.shop?.expressPct?.let { KeyValue("Express charge", "${it.roundToLong()}%") }
         KeyValue("Services", o.services.mapNotNull { it.name }.joinToString(", ").ifBlank { "None" })
@@ -246,7 +247,7 @@ fun ShopCard(userId: String, onOpenShop: ((String) -> Unit)? = null) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(o?.shopName ?: admin?.shop?.name ?: "Shop", style = bric(20), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                val who = listOfNotNull(o?.name, o?.phone?.let { "+91 ${it.take(5)} ${it.drop(5)}" }).joinToString(" · ")
+                val who = listOfNotNull(o?.name, o?.phone?.let { showPhone(it) }).joinToString(" · ")
                 if (who.isNotEmpty()) Text(who, style = fig(13, color = Tokens.InkSecondary))
             }
             o?.let { StateBadge(it.subscription.state) }

@@ -1,5 +1,6 @@
 package com.dailyworks.mylaundry.support.ui.screens
 
+import com.dailyworks.mylaundry.support.data.showPhone
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -300,7 +301,7 @@ fun CallNotesScreen(vm: CallNotesViewModel, onBack: () -> Unit, onOpenShop: (Str
                     Text("Call notes", style = fig(18, FontWeight.Bold))
                     val c = ui.call
                     Text(
-                        c?.shopName ?: ui.pending?.label ?: c?.let { "+91 ${it.phone}" } ?: "",
+                        c?.shopName ?: ui.pending?.label ?: c?.let { showPhone(it.phone) } ?: "",
                         style = fig(13, color = Tokens.Muted),
                     )
                 }
@@ -478,7 +479,7 @@ private fun StatusCard(ui: CallNotesUi, call: CallDto, onEnded: () -> Unit, onOp
                     Text(if (call.missed) "Open shop to call back" else "Open shop", style = fig(14, FontWeight.Bold, Tokens.Blue))
                 }
             } else {
-                Text("+91 ${call.phone} isn't a MyLaundry shop yet.", style = fig(13, color = Tokens.Muted))
+                Text("${showPhone(call.phone)} isn't a MyLaundry shop yet.", style = fig(13, color = Tokens.Muted))
             }
         }
         // Without phone-state permission we can't see the hang-up: let the agent say so.

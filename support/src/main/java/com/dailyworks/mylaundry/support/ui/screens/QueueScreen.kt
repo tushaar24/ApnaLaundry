@@ -66,6 +66,7 @@ import com.dailyworks.mylaundry.support.Graph
 import com.dailyworks.mylaundry.support.data.ApiException
 import com.dailyworks.mylaundry.support.data.QueueDto
 import com.dailyworks.mylaundry.support.data.QueueItemDto
+import com.dailyworks.mylaundry.support.data.showPhone
 import com.dailyworks.mylaundry.support.ui.theme.Tokens
 import com.dailyworks.mylaundry.support.ui.theme.bric
 import com.dailyworks.mylaundry.support.ui.theme.fig
@@ -331,7 +332,7 @@ fun QueueScreen(
                         Text("NEXT", style = fig(12, FontWeight.Bold, Tokens.Muted))
                         Text(current.label, style = bric(24), maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.clickable { onOpenShop(current.userId) })
                         if (current.phone.isNotBlank()) {
-                            Text("+91 ${current.phone.take(5)} ${current.phone.drop(5)}", style = fig(15, FontWeight.SemiBold, Tokens.InkSecondary))
+                            Text(showPhone(current.phone), style = fig(15, FontWeight.SemiBold, Tokens.InkSecondary))
                         }
                         current.note.takeIf { it.isNotBlank() }?.let { Text("⏰ $it", style = fig(14, color = Tokens.BlueText)) }
                         Spacer(Modifier.height(6.dp))
@@ -427,7 +428,7 @@ private fun QueuePersonRow(
                     "no_answer" -> "Didn't pick up" + (by?.let { " · $it called" } ?: "")
                     "skipped" -> "Skipped"
                     "calling" -> if (by == "you") "You're calling" else "${by ?: "An agent"} is calling"
-                    else -> if (item.phone.isBlank()) "Waiting" else "+91 ${item.phone}"
+                    else -> showPhone(item.phone).ifBlank { "Waiting" }
                 },
                 style = fig(13, color = Tokens.Muted),
             )

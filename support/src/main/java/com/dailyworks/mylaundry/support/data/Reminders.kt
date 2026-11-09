@@ -77,7 +77,7 @@ object ReminderAlarms {
                     putExtra("id", r.id)
                     putExtra("userId", r.userId)
                     putExtra("title", "⏰ ${r.title} · ${r.tagLine}")
-                    putExtra("text", r.note.ifBlank { "+91 ${r.phone.orEmpty()}" })
+                    putExtra("text", r.note.ifBlank { showPhone(r.phone) })
                 }
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,

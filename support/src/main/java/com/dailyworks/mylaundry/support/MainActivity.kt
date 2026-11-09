@@ -1,15 +1,11 @@
 package com.dailyworks.mylaundry.support
 
-import android.Manifest
-import android.content.ActivityNotFoundException
+import com.dailyworks.mylaundry.support.data.showPhone
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
@@ -48,7 +44,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -170,49 +165,9 @@ private fun MainNav(graph: Graph, opens: Opens) {
      * [onFailed]: the call wasn't placed (a queue gives the person back).
      */
     class Dial(val userId: String, val phone: String, val label: String, val onFailed: () -> Unit = {}, val onPlaced: (String) -> Unit = {})
-    var waitingForPermission by remember { mutableStateOf<Dial?>(null) }
-
-    // Through the phone's dialer: the app finds and uploads the dialer's recording.
-    fun place(d: Dial) {
-        scope.launch {
-            try {
-                val pending = graph.calls.start(d.userId, d.phone, d.label)
-                d.onPlaced(pending.callId)
-                // Open the notes screen first so returning from the dialer lands there.
-                nav.navigate("call/${pending.callId}") { launchSingleTop = true }
-                context.startActivity(graph.calls.dialIntent(d.phone))
-            } catch (e: ApiException) {
-                d.onFailed()
-                snackbar.showSnackbar(e.message ?: "Couldn't start the call")
-            } catch (e: ActivityNotFoundException) {
-                d.onFailed()
-                snackbar.showSnackbar("This phone can't place calls")
-            }
-        }
-    }
-
-    val callPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        val d = waitingForPermission
-        waitingForPermission = null
-        if (granted && d != null) place(d)
-        else if (!granted) {
-            d?.onFailed?.invoke()
-            scope.launch { snackbar.showSnackbar("Allow phone calls to call from the app") }
-        }
-    }
-
-    fun placeWithDialer(d: Dial) {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
-            place(d)
-        } else {
-            waitingForPermission = d
-            callPermission.launch(Manifest.permission.CALL_PHONE)
-        }
-    }
-
     // Through MyLaundry: the server rings this phone, then the owner, and records +
-    // transcribes the call. Only while that isn't set up on the server (503) does the
-    // dialer take over.
+    // transcribes the call. Calls only go this way (since 1.11: no phone dialer, which would
+    // show the owner's number).
     var placing by remember { mutableStateOf(false) }
     fun startCall(d: Dial) {
         if (placing) return
@@ -223,17 +178,16 @@ private fun MainNav(graph: Graph, opens: Opens) {
                 d.onPlaced(call.id)
                 nav.navigate("call/${call.id}") { launchSingleTop = true }
             } catch (e: ApiException) {
-                if (e.status == 503) placeWithDialer(d)
-                else {
-                    d.onFailed()
-                    snackbar.showSnackbar(e.message ?: "Couldn't place the call")
-                }
+                // Calls only go through MyLaundry (owner, 9 Nov): the phone's dialer would show the
+                // owner's number, so when MyLaundry calling is down (503) the app says so instead.
+                d.onFailed()
+                snackbar.showSnackbar(if (e.status == 503) "Calling through MyLaundry is down — try again in a few minutes" else e.message ?: "Couldn't place the call")
             } finally {
                 placing = false
             }
         }
     }
-    val onCall: (OwnerSummary) -> Unit = { o -> startCall(Dial(o.id, o.phone, o.shopName ?: o.name ?: "+91 ${o.phone}")) }
+    val onCall: (OwnerSummary) -> Unit = { o -> startCall(Dial(o.id, o.phone, o.shopName ?: o.name ?: showPhone(o.phone))) }
 
     // A reminder's Call: the reminder is done once the call is placed.
     fun reminderDone(reminderId: String, callId: String) = scope.launch {

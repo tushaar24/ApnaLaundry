@@ -1,5 +1,6 @@
 package com.dailyworks.mylaundry.support.ui.screens
 
+import com.dailyworks.mylaundry.support.data.showPhone
 import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
@@ -399,9 +400,9 @@ fun ChatScreen(vm: ChatViewModel, onBack: () -> Unit, onOpenShop: (String) -> Un
         TopAppBar(
             title = {
                 Column {
-                    Text(c?.title ?: "+${vm.waId}", style = fig(17, FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(c?.title ?: "Chat", style = fig(17, FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     val sub = listOfNotNull(
-                        c?.phone?.let { "+91 ${it.take(5)} ${it.drop(5)}" },
+                        c?.phone?.let { showPhone(it) },
                         c?.ownerName?.takeIf { it != c.title },
                         if (c != null && c.userId == null) "not a MyLaundry shop" else null,
                     ).joinToString(" · ")
