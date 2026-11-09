@@ -91,7 +91,10 @@ class AuthRepository(
         onAutoVerified: (PhoneAuthCredential) -> Unit,
     ): Result<Challenge> = runCatching {
         if (isReviewNumber(phone)) return@runCatching requestBackendOtp(phone)
-        val body = runCatching { api.requestOtp(phone, firebaseOk = true) }.getOrNull()?.body
+        // Our server couldn't be reached (a network that can't get to it, no signal): say so. Firebase
+        // can't help then — its sending is off since 3 Nov, and its login needs our server too (9 Nov:
+        // Laundry Express staff saw "Couldn't send OTP" on a network that couldn't reach us).
+        val body = runCatching { api.requestOtp(phone, firebaseOk = true) }.getOrElse { throw AuthException(OFFLINE) }.body
         when {
             body?.success == true && body.challengeId != null && body.challengeToken != null ->
                 backendChallenge(phone, body, sms = true)
