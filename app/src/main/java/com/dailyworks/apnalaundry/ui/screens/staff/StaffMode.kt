@@ -198,6 +198,33 @@ fun StaffLoadingGate(shopVm: ShopViewModel, active: Boolean) {
 }
 
 /**
+ * An existing number logged in but its shop didn't come down (no internet, a timeout): this over
+ * the whole app instead of the sample shop's setup, until it does ([finish] =
+ * AuthRepository.finishShopDownload). [onDone]: the shop is here (setup next if it never finished it).
+ */
+@Composable
+fun ShopDownloadGate(active: Boolean, shopReady: Boolean, finish: suspend () -> Boolean, onDone: suspend () -> Unit) {
+    if (!active) return
+    var slow by remember { mutableStateOf(false) }
+    var attempt by remember { mutableStateOf(0) }
+    LaunchedEffect(attempt, shopReady) {
+        slow = false
+        if (finish()) onDone() else slow = true
+    }
+    BackHandler { }
+    Box(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars).tap { }, contentAlignment = Alignment.Center) {
+        Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            androidx.compose.material3.CircularProgressIndicator(color = Tokens.Blue)
+            Text(tr("Loading your shop…"), style = bric(20, FontWeight.Bold), textAlign = TextAlign.Center)
+            if (slow) {
+                Text(tr("Taking long? Check the internet."), style = fig(15, color = Tokens.InkSecondary), textAlign = TextAlign.Center)
+                OutlineButton(tr("Try again"), Modifier.fillMaxWidth(), height = 52.dp) { attempt++ }
+            }
+        }
+    }
+}
+
+/**
  * The owner's plan has ended: staff can't work in the shop until it's renewed (the server says
  * 402). Over the whole app; it goes away by itself at the first sync after the owner renews.
  */

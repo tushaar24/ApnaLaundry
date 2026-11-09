@@ -42,6 +42,12 @@ class SyncManager(
 
     private val mutex = Mutex()
 
+    /**
+     * [block] with no sync running: a wipe (logout, another account) must not race a pull still in
+     * flight, which would write the old account's rows and sync positions back after it.
+     */
+    suspend fun <T> exclusive(block: suspend () -> T): T = mutex.withLock { block() }
+
     suspend fun syncNow(): Result = runLocked {
         forEachShop { pushOnce(it); pullOnce(it); topUpIds(it) }
         // A staff member's number switch changed: the re-pull it needs, right away.

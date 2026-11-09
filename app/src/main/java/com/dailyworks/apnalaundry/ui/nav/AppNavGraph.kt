@@ -384,6 +384,13 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
     )
     val shopReady by shopVm.shopReady.collectAsStateWithLifecycle()
     com.dailyworks.apnalaundry.ui.screens.staff.StaffLoadingGate(shopVm, active = li && access.isStaff && access.ownerPlanActive && !shopReady)
+    // An existing number whose shop didn't come down at login: "Loading your shop…", never the sample shop.
+    val downloadPending by prefs.shopDownloadPending.collectAsStateWithLifecycle(initialValue = false)
+    com.dailyworks.apnalaundry.ui.screens.staff.ShopDownloadGate(
+        active = li && downloadPending, shopReady = shopReady,
+        finish = { authRepo.finishShopDownload() },
+        onDone = { if (!prefs.setupDone.first()) navigator.toRatesSetup() },
+    )
     }
     }
 }

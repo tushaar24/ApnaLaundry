@@ -211,11 +211,17 @@ class AuthRepository(
         // Staff (1.0.20): this phone held only someone else's shop (a staff login) — its data isn't
         // this account's either, even with the same number (staff who were removed, then log in).
         val wasStaffOnly = shops.list().firstOrNull()?.staff != null
-        if ((prevPhone != null && prevPhone != user.phone) || wasStaffOnly) {
-            shops.forgetExtraShops() // back on the main shop, extra shops' data gone
-            repo.clearAll()
-            prefs.resetSyncState() // checkpoints, sync v2 positions, number blocks: the old account's
-            prefs.setSetupDone(false)
+        // Only this same number's expired session keeps what's on the phone (unsent work goes up
+        // next). After a logout (no number saved) it starts clean too: leftovers of the last login —
+        // rows, or a sync position — made a pull skip this shop, and the sample shop then went up
+        // over the real one (9 Nov 2026).
+        if (prevPhone != user.phone || wasStaffOnly) {
+            syncManager.exclusive {
+                shops.forgetExtraShops() // back on the main shop, extra shops' data gone
+                repo.clearAll()
+                prefs.resetSyncState() // checkpoints, sync v2 positions, number blocks: the old account's
+                prefs.setSetupDone(false)
+            }
         }
 
         prefs.setCredentials(
@@ -247,12 +253,17 @@ class AuthRepository(
         // non-fatal — the app works offline and syncs later. A just-created
         // account has nothing to pull, so it skips straight to seeding. The
         // shop list comes first, so a new phone pulls every shop.
+        var downloaded = true
         if (!body.isNewUser) {
             shopsRepo.refresh()
-            syncManager.syncNow()
+            downloaded = syncManager.syncNow() is SyncManager.Result.Success
         }
         val existingAccount = repo.hasShop()
-        if (!existingAccount) {
+        // An existing number whose shop didn't come down (no internet, a timeout): never the sample
+        // shop — pushed, it would replace the real one. Home waits on "Loading your shop…" until
+        // [finishShopDownload] has it.
+        val waitForShop = !existingAccount && !body.isNewUser && !downloaded
+        if (!existingAccount && !waitForShop) {
             repo.ensureSeeded(shopPhone = user.phone)
             // Just pulled (or nothing to pull) — only the seed needs to go up.
             syncManager.pushNow()
@@ -260,22 +271,23 @@ class AuthRepository(
         // An existing shop isn't proof of setup (the seed went up at first
         // login): an account that never onboarded still gets name -> rate list
         // after paying.
-        val onboarded = repo.isOnboarded()
+        val onboarded = waitForShop || repo.isOnboarded()
+        prefs.setShopDownloadPending(waitForShop)
         prefs.setSetupDone(onboarded)
 
         // Identify the owner so every event attributes to this shop, then the
         // funnel event. is_new_user / needs_setup = this account had no shop yet.
         Analytics.identify(user.id, user.phone, repo.currentShopName())
         CrashReporting.setUser(user.id)
-        Analytics.loggedIn(isNewUser = !existingAccount, needsSetup = !onboarded)
+        Analytics.loggedIn(isNewUser = !existingAccount && !waitForShop, needsSetup = !onboarded)
         MetaEvents.identify(user.id, user.phone)
-        MetaEvents.loginSuccess(isNewUser = !existingAccount)
+        MetaEvents.loginSuccess(isNewUser = !existingAccount && !waitForShop)
 
         // Staff (1.0.20): this number also works in other shops as staff.
         if (body.contexts.isNotEmpty()) {
             Analytics.staffLoggedIn(body.contexts.size, hasOwnShop = true)
             // Their own shop has no orders (installed earlier, never used): open the staff shop.
-            if (!repo.hasOrders()) {
+            if (!waitForShop && !repo.hasOrders()) {
                 shops.switchTo(com.dailyworks.apnalaundry.data.shops.staffShopId(body.contexts.first().staffId))
                 prefs.setSetupDone(true)
                 prefs.setStaffWelcomePending(true)
@@ -337,6 +349,28 @@ class AuthRepository(
     }
 
     /**
+     * The shop of an existing number didn't come down at login ([finishLogin]): try again. Once the
+     * server has answered: its shop — or, if it really has none, a new shop's setup (the sample shop
+     * now). True when done; [Prefs.setupDone] then says where to go.
+     */
+    suspend fun finishShopDownload(): Boolean {
+        if (!prefs.shopDownloadPending.first()) return true
+        if (!repo.hasShop()) {
+            val r = syncManager.syncNow()
+            if (r !is SyncManager.Result.Success && !repo.hasShop()) return false
+            if (!repo.hasShop()) {
+                repo.ensureSeeded(shopPhone = prefs.userPhone.first())
+                syncManager.pushNow()
+            }
+        }
+        prefs.setSetupDone(repo.isOnboarded())
+        prefs.setShopDownloadPending(false)
+        val id = prefs.userId.first(); val phone = prefs.userPhone.first()
+        if (id != null && phone != null) Analytics.identify(id, phone, repo.currentShopName())
+        return true
+    }
+
+    /**
      * Staff (1.0.20): the login ended on a phone that was only someone's staff (the owner removed
      * it, or deleted the shop) — that shop's data leaves the phone at once, whatever call noticed.
      */
@@ -344,10 +378,12 @@ class AuthRepository(
         if (prefs.loggedIn.first()) return
         val main = shops.list().firstOrNull() ?: return
         if (main.staff == null) return
-        shops.forgetExtraShops()
-        repo.clearAll()
-        prefs.resetSyncState()
-        prefs.setSetupDone(false)
+        syncManager.exclusive {
+            shops.forgetExtraShops()
+            repo.clearAll()
+            prefs.resetSyncState()
+            prefs.setSetupDone(false)
+        }
     }
 
     /**
@@ -370,8 +406,11 @@ class AuthRepository(
         Analytics.loggedOut()
         CrashReporting.setUser(null)
         MetaEvents.clearIdentity()
-        shops.forgetExtraShops() // before the prefs reset: it needs the shop list
-        prefs.logoutAndReset()
-        repo.clearAll()
+        // With no sync running: a pull in flight would write this account's rows and positions back.
+        syncManager.exclusive {
+            shops.forgetExtraShops() // before the prefs reset: it needs the shop list
+            prefs.logoutAndReset()
+            repo.clearAll()
+        }
     }
 }

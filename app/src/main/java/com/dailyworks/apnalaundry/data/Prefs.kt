@@ -41,6 +41,8 @@ class Prefs(private val context: Context) {
     private val STAFF_ENABLED = booleanPreferencesKey("staff_enabled")
     // Staff (1.0.20): show the once-only "Welcome — you're staff at …" card on Home.
     private val STAFF_WELCOME = booleanPreferencesKey("staff_welcome_pending")
+    // An existing number logged in but its shop didn't come down yet (AuthRepository.finishShopDownload).
+    private val SHOP_DOWNLOAD_PENDING = booleanPreferencesKey("shop_download_pending")
     // The assistant ("Ask" on Home) is on for this shop, as the server last said; unset = off.
     private val ASSISTANT_ON = booleanPreferencesKey("assistant_on")
     // Ask reads its answers out loud (phone's text-to-speech); unset = on.
@@ -98,6 +100,8 @@ class Prefs(private val context: Context) {
     val staffEnabled: Flow<Boolean> = context.dataStore.data.map { it[STAFF_ENABLED] == true }
     val staffWelcomePending: Flow<Boolean> = context.dataStore.data.map { it[STAFF_WELCOME] == true }
     suspend fun setStaffWelcomePending(v: Boolean) { context.dataStore.edit { it[STAFF_WELCOME] = v } }
+    val shopDownloadPending: Flow<Boolean> = context.dataStore.data.map { it[SHOP_DOWNLOAD_PENDING] == true }
+    suspend fun setShopDownloadPending(v: Boolean) { context.dataStore.edit { it[SHOP_DOWNLOAD_PENDING] = v } }
     val assistantOn: Flow<Boolean> = context.dataStore.data.map { it[ASSISTANT_ON] ?: false }
     val assistantSpeak: Flow<Boolean> = context.dataStore.data.map { it[ASSISTANT_SPEAK] ?: true }
     val demoVideoUrl: Flow<String?> = context.dataStore.data.map { it[DEMO_VIDEO_URL] }
@@ -268,7 +272,7 @@ class Prefs(private val context: Context) {
             it.remove(SHOPS); it.remove(ACTIVE_SHOP)
             it.asMap().keys.filter { k -> k.name.startsWith(SHOP_CHECKPOINT_PREFIX) }.forEach { k -> it.remove(k) }
             removeSyncState(it)
-            it.remove(STAFF_WELCOME); it.remove(STAFF_ENABLED)
+            it.remove(STAFF_WELCOME); it.remove(STAFF_ENABLED); it.remove(SHOP_DOWNLOAD_PENDING)
             it.remove(GUIDE_STAGE); it.remove(GUIDE_ORDER); it.remove(GUIDE_VARIANT); it.remove(GUIDE_NEW_SHOP)
             it.remove(CUSTOMER_FLOW); it.remove(SERVICES_SETUP); it.remove(ASSISTANT_ON)
             it.remove(ACCESS_TOKEN); it.remove(ACCESS_EXPIRES_AT); it.remove(REFRESH_TOKEN)
