@@ -23,6 +23,10 @@ import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material3.Badge
+import kotlinx.coroutines.flow.first
+import androidx.compose.foundation.layout.Row
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -225,22 +229,47 @@ private fun MainNav(graph: Graph, opens: Opens) {
     }
 
     // The call queue (kept on this phone): start one, call its people one by one.
-    fun startQueue(items: List<QueueItem>) = scope.launch {
-        graph.prefs.setQueue(items)
+    // A queue with people still to call is never replaced without asking.
+    var queueOffer by remember { mutableStateOf<List<QueueItem>?>(null) }
+    var queueOpenLeft by remember { mutableIntStateOf(0) }
+    fun openQueue(items: List<QueueItem>, add: Boolean) = scope.launch {
+        val fresh = items.distinctBy { it.key }
+        graph.prefs.updateQueue { q ->
+            if (!add) fresh
+            else {
+                // Already waiting: kept where it is. Called / skipped before: in again, at the end.
+                val waiting = q.filter { it.open }.map { it.key }.toSet()
+                q.filterNot { !it.open && fresh.any { f -> f.key == it.key } } + fresh.filter { it.key !in waiting }
+            }
+        }
         nav.navigate("queue") { launchSingleTop = true }
+    }
+    fun startQueue(items: List<QueueItem>) = scope.launch {
+        val left = graph.prefs.queue.first().count { it.open }
+        if (left == 0) openQueue(items, add = false)
+        else { queueOpenLeft = left; queueOffer = items }
+    }
+    queueOffer?.let { items ->
+        AlertDialog(
+            onDismissRequest = { queueOffer = null },
+            title = { Text("You already have a call queue", style = fig(18, FontWeight.Bold)) },
+            text = { Text("$queueOpenLeft still to call in it. Add these ${items.distinctBy { it.key }.size} to it, or start a new queue?", style = fig(15)) },
+            confirmButton = {
+                TextButton(onClick = { queueOffer = null; openQueue(items, add = true) }) { Text("Add to it", style = fig(15, FontWeight.Bold, Tokens.Blue)) }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = { queueOffer = null }) { Text("Cancel", style = fig(15, FontWeight.Bold, Tokens.Muted)) }
+                    TextButton(onClick = { queueOffer = null; openQueue(items, add = false) }) { Text("Start new", style = fig(15, FontWeight.Bold, Tokens.Red)) }
+                }
+            },
+        )
     }
     val onCallQueued: (QueueItem) -> Unit = { item ->
         startCall(Dial(item.userId, item.phone, item.label) { callId ->
+            // Called (placed). Its notes later say whether they picked up (CallNotesViewModel).
             scope.launch {
-                graph.prefs.updateQueue { q ->
-                    var ticked = false
-                    q.map {
-                        if (!ticked && it.status == "pending" && it.userId == item.userId && it.reminderId == item.reminderId) {
-                            ticked = true
-                            it.copy(status = "called", callId = callId)
-                        } else it
-                    }
-                }
+                graph.prefs.updateQueue { q -> q.map { if (it.key == item.key) it.copy(status = "called", callId = callId) else it } }
             }
             item.reminderId?.let { reminderDone(it, callId) }
         })

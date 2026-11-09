@@ -79,7 +79,8 @@ data class CallsUi(
     val message: String? = null,
 ) {
     val shownScheduled get() = if (mine) scheduled.filter { it.agentName == agent } else scheduled
-    val queueLeft get() = queue.count { it.status == "pending" }
+    /** Still to reach: next in line, or didn't pick up last time. */
+    val queueLeft get() = queue.count { it.open }
 }
 
 class CallsViewModel(private val graph: Graph, private val appContext: android.content.Context) : ViewModel() {
@@ -216,7 +217,8 @@ fun CallsScreen(
                         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        if (ui.queueLeft > 0) {
+                        // Any queue, even one called through: open it to call again or clear it.
+                        if (ui.queue.isNotEmpty()) {
                             item(key = "queue") {
                                 Row(
                                     Modifier.fillMaxWidth().background(Tokens.Ink, RoundedCornerShape(14.dp)).clickable(onClick = onOpenQueue).padding(14.dp),
@@ -224,9 +226,12 @@ fun CallsScreen(
                                 ) {
                                     Column(Modifier.weight(1f)) {
                                         Text("Call queue", style = fig(16, FontWeight.Bold, Tokens.OnDark))
-                                        Text("${ui.queueLeft} left to call", style = fig(13, color = Tokens.OnDark.copy(alpha = 0.8f)))
+                                        Text(
+                                            if (ui.queueLeft > 0) "${ui.queueLeft} left to call" else "Everyone called · open to clear",
+                                            style = fig(13, color = Tokens.OnDark.copy(alpha = 0.8f)),
+                                        )
                                     }
-                                    Text("Continue →", style = fig(15, FontWeight.Bold, Tokens.OnDark))
+                                    Text(if (ui.queueLeft > 0) "Continue →" else "Open →", style = fig(15, FontWeight.Bold, Tokens.OnDark))
                                 }
                             }
                         }

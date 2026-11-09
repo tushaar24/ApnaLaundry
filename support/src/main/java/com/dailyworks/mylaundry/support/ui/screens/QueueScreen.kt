@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -32,7 +33,10 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -49,7 +53,8 @@ import kotlinx.coroutines.launch
 /**
  * The call queue (8 Nov 2026): people picked in Shops (Select) or today's scheduled calls
  * (Call all). Call → the call → notes → back here with the next one ready: call, call, call.
- * Kept on this phone.
+ * Kept on this phone. An entry is "called" once the call is placed; its notes then say
+ * whether they picked up — no answer / busy / switched off → "Call again".
  */
 @Composable
 fun QueueScreen(graph: Graph, placing: Boolean, onBack: () -> Unit, onCall: (QueueItem) -> Unit, onOpenShop: (String) -> Unit) {
@@ -57,9 +62,24 @@ fun QueueScreen(graph: Graph, placing: Boolean, onBack: () -> Unit, onCall: (Que
     val scope = rememberCoroutineScope()
     val current = queue.firstOrNull { it.status == "pending" }
     val called = queue.count { it.status == "called" }
+    val notReached = queue.count { it.status == "no_answer" }
     val skipped = queue.count { it.status == "skipped" }
+    val left = queue.count { it.open }
+    // By key, never by position or equality: the list can change under a tap (a call ticked off).
     fun set(item: QueueItem, status: String) = scope.launch {
-        graph.prefs.updateQueue { q -> q.map { if (it === item || it == item) it.copy(status = status) else it } }
+        graph.prefs.updateQueue { q -> q.map { if (it.key == item.key) it.copy(status = status) else it } }
+    }
+    fun remove(item: QueueItem) = scope.launch { graph.prefs.updateQueue { q -> q.filterNot { it.key == item.key } } }
+    fun clear() = scope.launch { graph.prefs.setQueue(emptyList()); onBack() }
+    var confirmClear by remember { mutableStateOf(false) }
+    if (confirmClear) {
+        AlertDialog(
+            onDismissRequest = { confirmClear = false },
+            title = { Text("Clear the queue?", style = fig(18, FontWeight.Bold)) },
+            text = { Text("$left still to call. They'll be taken out of the queue.", style = fig(15)) },
+            confirmButton = { TextButton(onClick = { confirmClear = false; clear() }) { Text("Clear", style = fig(15, FontWeight.Bold, Tokens.Red)) } },
+            dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Keep", style = fig(15, FontWeight.Bold, Tokens.Blue)) } },
+        )
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -68,7 +88,7 @@ fun QueueScreen(graph: Graph, placing: Boolean, onBack: () -> Unit, onCall: (Que
             navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
             actions = {
                 if (queue.isNotEmpty()) {
-                    TextButton(onClick = { scope.launch { graph.prefs.setQueue(emptyList()); onBack() } }) {
+                    TextButton(onClick = { if (left > 0) confirmClear = true else clear() }) {
                         Text("Clear", style = fig(14, FontWeight.Bold, Tokens.Red))
                     }
                 }
@@ -83,11 +103,13 @@ fun QueueScreen(graph: Graph, placing: Boolean, onBack: () -> Unit, onCall: (Que
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
-                        "$called of ${queue.size} called" + if (skipped > 0) " · $skipped skipped" else "",
+                        "$called of ${queue.size} reached" +
+                            (if (notReached > 0) " · $notReached didn't pick up" else "") +
+                            (if (skipped > 0) " · $skipped skipped" else ""),
                         style = fig(14, FontWeight.SemiBold, Tokens.Muted),
                     )
                     LinearProgressIndicator(
-                        progress = { if (queue.isEmpty()) 0f else (called + skipped) / queue.size.toFloat() },
+                        progress = { if (queue.isEmpty()) 0f else (queue.size - left) / queue.size.toFloat() },
                         modifier = Modifier.fillMaxWidth(), color = Tokens.Green, trackColor = Tokens.Neutral,
                     )
                 }
@@ -104,7 +126,9 @@ fun QueueScreen(graph: Graph, placing: Boolean, onBack: () -> Unit, onCall: (Que
                             current.label, style = bric(24), maxLines = 2, overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.clickable { onOpenShop(current.userId) },
                         )
-                        Text("+91 ${current.phone.take(5)} ${current.phone.drop(5)}", style = fig(15, FontWeight.SemiBold, Tokens.InkSecondary))
+                        if (current.phone.isNotBlank()) {
+                            Text("+91 ${current.phone.take(5)} ${current.phone.drop(5)}", style = fig(15, FontWeight.SemiBold, Tokens.InkSecondary))
+                        }
                         current.note?.takeIf { it.isNotBlank() }?.let { Text("⏰ $it", style = fig(14, color = Tokens.BlueText)) }
                         Spacer(Modifier.height(6.dp))
                         Button(
@@ -129,15 +153,32 @@ fun QueueScreen(graph: Graph, placing: Boolean, onBack: () -> Unit, onCall: (Que
                         Modifier.fillMaxWidth().background(Tokens.GreenLight, RoundedCornerShape(16.dp)).padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Text(if (queue.isEmpty()) "The queue is empty" else "All done 🎉", style = bric(22))
                         Text(
-                            if (queue.isEmpty()) "Pick shops in Shops (Select) or use Call all on today's scheduled calls."
-                            else "Everyone in the queue was called or skipped.",
+                            when {
+                                queue.isEmpty() -> "The queue is empty"
+                                notReached > 0 -> "Round done"
+                                else -> "All done 🎉"
+                            },
+                            style = bric(22),
+                        )
+                        Text(
+                            when {
+                                queue.isEmpty() -> "Pick shops in Shops (Select) or use Call all on today's scheduled calls."
+                                notReached > 0 -> "$notReached didn't pick up. Call them again, or clear the queue."
+                                else -> "Everyone in the queue was called or skipped."
+                            },
                             style = fig(14, color = Tokens.InkSecondary),
                         )
+                        if (notReached > 0) {
+                            Button(
+                                onClick = { scope.launch { graph.prefs.updateQueue { q -> q.map { if (it.status == "no_answer") it.copy(status = "pending") else it } } } },
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Tokens.Green),
+                            ) { Text("Call the $notReached again", style = fig(15, FontWeight.Bold, Tokens.OnDark)) }
+                        }
                         if (queue.isNotEmpty()) {
                             Button(
-                                onClick = { scope.launch { graph.prefs.setQueue(emptyList()); onBack() } },
+                                onClick = { if (left > 0) confirmClear = true else clear() },
                                 shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Tokens.Ink),
                             ) { Text("Clear the queue", style = fig(15, FontWeight.Bold, Tokens.OnDark)) }
@@ -148,8 +189,8 @@ fun QueueScreen(graph: Graph, placing: Boolean, onBack: () -> Unit, onCall: (Que
             // The next person's shop: plan, usage, sales, all details.
             current?.let { c -> item(key = "shop-" + c.userId) { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { ShopCard(c.userId, onOpenShop) } } }
             if (queue.isNotEmpty()) item { Text("Everyone · ${queue.size}", style = fig(16, FontWeight.Bold), modifier = Modifier.padding(top = 6.dp)) }
-            itemsIndexed(queue) { i, item ->
-                val isNext = item == current
+            itemsIndexed(queue, key = { _, it -> it.key }) { i, item ->
+                val isNext = item.key == current?.key
                 Row(
                     Modifier.fillMaxWidth()
                         .background(if (isNext) Tokens.BlueLight else Tokens.Card, RoundedCornerShape(12.dp))
@@ -161,6 +202,7 @@ fun QueueScreen(graph: Graph, placing: Boolean, onBack: () -> Unit, onCall: (Que
                 ) {
                     val (mark, color) = when (item.status) {
                         "called" -> "✓" to Tokens.GreenText
+                        "no_answer" -> "✕" to Tokens.Red
                         "skipped" -> "↷" to Tokens.Faint
                         else -> "${i + 1}" to Tokens.InkSecondary
                     }
@@ -168,14 +210,25 @@ fun QueueScreen(graph: Graph, placing: Boolean, onBack: () -> Unit, onCall: (Que
                     Column(Modifier.weight(1f)) {
                         Text(item.label, style = fig(15, FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(
-                            when (item.status) { "called" -> "Called"; "skipped" -> "Skipped"; else -> "+91 ${item.phone}" },
+                            when (item.status) {
+                                "called" -> "Called"
+                                "no_answer" -> "Didn't pick up"
+                                "skipped" -> "Skipped"
+                                else -> if (item.phone.isBlank()) "Pending" else "+91 ${item.phone}"
+                            },
                             style = fig(13, color = Tokens.Muted),
                         )
                     }
                     when (item.status) {
                         "pending" -> {
                             IconButton(onClick = { onCall(item) }, enabled = !placing) { Icon(Icons.Filled.Call, "Call now", tint = Tokens.Green) }
-                            IconButton(onClick = { scope.launch { graph.prefs.updateQueue { q -> q.filterIndexed { j, _ -> j != i } } } }) {
+                            IconButton(onClick = { remove(item) }) {
+                                Icon(Icons.Filled.Close, "Remove", tint = Tokens.Faint)
+                            }
+                        }
+                        "no_answer" -> {
+                            TextButton(onClick = { onCall(item) }, enabled = !placing) { Text("Call again", style = fig(13, FontWeight.Bold, Tokens.Green)) }
+                            IconButton(onClick = { remove(item) }) {
                                 Icon(Icons.Filled.Close, "Remove", tint = Tokens.Faint)
                             }
                         }

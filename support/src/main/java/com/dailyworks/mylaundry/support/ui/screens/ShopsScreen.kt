@@ -211,7 +211,8 @@ fun ShopsScreen(
     var showFilters by remember { mutableStateOf(false) }
     // Select mode: tick owners, then "Call queue" calls them one after another.
     var selecting by remember { mutableStateOf(false) }
-    var selected by remember { mutableStateOf(setOf<String>()) }
+    // The picked owners themselves (in the order picked), so a new search or filter keeps them.
+    var selected by remember { mutableStateOf(linkedMapOf<String, OwnerSummary>()) }
     val f = ui.filters
 
     Column(Modifier.fillMaxSize()) {
@@ -275,7 +276,7 @@ fun ShopsScreen(
                 Text(if (f.sheetCount > 0) "Filters · ${f.sheetCount}" else "Filters", style = fig(14, FontWeight.Bold, Tokens.Blue))
             }
             Spacer(Modifier.weight(1f))
-            TextButton(onClick = { selecting = !selecting; selected = emptySet() }) {
+            TextButton(onClick = { selecting = !selecting; selected = linkedMapOf() }) {
                 Text(if (selecting) "Cancel" else "Select", style = fig(14, FontWeight.Bold, Tokens.Blue))
             }
             SortMenu(f.sort) { vm.setFilters(f.copy(sort = it)) }
@@ -287,14 +288,19 @@ fun ShopsScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text("${selected.size} selected", style = fig(14, FontWeight.Bold, Tokens.OnDark), modifier = Modifier.weight(1f))
-                TextButton(onClick = { selected = if (selected.size == ui.items.size) emptySet() else ui.items.map { it.id }.toSet() }) {
-                    Text(if (selected.size == ui.items.size && ui.items.isNotEmpty()) "None" else "All ${ui.items.size}", style = fig(14, FontWeight.Bold, Tokens.OnDark))
+                // All / none of the owners shown now; picks from other searches stay.
+                val allShown = ui.items.isNotEmpty() && ui.items.all { it.id in selected }
+                TextButton(onClick = {
+                    selected = if (allShown) LinkedHashMap(selected).apply { ui.items.forEach { remove(it.id) } }
+                    else LinkedHashMap(selected).apply { ui.items.forEach { putIfAbsent(it.id, it) } }
+                }) {
+                    Text(if (allShown) "None" else "All ${ui.items.size}", style = fig(14, FontWeight.Bold, Tokens.OnDark))
                 }
                 Button(
                     onClick = {
-                        onQueue(ui.items.filter { it.id in selected })
+                        onQueue(selected.values.toList())
                         selecting = false
-                        selected = emptySet()
+                        selected = linkedMapOf()
                     },
                     enabled = selected.isNotEmpty(),
                     shape = RoundedCornerShape(10.dp),
@@ -331,7 +337,10 @@ fun ShopsScreen(
                         items(ui.items, key = { it.id }) { o ->
                             OwnerRow(
                                 o, ui.tags,
-                                onClick = { if (selecting) selected = if (o.id in selected) selected - o.id else selected + o.id else onOpen(o.id) },
+                                onClick = {
+                                    if (selecting) selected = LinkedHashMap(selected).apply { if (remove(o.id) == null) put(o.id, o) }
+                                    else onOpen(o.id)
+                                },
                                 onCall = { onCall(o) },
                                 checked = if (selecting) o.id in selected else null,
                             )

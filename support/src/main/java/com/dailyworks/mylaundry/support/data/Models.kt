@@ -201,9 +201,18 @@ data class QueueItem(
     /** Came from a reminder: marked done when called. */
     val reminderId: String? = null,
     val note: String? = null,
-    val status: String = "pending", // pending | called | skipped
+    /** pending | called | no_answer (called, didn't pick up: Call again) | skipped */
+    val status: String = "pending",
     val callId: String? = null,
-)
+) {
+    /** One entry per reminder, else per owner (Shops → Select). */
+    val key: String get() = reminderId ?: "u:$userId"
+    /** Still to be reached: next in line, or called and didn't pick up. */
+    val open: Boolean get() = status == "pending" || status == "no_answer"
+}
+
+/** Outcomes where the owner wasn't reached: the queue offers Call again. */
+val NOT_REACHED = setOf(Outcome.NO_ANSWER.name, Outcome.BUSY.name, Outcome.SWITCHED_OFF.name)
 
 @Serializable
 data class CallsPage(val items: List<CallDto>, val total: Int, val page: Int, val pageSize: Int)

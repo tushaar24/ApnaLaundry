@@ -168,6 +168,7 @@ class CallNotesViewModel(private val graph: Graph, private val callId: String) :
                         outcome = call.outcome, note = call.note, tagIds = call.tags.map { it.id }.toSet(),
                     )
                 }
+                if (!_ui.value.dirty) queueOutcome(call.outcome)
             } catch (e: ApiException) {
                 _ui.update { it.copy(loading = false, error = e.message) }
             }
@@ -182,6 +183,7 @@ class CallNotesViewModel(private val graph: Graph, private val callId: String) :
                 // The server may have filled in the outcome; keep the agent's own pick.
                 if (s.dirty) s.copy(call = call) else s.copy(call = call, outcome = call.outcome)
             }
+            if (!_ui.value.dirty) queueOutcome(call.outcome)
         } catch (_: ApiException) {
             // Next round.
         }
@@ -212,6 +214,7 @@ class CallNotesViewModel(private val graph: Graph, private val callId: String) :
                         outcome = if (s.dirty && s.outcome != null) s.outcome else call.outcome ?: s.outcome,
                     )
                 }
+                queueOutcome(_ui.value.outcome)
             } catch (e: ApiException) {
                 _ui.update { it.copy(finalizing = false, message = e.message) }
             }
@@ -263,10 +266,30 @@ class CallNotesViewModel(private val graph: Graph, private val callId: String) :
             try {
                 val call = graph.api.updateCall(callId, outcome = s.outcome, note = s.note, tagIds = s.tagIds.toList())
                 _ui.update { it.copy(call = call, saving = false, dirty = false) }
+                queueOutcome(s.outcome)
                 onDone()
             } catch (e: ApiException) {
                 _ui.update { it.copy(saving = false, message = e.message) }
             }
+        }
+    }
+
+    /**
+     * A call placed from the call queue: its entry follows the outcome — not reached (no answer,
+     * busy, switched off) → "Call again", and a reminder it came from opens again (placing the
+     * call had marked it done); reached after all → called, the reminder done again.
+     */
+    private fun queueOutcome(outcome: String?) {
+        if (outcome == null) return
+        viewModelScope.launch {
+            val (before, after) = graph.prefs.queueCallOutcome(callId, outcome) ?: return@launch
+            val reminderId = after.reminderId ?: return@launch
+            if (before.status == after.status) return@launch
+            runCatching {
+                if (after.status == "no_answer") graph.api.updateReminder(reminderId, done = false)
+                else graph.api.updateReminder(reminderId, done = true, callId = callId)
+            }
+            ReminderAlarms.syncSoon(graph.context)
         }
     }
 

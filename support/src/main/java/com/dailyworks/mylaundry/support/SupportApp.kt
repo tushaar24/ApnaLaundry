@@ -10,6 +10,7 @@ import com.dailyworks.mylaundry.support.data.WhatsAppApi
 
 /** The app's few singletons (small enough not to need a DI framework). */
 class Graph(app: Application) {
+    val context: android.content.Context = app
     val api = SupportApi()
     val prefs = Prefs(app)
     val monitor = CallMonitor(app)

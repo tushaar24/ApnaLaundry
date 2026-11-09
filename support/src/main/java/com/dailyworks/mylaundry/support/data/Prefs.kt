@@ -76,17 +76,36 @@ class Prefs(private val context: Context) {
 
     /** The agent's call queue (JSON list of [QueueItem]). */
     val queue: Flow<List<QueueItem>> = context.store.data.map { p ->
-        p[K.queue]?.let { runCatching { queueJson.decodeFromString<List<QueueItem>>(it) }.getOrNull() }.orEmpty()
+        // One entry per key (the screen's list is keyed by it).
+        p[K.queue]?.let { runCatching { queueJson.decodeFromString<List<QueueItem>>(it) }.getOrNull() }.orEmpty().distinctBy { it.key }
     }
 
     suspend fun setQueue(items: List<QueueItem>) = context.store.edit {
-        if (items.isEmpty()) it.remove(K.queue) else it[K.queue] = queueJson.encodeToString(items)
+        if (items.isEmpty()) it.remove(K.queue) else it[K.queue] = queueJson.encodeToString(items.distinctBy { q -> q.key })
     }
 
     suspend fun updateQueue(change: (List<QueueItem>) -> List<QueueItem>) = context.store.edit {
         val now = it[K.queue]?.let { j -> runCatching { queueJson.decodeFromString<List<QueueItem>>(j) }.getOrNull() }.orEmpty()
-        val next = change(now)
+        val next = change(now).distinctBy { q -> q.key }
         if (next.isEmpty()) it.remove(K.queue) else it[K.queue] = queueJson.encodeToString(next)
+    }
+
+    /**
+     * The queue entry called as [callId] got [outcome] (the agent's pick, or the server's /
+     * dialer's guess): not reached → no_answer (Call again), anything else → called.
+     * Returns the entry (before, after) when its state changed, else null.
+     */
+    suspend fun queueCallOutcome(callId: String, outcome: String): Pair<QueueItem, QueueItem>? {
+        var changed: Pair<QueueItem, QueueItem>? = null
+        updateQueue { q ->
+            q.map {
+                if (it.callId != callId || it.status !in setOf("called", "no_answer")) return@map it
+                val next = it.copy(status = if (outcome in NOT_REACHED) "no_answer" else "called")
+                if (next != it) changed = it to next
+                next
+            }
+        }
+        return changed
     }
 
     suspend fun setWaCookie(cookie: String?) = context.store.edit {
