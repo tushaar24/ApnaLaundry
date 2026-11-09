@@ -171,6 +171,78 @@ class SupportApi(private val baseUrl: String = BuildConfig.API_BASE_URL) {
 
     suspend fun reminderTags(): List<TagDto> = call<TagsEnvelope> { client.get(url("/reminder-tags")) }.tags
 
+    // ── call queues (1.10): on the server, shared by every agent ──
+
+    suspend fun queues(): List<QueueDto> = call<QueuesEnvelope> { client.get(url("/queues")) }.queues
+
+    suspend fun queue(id: String): QueueDto = call<QueueEnvelope> { client.get(url("/queues/$id")) }.queue
+
+    /** [keepState]: a phone's own queue moving up keeps who was called / skipped. */
+    suspend fun createQueue(title: String, description: String, createdBy: String, items: List<QueueEntry> = emptyList(), keepState: Boolean = false): QueueDto =
+        call<QueueEnvelope> {
+            client.post(url("/queues")) {
+                contentType(ContentType.Application.Json)
+                setBody(NewQueueBody(title, description, createdBy, items, keepState))
+            }
+        }.queue
+
+    suspend fun editQueue(id: String, title: String, description: String): QueueDto = call<QueueEnvelope> {
+        client.patch(url("/queues/$id")) {
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject { put("title", JsonPrimitive(title)); put("description", JsonPrimitive(description)) })
+        }
+    }.queue
+
+    suspend fun deleteQueue(id: String) {
+        call<OkBody> { client.delete(url("/queues/$id")) }
+    }
+
+    suspend fun addToQueue(id: String, items: List<QueueEntry>): QueueDto = call<QueueEnvelope> {
+        client.post(url("/queues/$id/items")) {
+            contentType(ContentType.Application.Json)
+            setBody(QueueItemsBody(items))
+        }
+    }.queue
+
+    /** Skip ("skipped") or back in line ("pending"). */
+    suspend fun setQueueItem(queueId: String, itemId: String, status: String): QueueDto = call<QueueEnvelope> {
+        client.patch(url("/queues/$queueId/items/$itemId")) {
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject { put("status", JsonPrimitive(status)) })
+        }
+    }.queue
+
+    suspend fun removeQueueItem(queueId: String, itemId: String): QueueDto =
+        call<QueueEnvelope> { client.delete(url("/queues/$queueId/items/$itemId")) }.queue
+
+    /** Everyone who didn't pick up → back in line. */
+    suspend fun retryQueue(queueId: String): QueueDto = call<QueueEnvelope> { client.post(url("/queues/$queueId/retry")) }.queue
+
+    /** Before calling: this agent takes them. ApiException 409 = another agent is calling them. */
+    suspend fun startQueueItem(queueId: String, itemId: String, agentName: String) {
+        call<OkBody> {
+            client.post(url("/queues/$queueId/items/$itemId/start")) {
+                contentType(ContentType.Application.Json)
+                setBody(buildJsonObject { put("agentName", JsonPrimitive(agentName)) })
+            }
+        }
+    }
+
+    /** The call was placed (its notes later say whether they picked up; a reminder is done). */
+    suspend fun placedQueueItem(queueId: String, itemId: String, callId: String, agentName: String) {
+        call<OkBody> {
+            client.post(url("/queues/$queueId/items/$itemId/placed")) {
+                contentType(ContentType.Application.Json)
+                setBody(buildJsonObject { put("callId", JsonPrimitive(callId)); put("agentName", JsonPrimitive(agentName)) })
+            }
+        }
+    }
+
+    /** The call couldn't be placed: back to how they were. */
+    suspend fun releaseQueueItem(queueId: String, itemId: String) {
+        call<OkBody> { client.post(url("/queues/$queueId/items/$itemId/release")) }
+    }
+
     suspend fun createReminderTag(name: String, color: String): TagDto = call<TagEnvelope> {
         client.post(url("/reminder-tags")) {
             contentType(ContentType.Application.Json)

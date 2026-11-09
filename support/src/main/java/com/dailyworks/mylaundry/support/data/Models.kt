@@ -211,6 +211,59 @@ data class QueueItem(
     val open: Boolean get() = status == "pending" || status == "no_answer"
 }
 
+/**
+ * A call queue on the server (support app 1.10): shared by every agent, made in the app or on the
+ * server. [left] = still to call (next in line, being called, or didn't pick up).
+ */
+@Serializable
+data class QueueDto(
+    val id: String,
+    val title: String,
+    val description: String = "",
+    val createdBy: String = "",
+    val updatedAt: String = "",
+    val total: Int = 0,
+    val left: Int = 0,
+    val called: Int = 0,
+    val notReached: Int = 0,
+    val skipped: Int = 0,
+    val calling: Int = 0,
+    val items: List<QueueItemDto> = emptyList(),
+)
+
+/** One person in a server queue. status: pending | calling | called | no_answer | skipped. */
+@Serializable
+data class QueueItemDto(
+    val id: String,
+    val userId: String,
+    val phone: String = "",
+    val label: String = "",
+    val reminderId: String? = null,
+    val note: String = "",
+    val status: String = "pending",
+    /** Calling / called them. */
+    val agentName: String? = null,
+    val callId: String? = null,
+)
+
+/** Someone to put in a queue. [status] / [callId]: only when a phone's own queue moves up. */
+@Serializable
+data class QueueEntry(
+    val userId: String,
+    val reminderId: String? = null,
+    val note: String? = null,
+    val status: String? = null,
+    val callId: String? = null,
+)
+
+@Serializable internal data class QueuesEnvelope(val queues: List<QueueDto> = emptyList())
+@Serializable internal data class QueueEnvelope(val queue: QueueDto)
+@Serializable internal data class NewQueueBody(
+    val title: String, val description: String, val createdBy: String,
+    val items: List<QueueEntry> = emptyList(), val keepState: Boolean = false,
+)
+@Serializable internal data class QueueItemsBody(val items: List<QueueEntry>)
+
 /** Outcomes where the owner wasn't reached: the queue offers Call again. */
 val NOT_REACHED = setOf(Outcome.NO_ANSWER.name, Outcome.BUSY.name, Outcome.SWITCHED_OFF.name)
 

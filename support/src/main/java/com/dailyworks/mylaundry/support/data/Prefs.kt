@@ -74,7 +74,7 @@ class Prefs(private val context: Context) {
 
     suspend fun setAgentPhone(phone: String) = context.store.edit { it[K.phone] = phone.filter(Char::isDigit).takeLast(10) }
 
-    /** The agent's call queue (JSON list of [QueueItem]). */
+    /** The call queue this phone kept itself (1.4–1.9): moved to the server once by 1.10 (MainActivity). */
     val queue: Flow<List<QueueItem>> = context.store.data.map { p ->
         // One entry per key (the screen's list is keyed by it).
         p[K.queue]?.let { runCatching { queueJson.decodeFromString<List<QueueItem>>(it) }.getOrNull() }.orEmpty().distinctBy { it.key }
@@ -88,24 +88,6 @@ class Prefs(private val context: Context) {
         val now = it[K.queue]?.let { j -> runCatching { queueJson.decodeFromString<List<QueueItem>>(j) }.getOrNull() }.orEmpty()
         val next = change(now).distinctBy { q -> q.key }
         if (next.isEmpty()) it.remove(K.queue) else it[K.queue] = queueJson.encodeToString(next)
-    }
-
-    /**
-     * The queue entry called as [callId] got [outcome] (the agent's pick, or the server's /
-     * dialer's guess): not reached → no_answer (Call again), anything else → called.
-     * Returns the entry (before, after) when its state changed, else null.
-     */
-    suspend fun queueCallOutcome(callId: String, outcome: String): Pair<QueueItem, QueueItem>? {
-        var changed: Pair<QueueItem, QueueItem>? = null
-        updateQueue { q ->
-            q.map {
-                if (it.callId != callId || it.status !in setOf("called", "no_answer")) return@map it
-                val next = it.copy(status = if (outcome in NOT_REACHED) "no_answer" else "called")
-                if (next != it) changed = it to next
-                next
-            }
-        }
-        return changed
     }
 
     suspend fun setWaCookie(cookie: String?) = context.store.edit {

@@ -59,7 +59,12 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.dailyworks.mylaundry.support.data.ApiException
 import com.dailyworks.mylaundry.support.data.IncomingNotifier
-import com.dailyworks.mylaundry.support.data.QueueItem
+import com.dailyworks.mylaundry.support.data.QueueEntry
+import com.dailyworks.mylaundry.support.data.QueueItemDto
+import com.dailyworks.mylaundry.support.ui.screens.AddToQueueSheet
+import com.dailyworks.mylaundry.support.ui.screens.QueueViewModel
+import com.dailyworks.mylaundry.support.ui.screens.QueuesScreen
+import com.dailyworks.mylaundry.support.ui.screens.QueuesViewModel
 import com.dailyworks.mylaundry.support.data.ReminderAlarms
 import com.dailyworks.mylaundry.support.data.ReminderDto
 import com.dailyworks.mylaundry.support.ui.screens.QueueScreen
@@ -160,8 +165,11 @@ private fun MainNav(graph: Graph, opens: Opens) {
     val route = backStack?.destination?.route
 
     // ── placing a call (shops, a shop, a reminder, the queue) ──
-    /** Who to call; [onPlaced] gets the new call's id (to tick off a reminder / queue item). */
-    class Dial(val userId: String, val phone: String, val label: String, val onPlaced: (String) -> Unit = {})
+    /**
+     * Who to call; [onPlaced] gets the new call's id (to tick off a reminder / queue item);
+     * [onFailed]: the call wasn't placed (a queue gives the person back).
+     */
+    class Dial(val userId: String, val phone: String, val label: String, val onFailed: () -> Unit = {}, val onPlaced: (String) -> Unit = {})
     var waitingForPermission by remember { mutableStateOf<Dial?>(null) }
 
     // Through the phone's dialer: the app finds and uploads the dialer's recording.
@@ -174,8 +182,10 @@ private fun MainNav(graph: Graph, opens: Opens) {
                 nav.navigate("call/${pending.callId}") { launchSingleTop = true }
                 context.startActivity(graph.calls.dialIntent(d.phone))
             } catch (e: ApiException) {
+                d.onFailed()
                 snackbar.showSnackbar(e.message ?: "Couldn't start the call")
             } catch (e: ActivityNotFoundException) {
+                d.onFailed()
                 snackbar.showSnackbar("This phone can't place calls")
             }
         }
@@ -185,7 +195,10 @@ private fun MainNav(graph: Graph, opens: Opens) {
         val d = waitingForPermission
         waitingForPermission = null
         if (granted && d != null) place(d)
-        else if (!granted) scope.launch { snackbar.showSnackbar("Allow phone calls to call from the app") }
+        else if (!granted) {
+            d?.onFailed?.invoke()
+            scope.launch { snackbar.showSnackbar("Allow phone calls to call from the app") }
+        }
     }
 
     fun placeWithDialer(d: Dial) {
@@ -211,7 +224,10 @@ private fun MainNav(graph: Graph, opens: Opens) {
                 nav.navigate("call/${call.id}") { launchSingleTop = true }
             } catch (e: ApiException) {
                 if (e.status == 503) placeWithDialer(d)
-                else snackbar.showSnackbar(e.message ?: "Couldn't place the call")
+                else {
+                    d.onFailed()
+                    snackbar.showSnackbar(e.message ?: "Couldn't place the call")
+                }
             } finally {
                 placing = false
             }
@@ -228,51 +244,83 @@ private fun MainNav(graph: Graph, opens: Opens) {
         startCall(Dial(r.userId, r.phone.orEmpty(), r.title) { callId -> reminderDone(r.id, callId) })
     }
 
-    // The call queue (kept on this phone): start one, call its people one by one.
-    // A queue with people still to call is never replaced without asking.
-    var queueOffer by remember { mutableStateOf<List<QueueItem>?>(null) }
-    var queueOpenLeft by remember { mutableIntStateOf(0) }
-    fun openQueue(items: List<QueueItem>, add: Boolean) = scope.launch {
-        val fresh = items.distinctBy { it.key }
-        graph.prefs.updateQueue { q ->
-            if (!add) fresh
-            else {
-                // Already waiting: kept where it is. Called / skipped before: in again, at the end.
-                val waiting = q.filter { it.open }.map { it.key }.toSet()
-                q.filterNot { !it.open && fresh.any { f -> f.key == it.key } } + fresh.filter { it.key !in waiting }
-            }
-        }
-        nav.navigate("queue") { launchSingleTop = true }
+    // Call queues (1.10): on the server, shared by every agent. Adding people asks which queue —
+    // one there is, or a new one (title, description optional).
+    var adding by remember { mutableStateOf<List<QueueEntry>?>(null) }
+    var addingBusy by remember { mutableStateOf(false) }
+    fun startQueue(entries: List<QueueEntry>) {
+        if (entries.isNotEmpty()) adding = entries.distinctBy { it.reminderId ?: it.userId }
     }
-    fun startQueue(items: List<QueueItem>) = scope.launch {
-        val left = graph.prefs.queue.first().count { it.open }
-        if (left == 0) openQueue(items, add = false)
-        else { queueOpenLeft = left; queueOffer = items }
-    }
-    queueOffer?.let { items ->
-        AlertDialog(
-            onDismissRequest = { queueOffer = null },
-            title = { Text("You already have a call queue", style = fig(18, FontWeight.Bold)) },
-            text = { Text("$queueOpenLeft still to call in it. Add these ${items.distinctBy { it.key }.size} to it, or start a new queue?", style = fig(15)) },
-            confirmButton = {
-                TextButton(onClick = { queueOffer = null; openQueue(items, add = true) }) { Text("Add to it", style = fig(15, FontWeight.Bold, Tokens.Blue)) }
+    adding?.let { entries ->
+        AddToQueueSheet(
+            graph, count = entries.size, busy = addingBusy,
+            onDismiss = { adding = null },
+            onPick = { q ->
+                addingBusy = true
+                scope.launch {
+                    try {
+                        graph.api.addToQueue(q.id, entries)
+                        adding = null
+                        nav.navigate("queue/${q.id}") { launchSingleTop = true }
+                    } catch (e: ApiException) {
+                        snackbar.showSnackbar(e.message ?: "Couldn't add to the queue")
+                    } finally {
+                        addingBusy = false
+                    }
+                }
             },
-            dismissButton = {
-                Row {
-                    TextButton(onClick = { queueOffer = null }) { Text("Cancel", style = fig(15, FontWeight.Bold, Tokens.Muted)) }
-                    TextButton(onClick = { queueOffer = null; openQueue(items, add = false) }) { Text("Start new", style = fig(15, FontWeight.Bold, Tokens.Red)) }
+            onNew = { title, description ->
+                addingBusy = true
+                scope.launch {
+                    try {
+                        val q = graph.api.createQueue(title, description, graph.prefs.current().agentName, entries)
+                        adding = null
+                        nav.navigate("queue/${q.id}") { launchSingleTop = true }
+                    } catch (e: ApiException) {
+                        snackbar.showSnackbar(e.message ?: "Couldn't make the queue")
+                    } finally {
+                        addingBusy = false
+                    }
                 }
             },
         )
     }
-    val onCallQueued: (QueueItem) -> Unit = { item ->
-        startCall(Dial(item.userId, item.phone, item.label) { callId ->
-            // Called (placed). Its notes later say whether they picked up (CallNotesViewModel).
-            scope.launch {
-                graph.prefs.updateQueue { q -> q.map { if (it.key == item.key) it.copy(status = "called", callId = callId) else it } }
+    // A person in a queue: take them (another agent calling them already → say so), place the
+    // call, tell the server it's placed (a reminder they came from is then done), or give them
+    // back if the call couldn't be placed.
+    fun callFromQueue(queueId: String, item: QueueItemDto, refresh: () -> Unit) {
+        if (placing) return
+        scope.launch {
+            val agent = graph.prefs.current().agentName
+            try {
+                graph.api.startQueueItem(queueId, item.id, agent)
+            } catch (e: ApiException) {
+                refresh()
+                snackbar.showSnackbar(e.message ?: "Couldn't start the call")
+                return@launch
             }
-            item.reminderId?.let { reminderDone(it, callId) }
-        })
+            startCall(
+                Dial(
+                    item.userId, item.phone, item.label,
+                    onFailed = { scope.launch { runCatching { graph.api.releaseQueueItem(queueId, item.id) }; refresh() } },
+                ) { callId -> scope.launch { runCatching { graph.api.placedQueueItem(queueId, item.id, callId, agent) } } },
+            )
+        }
+    }
+
+    // The queue this phone kept itself (1.4–1.9) moves to the server once, as it was — who was
+    // called, skipped or didn't pick up — as "<agent>'s queue". The phone's copy goes only after
+    // the server has it (offline: next start).
+    LaunchedEffect(Unit) {
+        val local = graph.prefs.queue.first()
+        if (local.isEmpty()) return@LaunchedEffect
+        val agent = graph.prefs.current().agentName
+        runCatching {
+            graph.api.createQueue(
+                "$agent's queue", "Moved from this phone", agent,
+                local.map { QueueEntry(it.userId, it.reminderId, it.note, it.status, it.callId) }, keepState = true,
+            )
+        }.onSuccess { graph.prefs.setQueue(emptyList()) }
     }
 
     val callToOpen by opens.call.collectAsStateWithLifecycle()
@@ -365,7 +413,7 @@ private fun MainNav(graph: Graph, opens: Opens) {
                         vm = viewModel { ShopsViewModel(graph) },
                         onOpen = { id -> nav.navigate("shop/$id") },
                         onCall = onCall,
-                        onQueue = { owners -> startQueue(owners.map { o -> QueueItem(o.id, o.phone, o.shopName ?: o.name ?: "+91 ${o.phone}") }) },
+                        onQueue = { owners -> startQueue(owners.map { o -> QueueEntry(o.id) }) },
                         onReminders = { nav.navigate("reminders") { launchSingleTop = true } },
                     )
                 }
@@ -378,9 +426,9 @@ private fun MainNav(graph: Graph, opens: Opens) {
                         onOpenShop = { nav.navigate("shop/$it") },
                         onCallReminder = onCallReminder,
                         onQueueReminders = { rs ->
-                            startQueue(rs.map { r -> QueueItem(r.userId, r.phone.orEmpty(), r.title, reminderId = r.id, note = r.note.ifBlank { null }) })
+                            startQueue(rs.map { r -> QueueEntry(r.userId, reminderId = r.id, note = r.note.ifBlank { null }) })
                         },
-                        onOpenQueue = { nav.navigate("queue") { launchSingleTop = true } },
+                        onOpenQueue = { nav.navigate("queues") { launchSingleTop = true } },
                         onAllReminders = { nav.navigate("reminders") { launchSingleTop = true } },
                     )
                 }
@@ -393,18 +441,30 @@ private fun MainNav(graph: Graph, opens: Opens) {
                         onOpenShop = { nav.navigate("shop/$it") },
                         onCallReminder = onCallReminder,
                         onQueueReminders = { rs ->
-                            startQueue(rs.map { r -> QueueItem(r.userId, r.phone.orEmpty(), r.title, reminderId = r.id, note = r.note.ifBlank { null }) })
+                            startQueue(rs.map { r -> QueueEntry(r.userId, reminderId = r.id, note = r.note.ifBlank { null }) })
                         },
                     )
                 }
             }
-            composable("queue") {
+            composable("queues") {
+                Box(Modifier.statusBarsPadding()) {
+                    QueuesScreen(
+                        viewModel { QueuesViewModel(graph) },
+                        onBack = { if (!nav.popBackStack()) nav.navigate("calls") },
+                        onOpen = { nav.navigate("queue/$it") },
+                    )
+                }
+            }
+            composable("queue/{id}") { entry ->
+                val id = entry.arguments?.getString("id").orEmpty()
+                val agent by remember { graph.prefs.settings.map { it.agentName } }.collectAsStateWithLifecycle("")
                 Box(Modifier.statusBarsPadding()) {
                     QueueScreen(
-                        graph,
+                        viewModel(key = "queue-$id") { QueueViewModel(graph, id) },
                         placing = placing,
-                        onBack = { if (!nav.popBackStack()) nav.navigate("calls") },
-                        onCall = onCallQueued,
+                        agentName = agent,
+                        onBack = { if (!nav.popBackStack()) nav.navigate("queues") },
+                        onCall = { item, refresh -> callFromQueue(id, item, refresh) },
                         onOpenShop = { nav.navigate("shop/$it") },
                     )
                 }

@@ -37,7 +37,7 @@ import androidx.lifecycle.viewModelScope
 import com.dailyworks.mylaundry.support.Graph
 import com.dailyworks.mylaundry.support.data.ApiException
 import com.dailyworks.mylaundry.support.data.CallDto
-import com.dailyworks.mylaundry.support.data.QueueItem
+import com.dailyworks.mylaundry.support.data.QueueDto
 import com.dailyworks.mylaundry.support.data.ReminderAlarms
 import com.dailyworks.mylaundry.support.data.ReminderDto
 import com.dailyworks.mylaundry.support.ui.components.CallCard
@@ -73,14 +73,15 @@ data class CallsUi(
     val error: String? = null,
     /** Open reminders due by the end of today (overdue ones included), soonest first. */
     val scheduled: List<ReminderDto> = emptyList(),
-    val queue: List<QueueItem> = emptyList(),
+    /** Call queues on the server (1.10). */
+    val queues: List<QueueDto> = emptyList(),
     val editing: ReminderDto? = null,
     val saving: Boolean = false,
     val message: String? = null,
 ) {
     val shownScheduled get() = if (mine) scheduled.filter { it.agentName == agent } else scheduled
-    /** Still to reach: next in line, or didn't pick up last time. */
-    val queueLeft get() = queue.count { it.open }
+    /** Still to reach across the queues: next in line, being called, or didn't pick up. */
+    val queueLeft get() = queues.sumOf { it.left }
 }
 
 class CallsViewModel(private val graph: Graph, private val appContext: android.content.Context) : ViewModel() {
@@ -92,7 +93,6 @@ class CallsViewModel(private val graph: Graph, private val appContext: android.c
             _ui.update { it.copy(agent = graph.prefs.settings.first().agentName) }
             load()
         }
-        viewModelScope.launch { graph.prefs.queue.collect { q -> _ui.update { it.copy(queue = q) } } }
     }
 
     fun setMine(mine: Boolean) {
@@ -112,6 +112,7 @@ class CallsViewModel(private val graph: Graph, private val appContext: android.c
             }
         }
         loadScheduled()
+        viewModelScope.launch { runCatching { graph.api.queues() }.onSuccess { q -> _ui.update { it.copy(queues = q) } } }
     }
 
     private fun loadScheduled() {
@@ -217,21 +218,25 @@ fun CallsScreen(
                         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        // Any queue, even one called through: open it to call again or clear it.
-                        if (ui.queue.isNotEmpty()) {
+                        // The call queues (shared by every agent): always here, to open one or make one.
+                        run {
                             item(key = "queue") {
                                 Row(
                                     Modifier.fillMaxWidth().background(Tokens.Ink, RoundedCornerShape(14.dp)).clickable(onClick = onOpenQueue).padding(14.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Column(Modifier.weight(1f)) {
-                                        Text("Call queue", style = fig(16, FontWeight.Bold, Tokens.OnDark))
+                                        Text("Call queues", style = fig(16, FontWeight.Bold, Tokens.OnDark))
                                         Text(
-                                            if (ui.queueLeft > 0) "${ui.queueLeft} left to call" else "Everyone called · open to clear",
+                                            when {
+                                                ui.queues.isEmpty() -> "Make one, or pick shops in Shops (Select)"
+                                                ui.queueLeft > 0 -> "${ui.queueLeft} to call in ${ui.queues.count { it.left > 0 }} of ${ui.queues.size} queue${if (ui.queues.size == 1) "" else "s"}"
+                                                else -> "${ui.queues.size} queue${if (ui.queues.size == 1) "" else "s"} · everyone called"
+                                            },
                                             style = fig(13, color = Tokens.OnDark.copy(alpha = 0.8f)),
                                         )
                                     }
-                                    Text(if (ui.queueLeft > 0) "Continue →" else "Open →", style = fig(15, FontWeight.Bold, Tokens.OnDark))
+                                    Text("Open →", style = fig(15, FontWeight.Bold, Tokens.OnDark))
                                 }
                             }
                         }
