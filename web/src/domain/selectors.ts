@@ -42,20 +42,30 @@ export function orderNo(o: { id: number; serialNo?: string }): string {
 }
 
 /**
- * The serial a new order starts with: the latest order's number (its serial,
- * else its id) + 1, keeping any prefix ("A-102" → "A-103", "0099" → "0100").
- * The first order — or a last number with no digits to bump — starts at the
- * order number it will get.
+ * The serial a new order starts with: the highest number (its serial, else its
+ * id) among the latest day's orders + 1, keeping any prefix ("A-102" → "A-103",
+ * "0099" → "0100"). The first order — or numbers with no digits to bump —
+ * starts at the order number it will get.
+ *
+ * Not "the highest order number's serial": since Android 1.0.20 a shop with
+ * staff numbers its orders from each phone's own block, so order numbers aren't
+ * in the order orders were made (10 Nov: a staff order 1340 with serial 14297,
+ * then 1308, 1309, 1310 all got 14298). Port twin: Android Selectors.nextSerial.
  */
 export function nextSerial(state: LaundryState, nextOrderId: number): string {
-  let last: Order | undefined;
+  let lastDay = "";
+  for (const o of state.orders) if (o.createdOn > lastDay) lastDay = o.createdOn;
+  let best: { prefix: string; digits: string; n: bigint } | null = null;
   for (const o of state.orders) {
-    if (!last || o.id > last.id) last = o;
+    if (o.createdOn !== lastDay) continue;
+    const m = orderNo(o).match(/^(.*?)(\d+)$/);
+    if (!m) continue;
+    const n = BigInt(m[2]);
+    if (!best || n > best.n) best = { prefix: m[1], digits: m[2], n };
   }
-  const m = last ? orderNo(last).match(/^(.*?)(\d+)$/) : null;
-  if (!m) return String(nextOrderId);
-  const n = String(parseInt(m[2], 10) + 1).padStart(m[2].length, "0");
-  return (m[1] + n).slice(0, 12);
+  if (!best) return String(nextOrderId);
+  const next = String(best.n + BigInt(1)).padStart(best.digits.length, "0");
+  return (best.prefix + next).slice(0, 12);
 }
 
 /** "3 items", "2 kg", "2 kg (12 clothes)", "3 items + 2 kg", "Not itemised". */

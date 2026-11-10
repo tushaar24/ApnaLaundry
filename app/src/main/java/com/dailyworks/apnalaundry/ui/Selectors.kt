@@ -56,18 +56,29 @@ object Selectors {
         l.clothes.filter { it.qty > 0 }.joinToString(" · ") { "${it.name} × ${it.qty}" }
 
     /**
-     * The serial a new order starts with: the latest order's number (its
-     * serial, else its id) + 1, keeping any prefix and zero-padding ("A-102" →
-     * "A-103", "0099" → "0100"). The first order — or a last number with no
-     * digits to bump — starts at the order number it will get.
-     * Port twin: web Sel.nextSerial.
+     * The serial a new order starts with: the highest number (its serial, else
+     * its id) among the latest day's orders + 1, keeping any prefix and
+     * zero-padding ("A-102" → "A-103", "0099" → "0100"). The first order — or
+     * numbers with no digits to bump — starts at the order number it will get.
+     *
+     * Not "the highest order number's serial": since 1.0.20 a shop with staff
+     * numbers its orders from each phone's own block, so order numbers aren't
+     * in the order orders were made (10 Nov: FAB DRYCLEAN — a staff order 1340
+     * with serial 14297, then the owner's 1308, 1309, 1310 all got 14298).
+     * The latest day keeps a shop that starts its serials again (each day /
+     * month) on the new run. Port twin: web Sel.nextSerial.
      */
     fun nextSerial(state: LaundryState): String {
         val first = state.shop.nextOrder.toString()
-        val last = state.orders.maxByOrNull { it.id } ?: return first
-        val m = Regex("^(.*?)(\\d+)$").find(last.no()) ?: return first
-        val (prefix, digits) = m.destructured
-        val next = (digits.toBigInteger() + java.math.BigInteger.ONE).toString().padStart(digits.length, '0')
+        if (state.orders.isEmpty()) return first
+        val lastDay = state.orders.maxOf { it.createdOn }
+        val pattern = Regex("^(.*?)(\\d+)$")
+        val best = state.orders.asSequence()
+            .filter { it.createdOn == lastDay }
+            .mapNotNull { o -> pattern.find(o.no())?.destructured?.let { (prefix, digits) -> Triple(prefix, digits, digits.toBigInteger()) } }
+            .maxByOrNull { it.third } ?: return first
+        val (prefix, digits, n) = best
+        val next = (n + java.math.BigInteger.ONE).toString().padStart(digits.length, '0')
         return (prefix + next).take(12)
     }
 
