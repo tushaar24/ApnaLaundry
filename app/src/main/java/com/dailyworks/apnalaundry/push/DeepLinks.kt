@@ -29,6 +29,8 @@ import kotlinx.coroutines.flow.StateFlow
  *   mylaundry://add-shop                  Add a shop
  *   mylaundry://assistant                 Ask (Home where it isn't on)
  *   mylaundry://expenses                  Expenses (1.0.19; older apps open Home)
+ *   mylaundry://leads                     Get customers (1.0.22; older apps open Home)
+ *   mylaundry://lead/<id>                 one lead — the push for a new customer points here
  *
  * The same screens as https App Links, for WhatsApp buttons and SMS (which
  * can't carry a custom scheme) — verified through mylaundry.work's
@@ -67,12 +69,14 @@ object DeepLinks {
     private val ALIASES = mapOf(
         "services" to "rates", "orders" to "home", "khata" to "customers", "plans" to "subscription", "ask" to "assistant",
         "shop" to "settings", "demo-video" to "demo", "video" to "demo", "bill-fields" to "bill-details", "bill-setup" to "bill-design",
+        "get-customers" to "leads", "customers-leads" to "leads",
     )
     val SCREENS = setOf(
         "home", "new-order", "customers", "customer", "combined-bill", "order", "bill", "earnings",
         "subscription", "rates", "add-service", "settings", "bill-design", "bill-details", "add-shop", "assistant", "demo", "expenses",
+        "leads", "lead",
     )
-    private val WITH_ID = setOf("customer", "combined-bill", "order", "bill")
+    private val WITH_ID = setOf("customer", "combined-bill", "order", "bill", "lead")
 
     private val _pending = MutableStateFlow<Target?>(null)
     val pending: StateFlow<Target?> = _pending

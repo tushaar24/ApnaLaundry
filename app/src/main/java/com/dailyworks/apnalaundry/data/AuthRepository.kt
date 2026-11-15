@@ -42,6 +42,8 @@ class AuthRepository(
     private val shops: com.dailyworks.apnalaundry.data.shops.ShopDirectory,
     private val shopsRepo: com.dailyworks.apnalaundry.data.shops.ShopsRepository,
     private val experiments: com.dailyworks.apnalaundry.data.experiments.ExperimentsRepository,
+    private val devices: com.dailyworks.apnalaundry.data.leads.DeviceRegistrar,
+    private val leads: com.dailyworks.apnalaundry.data.leads.LeadsRepository,
 ) {
     /** In-flight OTP; held by the ViewModel between the two steps. */
     sealed interface Challenge {
@@ -406,6 +408,9 @@ class AuthRepository(
         prefs.accessToken.first()?.let { token ->
             runCatching { api.logout(token) } // best-effort server-side revoke
         }
+        // Get customers (1.0.22): this phone stops getting the account's lead pushes; its leads go.
+        runCatching { devices.forget() }
+        leads.clear()
         Analytics.loggedOut()
         CrashReporting.setUser(null)
         MetaEvents.clearIdentity()

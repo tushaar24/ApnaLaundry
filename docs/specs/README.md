@@ -30,6 +30,8 @@ Implementation / Testing Decisions → Out of Scope → Further Notes).
 | [billing-payments-khata.md](billing-payments-khata.md) | Bill, payments, khata ledger, customers | ✅ Built |
 | [earnings.md](earnings.md) | Earnings reconciliation | ✅ Built (chart pending) |
 | [rate-card-settings.md](rate-card-settings.md) | Rate card editor, settings | ✅ Built |
+| [staff.md](staff.md) | Staff logins + sync v2 | ✅ Built (1.0.20) |
+| [leads.md](leads.md) | Customers from Google ads, wallet, pay per lead | 🚧 Building (1.0.22) |
 | [pending.md](pending.md) | What's left, out of scope, roadmap | — |
 
 ## Status legend

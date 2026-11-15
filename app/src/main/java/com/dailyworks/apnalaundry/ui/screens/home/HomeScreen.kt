@@ -258,6 +258,8 @@ fun HomeScreen(shopVm: ShopViewModel, navigator: AppNavigator) {
         if (demoOpen) com.dailyworks.apnalaundry.ui.components.DemoVideoDialog(demoUrl) { demoOpen = false }
         // Staff (1.0.20): "Ramesh · staff at Sharma Laundry", and the once-only welcome.
         com.dailyworks.apnalaundry.ui.screens.staff.StaffHomeTop()
+        // Get customers (1.0.22): a lead waiting for the owner — the "ride request" card.
+        com.dailyworks.apnalaundry.ui.screens.leads.LeadsHomeCard(navigator)
 
         val noOrders = state.orders.isEmpty()
 

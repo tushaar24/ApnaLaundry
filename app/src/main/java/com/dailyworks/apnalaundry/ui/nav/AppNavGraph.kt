@@ -84,7 +84,7 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
             "earnings" -> acc.can(StaffPermission.SEE_EARNINGS)
             "rates", "add-service" -> acc.can(StaffPermission.EDIT_RATES)
             "expenses" -> acc.can(StaffPermission.EXPENSES)
-            "subscription", "bill-design", "bill-details", "add-shop", "assistant", "demo" -> acc.isOwner
+            "subscription", "bill-design", "bill-details", "add-shop", "assistant", "demo", "leads", "lead" -> acc.isOwner
             else -> true
         }
         if (!allowed) { navigator.openHome(); return@LaunchedEffect }
@@ -105,6 +105,8 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
             "bill-design" -> navigator.openBillDesign()
             "add-shop" -> navigator.openAddShop("push")
             "expenses" -> navigator.openExpenses("push")
+            "leads" -> navigator.openLeads("push")
+            "lead" -> navigator.openLead(t.id, "push")
             "assistant" -> if (prefs.assistantOn.first()) navigator.openAssistant("push") else navigator.openHome()
             else -> navigator.openHome()
         }
@@ -143,6 +145,13 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
     LaunchedEffect(Unit) { appConfig.refresh() }
     // The owner's shops (multi-shop): a shop added on another phone shows up here.
     LaunchedEffect(li) { if (li && !staffOnly) shopVm.refreshShops() }
+    // Get customers (1.0.22): this phone's push token goes to the server (a new lead is pushed to it),
+    // and a lead already waiting shows on Home — when the feature is on for this owner.
+    val deviceRegistrar: com.dailyworks.apnalaundry.data.leads.DeviceRegistrar = koinInject()
+    val leadsRepo: com.dailyworks.apnalaundry.data.leads.LeadsRepository = koinInject()
+    val leadsOn by prefs.leadsEnabled.collectAsStateWithLifecycle(initialValue = false)
+    LaunchedEffect(li) { if (li && !staffOnly) runCatching { deviceRegistrar.sync() } }
+    LaunchedEffect(li, leadsOn) { if (li && !staffOnly && leadsOn) leadsRepo.refresh() }
 
     // Staff (1.0.20): a removed staff-only phone — its shop's data goes the moment the login ends.
     LaunchedEffect(li) { if (!li) authRepo.dropStaffShopIfLoggedOut() }
@@ -346,6 +355,24 @@ fun AppNavGraph(navController: NavHostController, navigator: AppNavigator, shopV
             arguments = listOf(navArgument("id") { type = NavType.StringType; defaultValue = "" }),
         ) { entry ->
             com.dailyworks.apnalaundry.ui.screens.expenses.ExpenseFormScreen(shopVm, navigator, entry.arguments?.getString("id").orEmpty())
+        }
+
+        composable(
+            Routes.LEADS,
+            arguments = listOf(navArgument("from") { type = NavType.StringType; defaultValue = "push" }),
+        ) { entry ->
+            com.dailyworks.apnalaundry.ui.screens.leads.LeadsScreen(shopVm, navigator, from = entry.arguments?.getString("from") ?: "push")
+        }
+        composable(
+            Routes.LEAD,
+            arguments = listOf(
+                navArgument("id") { type = NavType.StringType },
+                navArgument("from") { type = NavType.StringType; defaultValue = "push" },
+            ),
+        ) { entry ->
+            com.dailyworks.apnalaundry.ui.screens.leads.LeadsScreen(
+                shopVm, navigator, from = entry.arguments?.getString("from") ?: "push", openLeadId = entry.arguments?.getString("id").orEmpty(),
+            )
         }
 
         composable(Routes.SUBSCRIPTION) {

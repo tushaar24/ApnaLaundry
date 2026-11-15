@@ -40,11 +40,34 @@ object RazorpayCheckout {
         }
         checkout.open(activity, options)
     }
+
+    /**
+     * Standard Checkout for a one-time Razorpay Order (1.0.22: a lead paid now, or money added to
+     * the wallet — routes/laundry-leads.js makes the order). The result carries the order id and
+     * signature the server verifies.
+     */
+    fun launchOrder(activity: Activity, keyId: String, orderId: String, amountPaise: Int, description: String, contact: String?) {
+        if (keyId.isBlank() || orderId.isBlank()) return
+        val checkout = Checkout()
+        checkout.setKeyID(keyId)
+        val options = JSONObject().apply {
+            put("name", "MyLaundry")
+            put("description", description)
+            put("order_id", orderId)
+            put("amount", amountPaise)
+            put("currency", "INR")
+            put("theme", JSONObject().put("color", "#1D4ED8"))
+            put("retry", JSONObject().put("enabled", true).put("max_count", 2))
+            if (!contact.isNullOrBlank()) put("prefill", JSONObject().put("contact", if (contact.startsWith("+")) contact else "+91$contact"))
+        }
+        checkout.open(activity, options)
+    }
 }
 
 /** The result of a Razorpay Checkout attempt, surfaced from the Activity. */
 sealed interface CheckoutResult {
-    data class Success(val paymentId: String?) : CheckoutResult
+    /** [orderId] + [signature] come with an Order payment (leads / wallet, 1.0.22); a subscription has neither. */
+    data class Success(val paymentId: String?, val orderId: String? = null, val signature: String? = null) : CheckoutResult
     data class Failure(val code: Int, val description: String?) : CheckoutResult
 }
 

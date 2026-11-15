@@ -134,7 +134,7 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
     }
 
     override fun onPaymentSuccess(razorpayPaymentId: String?, paymentData: PaymentData?) {
-        checkoutBridge.post(CheckoutResult.Success(razorpayPaymentId))
+        checkoutBridge.post(CheckoutResult.Success(razorpayPaymentId, paymentData?.orderId, paymentData?.signature))
     }
 
     override fun onPaymentError(code: Int, response: String?, paymentData: PaymentData?) {

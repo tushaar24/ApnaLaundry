@@ -55,11 +55,16 @@ val appModule = module {
     single { com.dailyworks.apnalaundry.data.attribution.InstallAttributionRepository(androidContext(), get(), get(), get()) }
     single { AssistantApi(get(), get(), get()) }
     single { com.dailyworks.apnalaundry.data.AppConfigRepository(get(), get()) }
+    // Get customers (1.0.22): leads, the wallet, Google connection; this phone's push token.
+    single { com.dailyworks.apnalaundry.data.leads.LeadsApi(get(), get()) }
+    single { com.dailyworks.apnalaundry.data.leads.LeadsRepository(get(), get()) }
+    single { com.dailyworks.apnalaundry.data.leads.DeviceRegistrar(androidContext(), get(), get()) }
     factory { VoiceRecorder(androidContext()) }
-    single { AuthRepository(get(), get(), get(), get(), get(), get(), get(), get()) }
+    single { AuthRepository(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
 
     viewModel { ShopViewModel(get(), get(), get(), get(), get(), get(), get()) }
     viewModel { AuthViewModel(get()) }
     viewModel { PaywallViewModel(get(), get(), get()) }
+    viewModel { com.dailyworks.apnalaundry.ui.screens.leads.LeadsViewModel(get(), get()) }
     viewModel { AssistantViewModel(get(), get(), get(), get(), get()) }
 }

@@ -23,6 +23,8 @@ data class ExperimentGroups(
     val billContactsAsk: String? = null,
     // Staff (1.0.20): Settings → Staff for this owner; absent = the "Coming later" card.
     val staff: Boolean = false,
+    // Get customers (1.0.22): Settings → Get customers for this owner; absent = hidden.
+    val leads: Boolean = false,
 )
 
 /**
@@ -97,6 +99,7 @@ class ExperimentsRepository(
         prefs.setBillContactsAsk(ask)
         Analytics.setBillContactsAsk(ask)
         prefs.setStaffEnabled(groups.staff)
+        prefs.setLeadsEnabled(groups.leads)
     }
 
     /** App start: stamp the saved groups on events before the fetch answers. */

@@ -939,4 +939,40 @@ object Analytics {
 
     fun subscriptionCancelRequested(plan: String) =
         track("Subscription Cancel Requested", mapOf("plan" to plan))
+
+    // ---- Get customers (1.0.22): customers from our Google ads, paid per lead (docs/specs/leads.md) ----
+    // Money-confirmed twins come from the server: Lead Offered / Lead Paid / Lead Declined / Lead Expired /
+    // Lead Refunded / Wallet Topped Up / GBP Connected (platform: backend).
+
+    /** from: settings | home_card | push. */
+    fun leadsEntryTapped(from: String) = track("Leads Entry Tapped", mapOf("from" to from))
+    fun leadsOpened(from: String, offered: Int, paid: Int, balancePaise: Int, gbp: String) =
+        track("Leads Opened", mapOf("from" to from, "offered" to offered, "paid" to paid, "wallet_paise" to balancePaise, "gbp" to gbp))
+    fun leadViewed(leadId: String, pricePaise: Int, from: String) =
+        track("Lead Viewed", mapOf("lead_id" to leadId, "price" to pricePaise, "from" to from))
+    /** how: wallet | razorpay (pay now) | topup (add money and pay). */
+    fun leadPayTapped(leadId: String, pricePaise: Int, how: String, balancePaise: Int) =
+        track("Lead Pay Tapped", mapOf("lead_id" to leadId, "price" to pricePaise, "how" to how, "wallet_paise" to balancePaise))
+    /** The app saw the lead paid (the number shown); via: wallet | razorpay. */
+    fun leadPaid(leadId: String, pricePaise: Int, via: String) =
+        track("Lead Pay Succeeded", mapOf("lead_id" to leadId, "price" to pricePaise, "via" to via))
+    /** Razorpay Checkout closed unpaid; code 0 = the owner closed it. */
+    fun leadPayFailed(leadId: String?, amountPaise: Int, code: Int) =
+        track("Lead Pay Failed", mapOf("lead_id" to leadId, "amount" to amountPaise, "code" to code))
+    /** The wallet was short for the lead: pay now / add money shown. */
+    fun leadPayBlocked(leadId: String, shortPaise: Int) = track("Lead Pay Blocked", mapOf("lead_id" to leadId, "short_paise" to shortPaise))
+    fun leadDeclined(leadId: String, pricePaise: Int, reason: String) =
+        track("Lead Not Now Tapped", mapOf("lead_id" to leadId, "price" to pricePaise, "reason" to reason))
+    fun walletTopupStarted(amountPaise: Int, forLead: Boolean) = track("Wallet Topup Started", mapOf("amount" to amountPaise, "for_lead" to forLead))
+    fun walletToppedUp(amountPaise: Int, forLead: Boolean) = track("Wallet Topup Succeeded", mapOf("amount" to amountPaise, "for_lead" to forLead))
+    fun leadCallTapped(leadId: String) = track("Lead Call Tapped", mapOf("lead_id" to leadId))
+    fun leadWhatsAppTapped(leadId: String) = track("Lead WhatsApp Tapped", mapOf("lead_id" to leadId))
+    /** existing: the number was already a customer (opened them instead of adding). */
+    fun leadSavedAsCustomer(leadId: String, existing: Boolean) = track("Lead Saved As Customer", mapOf("lead_id" to leadId, "existing" to existing))
+    /** how: google | maps_link. */
+    fun gbpConnectTapped(how: String) = track("GBP Connect Tapped", mapOf("how" to how))
+    fun gbpConnected(how: String, locations: Int) = track("GBP Connect Succeeded", mapOf("how" to how, "locations" to locations))
+    fun gbpConnectFailed(how: String, reason: String?) = track("GBP Connect Failed", mapOf("how" to how, "reason" to (reason ?: "cancelled")))
+    fun gbpDisconnected() = track("GBP Disconnected")
+    fun leadsNotificationsNudgeTapped() = track("Leads Notifications Nudge Tapped")
 }

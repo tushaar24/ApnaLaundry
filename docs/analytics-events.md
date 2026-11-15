@@ -448,6 +448,23 @@ Details and the analysis plan: `docs/deploy/2026-10-14-free-orders-ab.md`.
 Profile property `subscription_status` (+ `plan`) is kept current from the
 webhook, for retention/win-back journeys.
 
+**Get customers / leads (Android 1.0.22, from 2026-11-15).** Customers from our
+Google ads on the owner's listing, qualified by the team and sent to the app for
+cost + ₹10 (`docs/specs/leads.md`). App events: `Leads Entry Tapped {from:
+settings|home_card|push}`, `Leads Opened {from, offered, paid, wallet_paise, gbp}`,
+`Lead Viewed {lead_id, price, from}`, `Lead Pay Tapped {lead_id, price, how:
+wallet|razorpay|topup, wallet_paise}`, `Lead Pay Succeeded {lead_id, price, via}`,
+`Lead Pay Failed {lead_id, amount, code}` (code 0 = closed Checkout), `Lead Pay
+Blocked {lead_id, short_paise}` (wallet short), `Lead Not Now Tapped`, `Wallet Topup
+Started / Succeeded {amount, for_lead}`, `Lead Call Tapped`, `Lead WhatsApp Tapped`,
+`Lead Saved As Customer {existing}`, `GBP Connect Tapped / Succeeded / Failed {how:
+google|maps_link}`, `GBP Disconnected`, `Leads Notifications Nudge Tapped`. Server
+(money-confirmed, platform `backend`): `Lead Offered {lead_id, price, cost, area,
+service, push, expires_min}`, `Lead Paid {lead_id, price, via}`, `Lead Declined`,
+`Lead Expired`, `Lead Cancelled`, `Lead Refunded`, `Lead Checkout Started`, `Wallet
+Topup Started`, `Wallet Topped Up {amount, purpose, source: app|webhook|sweep}`,
+`GBP Connected {how, locations, api_error}`.
+
 ## Where it lives
 
 - **Web**: `web/src/analytics/` — `clevertap.ts` (SDK loader, no-op until

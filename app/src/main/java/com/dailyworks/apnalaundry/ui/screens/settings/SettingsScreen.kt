@@ -176,6 +176,22 @@ fun SettingsScreen(shopVm: ShopViewModel, navigator: AppNavigator, onLogout: (on
                 }
             }
 
+            // Get customers (1.0.22): customers from our Google ads, paid per lead — where the server turns it on.
+            val leadsOn by prefs.leadsEnabled.collectAsStateWithLifecycle(initialValue = false)
+            if (leadsOn && acc.isOwner) AppCard {
+                Row(
+                    Modifier.fillMaxWidth().tap { Analytics.leadsEntryTapped("settings"); navigator.openLeads("settings") }.padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f).padding(end = 12.dp)) {
+                        Text(tr("Get customers"), style = fig(16, FontWeight.Bold))
+                        Text(tr("New customers from Google, sent to your phone — pay per customer"), style = fig(13, color = Tokens.Muted))
+                    }
+                    Text(tr("Open"), style = fig(15, FontWeight.Bold, Tokens.Blue))
+                }
+            }
+
             // Language: the whole app (and Ask) in it; saved on this phone.
             var languageOpen by remember { mutableStateOf(false) }
             AppCard {

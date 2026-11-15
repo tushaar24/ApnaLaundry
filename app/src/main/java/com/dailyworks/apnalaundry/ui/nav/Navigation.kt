@@ -27,6 +27,9 @@ object Routes {
     const val STAFF = "staff?from={from}"
     const val STAFF_MEMBER = "staff-member/{id}"
     const val STAFF_FORM = "staff-form?id={id}"
+    /** Get customers (1.0.22): the leads screen, and one lead opened (the push lands here). */
+    const val LEADS = "leads?from={from}"
+    const val LEAD = "lead/{id}?from={from}"
 }
 
 /** Thin typed wrapper over the NavController used by every screen. */
@@ -57,6 +60,9 @@ class AppNavigator(val nav: NavHostController) {
     fun openStaff(from: String) = push("staff?from=$from")
     fun openStaffMember(id: String) = push("staff-member/${android.net.Uri.encode(id)}")
     fun openStaffForm(id: String) = push("staff-form?id=${android.net.Uri.encode(id)}")
+    /** Get customers (1.0.22); [from] = settings | home_card | push. */
+    fun openLeads(from: String) = push("leads?from=$from")
+    fun openLead(id: String, from: String) = push("lead/${android.net.Uri.encode(id)}?from=$from")
 
     /**
      * Opens a screen — once. A double tap on a slow phone (or a tap on the
