@@ -1,6 +1,6 @@
 # Leads — customers from Google ads, paid per lead
 
-Status: 🚧 Building (owner's brief, 15 Nov 2026). Android 1.0.22 · backend branch `leads` · admin.mylaundry.work /leads.
+Status: ✅ Backend + admin LIVE 15 Nov 2026 (server 2aa30ef) for the owner's test numbers; Android 1.0.22 on prod awaiting the owner's AAB; Google sign-in awaits the owner's OAuth client.
 
 ## Problem
 
@@ -149,8 +149,8 @@ Assumptions made while building (change them in `backend/.env`, no app release):
 2. [x] Android: data layer + device registration, Leads screens, Home card, Settings card, nav +
        deep links, push channel, Razorpay orders, Google connect, analytics. *(1.0.22 on prod; translations pending — run tools/i18n/translate.py)*
 3. [x] admin.mylaundry.work: leads page + owner panel; deploy script patches the live files. *(laundry-dashboard/leads.js)*
-4. [ ] Deploy: `deploy/2026-11-15-leads.sh` (migrate, env, rebuild, dashboard patch, smoke) — written, NOT run.
-       Google OAuth client + GBP API access are the owner's steps (`docs/deploy/2026-11-15-leads.md`).
+4. [x] Deploy: `deploy/2026-11-15-leads.sh` — RUN 15 Nov 2026 (migration applied, backend 200, dashboard patched, smoke 401/401/401 + summary OK;
+       `LAUNDRY_LEADS_PHONES` = the owner's test numbers). Left: Google OAuth client + GBP API access (`docs/deploy/2026-11-15-leads.md`), `LAUNDRY_LEADS_PHONES=all`.
 
 ## Testing decisions
 
