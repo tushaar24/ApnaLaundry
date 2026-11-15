@@ -145,7 +145,7 @@ Assumptions made while building (change them in `backend/.env`, no app release):
 ## Build order
 
 1. [x] Server: tables, wallet + leads services, owner routes, admin routes, push, Google, webhook
-       branch, sweeps, experiments key, unit tests. *(courses branch `leads`; 72 tests; owner + admin flow run end to end on a throwaway Postgres, 15 Nov)*
+       branch, sweeps, experiments key, unit tests. *(courses branch `leads`; 66 tests; owner + admin flow run end to end on a throwaway Postgres, 15 Nov)*
 2. [x] Android: data layer + device registration, Leads screens, Home card, Settings card, nav +
        deep links, push channel, Razorpay orders, Google connect, analytics. *(1.0.22 on prod; translations pending — run tools/i18n/translate.py)*
 3. [x] admin.mylaundry.work: leads page + owner panel; deploy script patches the live files. *(laundry-dashboard/leads.js)*
