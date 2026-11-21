@@ -17,6 +17,8 @@ export type ActiveSheet =
       prefillName?: string;
       prefillPhone?: string;
       needAddress?: boolean;
+      /** Where it was opened (analytics): customer_top_bar | customer_page | order_menu | bill | address_card | … */
+      trigger?: string;
       onSaved?: (id: string) => void;
     }
   | { kind: "receive"; custId: string }

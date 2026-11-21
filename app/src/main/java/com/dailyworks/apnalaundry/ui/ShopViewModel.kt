@@ -466,13 +466,15 @@ class ShopViewModel(
     suspend fun loginPhone(): String = prefs.userPhone.first() ?: state.value.shop.phone
 
     // ---- commands whose result the caller needs ----
+    /** [editFrom]: where an edit of an existing customer was opened (analytics, "Customer Edited"). */
     fun saveCustomer(
         editId: String?, name: String, phone: String, address: String, oldBaaki: Int, fromList: Boolean,
+        editFrom: String = "other",
         onDone: (String) -> Unit,
     ) = viewModelScope.launch {
         invalidateUndo()
         // A staff shop still downloading has no shop row yet (its counters): say so, don't crash.
-        val (id, res) = runCatching { repo.saveCustomer(editId, name, phone, address, oldBaaki, fromList) }
+        val (id, res) = runCatching { repo.saveCustomer(editId, name, phone, address, oldBaaki, fromList, editFrom) }
             .getOrElse { if (it is NullPointerException) { publish(CmdResult(tr("Still loading the shop — try again in a moment"))); return@launch } else throw it }
         res?.let { publish(it) }
         sync.requestSync()

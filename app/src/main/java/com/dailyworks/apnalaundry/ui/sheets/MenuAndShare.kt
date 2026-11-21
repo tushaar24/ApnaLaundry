@@ -19,6 +19,7 @@ import androidx.compose.material.icons.outlined.Cancel
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.LocalShipping
+import androidx.compose.material.icons.outlined.ManageAccounts
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Print
 import androidx.compose.material.icons.outlined.SwapVert
@@ -88,6 +89,11 @@ fun OrderMenuSheet(
             if (o.status == OrderStatus.CREATED || o.status == OrderStatus.RECEIVED || o.status == OrderStatus.READY)
                 MenuRow(Icons.Outlined.LocalShipping, if (o.deliveryDate.isNotBlank()) tr("Reschedule delivery") else tr("Set delivery date")) { onOpen(ActiveSheet.Reschedule(o.id, "drop")) }
             MenuRow(Icons.Outlined.Person, tr("Open customer khata")) { onDismiss(); navigator.openCustomer(o.custId, "home") }
+            // A wrong name or number typed by mistake: fix it from the order too (the customer keeps every order).
+            if (acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.TAKE_ORDERS))
+                MenuRow(Icons.Outlined.ManageAccounts, if (phones) tr("Edit customer name / number") else tr("Edit customer name")) {
+                    onOpen(ActiveSheet.CustomerForm(editId = o.custId, ctx = "list", trigger = "order_menu"))
+                }
             if (phones) MenuRow(Icons.Filled.Call, tr("Call {name}", "name" to Selectors.firstName(c.name))) {
                 onDismiss()
                 runCatching { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:+91${c.phone}"))) }

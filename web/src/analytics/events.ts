@@ -119,6 +119,13 @@ export const Analytics = {
   customerAdded(entryPoint: "order" | "list", withOldBaaki: boolean) {
     rawTrack("Customer Added", { entry_point: entryPoint, with_old_baaki: withOldBaaki });
   },
+  /** An existing customer's details saved with something changed; [changed] = name, phone, address (in order). */
+  customerEdited(customerId: string, changed: string[], from: string, orders: number) {
+    rawTrack("Customer Edited", {
+      customer_id: customerId, changed: changed.join(","), from, orders,
+      name_changed: changed.includes("name"), phone_changed: changed.includes("phone"), address_changed: changed.includes("address"),
+    });
+  },
   reminderSent(customerId: string, amount: number) {
     rawTrack("Reminder Sent", { customer_id: customerId, amount });
   },

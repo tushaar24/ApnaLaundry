@@ -685,14 +685,29 @@ class LaundryRepository(
 
     // ---------------- customers ----------------
     /** Returns the customer id (new or existing on edit). */
+    /**
+     * [editId] set = change that customer's name / phone / address in place: the id stays, so
+     * their orders and khata (linked by id, no copy of the name or number) show the new details.
+     * A save that changes nothing writes nothing (no needless sync push). [editFrom] = where the
+     * edit was opened (analytics).
+     */
     suspend fun saveCustomer(
         editId: String?, name: String, phone: String, address: String, oldBaaki: Int, fromList: Boolean,
+        editFrom: String = "other",
     ): Pair<String, CmdResult?> {
         val undo = snapshot()
         if (editId != null) {
             val st = current()
             val c = st.customers.first { it.id == editId }
+            val changed = buildList {
+                if (c.name != name) add("name")
+                if (c.phone != phone) add("phone")
+                if (c.address != address) add("address")
+            }
+            if (changed.isEmpty()) return editId to null
+            // toEntity() stamps updatedAt = now and dirty = true: the next sync pushes it.
             customerDao.upsert(c.copy(name = name, phone = phone, address = address).toEntity())
+            Analytics.customerEdited(editId, changed, editFrom, st.orders.count { it.custId == editId })
             return editId to null
         }
         val id = db.withTransaction {

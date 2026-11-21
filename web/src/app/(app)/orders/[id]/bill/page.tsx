@@ -13,6 +13,7 @@ import { useLaundryState } from "@/data/store";
 import { useScreenView } from "@/analytics/useScreenView";
 import { AppCard, cls, Divider, OutlineButton, PrimaryButton, TopBar } from "@/ui/basics";
 import { downloadBill, sendBillOnWhatsApp, usePrepareBillSend } from "@/ui/billActions";
+import { IcEdit } from "@/ui/icons";
 import { SheetHost } from "@/ui/sheets/host";
 import type { ActiveSheet } from "@/ui/sheets/types";
 import { Shell, useNav } from "@/ui/shell";
@@ -76,8 +77,21 @@ function BillScreen({ orderId }: { orderId: number }) {
         {/* summary */}
         <AppCard>
           <div className="flex flex-col gap-1.5 p-4">
-            <span className="text-[17px] font-bold">{c.name}</span>
-            <span className="text-[13px] text-muted">+91 {Sel.fmtPhone(c.phone)}</span>
+            {/* Wrong name or number? Fix it here, before the bill goes on WhatsApp to that number. */}
+            <div className="flex w-full items-center gap-2">
+              <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                <span className="text-[17px] font-bold">{c.name}</span>
+                <span className="text-[13px] text-muted">+91 {Sel.fmtPhone(c.phone)}</span>
+              </div>
+              <button
+                type="button"
+                className="flex min-h-10 items-center gap-1 rounded-lg px-2 text-[14px] font-bold text-blue"
+                onClick={() => setActive({ kind: "customerForm", editId: o.custId, ctx: "list", trigger: "bill" })}
+              >
+                <IcEdit size={18} />
+                Edit
+              </button>
+            </div>
             <span className="text-[13px] text-inksecondary">{routeLine(o.pickup, o.delivery)}</span>
             <Divider className="my-1" />
             {o.lines.map((l, i) => (

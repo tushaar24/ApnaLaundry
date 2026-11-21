@@ -10,11 +10,16 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -109,8 +114,20 @@ fun BillScreen(shopVm: ShopViewModel, navigator: AppNavigator, orderId: Int, fro
                 // summary
                 AppCard {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(c.name, style = fig(16, FontWeight.Bold))
-                        if (com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current.can(com.dailyworks.apnalaundry.domain.StaffPermission.SEE_PHONES)) Text("+91 ${Selectors.fmtPhone(c.phone)}", style = fig(13, color = Tokens.Muted))
+                        // Wrong name or number? Fix it here, before the bill goes on WhatsApp to that number.
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(c.name, style = fig(16, FontWeight.Bold))
+                                if (com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current.can(com.dailyworks.apnalaundry.domain.StaffPermission.SEE_PHONES)) Text("+91 ${Selectors.fmtPhone(c.phone)}", style = fig(13, color = Tokens.Muted))
+                            }
+                            if (com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current.can(com.dailyworks.apnalaundry.domain.StaffPermission.TAKE_ORDERS)) Row(
+                                Modifier.heightIn(min = 40.dp).rounded(10.dp).tap { active = ActiveSheet.CustomerForm(editId = o.custId, ctx = "list", trigger = "bill") }.padding(horizontal = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Icon(Icons.Outlined.Edit, null, tint = Tokens.Blue, modifier = Modifier.size(18.dp))
+                                Text(tr("Edit"), style = fig(14, FontWeight.Bold, Tokens.Blue))
+                            }
+                        }
                         Text(routeLine(o.pickup, o.delivery), style = fig(13, color = Tokens.InkSecondary))
                         Divider()
                         o.lines.forEach { l ->

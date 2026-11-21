@@ -486,15 +486,31 @@ export function addOldBaaki(custId: string, amount: number) {
 // ---------------- customers ----------------
 
 /** Returns the customer id (new or existing on edit). */
+/**
+ * [editId] set = change that customer in place: the id stays, so their orders and khata (linked by
+ * custId, no copy of the name or number) show the new details. A save that changes nothing writes
+ * nothing. [editFrom] = where the edit was opened (analytics). Port of LaundryRepository.saveCustomer.
+ */
 export function saveCustomer(
   editId: string | null, name: string, phone: string, address: string, oldBaaki: number, fromList: boolean,
+  editFrom = "other",
 ): string {
   const undoSnap = snapshot();
   if (editId != null) {
+    const before = rows().customers.find((c) => c.id === editId);
+    const changed = before
+      ? [
+          ...(before.name !== name ? ["name"] : []),
+          ...(before.phone !== phone ? ["phone"] : []),
+          ...(before.address !== address ? ["address"] : []),
+        ]
+      : [];
+    if (changed.length === 0) return editId;
     setRows((r) => ({
       ...r,
       customers: r.customers.map((c) => (c.id === editId ? { ...c, name, phone, address, ...stamp() } : c)),
     }));
+    Analytics.customerEdited(editId, changed, editFrom, rows().orders.filter((o) => o.custId === editId && !o.deleted).length);
     requestSync();
     return editId;
   }

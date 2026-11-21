@@ -13,6 +13,7 @@ import { useScreenView } from "@/analytics/useScreenView";
 import {
   AppCard, Avatar, cls, OutlineButton, PrimaryButton, Segmented, StatusPill, TopBar,
 } from "@/ui/basics";
+import { IcEdit } from "@/ui/icons";
 import { SheetHost } from "@/ui/sheets/host";
 import type { ActiveSheet } from "@/ui/sheets/types";
 import { Shell, useNav } from "@/ui/shell";
@@ -142,7 +143,21 @@ function CustomerScreen({ custId }: { custId: string }) {
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <TopBar title="" onBack={nav.back} />
+      {/* Owners look top-right for edit (Pressora, Nov 2026: "no option to edit name or number"). */}
+      <TopBar
+        title=""
+        onBack={nav.back}
+        trailing={
+          <button
+            type="button"
+            className="flex min-h-11 items-center gap-1.5 rounded-xl px-2.5 text-[15px] font-bold text-blue"
+            onClick={() => setActive({ kind: "customerForm", editId: custId, ctx: "list", trigger: "customer_top_bar" })}
+          >
+            <IcEdit size={20} />
+            Edit
+          </button>
+        }
+      />
       <div className="flex flex-col gap-3.5 px-4 pb-10">
         {/* header */}
         <div className="flex items-center gap-3">
@@ -164,9 +179,10 @@ function CustomerScreen({ custId }: { custId: string }) {
             className="flex-1"
             border="var(--color-cardborder)"
             fg="var(--color-ink)"
-            onClick={() => setActive({ kind: "customerForm", editId: custId, ctx: "list" })}
+            onClick={() => setActive({ kind: "customerForm", editId: custId, ctx: "list", trigger: "customer_page" })}
           >
-            Edit
+            {/* Said in full: a bare "Edit" next to "New order" can read as editing an order. */}
+            Edit name / number
           </OutlineButton>
         </div>
 

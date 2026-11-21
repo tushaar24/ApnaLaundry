@@ -368,6 +368,7 @@ function NewOrderScreen() {
                             editId: cust.id,
                             ctx: "order",
                             needAddress: true,
+                            trigger: "address_card",
                             onSaved: (id) => setCustId(id),
                           })
                         }

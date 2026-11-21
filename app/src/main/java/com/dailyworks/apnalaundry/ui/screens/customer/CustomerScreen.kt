@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FileCopy
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -91,14 +92,26 @@ fun CustomerScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: Strin
     val mine = state.orders.filter { it.custId == custId }.sortedByDescending { it.id }
     val inProgress = mine.filter { it.status in listOf(OrderStatus.CREATED, OrderStatus.RECEIVED, OrderStatus.READY) }
 
+    // Staff (1.0.20): only what this staff member may do here.
+    val acc = com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current
+    val canEdit = acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.TAKE_ORDERS)
+    fun editCustomer(trigger: String) { active = ActiveSheet.CustomerForm(editId = custId, ctx = "list", trigger = trigger) }
+
     Column(Modifier.fillMaxSize().background(Tokens.Bg).windowInsetsPadding(WindowInsets.systemBars)) {
-        TopBar(title = "", onBack = navigator::back)
+        // Owners look top-right for edit (Pressora, Nov 2026: "no option to edit name or number").
+        TopBar(title = "", onBack = navigator::back, trailing = if (canEdit) ({
+            Row(
+                Modifier.heightIn(min = 44.dp).rounded(12.dp).tap { editCustomer("customer_top_bar") }.padding(horizontal = 10.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Icon(Icons.Outlined.Edit, null, tint = Tokens.Blue, modifier = Modifier.size(20.dp))
+                Text(tr("Edit"), style = fig(15, FontWeight.Bold, Tokens.Blue))
+            }
+        }) else null)
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 40.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            // Staff (1.0.20): only what this staff member may do here.
-            val acc = com.dailyworks.apnalaundry.ui.screens.staff.LocalStaffAccess.current
             // header
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Box(Modifier.size(52.dp).rounded(999.dp).background(Tokens.NeutralFill), contentAlignment = Alignment.Center) {
@@ -112,11 +125,12 @@ fun CustomerScreen(shopVm: ShopViewModel, navigator: AppNavigator, custId: Strin
                     if (c.address.isNotBlank()) Text(c.address, style = fig(13, color = Tokens.Muted), maxLines = 3, overflow = TextOverflow.Ellipsis)
                 }
             }
-            if (acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.TAKE_ORDERS)) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (canEdit) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlineButton(tr("New order"), Modifier.weight(1f), height = 48.dp) { navigator.openNewOrder(custId = custId, from = "customer") }
-                OutlineButton(tr("Edit"), Modifier.weight(1f), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) {
-                    active = ActiveSheet.CustomerForm(editId = custId, ctx = "list", trigger = "customer_page")
-                }
+                // Said in full: a bare "Edit" next to "New order" can read as editing an order.
+                // (Staff without customer numbers can change the name only: just "Edit".)
+                val editLabel = if (acc.can(com.dailyworks.apnalaundry.domain.StaffPermission.SEE_PHONES)) tr("Edit name / number") else tr("Edit")
+                OutlineButton(editLabel, Modifier.weight(1f), height = 48.dp, border = Tokens.CardBorder, fg = Tokens.Ink) { editCustomer("customer_page") }
             }
 
             // balance card
