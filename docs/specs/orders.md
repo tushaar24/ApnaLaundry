@@ -117,6 +117,11 @@ only (Android 12+ asks for "Nearby devices"). Printer, paper size and per-cloth/
 remembered on the phone (`tag_printer` prefs), not synced. Code: `domain/LaundryTags.kt`,
 `print/` (TagRender, EscPos, TagPrinter), `ui/sheets/PrintTagsSheet.kt`. Web: not yet.
 
+**Print bill** uses the same printer: `print/ReceiptRender` redraws the bill in the shop's design in black
+on white. The shop logo prints at the top as black / white dots (`print/ThermalLogo`: trimmed, ≤ 60% of
+the paper wide, Atkinson-dithered); the pay QR is drawn on whole printer dots (5 a module on 58 mm, 7 on
+80 mm for the short pay link) with a 4-module white border.
+
 ## Further notes
 
 The Close-today end-of-day wizard and its Home banner were intentionally removed at the user's

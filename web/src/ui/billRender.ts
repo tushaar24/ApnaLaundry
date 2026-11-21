@@ -440,8 +440,32 @@ function layout(ctx: CanvasRenderingContext2D, r: BillReceipt, draw: boolean, mi
     lines(r.gstNote, 11.5, 400, BODY, right - left, left, "left", C.muted, 15);
   }
 
-  // 6. payment status (real bills)
-  if (r.payStatus) {
+  // 6. payment status (real bills) — or, for a customer with old baaki / advance: Paid,
+  // Previous due (old baaki) or Advance with shop, then Total to pay. Port twin: BillRender.khataBlock.
+  if (r.khata) {
+    const k = r.khata;
+    const inv = t === "invoice";
+    p.y += 6;
+    for (const e of k.rows) {
+      const value = inv ? e.exact || e.value : e.value;
+      const color = e.discount ? C.green : C.ink;
+      p.y += inv ? 24 : 20;
+      font(inv ? 14.5 : 13.5, 400);
+      text(e.label, left, p.y, "left", inv || color !== C.ink ? color : C.muted);
+      font(inv ? 14.5 : 13.5, inv ? 700 : 600);
+      text(value, right, p.y, "right", color);
+    }
+    p.y += 12;
+    rule({ width: receipt ? 1 : 1.2, color: C.ink, dashed: receipt });
+    p.y += inv ? 28 : 26;
+    const tone = t === "bold" ? C.blue : C.ink;
+    font(inv ? 17 : 16, 700, inv ? BODY : DISPLAY);
+    text(receipt ? "TOTAL TO PAY" : k.toPay.label, left, p.y, "left", tone);
+    font(inv || receipt ? 17 : 19, 700, inv ? BODY : DISPLAY);
+    text(inv ? k.toPay.exact || k.toPay.value : k.toPay.value, right, p.y, "right", tone);
+    p.y += 4;
+    if (k.advanceLeft) lines(k.advanceLeft, 13, 700, BODY, right - left, mid, "center", C.green, 20);
+  } else if (r.payStatus) {
     p.y += 22;
     font(13.5, 700);
     text(r.payStatus, mid, p.y, "center", r.payStatus === "Paid in full" ? C.green : C.ink);

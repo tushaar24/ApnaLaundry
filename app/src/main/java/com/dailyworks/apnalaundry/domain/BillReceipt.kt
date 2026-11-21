@@ -30,8 +30,8 @@ data class BillReceipt(
     val extras: List<Row>, // express, pickup/delivery, discount, then exclusive GST (taxable, CGST, SGST, round off)
     val total: String,
     val gstNote: String, // inclusive GST: "Price includes GST 18%: …" under the total ("" = none)
-    val payStatus: String, // real bills only; "" on the preview
-    val upi: Upi?,
+    val payStatus: String, // real bills only; "" on the preview. Paid = what's paid toward this bill (before delivery: paid in advance)
+    val upi: Upi?, // what's left to pay (with old baaki / advance: [Khata.toPayAmount]); null when nothing is (or no valid UPI id)
     val terms: List<String>,
     // The Invoice design (BillDetails.INVOICE): order details as a table of
     // label → value, money with paise.
@@ -42,6 +42,8 @@ data class BillReceipt(
     val dateValue: String = "", // "04/10/2026"
     val subtotalExact: String = "", // "₹840.00"
     val totalExact: String = "",
+    // Real bills of a customer with old baaki or advance in the khata (else null): drawn instead of [payStatus].
+    val khata: Khata? = null,
 ) {
     /**
      * [name] / [qty] / [unit] / [totalExact]: the Invoice design's columns —
@@ -54,11 +56,28 @@ data class BillReceipt(
     data class Row(val label: String, val value: String, val discount: Boolean = false, val exact: String = value) // exact: with paise
     data class Upi(val id: String, val payload: String, val amount: String)
 
+    /**
+     * Under a real bill, when the customer owes from earlier (old baaki, other
+     * orders) or has advance with the shop (owner, 21 Nov 2026: "old baaki &
+     * advance payment is not added in the bill"): Total − Paid ± previous =
+     * Total to pay. [previous] is the khata without this bill — everything the
+     * customer owes now minus what's still due on this bill — so a payment made
+     * at this delivery that cleared old baaki is already in it. Port twin: web ReceiptKhata.
+     */
+    data class Khata(
+        val rows: List<Row>, // "Paid" "− ₹100" (when something is paid on this bill), then "Previous due (old baaki)" "+ ₹200" / "Advance with shop" "− ₹500"
+        val toPay: Row, // "Total to pay" "₹400" — never below ₹0
+        val advanceLeft: String, // "Advance left ₹200" when the advance is more than everything due; ""
+        val previous: Int, // + old baaki / − advance
+        val toPayAmount: Int,
+    )
+
     companion object {
-        /** A real order's bill. */
+        /** A real order's bill, with the customer's old baaki / advance from the khata (a cancelled order's bill: without). */
         fun of(state: LaundryState, o: Order): BillReceipt {
             val c = Selectors.customer(state, o.custId)
-            return build(state.shop, c.name, c.phone, o, sample = false, expressPct = null, template = null, custAddress = c.address)
+            val balance = if (o.status == OrderStatus.CANCELLED) null else LaundryMath.balance(o.custId, state.ledger, state.orders)
+            return build(state.shop, c.name, c.phone, o, sample = false, expressPct = null, template = null, custAddress = c.address, balance = balance)
         }
 
         /** The onboarding preview: a sample order built from the owner's rates. */
@@ -101,6 +120,25 @@ data class BillReceipt(
             else -> "Ready by ${AppDate.plain(o.deliveryDate)}" + if (o.deliveryTime.isNotEmpty()) " · ${o.deliveryTime}" else ""
         }
 
+        /** Paid toward [o]'s bill: once delivered what was collected for it, before that what was paid in advance. */
+        fun paidOn(o: Order, total: Int): Int =
+            (if (o.status == OrderStatus.DELIVERED) o.paid else o.pre).coerceIn(0, maxOf(0, total))
+
+        /** The old baaki / advance lines, for [previous] ≠ 0 (+ owes from before, − advance). */
+        private fun khata(total: Int, paid: Int, previous: Int): Khata {
+            val sum = total - paid + previous
+            val toPay = maxOf(0, sum)
+            val rows = buildList {
+                if (paid > 0) add(Row("Paid", "− ${Money.rupees(paid)}", discount = true, exact = "− ${exact(paid)}"))
+                if (previous > 0) add(Row("Previous due (old baaki)", "+ ${Money.rupees(previous)}", exact = "+ ${exact(previous)}"))
+                else add(Row("Advance with shop", "− ${Money.rupees(previous)}", discount = true, exact = "− ${exact(-previous)}"))
+            }
+            return Khata(
+                rows, Row("Total to pay", Money.rupees(toPay), exact = exact(toPay)),
+                if (sum < 0) "Advance left ${Money.rupees(sum)}" else "", previous, toPay,
+            )
+        }
+
         private fun payStatus(paid: Int, total: Int): String = when {
             paid <= 0 -> "To pay ${Money.rupees(total)}"
             paid >= total -> "Paid in full"
@@ -110,9 +148,19 @@ data class BillReceipt(
         private fun build(
             shop: Shop, custName: String, custPhone: String, o: Order,
             sample: Boolean, expressPct: Int?, template: String?, custAddress: String = "",
+            balance: Int? = null, // the customer's whole khata now (+ owes / − advance); null = no old baaki / advance lines
         ): BillReceipt {
             val gst = LaundryMath.gstOf(o)
             val total = gst.total
+            val paid = if (sample) 0 else paidOn(o, total)
+            val previous = if (balance != null) balance - (total - paid) else 0
+            val khata = if (!sample && previous != 0) khata(total, paid, previous) else null
+            // The pay QR asks for what's left: the whole total on the preview.
+            val toPay = when {
+                sample -> total
+                khata != null -> khata.toPayAmount
+                else -> total - paid
+            }
             val phone = custPhone.filter { it.isDigit() }.takeLast(10)
             val extras = buildList {
                 if (o.express && o.exAmt > 0) {
@@ -149,9 +197,9 @@ data class BillReceipt(
                 extras = extras,
                 total = Money.rupees(total),
                 gstNote = if (gst.on && gst.mode == Gst.INCL) Gst.billNote(gst) else "",
-                payStatus = if (sample) "" else payStatus(o.paid, total),
-                upi = if (BillDetails.isUpiValid(shop.upiId)) {
-                    Upi(shop.upiId, BillDetails.upiPayload(shop.upiId, shop.name, total, o.id), Money.rupees(total))
+                payStatus = if (sample) "" else payStatus(paid, total),
+                upi = if (toPay > 0 && BillDetails.isUpiValid(shop.upiId)) {
+                    Upi(shop.upiId, BillDetails.upiPayload(shop.upiId, shop.name, toPay, o.id), Money.rupees(toPay))
                 } else null,
                 terms = BillDetails.termLines(shop.terms, shop.termsCustom),
                 orderNo = o.no(),
@@ -168,6 +216,7 @@ data class BillReceipt(
                 },
                 subtotalExact = exact(LaundryMath.clothesOf(o)),
                 totalExact = exact(total),
+                khata = khata,
             )
         }
     }

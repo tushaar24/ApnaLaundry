@@ -81,6 +81,16 @@ a clear allocation rule, and a per-customer khata ledger that always reconciles.
   and the bill is marked not-sent.
 - **WhatsApp / Download / UPI-QR:** stubbed as toasts ("Opening WhatsApp…", "Bill-N.pdf saved").
   The real integrations are pending.
+- **What a bill asks for** (`domain/BillReceipt`, web twin `domain/billReceipt.ts`; 21 Nov 2026):
+  paid on the bill = `delivered ? paid : pre` (an advance paid before delivery shows as paid).
+  A customer with old baaki or advance gets, in place of the payment status, `Paid − ₹X` (if any),
+  `Previous due (old baaki) + ₹Y` or `Advance with shop − ₹Y`, then `Total to pay` (never below ₹0;
+  "Advance left ₹Z" when the advance is bigger). `previous = balance(all) − (total − paid)`, so the
+  part of a delivery payment that cleared old baaki is already in it. Shown on the bill picture, PDF,
+  printed bill and the website's in-app bill + WhatsApp message; not on the public `/b/` page (its
+  server copy has no khata). The UPI QR asks for the total to pay, and is left off when nothing is.
+  Pay link (`BillDetails.upiLink` = web `upiLink`): `pa=<id>&pn=<shop name, English letters only, ≤ 20,
+  else "Laundry Shop">&am=…&cu=INR&tn=Bill <id>` — kept short so the QR scans off a 58 mm printer.
 - **Combined bill** (`domain/CombinedBill`, `ui/screens/customer/CombinedBillScreen`, drawn by
   `BillRender.layoutCombined`, sent by `BillShare.sendCombinedBillOnWhatsApp`):
   - Eligible orders = not cancelled and with lines; the pickup date decides the month.

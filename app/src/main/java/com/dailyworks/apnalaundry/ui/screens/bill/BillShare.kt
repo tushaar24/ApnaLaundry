@@ -134,9 +134,19 @@ private fun billCaption(state: LaundryState, o: Order, link: String?): String {
     val c = Selectors.customer(state, o.custId)
     val hello = tr("Hi {name}, here is your bill for order #{no} from *{shop}* — Total *{amount}*.",
         "name" to Selectors.firstName(c.name), "no" to o.no(), "shop" to state.shop.name, "amount" to Money.rupees(LaundryMath.amtOf(o)))
-    return hello +
+    return hello + khataLine(I18n.english { BillReceipt.of(state, o) }.khata) +
         (if (link != null) "\n\n" + tr("Download PDF: {link}", "link" to link) else "") +
         "\n\n" + tr("Thank you!")
+}
+
+/**
+ * The old baaki / advance on the bill, for the message under it ("" when the customer has
+ * neither): the bill page behind the link can't show it (its server copy has no khata).
+ */
+private fun khataLine(k: BillReceipt.Khata?): String = when {
+    k == null -> ""
+    k.previous > 0 -> "\n" + tr("Old baaki {old} · total to pay *{amount}*.", "old" to Money.rupees(k.previous), "amount" to Money.rupees(k.toPayAmount))
+    else -> "\n" + tr("Advance {advance} · total to pay *{amount}*.", "advance" to Money.rupees(k.previous), "amount" to Money.rupees(k.toPayAmount))
 }
 
 private fun combinedBillCaption(shopName: String, r: CombinedReceipt): String {
@@ -255,7 +265,12 @@ private fun billText(state: LaundryState, o: Order, link: String?): String {
         r.lines.forEach { appendLine("${it.item}  ${it.amount}") }
         r.extras.forEach { appendLine("${it.label}  ${it.value}") }
         appendLine("*Total ${r.total}*")
-        if (r.payStatus.isNotBlank()) appendLine(r.payStatus)
+        val k = r.khata
+        if (k != null) {
+            k.rows.forEach { appendLine("${it.label}  ${it.value}") }
+            appendLine("*${k.toPay.label} ${k.toPay.value}*")
+            if (k.advanceLeft.isNotBlank()) appendLine(k.advanceLeft)
+        } else if (r.payStatus.isNotBlank()) appendLine(r.payStatus)
         appendLine()
         append(tr("Thank you!"))
     }

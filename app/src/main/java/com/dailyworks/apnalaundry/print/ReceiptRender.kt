@@ -183,12 +183,26 @@ object ReceiptRender {
 
         fun gstNote() { if (r.gstNote.isNotBlank()) wrapped(r.gstNote, paint(18f)) }
 
+        /** The payment status — or, for a customer with old baaki / advance, Paid ± previous = Total to pay. */
+        fun payBlock() {
+            val k = r.khata ?: return payStatus()
+            y += 8 * s
+            val tl = paint(if (invoice) 20f else 21f)
+            val tv = paint(if (invoice) 20f else 21f, strong = invoice, medium = !invoice)
+            k.rows.forEach { row(it.label, if (invoice) it.exact else it.value, tl, tv, gapAfter = 5 * s) }
+            rule(gap = 4 * s, heavy = !receipt, dashed = receipt)
+            row(
+                if (receipt) "TOTAL TO PAY" else k.toPay.label, if (invoice) k.toPay.exact else k.toPay.value,
+                paint(24f, strong = true), paint(28f, strong = true), gapAfter = 4 * s,
+            )
+            if (k.advanceLeft.isNotEmpty()) centred(k.advanceLeft, paint(20f, strong = true), 4 * s)
+        }
+
         /** The pay QR's modules (null when there's no UPI QR on this bill, or it can't be made). */
         val qr: BitMatrix? by lazy { r.upi?.let { qrMatrix(it.payload) } }
 
         fun qrBlock() {
-            val upi = r.upi ?: return
-            if (r.payStatus == "Paid in full") return
+            val upi = r.upi ?: return // none when nothing is left to pay
             val m = qr ?: return
             rule(dashed = true)
             centred("Scan to pay ${upi.amount}", paint(22f, strong = true), 0f)
@@ -267,7 +281,7 @@ object ReceiptRender {
                 row(if (receipt) "TOTAL" else "Total", r.total, paint(26f, strong = true), paint(30f, strong = true), gapAfter = 4 * s)
             }
             gstNote()
-            payStatus()
+            payBlock()
             qrBlock()
             if (r.readyBy.isNotBlank()) { y += 4 * s; centred(r.readyBy, paint(18f)) }
             termsAndThanks()
@@ -329,7 +343,7 @@ object ReceiptRender {
             rule(gap = 5 * s, dashed = false)
             row("Total", r.totalExact.ifEmpty { r.total }, paint(26f, strong = true), paint(28f, strong = true), gapAfter = 4 * s)
             gstNote()
-            payStatus()
+            payBlock()
             qrBlock()
             termsAndThanks()
         }

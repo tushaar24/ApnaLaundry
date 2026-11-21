@@ -33,11 +33,24 @@ function waUrl(digits: string, text: string): string {
   return digits.length === 10 ? `https://wa.me/91${digits}?text=${t}` : `https://wa.me/?text=${t}`;
 }
 
+/**
+ * The old baaki / advance on the bill, for the message ("" when the customer has neither):
+ * the bill page behind the link can't show it (its server copy has no khata).
+ */
+function khataLine(state: LaundryState, o: Order): string {
+  const k = billReceipt(state, o).khata;
+  if (!k) return "";
+  return k.previous > 0
+    ? `\nOld baaki ${rupees(k.previous)} · total to pay *${rupees(k.toPayAmount)}*.`
+    : `\nAdvance ${rupees(k.previous)} · total to pay *${rupees(k.toPayAmount)}*.`;
+}
+
 /** The WhatsApp message (asterisks render bold). Without a link it still carries the total. */
 function billMessage(state: LaundryState, o: Order, link: string | null): string {
   const c = Sel.customer(state, o.custId);
   return [
-    `Hi ${Sel.firstName(c.name)}, here is your bill for order #${Sel.orderNo(o)} from *${state.shop.name}* — Total *${rupees(amtOf(o))}*.`,
+    `Hi ${Sel.firstName(c.name)}, here is your bill for order #${Sel.orderNo(o)} from *${state.shop.name}* — Total *${rupees(amtOf(o))}*.` +
+      khataLine(state, o),
     link ? `View / download your bill:\n${link}` : "",
     "Thank you!",
   ].filter(Boolean).join("\n\n");

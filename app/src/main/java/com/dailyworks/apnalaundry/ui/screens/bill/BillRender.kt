@@ -307,6 +307,33 @@ object BillRender {
         }
 
         /**
+         * 6. A customer with old baaki / advance: Paid, Previous due (old baaki) or Advance with
+         * shop, then Total to pay — in place of the payment status. [exact] = with paise (Invoice).
+         */
+        fun khataBlock(k: BillReceipt.Khata, exact: Boolean) {
+            cy += 6
+            k.rows.forEach { row ->
+                val value = if (exact) row.exact else row.value
+                val color = if (row.discount) GREEN else INK
+                if (invoice) {
+                    cy += 24
+                    font(14.5f, 400); text(row.label, left, cy, Paint.Align.LEFT, color)
+                    font(14.5f, 700); text(value, right, cy, Paint.Align.RIGHT, color)
+                } else totalRow(row.label, value, color)
+            }
+            cy += 12
+            rule(cy, width = if (receipt) 1f else 1.2f, color = INK, dashed = receipt)
+            cy += if (invoice) 28 else 26
+            val tone = if (bold) BLUE else INK
+            font(if (invoice) 17f else 16f, 700, display = !invoice)
+            text(if (receipt) "TOTAL TO PAY" else k.toPay.label, left, cy, Paint.Align.LEFT, tone)
+            font(if (invoice || receipt) 17f else 19f, 700, display = !invoice)
+            text(if (exact) k.toPay.exact else k.toPay.value, right, cy, Paint.Align.RIGHT, tone)
+            cy += 4
+            if (k.advanceLeft.isNotEmpty()) lines(k.advanceLeft, 13f, 700, false, right - left, mid, Paint.Align.CENTER, GREEN, 20f)
+        }
+
+        /**
          * 7. UPI pay QR (valid ids only) with "Scan to pay"; a small gap when there is none.
          * The QR carries the short pay link (BillDetails.upiLink) and a 4-module white
          * border inside its box, the QR standard's quiet zone.
@@ -432,8 +459,10 @@ object BillRender {
                 lines(r.gstNote, 11.5f, 400, false, right - left, left, Paint.Align.LEFT, MUTED, 15f)
             }
 
-            // 6. payment status (real bills)
-            if (r.payStatus.isNotEmpty()) {
+            // 6. payment status (real bills) — or, with old baaki / advance, the sum to pay
+            if (r.khata != null) {
+                khataBlock(r.khata, exact = false)
+            } else if (r.payStatus.isNotEmpty()) {
                 cy += 22
                 font(13.5f, 700)
                 text(r.payStatus, mid, cy, Paint.Align.CENTER, if (r.payStatus == "Paid in full") GREEN else INK)
@@ -538,7 +567,9 @@ object BillRender {
                 cy += 4
                 lines(r.gstNote, 11.5f, 400, false, right - left, left, Paint.Align.LEFT, MUTED, 15f)
             }
-            if (r.payStatus.isNotEmpty()) {
+            if (r.khata != null) {
+                khataBlock(r.khata, exact = true)
+            } else if (r.payStatus.isNotEmpty()) {
                 cy += 22
                 font(13.5f, 700)
                 text(r.payStatus, mid, cy, Paint.Align.CENTER, if (r.payStatus == "Paid in full") GREEN else INK)
