@@ -5,7 +5,6 @@ import com.dailyworks.apnalaundry.core.tr
 import com.dailyworks.apnalaundry.core.AppDate
 import com.dailyworks.apnalaundry.core.Money
 import com.dailyworks.apnalaundry.ui.Selectors
-import java.net.URLEncoder
 import java.time.LocalDate
 import java.time.YearMonth
 
@@ -127,11 +126,9 @@ object CombinedBill {
         return stem.replace(Regex("[^A-Za-z0-9]+"), "-").trim('-') + ".pdf"
     }
 
-    private fun enc(s: String) = URLEncoder.encode(s, "UTF-8").replace("+", "%20")
-
-    /** upi://pay link the combined bill's QR encodes — the amount is what is still to pay. */
+    /** upi://pay link the combined bill's QR encodes — the amount is what is still to pay (short, like a bill's: BillDetails.upiLink). */
     fun upiPayload(upiId: String, shopName: String, amount: Int, period: String): String =
-        "upi://pay?pa=${enc(upiId)}&pn=${enc(shopName)}&am=$amount&cu=INR&tn=${enc("Combined bill $period")}"
+        BillDetails.upiLink(upiId, shopName, amount, "Combined bill $period")
 
     private fun itemLines(o: Order): List<BillReceipt.Row> = buildList {
         o.lines.forEach { l ->

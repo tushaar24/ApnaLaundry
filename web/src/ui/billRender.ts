@@ -453,7 +453,7 @@ function layout(ctx: CanvasRenderingContext2D, r: BillReceipt, draw: boolean, mi
     const qr = QRCode.create(r.upi.payload, { errorCorrectionLevel: "M" });
     const n = qr.modules.size;
     const box = 124;
-    const cell = box / (n + 4); // 2-module quiet zone each side
+    const cell = box / (n + 8); // 4-module quiet zone each side (the QR standard's)
     const x0 = mid - box / 2;
     if (draw) {
       ctx.fillStyle = "#FFFFFF";
@@ -462,7 +462,7 @@ function layout(ctx: CanvasRenderingContext2D, r: BillReceipt, draw: boolean, mi
       for (let row2 = 0; row2 < n; row2++) {
         for (let col = 0; col < n; col++) {
           if (qr.modules.get(row2, col)) {
-            ctx.fillRect(x0 + (col + 2) * cell, p.y + (row2 + 2) * cell, cell + 0.05, cell + 0.05);
+            ctx.fillRect(x0 + (col + 4) * cell, p.y + (row2 + 4) * cell, cell + 0.05, cell + 0.05);
           }
         }
       }

@@ -15,6 +15,7 @@ import com.dailyworks.apnalaundry.domain.BillDetails
 import com.dailyworks.apnalaundry.domain.BillReceipt
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
+import com.google.zxing.common.BitMatrix
 import com.google.zxing.qrcode.QRCodeWriter
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import kotlin.math.ceil
@@ -170,14 +171,22 @@ object ReceiptRender {
 
         fun gstNote() { if (r.gstNote.isNotBlank()) wrapped(r.gstNote, paint(18f)) }
 
+        /** The pay QR's modules (null when there's no UPI QR on this bill, or it can't be made). */
+        val qr: BitMatrix? by lazy { r.upi?.let { qrMatrix(it.payload) } }
+
         fun qrBlock() {
             val upi = r.upi ?: return
             if (r.payStatus == "Paid in full") return
+            val m = qr ?: return
             rule(dashed = true)
-            centred("Scan to pay ${upi.amount}", paint(22f, strong = true), 6 * s)
-            val size = (inner * 0.55f).toInt().coerceAtLeast(120)
-            drawQr(c, upi.payload, (width - size) / 2f, y, size)
-            y += size + 6 * s
+            centred("Scan to pay ${upi.amount}", paint(22f, strong = true), 0f)
+            // Whole printer dots per module, a 4-module white border, centred on whole dots.
+            val dot = qrDots(m.width, width)
+            val side = (m.width + 2 * QR_QUIET) * dot
+            val x0 = (width - side) / 2
+            val y0 = ceil(y).toInt()
+            if (c != null) drawQr(c, m, x0 + QR_QUIET * dot, y0 + QR_QUIET * dot, dot)
+            y = (y0 + side).toFloat()
             centred(upi.id, paint(18f), 4 * s)
         }
 
@@ -312,15 +321,37 @@ object ReceiptRender {
         }
     }
 
-    private fun drawQr(c: Canvas?, payload: String, left: Float, top: Float, size: Int) {
-        if (c == null) return
-        val m = runCatching {
-            QRCodeWriter().encode(payload, BarcodeFormat.QR_CODE, 0, 0, mapOf(EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M, EncodeHintType.MARGIN to 0))
-        }.getOrNull() ?: return
-        val cell = size.toFloat() / m.width
-        val p = Paint().apply { color = Color.BLACK; style = Paint.Style.FILL }
+    /** White modules around the QR — the 4 the QR standard asks for; text closer than that stops phones finding it. */
+    private const val QR_QUIET = 4
+
+    /** The QR's modules alone (no border), error correction M — survives a smudge or a faint patch. */
+    private fun qrMatrix(payload: String): BitMatrix? = runCatching {
+        QRCodeWriter().encode(payload, BarcodeFormat.QR_CODE, 0, 0, mapOf(EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M, EncodeHintType.MARGIN to 0))
+    }.getOrNull()
+
+    /**
+     * Printer dots per QR module, a whole number: as big as fits ~68% of the paper
+     * with its white border, at most 8. A bill's short pay link (BillDetails.upiLink)
+     * is a 37–41-module QR: 5 dots (0.6 mm) a module on 58 mm paper, 7 on 80 mm.
+     * Uneven or 3-dot modules (the old bill: a long Hindi link drawn at 3.05 dots)
+     * blur together on thermal paper and phones can't read them.
+     */
+    fun qrDots(modules: Int, width: Int): Int {
+        val total = modules + 2 * QR_QUIET
+        val fit = (width * 0.68f).toInt() / total
+        // A long link: never under 4 dots while the full width still fits it.
+        return if (fit >= 4) fit.coerceAtMost(8) else (width / total).coerceIn(1, 4)
+    }
+
+    /** Solid black squares on whole dots — no anti-aliasing, so every printed module is crisp. */
+    private fun drawQr(c: Canvas, m: BitMatrix, left: Int, top: Int, dot: Int) {
+        val p = Paint().apply { color = Color.BLACK; style = Paint.Style.FILL; isAntiAlias = false }
         for (yy in 0 until m.height) for (xx in 0 until m.width) {
-            if (m.get(xx, yy)) c.drawRect(left + xx * cell, top + yy * cell, left + (xx + 1) * cell + 0.5f, top + (yy + 1) * cell + 0.5f, p)
+            if (m.get(xx, yy)) {
+                val x = (left + xx * dot).toFloat()
+                val y = (top + yy * dot).toFloat()
+                c.drawRect(x, y, x + dot, y + dot, p)
+            }
         }
     }
 }

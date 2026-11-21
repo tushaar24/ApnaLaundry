@@ -306,7 +306,11 @@ object BillRender {
             }
         }
 
-        /** 7. UPI pay QR (valid ids only) with "Scan to pay"; a small gap when there is none. */
+        /**
+         * 7. UPI pay QR (valid ids only) with "Scan to pay"; a small gap when there is none.
+         * The QR carries the short pay link (BillDetails.upiLink) and a 4-module white
+         * border inside its box, the QR standard's quiet zone.
+         */
         fun qrBlock(upi: BillReceipt.Upi?) {
             if (upi == null) {
                 cy += 4
@@ -318,7 +322,7 @@ object BillRender {
             val matrix = runCatching {
                 QRCodeWriter().encode(
                     upi.payload, BarcodeFormat.QR_CODE, 0, 0,
-                    mapOf(EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M, EncodeHintType.MARGIN to 2),
+                    mapOf(EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M, EncodeHintType.MARGIN to 4),
                 )
             }.getOrNull()
             if (draw && matrix != null) {

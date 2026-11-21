@@ -127,16 +127,46 @@ export function addedFieldsCount(d: BillDetails, loginPhone: string): number {
   return n;
 }
 
+/** Longest payee name (pn) / note (tn) the pay QR carries. */
+export const UPI_NAME_MAX = 20;
+export const UPI_NOTE_MAX = 30;
+
+/** The payee name when the shop's name has no English letters (a Hindi / Marathi name). */
+export const UPI_NAME_FALLBACK = "Laundry Shop";
+
+/**
+ * `s` in plain English letters, digits, spaces, "." and "-" only, at most `max`
+ * long (cut at a space when it can be) — "" when nothing is left.
+ */
+export function upiText(s: string, max: number): string {
+  const ascii = s.replace(/[^A-Za-z0-9.-]/g, " ").replace(/\s+/g, " ").trim();
+  if (ascii.length <= max) return ascii;
+  const cut = ascii.slice(0, max + 1).lastIndexOf(" ");
+  return (cut >= Math.floor(max / 2) ? ascii.slice(0, cut) : ascii.slice(0, max)).trim();
+}
+
+/** The payee name the pay QR shows: the shop name in English letters, else UPI_NAME_FALLBACK. */
+export function upiName(shopName: string): string {
+  return upiText(shopName, UPI_NAME_MAX) || UPI_NAME_FALLBACK;
+}
+
+/**
+ * The upi://pay link a pay QR encodes, kept short so the QR stays coarse
+ * enough to scan off a 58 mm thermal printer: a Hindi shop name, percent-
+ * encoded, made it 2–3× denser and unreadable (owner, 21 Nov 2026). Only
+ * pa / pn / am / cu / tn; pn and tn are plain English letters (the UPI app
+ * shows the bank's name for the UPI id anyway). The UPI id goes in as is —
+ * isUpiValid allows only letters, digits, ".", "_", "-" and one "@".
+ * Port twin: BillDetails.upiLink (Android) — both must give the same link.
+ */
+export function upiLink(upiId: string, shopName: string, amount: number, note: string): string {
+  const tn = upiText(note, UPI_NOTE_MAX);
+  return `upi://pay?pa=${upiId}&pn=${encodeURIComponent(upiName(shopName))}&am=${amount}&cu=INR` + (tn ? `&tn=${encodeURIComponent(tn)}` : "");
+}
+
 /** upi://pay link the bill's QR encodes. */
 export function upiPayload(upiId: string, shopName: string, amount: number, billNo: number): string {
-  const q = [
-    `pa=${encodeURIComponent(upiId)}`,
-    `pn=${encodeURIComponent(shopName)}`,
-    `am=${amount}`,
-    "cu=INR",
-    `tn=${encodeURIComponent(`Bill ${billNo}`)}`,
-  ];
-  return `upi://pay?${q.join("&")}`;
+  return upiLink(upiId, shopName, amount, `Bill ${billNo}`);
 }
 
 /** Public URL of an uploaded logo (served through the site's /api proxy). */

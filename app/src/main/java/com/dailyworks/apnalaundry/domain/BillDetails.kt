@@ -139,9 +139,45 @@ object BillDetails {
 
     private fun enc(s: String) = URLEncoder.encode(s, "UTF-8").replace("+", "%20")
 
+    /** Longest payee name (pn) / note (tn) the pay QR carries. */
+    const val UPI_NAME_MAX = 20
+    const val UPI_NOTE_MAX = 30
+
+    /** The payee name when the shop's name has no English letters (a Hindi / Marathi name). */
+    const val UPI_NAME_FALLBACK = "Laundry Shop"
+
+    /**
+     * [s] in plain English letters, digits, spaces, '.' and '-' only, at most [max]
+     * long (cut at a space when it can be) — "" when nothing is left.
+     */
+    fun upiText(s: String, max: Int): String {
+        val ascii = s.map { ch -> if (ch in 'A'..'Z' || ch in 'a'..'z' || ch in '0'..'9' || ch == '.' || ch == '-') ch else ' ' }
+            .joinToString("").replace(Regex("\\s+"), " ").trim()
+        if (ascii.length <= max) return ascii
+        val cut = ascii.take(max + 1).lastIndexOf(' ')
+        return (if (cut >= max / 2) ascii.take(cut) else ascii.take(max)).trim()
+    }
+
+    /** The payee name the pay QR shows: the shop name in English letters, else [UPI_NAME_FALLBACK]. */
+    fun upiName(shopName: String): String = upiText(shopName, UPI_NAME_MAX).ifEmpty { UPI_NAME_FALLBACK }
+
+    /**
+     * The upi://pay link a pay QR encodes, kept short so the QR stays coarse
+     * enough to scan off a 58 mm thermal printer: a Hindi shop name, percent-
+     * encoded, made it 2–3× denser and unreadable (owner, 21 Nov 2026). Only
+     * pa / pn / am / cu / tn; pn and tn are plain English letters (the UPI app
+     * shows the bank's name for the UPI id anyway). The UPI id goes in as is —
+     * [isUpiValid] allows only letters, digits, '.', '_', '-' and one '@'.
+     * Port twin: web upiLink (domain/billDetails.ts) — both must give the same link.
+     */
+    fun upiLink(upiId: String, shopName: String, amount: Int, note: String): String {
+        val tn = upiText(note, UPI_NOTE_MAX)
+        return "upi://pay?pa=$upiId&pn=${enc(upiName(shopName))}&am=$amount&cu=INR" + if (tn.isNotEmpty()) "&tn=${enc(tn)}" else ""
+    }
+
     /** upi://pay link the bill's QR encodes. */
     fun upiPayload(upiId: String, shopName: String, amount: Int, billNo: Int): String =
-        "upi://pay?pa=${enc(upiId)}&pn=${enc(shopName)}&am=$amount&cu=INR&tn=${enc("Bill $billNo")}"
+        upiLink(upiId, shopName, amount, "Bill $billNo")
 
     // ── the sample order for the "Your bill" preview (handoff §9) ──
 
