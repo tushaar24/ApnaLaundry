@@ -7,7 +7,7 @@ import * as Repo from "@/data/repository";
 import { cls, PrimaryButton } from "../basics";
 import { AppSheet } from "../sheet";
 import {
-  IcCalendar, IcCall, IcCancel, IcDelete, IcEdit, IcEye, IcPerson, IcReceipt, IcReplay, IcTruck,
+  IcBadge, IcCalendar, IcCall, IcCancel, IcDelete, IcEdit, IcEye, IcPerson, IcReceipt, IcReplay, IcTruck,
 } from "../icons";
 import type { ActiveSheet } from "./types";
 import type { useNav } from "../shell";
@@ -66,6 +66,12 @@ export function OrderMenuSheet({
           />
         ) : null}
         <MenuRow icon={<IcPerson size={22} />} label="Open customer khata" onClick={() => { onDismiss(); nav.openCustomer(o.custId); }} />
+        {/* A wrong name or number typed by mistake: fix it from the order too (the customer keeps every order). */}
+        <MenuRow
+          icon={<IcBadge size={22} />}
+          label="Edit customer name / number"
+          onClick={() => onOpen({ kind: "customerForm", editId: o.custId, ctx: "list", trigger: "order_menu" })}
+        />
         <a href={`tel:+91${c.phone}`} onClick={onDismiss} className="flex h-[52px] w-full items-center gap-3.5 text-ink">
           <span className="text-inksecondary"><IcCall size={22} /></span>
           <span className="text-[16px] font-semibold">Call {Sel.firstName(c.name)}</span>

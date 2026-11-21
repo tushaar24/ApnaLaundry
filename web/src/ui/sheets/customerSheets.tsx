@@ -51,7 +51,12 @@ export function CustomerFormSheet({
   const valid = name.trim() !== "" && phone.length === 10 && !dup && (!addrNeeded || address.trim() !== "");
 
   return (
-    <AppSheet title={editing ? "Edit customer" : "New customer"} onDismiss={onDismiss}>
+    // Editing: the id stays, so the customer's orders and khata stay with them and show the new details.
+    <AppSheet
+      title={editing ? "Edit customer" : "New customer"}
+      subtitle={editing ? "Old orders and khata stay with this customer" : undefined}
+      onDismiss={onDismiss}
+    >
       <div className="flex flex-col gap-3">
         <Field label="Name" value={name} onChange={setName} placeholder="Customer name" />
         <Field
@@ -62,7 +67,14 @@ export function CustomerFormSheet({
           prefix="+91"
           inputMode="tel"
         />
-        {dup ? (
+        {dup && editing ? (
+          // Editing: the new number is another customer's. Say whose; Save stays greyed (no two
+          // customers with one number, and no silent switch to the other customer).
+          <div className="flex w-full flex-col gap-0.5 rounded-xl bg-orangelight p-3 text-orangedeep">
+            <span className="text-[14px] font-semibold">{Sel.fmtPhone(phone)} is already saved for {dup.name}</span>
+            <span className="text-[13px]">Use a different number</span>
+          </div>
+        ) : dup ? (
           <div className="flex w-full items-center rounded-xl bg-orangelight p-3">
             <span className="flex-1 text-[14px] font-semibold text-orangedeep">Already saved as {dup.name}</span>
             <button
@@ -104,6 +116,9 @@ export function CustomerFormSheet({
         <PrimaryButton
           disabled={!valid}
           onClick={() => {
+            const changedSomething =
+              existing != null &&
+              (existing.name !== name.trim() || existing.phone !== phone || existing.address !== address.trim());
             const id = Repo.saveCustomer(
               form.editId ?? null,
               name.trim(),
@@ -111,7 +126,9 @@ export function CustomerFormSheet({
               address.trim(),
               parseInt(oldBaaki, 10) || 0,
               form.ctx === "list",
+              form.trigger ?? "other",
             );
+            if (changedSomething) Repo.showInfo("Customer details saved");
             form.onSaved?.(id);
             onDismiss();
           }}
