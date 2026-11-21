@@ -32,16 +32,20 @@ import kotlin.math.ceil
  *   Receipt  monospace, SHOP NAME in capitals, dashed rules, "TOTAL"
  *   Invoice  "Mobile - …" header, Order/Customer/Mobile/dates as label → value, Item·Qty·Rate·Total table, paise
  *
- * No logo (a thermal printer can't half-tone it); everything else the design shows is here.
+ * The shop logo prints centred at the top in every design, like the bill image shows it
+ * (when the shop has one and it has loaded), as black / white dots (print/ThermalLogo).
  * Drawn as a picture so any script prints.
  */
 object ReceiptRender {
-    fun render(r: BillReceipt, width: Int): Bitmap {
-        val h = Pen(null, r, width).layout()
+    /** [logo] = the shop's logo ([BillReceipt.logoId]'s picture), or null to print without it. */
+    fun render(r: BillReceipt, width: Int, logo: Bitmap? = null): Bitmap {
+        // The logo as printer dots, made once for both passes; a logo that can't be made is left off (never the print).
+        val mark = if (r.logoId.isNotEmpty() && logo != null) runCatching { ThermalLogo.of(logo, width) }.getOrNull() else null
+        val h = Pen(null, r, width, mark).layout()
         val bmp = Bitmap.createBitmap(width, h, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
         c.drawColor(Color.WHITE)
-        Pen(c, r, width).layout()
+        Pen(c, r, width, mark).layout()
         return bmp
     }
 
@@ -51,7 +55,7 @@ object ReceiptRender {
     private val MONO_BOLD: Typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
 
     /** One pass down the page: measures when [c] is null, draws otherwise. */
-    private class Pen(val c: Canvas?, val r: BillReceipt, val width: Int) {
+    private class Pen(val c: Canvas?, val r: BillReceipt, val width: Int, val logo: Bitmap?) {
         val template = BillDetails.templateOrDefault(r.template)
         val receipt = template == BillDetails.RECEIPT
         val bold = template == BillDetails.BOLD
@@ -133,6 +137,14 @@ object ReceiptRender {
             return ceil(y).toInt()
         }
 
+        /** The shop logo, centred on whole dots, drawn 1:1 (no filtering) so its black / white dots print as made. */
+        fun logoBlock() {
+            val m = logo ?: return
+            val top = ceil(y).toInt()
+            c?.drawBitmap(m, ((width - m.width) / 2).toFloat(), top.toFloat(), null)
+            y = top + m.height + 10 * s
+        }
+
         // ---- blocks shared by Classic / Bold / Receipt ----
 
         fun shopBlock() {
@@ -203,6 +215,7 @@ object ReceiptRender {
         // ---- Classic / Bold / Receipt ----
 
         fun layoutStandard() {
+            logoBlock()
             shopBlock()
             taxInvoice()
             // bill no. + date, customer
@@ -263,6 +276,7 @@ object ReceiptRender {
         // ---- Invoice ----
 
         fun layoutInvoice() {
+            logoBlock()
             val digits = r.shopPhone.filter { it.isDigit() }.takeLast(10)
             wrapped(r.shopName.trim(), paint(30f, strong = true), gapAfter = 3 * s, align = Layout.Alignment.ALIGN_CENTER)
             listOf(r.address, if (digits.isNotEmpty()) "Mobile - $digits" else "", r.email, if (r.gstin.isNotEmpty()) "GSTIN ${r.gstin}" else "")

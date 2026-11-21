@@ -1,6 +1,7 @@
 package com.dailyworks.apnalaundry.ui.sheets
 
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.viewModelScope
 import android.Manifest
 import android.bluetooth.BluetoothAdapter
@@ -107,7 +108,14 @@ fun PrintTagsSheet(state: LaundryState, orderId: Int, from: String, vm: ShopView
     val dots = if (wide) TagRender.WIDE else TagRender.NARROW
     // The bill is English whatever the app's language, like the WhatsApp bill image.
     val receipt = remember(state.shop, o, c, bill) { if (bill) I18n.english { BillReceipt.of(state, o) } else null }
-    val images = remember(tags, receipt, dots) { if (receipt != null) listOf(ReceiptRender.render(receipt, dots)) else tags.map { TagRender.render(it, dots) } }
+    // The shop logo prints at the top of the bill. It's usually loaded already (the app keeps it
+    // ready for bills); if not, it's fetched now — until then (or offline) the bill prints without it.
+    val logoId = receipt?.logoId.orEmpty()
+    var logo by remember(logoId) { mutableStateOf(if (logoId.isEmpty()) null else vm.logos.cached(logoId)) }
+    LaunchedEffect(logoId) {
+        if (logoId.isNotEmpty() && logo == null) logo = runCatching { vm.logos.load(logoId) }.getOrNull()
+    }
+    val images = remember(tags, receipt, dots, logo) { if (receipt != null) listOf(ReceiptRender.render(receipt, dots, logo)) else tags.map { TagRender.render(it, dots) } }
     val preview = remember(images) { images.firstOrNull()?.asImageBitmap() }
 
     var printing by remember { mutableStateOf(false) }
