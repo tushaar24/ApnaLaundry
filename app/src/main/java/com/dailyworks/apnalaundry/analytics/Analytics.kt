@@ -486,6 +486,21 @@ object Analytics {
     fun customerAdded(entryPoint: String, withOldBaaki: Boolean) =
         track("Customer Added", mapOf("entry_point" to entryPoint, "with_old_baaki" to withOldBaaki))
 
+    /**
+     * An existing customer's details changed and saved (only when something really changed).
+     * [changed] = the fields, in order: name, phone, address (e.g. "name,phone"). [from] = where the
+     * edit was opened: customer_top_bar | customer_page | order_menu | bill | address_card (New order)
+     * | address_sheet | assistant | other. [orders] = that customer's orders (they stay linked by id).
+     */
+    fun customerEdited(customerId: String, changed: List<String>, from: String, orders: Int) =
+        track(
+            "Customer Edited",
+            mapOf(
+                "customer_id" to customerId, "changed" to changed.joinToString(","), "from" to from, "orders" to orders,
+                "name_changed" to ("name" in changed), "phone_changed" to ("phone" in changed), "address_changed" to ("address" in changed),
+            ),
+        )
+
     fun reminderSent(customerId: String, amount: Int) =
         track("Reminder Sent", mapOf("customer_id" to customerId, "amount" to amount))
 

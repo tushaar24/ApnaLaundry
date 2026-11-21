@@ -226,7 +226,7 @@ internal fun SaveCustomerCard(
         else PrimaryButton(if (card.editId == null) tr("Add customer") else tr("Save"), Modifier.fillMaxWidth(), height = 48.dp) {
             val dup = shopVm.state.value.customers.firstOrNull { it.phone == card.phone && it.id != card.editId }
             if (dup != null) { shopVm.showInfo(tr("{phone} is already saved for {name}", "phone" to Selectors.fmtPhone(card.phone), "name" to dup.name)); return@PrimaryButton }
-            shopVm.saveCustomer(card.editId, card.name, card.phone, card.address, card.oldBaaki, fromList = card.editId == null) {
+            shopVm.saveCustomer(card.editId, card.name, card.phone, card.address, card.oldBaaki, fromList = card.editId == null, editFrom = "assistant") {
                 vm.used(key, "customer", (if (card.editId == null) "Added customer " else "Updated customer ") + card.name)
             }
         }

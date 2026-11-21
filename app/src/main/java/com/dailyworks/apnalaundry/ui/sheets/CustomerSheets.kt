@@ -192,7 +192,12 @@ fun CustomerFormSheet(state: LaundryState, form: ActiveSheet.CustomerForm, vm: S
     }
     val valid = missing() == "none"
 
-    AppBottomSheet(title = if (editing) tr("Edit customer") else tr("New customer"), onDismiss = onDismiss) {
+    // Editing: the id stays, so the customer's orders and khata stay with them and show the new details.
+    AppBottomSheet(
+        title = if (editing) tr("Edit customer") else tr("New customer"),
+        subtitle = if (editing) tr("Old orders and khata stay with this customer") else null,
+        onDismiss = onDismiss,
+    ) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (!editing && form.ctx == "order" && tour == TourStage.ORDER) TourTip(
                 when (flow) {
@@ -221,7 +226,14 @@ fun CustomerFormSheet(state: LaundryState, form: ActiveSheet.CustomerForm, vm: S
                 }
                 phone = digits.take(10)
             }, placeholder = tr("10-digit number"), prefix = "+91", kb = KeyboardType.Phone)
-            if (dup != null) {
+            if (dup != null && editing) {
+                // Editing: the new number is another customer's. Say whose, and Save stays greyed —
+                // no two customers with one number, and no silent switch to the other customer.
+                Column(Modifier.fillMaxWidth().rounded(12.dp).background(Tokens.OrangeLight).padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(tr("{phone} is already saved for {name}", "phone" to Selectors.fmtPhone(phone), "name" to dup.name), style = fig(14, FontWeight.SemiBold, Tokens.OrangeDeep))
+                    Text(tr("Use a different number"), style = fig(13, color = Tokens.OrangeDeep))
+                }
+            } else if (dup != null) {
                 Row(Modifier.fillMaxWidth().rounded(12.dp).background(Tokens.OrangeLight).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(tr("Already saved as {name}", "name" to dup.name), style = fig(14, FontWeight.SemiBold, Tokens.OrangeDeep), modifier = Modifier.weight(1f))
                     Text(tr("Use this"), style = fig(14, FontWeight.Bold, Tokens.Blue), modifier = Modifier.tap { step("use_existing"); how = "used_existing"; form.onSaved(dup.id); onDismiss() })
@@ -253,9 +265,11 @@ fun CustomerFormSheet(state: LaundryState, form: ActiveSheet.CustomerForm, vm: S
                 step("save")
                 how = "saved"
                 method = if (pickedPhone != null && pickedPhone == phone) "contacts" else "typed"
-                vm.saveCustomer(form.editId, name.trim(), phone, address.trim(), oldBaaki.toIntOrNull() ?: 0, form.ctx == "list") { id ->
+                val changedSomething = existing != null && (existing.name != name.trim() || existing.phone != phone || existing.address != address.trim())
+                vm.saveCustomer(form.editId, name.trim(), phone, address.trim(), oldBaaki.toIntOrNull() ?: 0, form.ctx == "list", editFrom = form.trigger) { id ->
                     form.onSaved(id)
                 }
+                if (changedSomething) vm.showInfo(tr("Customer details saved"))
                 onDismiss()
             }
         }
@@ -302,7 +316,7 @@ fun AddressFormSheet(state: LaundryState, form: ActiveSheet.AddressForm, vm: Sho
                 onDisabledClick = { blockedTaps++; Analytics.customerSaveBlocked("address", "address_sheet", true, c.phone.length, false) },
             ) {
                 how = "saved"
-                vm.saveCustomer(c.id, c.name, c.phone, address.trim(), 0, false) { id -> form.onSaved(id) }
+                vm.saveCustomer(c.id, c.name, c.phone, address.trim(), 0, false, editFrom = "address_sheet") { id -> form.onSaved(id) }
                 onDismiss()
             }
         }
