@@ -360,7 +360,7 @@ object ReceiptRender {
     /**
      * Printer dots per QR module, a whole number: as big as fits ~68% of the paper
      * with its white border, at most 8. A bill's short pay link (BillDetails.upiLink)
-     * is a 37–41-module QR: 5 dots (0.6 mm) a module on 58 mm paper, 7 on 80 mm.
+     * is a 37–41-module QR: 5 dots (0.6 mm) a module on 58 mm paper, 7–8 on 80 mm.
      * Uneven or 3-dot modules (the old bill: a long Hindi link drawn at 3.05 dots)
      * blur together on thermal paper and phones can't read them.
      */

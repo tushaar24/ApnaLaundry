@@ -119,7 +119,7 @@ remembered on the phone (`tag_printer` prefs), not synced. Code: `domain/Laundry
 
 **Print bill** uses the same printer: `print/ReceiptRender` redraws the bill in the shop's design in black
 on white. The shop logo prints at the top as black / white dots (`print/ThermalLogo`: trimmed, ≤ 60% of
-the paper wide, Atkinson-dithered); the pay QR is drawn on whole printer dots (5 a module on 58 mm, 7 on
+the paper wide, Atkinson-dithered); the pay QR is drawn on whole printer dots (5 a module on 58 mm, 7–8 on
 80 mm for the short pay link) with a 4-module white border.
 
 ## Further notes
