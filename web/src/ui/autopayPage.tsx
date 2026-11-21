@@ -14,7 +14,8 @@ interface Info {
   shopName: string;
   phone: string;
   active: boolean;
-  oneTime: { plan: string; amount: number };
+  // label / days: a one-owner price like "3 months" (LAUNDRY_ONE_TIME_OFFERS); absent from older servers = a year.
+  oneTime: { plan: string; amount: number; label?: string; days?: number };
   subscription: { status: string; plan: string; amount: number } | null;
 }
 
@@ -66,7 +67,7 @@ export function AutopayPage({ id }: { id: string }) {
       if (r.status === 409 || o.code === "ALREADY_SUBSCRIBED") { await load(); setBusy(false); return; }
       if (!r.ok || !o.success || !o.orderId || !o.keyId || !o.amount) throw new Error(o.message || "Could not start the payment. Try again.");
       await openOrderCheckout(
-        { orderId: o.orderId, keyId: o.keyId, amount: o.amount, description: `MyLaundry · 1 year · ${rupees(o.amount)}`, name: o.shopName || view.info.shopName, contact: o.phone ? `+91${o.phone}` : undefined },
+        { orderId: o.orderId, keyId: o.keyId, amount: o.amount, description: `MyLaundry · ${view.info.oneTime.label || "1 year"} · ${rupees(o.amount)}`, name: o.shopName || view.info.shopName, contact: o.phone ? `+91${o.phone}` : undefined },
         {
           onPaid: async (proof) => {
             setNote("Payment received. Activating your plan…");
@@ -103,7 +104,7 @@ export function AutopayPage({ id }: { id: string }) {
       <div style={{ maxWidth: 440, margin: "0 auto", display: "grid", gap: 14 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontWeight: 800, fontSize: 20 }}>MyLaundry</span>
-          <span style={muted}>· Yearly plan</span>
+          <span style={muted}>· {view.kind === "ready" && view.info.oneTime.label && view.info.oneTime.label !== "1 year" ? `${view.info.oneTime.label} plan` : "Yearly plan"}</span>
         </div>
 
         {view.kind === "loading" && <div style={card}>Loading…</div>}
@@ -129,10 +130,10 @@ export function AutopayPage({ id }: { id: string }) {
 
             <div style={card}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                <span style={{ fontWeight: 700, fontSize: 17 }}>1 year of MyLaundry</span>
+                <span style={{ fontWeight: 700, fontSize: 17 }}>{view.info.oneTime.label || "1 year"} of MyLaundry</span>
                 <span style={{ fontWeight: 800, fontSize: 26 }}>{rupees(view.info.oneTime.amount)}</span>
               </div>
-              <p style={{ ...muted, margin: "6px 0 14px" }}>One payment. No AutoPay, no monthly charges. Unlimited orders, bills on WhatsApp, khata and earnings for 12 months.</p>
+              <p style={{ ...muted, margin: "6px 0 14px" }}>One payment. No AutoPay, no monthly charges. Unlimited orders, bills on WhatsApp, khata and earnings for {view.info.oneTime.label && view.info.oneTime.label !== "1 year" ? view.info.oneTime.label : "12 months"}.</p>
               <PrimaryButton onClick={pay} disabled={busy}>{busy ? "Opening payment…" : `Pay ${rupees(view.info.oneTime.amount)}`}</PrimaryButton>
               <p style={{ ...muted, margin: "10px 0 0" }}>UPI (Google Pay, PhonePe, Paytm, BHIM), cards and net banking. Your plan activates the moment the payment goes through.</p>
               {note && <p style={{ margin: "10px 0 0", color: "#8a3a06", fontWeight: 600 }}>{note}</p>}
