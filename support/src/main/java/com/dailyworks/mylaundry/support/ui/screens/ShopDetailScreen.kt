@@ -138,6 +138,28 @@ class ShopDetailViewModel(private val graph: Graph, private val userId: String) 
 
     fun deleteReminder(context: android.content.Context, r: ReminderDto) = reminderChange(context) { graph.api.deleteReminder(r.id) }
 
+    /**
+     * Opens the owner's WhatsApp chat by its id. The server sends it with the shop (1.12; the masked
+     * number can't address a chat — "91******3210" never loaded and couldn't send); an older server
+     * doesn't, so then the admin site's owner panel gives it (same WhatsApp sign-in).
+     */
+    fun openWhatsApp(onOpen: (waId: String) -> Unit) {
+        val d = _ui.value.detail ?: return
+        d.owner.waId?.takeIf { it.isNotBlank() }?.let { onOpen(it); return }
+        _ui.update { it.copy(message = null) }
+        viewModelScope.launch {
+            try {
+                val id = graph.wa.owner(userId).waChat
+                if (id.isNullOrBlank()) _ui.update { it.copy(message = "Couldn't open their WhatsApp chat — try again") }
+                else onOpen(id)
+            } catch (_: com.dailyworks.mylaundry.support.data.WaSignedOut) {
+                _ui.update { it.copy(message = "Sign in on the WhatsApp tab first") }
+            } catch (e: ApiException) {
+                _ui.update { it.copy(message = e.message) }
+            }
+        }
+    }
+
     /** A call made outside this app (recording optional): log it, then open its after-call notes. */
     fun logOutsideCall(file: Uri?, onCreated: (callId: String) -> Unit) {
         val phone = _ui.value.detail?.owner?.phone ?: return
@@ -239,7 +261,7 @@ fun ShopDetailScreen(
                             adding = ui.adding,
                             message = ui.message,
                             onCall = { onCall(d.owner) },
-                            onWhatsApp = { onWhatsApp("91${d.owner.phone}") },
+                            onWhatsApp = { vm.openWhatsApp(onWhatsApp) },
                             onLogOutsideCall = { askOutsideCall = true },
                         )
                     }

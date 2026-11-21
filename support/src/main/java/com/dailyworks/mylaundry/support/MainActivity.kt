@@ -164,7 +164,8 @@ private fun MainNav(graph: Graph, opens: Opens) {
      * Who to call; [onPlaced] gets the new call's id (to tick off a reminder / queue item);
      * [onFailed]: the call wasn't placed (a queue gives the person back).
      */
-    class Dial(val userId: String, val phone: String, val label: String, val onFailed: () -> Unit = {}, val onPlaced: (String) -> Unit = {})
+    // [waId] (1.12): a WhatsApp chat that isn't a shop owner's, called by the chat's id (userId null).
+    class Dial(val userId: String?, val phone: String, val label: String, val waId: String? = null, val onFailed: () -> Unit = {}, val onPlaced: (String) -> Unit = {})
     // Through MyLaundry: the server rings this phone, then the owner, and records +
     // transcribes the call. Calls only go this way (since 1.11: no phone dialer, which would
     // show the owner's number).
@@ -174,7 +175,8 @@ private fun MainNav(graph: Graph, opens: Opens) {
         placing = true
         scope.launch {
             try {
-                val call = graph.calls.bridge(d.userId)
+                val uid = d.userId
+                val call = if (uid != null) graph.calls.bridge(uid) else graph.calls.bridgeChat(d.waId.orEmpty())
                 d.onPlaced(call.id)
                 nav.navigate("call/${call.id}") { launchSingleTop = true }
             } catch (e: ApiException) {
@@ -432,6 +434,13 @@ private fun MainNav(graph: Graph, opens: Opens) {
                     vm = viewModel(key = "chat-$waId") { ChatViewModel(graph, waId) },
                     onBack = { if (!nav.popBackStack()) nav.navigate("wa") },
                     onOpenShop = { nav.navigate("shop/$it") },
+                    placing = placing,
+                    // An owner's chat calls the owner; any other chat is called by its id (1.12).
+                    onCall = { c ->
+                        val uid = c.userId
+                        if (uid != null) startCall(Dial(uid, c.phone.orEmpty(), c.title))
+                        else startCall(Dial(null, c.phone.orEmpty(), c.title, waId = c.waId))
+                    },
                 )
             }
             composable("tags") {

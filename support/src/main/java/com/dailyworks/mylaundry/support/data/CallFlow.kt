@@ -32,6 +32,13 @@ class CallFlow(
         return api.bridgeCall(userId, s.agentName, s.agentPhone)
     }
 
+    /** Calls a WhatsApp chat's number through MyLaundry, by the chat's id (never the number). */
+    suspend fun bridgeChat(waId: String): CallDto {
+        val s = prefs.current()
+        if (s.agentName.isBlank()) throw ApiException("Set your name in Settings first")
+        return api.bridgeChat(waId, s.agentName, s.agentPhone)
+    }
+
     suspend fun start(userId: String, phone: String, label: String): PendingCall {
         val agent = prefs.current().agentName.ifBlank { throw ApiException("Set your name in Settings first") }
         val now = System.currentTimeMillis()

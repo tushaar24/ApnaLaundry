@@ -136,6 +136,32 @@ data class WaTemplate(
 }
 
 @Serializable internal data class WaTemplates(val templates: List<WaTemplate> = emptyList())
+
+/** A how-to video of the app: [text] is the message that sends it (inside the 24-hour window). */
+@Serializable
+data class WaVideo(
+    val key: String,
+    val title: String,
+    val about: String? = null,
+    val url: String,
+    val text: String,
+)
+
+/**
+ * The how-to videos (GET /api/whatsapp/videos, 21 Nov 2026): one by one, the whole playlist, and the
+ * approved template that sends the playlist outside the 24-hour window.
+ */
+@Serializable
+data class WaVideos(
+    val videos: List<WaVideo> = emptyList(),
+    val playlist: WaVideo? = null,
+    val template: String = VIDEOS_TEMPLATE,
+) {
+    val all get() = listOfNotNull(playlist) + videos
+}
+
+/** The approved template with the how-to playlist on its button ({{1}} = shop name). */
+const val VIDEOS_TEMPLATE = "how_to_use_videos"
 @Serializable internal data class WaSent(val message: WaMessage)
 @Serializable internal data class WaUnread(val messages: Int = 0, val chats: Int = 0)
 @Serializable internal data class WaError(val error: String? = null)
@@ -211,6 +237,8 @@ data class AdminOwner(
     val baakiMarket: Double = 0.0,
     val baakiCustomers: Int = 0,
     val dayCloses: Int = 0,
+    /** The owner's WhatsApp chat id (opaque), for the WhatsApp button. */
+    val waChat: String? = null,
 )
 
 class WhatsAppApi(private val prefs: Prefs, private val baseUrl: String = "https://admin.mylaundry.work") {
@@ -314,6 +342,8 @@ class WhatsAppApi(private val prefs: Prefs, private val baseUrl: String = "https
             )
         }
     }.message
+
+    suspend fun videos(): WaVideos = call { client.get("$baseUrl/api/whatsapp/videos") }
 
     suspend fun templates(): List<WaTemplate> =
         call<WaTemplates> { client.get("$baseUrl/api/whatsapp/templates") }.templates

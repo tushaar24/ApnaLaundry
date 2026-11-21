@@ -39,6 +39,11 @@ data class OwnerSummary(
     val subscription: SubSummary,
     val calls: CallSummary = CallSummary(),
     val tagIds: List<String> = emptyList(),
+    /**
+     * Their WhatsApp chat's id (opaque — the number never reaches the app). Only on a shop's own page
+     * (GET /shops/:id, server of 21 Nov 2026); null from older servers and in lists.
+     */
+    val waId: String? = null,
 )
 
 @Serializable

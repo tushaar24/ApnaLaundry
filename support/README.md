@@ -44,6 +44,14 @@ backend repo (`routes/laundry-support.js`).
 - **Shop details** (1.4): with the admin login (WhatsApp tab), each shop page
   shows what admin.mylaundry.work shows — total orders and sales, earnings,
   customers + baaki, recent orders, services, CleverTap identity / ID / props.
+- **WhatsApp Call + videos** (1.12): every chat has a Call button (top right) —
+  an owner's chat calls the owner, any other chat is called through MyLaundry by
+  the chat's id (the number never reaches the phone; needs the server of 21 Nov
+  2026). The composer's video button sends one of the app's how-to videos (or
+  the whole playlist) as a link; outside the 24-hour window "Send the how-to
+  videos" opens the `how_to_use_videos` template. The list comes from
+  admin.mylaundry.work (`/api/whatsapp/videos`). The shop page's WhatsApp
+  button opens the owner's chat by its id (it was broken by number masking).
 - While calling through MyLaundry isn't set up on the server, Call falls back to
   the phone's dialer: the call's real talk time comes from the call log, and the
   dialer's recording is found and uploaded in the background. Unanswered calls

@@ -39,6 +39,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.OndemandVideo
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -48,6 +50,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -90,6 +93,9 @@ import com.dailyworks.mylaundry.support.data.WaNotifier
 import com.dailyworks.mylaundry.support.data.WaPush
 import com.dailyworks.mylaundry.support.data.WaSignedOut
 import com.dailyworks.mylaundry.support.data.WaTemplate
+import com.dailyworks.mylaundry.support.data.VIDEOS_TEMPLATE
+import com.dailyworks.mylaundry.support.data.WaVideo
+import com.dailyworks.mylaundry.support.data.WaVideos
 import com.dailyworks.mylaundry.support.ui.components.EmptyState
 import com.dailyworks.mylaundry.support.ui.components.ErrorState
 import com.dailyworks.mylaundry.support.ui.components.Loading
@@ -115,6 +121,8 @@ import java.util.Locale
 
 // The WhatsApp tab (8 Nov 2026): the MyLaundry number's chats from admin.mylaundry.work —
 // read, reply (text, photo / file, template), and a notification for each new message.
+// 1.12 (21 Nov 2026): Call any chat through MyLaundry (numbers that aren't a shop's too, by the
+// chat's id) and send the app's how-to videos (the list comes from the admin site).
 
 private val WaGreen = Color(0xFF128C7E)
 private val OutBubble = Color(0xFFDCF8C6)
@@ -297,6 +305,9 @@ data class ChatUi(
     val sending: Boolean = false,
     val message: String? = null,
     val templates: List<WaTemplate>? = null,
+    /** The how-to videos (loaded when the Videos button is first tapped). */
+    val videos: WaVideos? = null,
+    val videosError: String? = null,
 )
 
 class ChatViewModel(private val graph: Graph, val waId: String) : ViewModel() {
@@ -378,13 +389,40 @@ class ChatViewModel(private val graph: Graph, val waId: String) : ViewModel() {
     }
 
     fun sendTemplate(t: WaTemplate, params: List<String>) = sending { graph.wa.sendTemplate(waId, t, params) }
+
+    fun loadVideos() {
+        if (_ui.value.videos != null) return
+        _ui.update { it.copy(videosError = null) }
+        viewModelScope.launch {
+            try {
+                val v = graph.wa.videos()
+                _ui.update { it.copy(videos = v) }
+            } catch (e: ApiException) {
+                _ui.update { it.copy(videosError = e.message) }
+            } catch (_: WaSignedOut) {
+            }
+        }
+    }
+
+    /** Inside the 24-hour window: the video's link as a message. */
+    fun sendVideo(v: WaVideo) = sending { graph.wa.send(waId, v.text) }
 }
 
 @Composable
-fun ChatScreen(vm: ChatViewModel, onBack: () -> Unit, onOpenShop: (String) -> Unit) {
+fun ChatScreen(
+    vm: ChatViewModel,
+    onBack: () -> Unit,
+    onOpenShop: (String) -> Unit,
+    placing: Boolean = false,
+    onCall: (WaContact) -> Unit = {},
+) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var templatesOpen by remember { mutableStateOf(false) }
+    // The template picker opened on this one (the how-to videos template, outside the window).
+    var templateInitial by remember { mutableStateOf<String?>(null) }
+    var videosOpen by remember { mutableStateOf(false) }
+    var confirmCall by remember { mutableStateOf(false) }
     // No notification for this chat while it's on screen; clear the one already shown.
     DisposableEffect(vm.waId) {
         WaNotifier.openChat = vm.waId
@@ -411,7 +449,11 @@ fun ChatScreen(vm: ChatViewModel, onBack: () -> Unit, onOpenShop: (String) -> Un
             },
             navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
             actions = {
-                TextButton(onClick = { vm.loadTemplates(); templatesOpen = true }) {
+                // Through MyLaundry: an owner by their account, anyone else by this chat (never the number).
+                IconButton(onClick = { confirmCall = true }, enabled = c != null && !placing) {
+                    Icon(Icons.Filled.Call, "Call", tint = if (c != null && !placing) Tokens.GreenText else Tokens.Faint)
+                }
+                TextButton(onClick = { vm.loadTemplates(); templateInitial = null; templatesOpen = true }) {
                     Text("Template", style = fig(14, FontWeight.Bold, WaGreen))
                 }
                 c?.userId?.let { id -> IconButton(onClick = { onOpenShop(id) }) { Icon(Icons.Filled.Storefront, "Open shop", tint = Tokens.InkSecondary) } }
@@ -445,12 +487,27 @@ fun ChatScreen(vm: ChatViewModel, onBack: () -> Unit, onOpenShop: (String) -> Un
                             style = fig(13, color = Tokens.Muted),
                         )
                         Button(
-                            onClick = { vm.loadTemplates(); templatesOpen = true },
+                            onClick = { vm.loadTemplates(); templateInitial = null; templatesOpen = true },
                             enabled = !ui.sending,
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = WaGreen),
                         ) { Text(if (ui.sending) "Sending…" else "Send a template", style = fig(15, FontWeight.Bold, Tokens.OnDark)) }
+                        // The how-to videos can only go as their template now (its button opens the playlist).
+                        OutlinedButton(
+                            onClick = {
+                                vm.loadTemplates()
+                                templateInitial = ui.videos?.template ?: VIDEOS_TEMPLATE
+                                templatesOpen = true
+                            },
+                            enabled = !ui.sending,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                        ) {
+                            Icon(Icons.Filled.OndemandVideo, null, Modifier.size(18.dp), tint = WaGreen)
+                            Spacer(Modifier.size(8.dp))
+                            Text("Send the how-to videos", style = fig(15, FontWeight.Bold, WaGreen))
+                        }
                     }
                 } else {
                     Row(
@@ -459,6 +516,9 @@ fun ChatScreen(vm: ChatViewModel, onBack: () -> Unit, onOpenShop: (String) -> Un
                     ) {
                         IconButton(onClick = { pickFile.launch(arrayOf("*/*")) }, enabled = !ui.sending) {
                             Icon(Icons.Filled.AttachFile, "Attach a photo or file", tint = Tokens.InkSecondary)
+                        }
+                        IconButton(onClick = { vm.loadVideos(); videosOpen = true }, enabled = !ui.sending) {
+                            Icon(Icons.Filled.OndemandVideo, "Send a how-to video", tint = Tokens.InkSecondary)
                         }
                         OutlinedTextField(
                             value = ui.text, onValueChange = vm::setText,
@@ -480,10 +540,72 @@ fun ChatScreen(vm: ChatViewModel, onBack: () -> Unit, onOpenShop: (String) -> Un
         TemplateDialog(
             templates = ui.templates,
             shopName = c?.shopName ?: c?.ownerName ?: c?.contactName ?: "",
+            initialName = templateInitial,
             onDismiss = { templatesOpen = false },
             onSend = { t, params -> templatesOpen = false; vm.sendTemplate(t, params) },
         )
     }
+    if (videosOpen) {
+        VideosDialog(
+            videos = ui.videos,
+            error = ui.videosError,
+            onDismiss = { videosOpen = false },
+            onSend = { v -> videosOpen = false; vm.sendVideo(v) },
+        )
+    }
+    if (confirmCall && c != null) {
+        AlertDialog(
+            onDismissRequest = { confirmCall = false },
+            title = { Text("Call ${c.title}?", style = fig(18, FontWeight.Bold)) },
+            text = {
+                Text(
+                    if (c.userId != null) "Through MyLaundry: your phone rings first, then the shop owner's."
+                    else "Through MyLaundry: your phone rings first, then theirs. Their number stays hidden.",
+                    style = fig(15),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { confirmCall = false; onCall(c) }) { Text("Call", style = fig(15, FontWeight.Bold, Tokens.GreenText)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmCall = false }) { Text("Cancel", style = fig(15, FontWeight.SemiBold)) }
+            },
+            containerColor = Tokens.Card,
+        )
+    }
+}
+
+/** The how-to videos: tap one to send its link (inside the 24-hour window). */
+@Composable
+private fun VideosDialog(videos: WaVideos?, error: String?, onDismiss: () -> Unit, onSend: (WaVideo) -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("How-to videos", style = fig(18, FontWeight.Bold)) },
+        text = {
+            Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                when {
+                    videos == null && error != null -> Text(error, style = fig(14, FontWeight.SemiBold, Tokens.Red))
+                    videos == null -> Loading(Modifier.height(80.dp))
+                    videos.all.isEmpty() -> Text("No videos.", style = fig(14, color = Tokens.Muted))
+                    else -> {
+                        Text("Tap one to send its link now.", style = fig(13, color = Tokens.Muted))
+                        videos.all.forEach { v ->
+                            Column(
+                                Modifier.fillMaxWidth().border(1.dp, Tokens.CardBorder, RoundedCornerShape(10.dp))
+                                    .clickable { onSend(v) }
+                                    .padding(10.dp),
+                            ) {
+                                Text("🎬 ${v.title}", style = fig(15, FontWeight.Bold))
+                                v.about?.let { Text(it, style = fig(13, color = Tokens.Muted), maxLines = 2, overflow = TextOverflow.Ellipsis) }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", style = fig(15, FontWeight.SemiBold)) } },
+    )
 }
 
 @Composable
@@ -649,9 +771,19 @@ private fun TemplateDialog(
     shopName: String,
     onDismiss: () -> Unit,
     onSend: (WaTemplate, List<String>) -> Unit,
+    /** Open on this template (once the list is in), e.g. the how-to videos one. */
+    initialName: String? = null,
 ) {
     var picked by remember { mutableStateOf<WaTemplate?>(null) }
     val values = remember { mutableStateListOf<String>() }
+    LaunchedEffect(templates, initialName) {
+        if (picked != null || initialName == null) return@LaunchedEffect
+        templates?.firstOrNull { it.name == initialName }?.let { x ->
+            picked = x
+            values.clear()
+            repeat(x.params) { i -> values.add(if (i == 0) shopName else "") }
+        }
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(picked?.name ?: "Send a template", style = fig(18, FontWeight.Bold)) },

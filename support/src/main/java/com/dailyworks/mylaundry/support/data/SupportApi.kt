@@ -286,6 +286,22 @@ class SupportApi(private val baseUrl: String = BuildConfig.API_BASE_URL) {
             }
         }.call
 
+    /**
+     * A call through MyLaundry to a WhatsApp chat (1.12): [waId] = the chat's opaque id, for chats
+     * from numbers that aren't a shop owner's. The server turns it into the number.
+     */
+    suspend fun bridgeChat(waId: String, agentName: String, agentPhone: String): CallDto =
+        call<CallEnvelope> {
+            client.post(url("/calls/bridge")) {
+                contentType(ContentType.Application.Json)
+                setBody(buildJsonObject {
+                    put("waId", JsonPrimitive(waId))
+                    put("agentName", JsonPrimitive(agentName))
+                    put("agentPhone", JsonPrimitive(agentPhone))
+                })
+            }
+        }.call
+
     /** PATCH only the fields given (null = leave unchanged). */
     suspend fun updateCall(
         id: String,
